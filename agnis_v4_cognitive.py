@@ -101,10 +101,12 @@ class CognitivePredictiveAgent:
             self.base_lrs.append((col.eta_V, col.eta_W))
 
     def observe_and_learn(self, x: torch.Tensor, y: torch.Tensor, task_id: int = 0, 
-                          max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0):
+                          max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0,
+                          warm_start: bool = False):
         """Processes a single sample online."""
         # 1. Do a dry-run inference to compute surprise (MSE without label guidance)
-        self.hierarchy.reset_states(batch_size=1)
+        if not warm_start:
+            self.hierarchy.reset_states(batch_size=1)
         with torch.no_grad():
             pred_y_tensor = self.hierarchy.predict_label(x, max_steps=max_steps)
             if pred_y_tensor.shape[1] > y.shape[1]:
@@ -136,7 +138,8 @@ class CognitivePredictiveAgent:
             x, top_level_label=y,
             max_steps=max_steps,
             recognition_weight=recognition_weight,
-            beta_push=beta_push
+            beta_push=beta_push,
+            warm_start=warm_start
         )
         
         # 6. Restore base learning rates

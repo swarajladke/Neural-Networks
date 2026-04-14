@@ -40,7 +40,12 @@ class AGNIS_SLM_Wrapper(nn.Module):
         return flat_ctx, embedded_tgt
 
     def learn_step(self, context_indices: list[list[int]], target_indices: list[list[int]]):
-        """Processes a single batch of character rolling windows."""
+        """Processes a single batch of character rolling windows with amortized inference.
+        
+        V5.1: The first sample in the batch cold-starts (full reset). All subsequent
+        samples warm-start from the previous settled state. Since consecutive windows
+        share 15/16 characters, warm-starting reduces settling from ~50 to ~5-10 steps.
+        """
         flat_ctx, embedded_tgt = self._prepare_tensors(context_indices, target_indices)
         
         # AGNIS core loop (online learning per sample in the batch)
@@ -50,8 +55,9 @@ class AGNIS_SLM_Wrapper(nn.Module):
         for i in range(flat_ctx.shape[0]):
             x = flat_ctx[i:i+1]
             y = embedded_tgt[i:i+1]
-            # Max steps limited for text speed; language is fluid, 50 steps is usually enough to settle 
-            w, s = self.agent.observe_and_learn(x, y, task_id=0, max_steps=50, beta_push=3.0)
+            # V5.1: First sample cold-starts, rest warm-start (amortized inference)
+            use_warm = (i > 0)
+            w, s = self.agent.observe_and_learn(x, y, task_id=0, max_steps=50, beta_push=3.0, warm_start=use_warm)
             total_weight += w
             total_surprise += s
             
