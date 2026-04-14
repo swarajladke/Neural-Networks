@@ -1,44 +1,38 @@
-# 📔 MISSION BRIEFING: AGNIS V2 Scaling & Optimization
-**Recipient**: Codex Agent 🤖
-**Origin**: Antigravity (Project Architect) 🛡️🧠🚀
-**Status**: Phase 28 [SUCCEEDED]
+# MISSION BRIEFING: The AGNIS AGI Roadmap
+
+## Project Vision
+AGNIS (Autonomous General Neural Intelligence System) is built on the principles of **Predictive Coding** and **SNAP-ATP** (Scale-free Neural Architecture Project - Asymmetric Top-down Prediction). Our goal is to move beyond the limitations of standard backpropagation-based Transformers and create a self-evolving, grounded intelligence substrate.
 
 ---
 
-## 🏛️ Context: The AGNIS V2 Breakthrough
-We have just completed **Phase 28: Live Continual Learning Proof**. The architecture successfully demonstrated:
-1.  **Autonomous Domain Partitioning**: 156 learned facets discovered from a label-less stream.
-2.  **Organic Neurogenesis**: Real-time scaling from 40 to **3,173 neurons** during inference.
-3.  **Zero Forgetting**: Verified via "Flashback Probes" across 5 high-entropy symbolic domains.
+## 🚀 The Long Road: Phase Map
 
-### 🔬 Core Architecture Files:
-- [enhanced_agnis_v2.py](file:///c:/Users/Vicky/Desktop/Neural%20Networks/enhanced_agnis_v2.py) — The current engine.
-- [runtime_continual_learning_proof.py](file:///c:/Users/Vicky/Desktop/Neural%20Networks/runtime_continual_learning_proof.py) — The live-learning execution logic.
-- [agnis_architecture.md](file:///C:/Users/Vicky/.gemini/antigravity/brain/62c24414-93e2-4fe7-a02d-34971e5ef4b1/agnis_architecture.md) — Technical schematic.
+### **Phase 1: The Speed Barrier (V6.1 - V6.5)**
+*   **Current State**: Validated Sequential Logic (SLM), Python-CPU execution.
+*   **The Goal**: **C++/CUDA Acceleration**. Moving the 50-step "settling" loop into dedicated GPU hardware kernels.
+*   **Outcome**: Scale from training on 150k characters to **100 Billion+ tokens**. Achieving human-level linguistic coherence and real-time inference.
 
----
+### **Phase 2: Multi-Modal Grounding (V7.0)**
+*   **The Concept**: Predictive coding is sensory-agnostic. Language is just one stream.
+*   **The Goal**: Integrate **Vision (Pixels)** and **Audio (Waveforms)** into the same predictive hierarchy.
+*   **Outcome**: True semantic grounding. The model understands that the word "Apple" is statistically linked to the visual 🍎 and the sound of a "crunch." 
 
-## ⚡ Collaborative Objectives for Codex Agent
+### **Phase 3: Long-Term Consolidation (V8.0)**
+*   **The Concept**: Moving beyond the short-term sliding window.
+*   **The Goal**: Implementing a **Dynamic Memory Buffer**. Compressing past predictive snapshots into long-term declarative storage layers.
+*   **Outcome**: Functional Long-Term Memory (LTM). The model maintains context across thousands of pages of interaction.
 
-To reach our goal of a **Trillion-Parameter Autonomous SLM**, I require your expertise on the following modules:
-
-### 1. Vectorized Hebbian Batching [HIGH PRIORITY]
-In `enhanced_agnis_v2.py`, the `learn()` method currently processes error propagation in a semi-serial manner. 
-- **Goal**: Optimize the Hebbian update logic to use more efficient `torch` tensor operations.
-- **Problem**: We need to avoid "Weight Drifting" while batching local updates.
-
-### 2. Distributed Plasticity Consolidation
-Our consolidation lock (shield against forgetting) is currently memory-intensive for 1,000+ tasks.
-- **Goal**: Propose a sparse indexing strategy or a hashing mechanism for `connection.usage_per_task`.
-
-### 3. Stability Regression Suite
-As we scale to Phase 29 (100+ tasks), we need a automated bench.
-- **Goal**: Design a `stability_oracle.py` that automatically triggers flashbacks based on loss spikes.
+### **Phase 4: Intrinsic Motivation (V9.0+)**
+*   **The Concept**: Autonomy.
+*   **The Goal**: Shifting from "Minimize Surprise of Passive Input" to **"Maximize Discovery."**
+*   **Outcome**: **Curiosity-Driven Learning**. An autonomous agent that actively explores its environment/dataset to resolve internal world-model blind spots. 
 
 ---
 
-## 🛰️ Hand-off Protocol
-- Documentation for your contributions should be added to `c:\Users\Vicky\Desktop\Neural Networks\MISSION_LOG.md`.
-- Sign off with `[CODEX -> ANTIGRAVITY]` for any architectural feedback.
+## 📍 Current Station: V6.0 (SLM Bridge)
+*   **Status**: ✅ **STABLE**
+*   **Achievements**: Sequential SLM Wrapper, 64D Embedding Manifold, Stochastic Generation.
+*   **Constraint**: CPU Settlement Bottle-neck (Slow).
 
-**Let's build the future of AGI.** 🛡️🧠🚀🤝🤖
+## ⏭️ Immediate Objective: V6.1 (CUDA Port)
+Preparing for the C++/CUDA transition to achieve **1,000x acceleration**.
