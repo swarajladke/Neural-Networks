@@ -1,8 +1,9 @@
 import torch
 import random
+import math
 import heapq
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 from agnis_v4_core import PredictiveHierarchy
 
 @dataclass
@@ -87,6 +88,13 @@ class CognitivePredictiveAgent:
         self.buffer = SurpriseBuffer()
         self.step_count = 0
         
+        # --- V5.0: Novelty Decay ---
+        self.exposure_counts: Dict[int, int] = {}  # pattern_hash -> count
+        self.tau_novelty: float = 10.0  # decay time constant
+        
+        # --- V5.0: Expert Retention ---
+        self.neurogenesis_count = 0  # total slivers recruited
+        
         # Save base learning rates
         self.base_lrs = []
         for col in self.hierarchy.layers:
@@ -102,14 +110,22 @@ class CognitivePredictiveAgent:
             if pred_y_tensor.shape[1] > y.shape[1]:
                 d = y.shape[1]
                 pred_y_tensor = pred_y_tensor[:, :d]
-            surprise_loss = torch.nn.functional.mse_loss(pred_y_tensor, y).item()
-            
-        # 2. Compute Salience
-        weight, surprise, progress = self.salience_engine.compute(surprise_loss)
+            raw_surprise = torch.nn.functional.mse_loss(pred_y_tensor, y).item()
 
-        # 3. Add to Episodic Buffer if surprise is notable
-        if surprise > 0.05:
-            exp = Experience(task_id, x, y, surprise, weight, self.step_count)
+        # --- V5.0: Novelty Decay ---
+        # Quantize to 2 decimal places before hashing to bin similar patterns
+        quantized = (x.flatten() * 100).int()
+        pattern_key = hash(quantized.numpy().tobytes())
+        self.exposure_counts[pattern_key] = self.exposure_counts.get(pattern_key, 0) + 1
+        exposure = self.exposure_counts[pattern_key]
+        effective_surprise = raw_surprise * math.exp(-exposure / self.tau_novelty)
+            
+        # 2. Compute Salience (using effective_surprise instead of raw)
+        weight, surprise, progress = self.salience_engine.compute(effective_surprise)
+
+        # 3. Add to Episodic Buffer if effective surprise is notable
+        if effective_surprise > 0.05:
+            exp = Experience(task_id, x, y, effective_surprise, weight, self.step_count)
             self.buffer.add(exp)
 
         # 4. Scale Learning Rates dynamically for this sample based on Salience
@@ -127,7 +143,7 @@ class CognitivePredictiveAgent:
         self._apply_salience_weight(1.0, restore=True)
         self.step_count += 1
         
-        return weight, surprise
+        return weight, effective_surprise
 
     def dream_replay(self, batch_size: int = 16, max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0):
         """Extracts highly salient memories and dreams about them to bootstrap the sparse dictionary."""
@@ -153,6 +169,12 @@ class CognitivePredictiveAgent:
             
             print(f">>> RECRUITING IDENTITY SLIVER PATHWAY for Sample {best_idx} (Surprise: {sample_surprises[best_idx]:.4f}) <<<")
             self.hierarchy.expand_pathway(x_batch[best_idx:best_idx+1], y_batch[best_idx:best_idx+1])
+            self.neurogenesis_count += 1
+            
+            # V5.0: Stamp birth_surprise on newly recruited neurons
+            recruit_surprise = sample_surprises[best_idx]
+            for col in self.hierarchy.layers:
+                col.birth_surprise[-1] = recruit_surprise
             
             # --- NEURAL CONSOLIDATION ---
             # Immediately 'burn-in' the new pathway with a high-intensity focused dream
@@ -166,6 +188,11 @@ class CognitivePredictiveAgent:
                 beta_push=10.0 # Force alignment
             )
             self._apply_salience_weight(1.0, restore=True)
+            
+            # V5.0: Check if pruning is due (dynamic interval)
+            prune_interval = max(500, 2 * self.neurogenesis_count * 100)
+            if self.step_count > 0 and self.step_count % prune_interval == 0:
+                self.prune_dormant_experts()
             
             self.buffer._heap.clear()
             self.buffer._counter = 0
@@ -190,3 +217,30 @@ class CognitivePredictiveAgent:
                 base_v, base_w = self.base_lrs[i]
                 col.eta_V = base_v * weight
                 col.eta_W = base_w * weight
+
+    def prune_dormant_experts(self, threshold: float = 0.01):
+        """V5.0: Lift gradient shields on dormant expert neurons.
+        Neurons below the retention threshold re-enter the general
+        learning manifold and can be reused for new tasks.
+        """
+        pruned_total = 0
+        for i, col in enumerate(self.hierarchy.layers):
+            scores = col.compute_retention_scores()
+            # Only consider neurons beyond the original architecture
+            original_dim = 16  # base architecture width
+            if col.output_dim <= original_dim:
+                continue
+            
+            expert_scores = scores[original_dim:]
+            dormant = (expert_scores < threshold)
+            if dormant.any():
+                n_dormant = dormant.sum().item()
+                # Lift shields — neurons re-enter general manifold
+                col.V_mask[:, original_dim:][:, dormant] = 1.0
+                col.W_mask[original_dim:, :][dormant, :] = 1.0
+                pruned_total += n_dormant
+                print(f"    [PRUNE] Layer {i}: {n_dormant} dormant experts un-shielded (scores < {threshold})")
+        
+        if pruned_total > 0:
+            print(f"    [PRUNE] Total: {pruned_total} expert pathways returned to general manifold")
+        return pruned_total
