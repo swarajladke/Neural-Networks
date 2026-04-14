@@ -1,0 +1,6 @@
+torch>=1.9.0
+numpy>=1.21.0
+matplotlib>=3.3.0
+datasets>=2.0.0
+sentencepiece>=0.1.99
+tokenizers>=0.15.0

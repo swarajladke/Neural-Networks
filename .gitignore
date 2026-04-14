@@ -1,0 +1,26 @@
+# Large Data Files
+*.txt
+*.csv
+*.npz
+*.pkl
+*.model
+*.vocab
+*.gguf
+*.json
+
+# Visualizations / Reports
+*.png
+*.md
+!README.md
+!MISSION_BRIEFING.md
+!MISSION_LOG.md
+!AGNIS_V2_SYSTEM_SPEC.md
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Local Environment
+requirements.txt
+# (Removing requirements.txt from ignore, usually good to keep)
+!requirements.txt
