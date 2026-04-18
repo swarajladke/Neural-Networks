@@ -41,9 +41,9 @@ class SLMDataset:
     def load_and_tokenize(self):
         with open(self.filepath, "r", encoding="utf-8") as f:
             text = f.read()
-            # If it's a massive Gutenberg file, let's truncate to 150k chars for CPU speed
-            if len(text) > 150000:
-                text = text[:150000]
+            # If it's a massive Gutenberg file, let's truncate to 1M chars for GPU
+            if len(text) > 1000000:
+                text = text[:1000000]
             
         # Fit tokenizer and convert text to indices
         self.tokenizer.fit(text)

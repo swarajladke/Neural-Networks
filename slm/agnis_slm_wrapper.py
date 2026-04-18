@@ -40,28 +40,20 @@ class AGNIS_SLM_Wrapper(nn.Module):
         return flat_ctx, embedded_tgt
 
     def learn_step(self, context_indices: list[list[int]], target_indices: list[list[int]]):
-        """Processes a single batch of character rolling windows with amortized inference.
-        
-        V5.1: The first sample in the batch cold-starts (full reset). All subsequent
-        samples warm-start from the previous settled state. Since consecutive windows
-        share 15/16 characters, warm-starting reduces settling from ~50 to ~5-10 steps.
-        """
+        """Processes a full batch of windows in parallel using Vectorized SNAP-ATP."""
         flat_ctx, embedded_tgt = self._prepare_tensors(context_indices, target_indices)
         
-        # AGNIS core loop (online learning per sample in the batch)
-        total_weight = 0.0
-        total_surprise = 0.0
+        # V6.0: Full Batch-Parallel training.
+        # Amortized inference (warm_start) is now implicitly handled across the whole batch
+        # for temporal consistency between windows in the same stream.
+        weight, surprise = self.agent.observe_and_learn(
+            flat_ctx, embedded_tgt, 
+            task_id=0, max_steps=50, beta_push=3.0, 
+            warm_start=True # Keep latents between batches for temporal continuity
+        )
         
-        for i in range(flat_ctx.shape[0]):
-            x = flat_ctx[i:i+1]
-            y = embedded_tgt[i:i+1]
-            # V5.1: First sample cold-starts, rest warm-start (amortized inference)
-            use_warm = (i > 0)
-            w, s = self.agent.observe_and_learn(x, y, task_id=0, max_steps=50, beta_push=3.0, warm_start=use_warm)
-            total_weight += w
-            total_surprise += s
-            
-        return total_weight / flat_ctx.shape[0], total_surprise / flat_ctx.shape[0]
+        # observe_and_learn now returns the average weight and surprise for the batch
+        return weight, surprise.mean().item()
 
     def dream_consolidation(self, batch_size=16):
         """Pass-through to AGNIS declarative memory replay"""
@@ -73,6 +65,7 @@ class AGNIS_SLM_Wrapper(nn.Module):
         print(prompt, end="")
         
         self.hierarchy.eval() # Optional: if batchnorm etc were there
+        self.hierarchy.reset_states(batch_size=1)
         
         # Seed the initial context
         context_str = prompt
@@ -86,13 +79,26 @@ class AGNIS_SLM_Wrapper(nn.Module):
 
         generated = ""
         with torch.no_grad():
+            if self.seq_length == 1 and len(prompt) > 1:
+                # Native recurrence mode: consume the prompt token-by-token to build context.
+                for ch in prompt[:-1]:
+                    warm_idx = tokenizer.encode(ch)[0]
+                    warm_tensor = torch.tensor([[warm_idx]], dtype=torch.long, device=self.device)
+                    warm_embed = self.embeddings(warm_tensor).view(1, -1)
+                    self.hierarchy.predict_label(warm_embed, update_temporal=True)
+                current_ctx_indices = [tokenizer.encode(prompt[-1])[0]]
+
             for _ in range(max_new_chars):
                 ctx_tensor = torch.tensor([current_ctx_indices], dtype=torch.long, device=self.device)
                 embedded_ctx = self.embeddings(ctx_tensor)
                 flat_ctx = embedded_ctx.view(1, -1)
                 
                 # Ask AGNIS to predict the readout (what the next embedding should look like)
-                predicted_embed = self.hierarchy.predict_label(flat_ctx)
+                predicted_embed = self.hierarchy.predict_label(flat_ctx, update_temporal=True)
+                
+                # V7.3.4 (Fix): Slice predicted readout to match embedding manifold if expanded
+                if predicted_embed.shape[1] > self.embed_dim:
+                    predicted_embed = predicted_embed[:, :self.embed_dim]
                 
                 # Decode: Inverse-distance sampling with Temperature
                 # Shape: embeddings.weight is [vocab_size, embed_dim]

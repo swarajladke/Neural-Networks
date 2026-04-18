@@ -2,6 +2,10 @@ import torch
 import random
 import math
 import heapq
+import time
+import subprocess
+import sys
+import os
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 from agnis_v4_core import PredictiveHierarchy
@@ -32,18 +36,23 @@ class SalienceEngine:
         self.progress_scale = progress_scale
         self.loss_ema: Optional[float] = None
 
-    def compute(self, loss: float) -> Tuple[float, float, float]:
+    def compute(self, loss: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Vectorized salience computation for a batch of losses."""
         surprise = loss
+        
+        # Scalar fallback for EMA tracking
+        avg_loss = loss.mean().item()
         if self.loss_ema is None:
-            progress = 0.0
-            self.loss_ema = loss
+            self.loss_ema = avg_loss
+            progress = torch.zeros_like(loss)
         else:
-            progress = max(0.0, self.loss_ema - loss)
-            self.loss_ema = self.ema * self.loss_ema + (1 - self.ema) * loss
-
+            # Progress is relative to global EMA
+            progress = (self.loss_ema - loss).clamp(min=0.0)
+            self.loss_ema = self.ema * self.loss_ema + (1 - self.ema) * avg_loss
+ 
         salience_raw = self.surprise_scale * surprise + self.progress_scale * progress
         weight = 0.5 + salience_raw
-        weight = max(self.min_weight, min(self.max_weight, weight))
+        weight = weight.clamp(self.min_weight, self.max_weight)
         return weight, surprise, progress
 
 class SurpriseBuffer:
@@ -76,6 +85,167 @@ class SurpriseBuffer:
         k = min(k, len(items))
         return random.choices(items, weights=weights, k=k)
 
+class NeuromodulatorNode:
+    """
+    V5.2: Global Arousal Node providing selective dopaminergic attention.
+    Tracks prediction error ABOUT surprise (not just raw surprise).
+    If the network expects calm and gets surprised, dopamine spikes.
+    If the network expects noise (high predicted_surprise) and gets it, dopamine stays ~1.0.
+    """
+    def __init__(self):
+        self.predicted_surprise = 0.0
+    
+    def compute_dopamine(self, actual_surprise: torch.Tensor, update_state: bool = True) -> torch.Tensor:
+        """Vectorized dopamine computation for a batch of surprises."""
+        avg_surprise = actual_surprise.mean().item()
+        
+        if self.predicted_surprise <= 1e-6:
+            self.predicted_surprise = max(1e-6, avg_surprise)
+            return torch.ones_like(actual_surprise)
+            
+        # V5.2.1: Ratio-based dopamine burst
+        rel_error = (actual_surprise - self.predicted_surprise) / self.predicted_surprise
+        dopamine = (1.0 + rel_error).clamp(0.1, 5.0)
+        
+        if update_state:
+            alpha = 0.2 if avg_surprise > self.predicted_surprise else 0.02
+            self.predicted_surprise = (1 - alpha) * self.predicted_surprise + alpha * avg_surprise
+        return dopamine
+
+class HippocampalModule:
+    """
+    V5.2: Episodic Memory System (Hippocampus).
+    Stores "Epiphanies" (high-salience settled latent states).
+    Allows zero-shot recall by injecting stored states into the hierarchy,
+    bypassing the iterative settling loop for familiar contexts.
+    """
+    def __init__(self, max_memories: int = 1000, similarity_threshold: float = 0.95):
+        self.max_memories = max_memories
+        self.threshold = similarity_threshold
+        # Stores: {Input_Norm: (Input_Tensor, Latent_States_List)}
+        self.memory: List[Dict] = []
+
+    def store(self, x: torch.Tensor, latent_states: List[torch.Tensor]):
+        """Stores a snapshot of the input and the resulting hierarchy states."""
+        # x is [1, input_dim]. We keep it as a flattened key.
+        snapshot = {
+            'x': x.detach().clone(),
+            'latents': [l.detach().clone() for l in latent_states]
+        }
+        
+        # Simple FIFO for now
+        if len(self.memory) >= self.max_memories:
+            self.memory.pop(0)
+        self.memory.append(snapshot)
+
+    def recall(self, x: torch.Tensor) -> Optional[List[torch.Tensor]]:
+        """Searches for a matching context using Cosine Similarity."""
+        if not self.memory:
+            return None
+        
+        # Flatten input for comparison
+        x_flat = x.view(-1)
+        x_norm = torch.norm(x_flat)
+        if x_norm < 1e-6: return None
+        
+        best_sim = -1.0
+        best_latents = None
+        
+        # Search for best match
+        # TODO: Vectorize this or use a spatial index (FAISS-like) as memory grows
+        for mem in self.memory:
+            m_flat = mem['x'].view(-1)
+            similarity = torch.dot(x_flat, m_flat) / (x_norm * torch.norm(m_flat) + 1e-8)
+            
+            if similarity > best_sim:
+                best_sim = similarity
+                best_latents = mem['latents']
+                
+        if best_sim >= self.threshold:
+            return best_latents
+        return None
+
+class ThermalGuardian:
+    """
+    V5.5: Hardware-Aware Safety Layer (Laptop Shield).
+    Monitors GPU temperature and VRAM usage via nvidia-smi.
+    Implements adaptive throttling, mandatory pauses, and emergency shutdowns.
+    """
+    def __init__(self, device: str = "cpu", 
+                 caution_temp: int = 70, 
+                 pause_temp: int = 78, 
+                 emergency_temp: int = 85):
+        self.device = device
+        self.is_cuda = "cuda" in device
+        self.caution_temp = caution_temp
+        self.pause_temp = pause_temp
+        self.emergency_temp = emergency_temp
+        
+        # Telemetry state
+        self.peak_temp = 0
+        self.avg_temp = 0
+        self._temp_history = []
+        self._check_counter = 0
+
+    def query_telemetry(self) -> Tuple[int, float]:
+        """Queries GPU temp (C) and VRAM usage (%) via nvidia-smi."""
+        if not self.is_cuda:
+            return 30, 0.0 # Standard CPU room temp
+            
+        try:
+            # Query temperature and memory usage
+            cmd = "nvidia-smi --query-gpu=temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits"
+            res = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split(',')
+            temp = int(res[0])
+            used_mem = int(res[1])
+            total_mem = int(res[2])
+            vram_pct = (used_mem / total_mem) * 100
+            return temp, vram_pct
+        except Exception as e:
+            # Fallback if nvidia-smi fails
+            return 40, 0.0
+
+    def check(self, agent: 'CognitivePredictiveAgent' = None):
+        """Perform a safety check and throttle if necessary."""
+        self._check_counter += 1
+        # Only query every 10 calls to reduce overhead
+        if self._check_counter % 10 != 0:
+            return
+            
+        temp, vram = self.query_telemetry()
+        self.peak_temp = max(self.peak_temp, temp)
+        self._temp_history.append(temp)
+        if len(self._temp_history) > 100: self._temp_history.pop(0)
+        self.avg_temp = sum(self._temp_history) / len(self._temp_history)
+
+        # 1. VRAM Guardian (Safety Cache Clear)
+        if vram > 90.0:
+            print(f"!!! [WARNING] VRAM CRITICAL: {vram:.1f}% !!! Clearing Cache...")
+            torch.cuda.empty_cache()
+            time.sleep(5.0)
+
+        # 2. Thermal Emergency (Shutdown)
+        if temp >= self.emergency_temp:
+            print(f"\nFATAL: [THERMAL EMERGENCY] GPU at {temp}C! Threshold {self.emergency_temp}C reached.")
+            print("Action: Saving emergency checkpoint and shutting down process...")
+            if agent:
+                agent.save_checkpoint("thermal_emergency_checkpoint.pt")
+            sys.exit(1)
+
+        # 3. Thermal Pause (Mandatory Rest)
+        if temp >= self.pause_temp:
+            print(f"\n[THERMAL PAUSE] GPU at {temp}C. Mandatory 30s rest for cooling...")
+            time.sleep(30.0)
+            # Re-check after rest
+            temp, _ = self.query_telemetry()
+            if temp > self.caution_temp:
+                 print(f"Still at {temp}C. Extending rest...")
+                 time.sleep(15.0)
+
+        # 4. Thermal Caution (Active Throttling)
+        elif temp >= self.caution_temp:
+            # Micro-sleep to allow fans to catch up
+            time.sleep(0.1)
 class CognitivePredictiveAgent:
     """
     Wraps the V4 PredictiveHierarchy with V2/V3 Cognitive Ecosystems:
@@ -86,6 +256,9 @@ class CognitivePredictiveAgent:
         self.device = device
         self.salience_engine = SalienceEngine()
         self.buffer = SurpriseBuffer()
+        self.neuromodulator = NeuromodulatorNode()
+        self.hippocampus = HippocampalModule()
+        self.guardian = ThermalGuardian(device=device)
         self.step_count = 0
         
         # --- V5.0: Novelty Decay ---
@@ -100,53 +273,136 @@ class CognitivePredictiveAgent:
         for col in self.hierarchy.layers:
             self.base_lrs.append((col.eta_V, col.eta_W))
 
+        # --- V7.2: Temporal Context Management ---
+        self.r_matrix_snapshots: Dict[str, list[torch.Tensor]] = {}
+        self.current_context: Optional[str] = None
+        
+        # --- V7.2: Parametric Neurogenesis ---
+        self.dopamine_threshold = 1.1
+        self.salience_threshold = 1.1
+        self.hypersensitive = False
+
+    def detect_context_shift(self, surprise: float, baseline: float) -> bool:
+        """V7.2: Detect sudden surprisal spikes that indicate a domain/language boundary."""
+        if baseline <= 0: return False
+        return surprise > baseline * 2.0
+
+    def switch_temporal_context(self, context_name: str):
+        """V7.2: Swap the hierarchy's recurrent weights to match the detected context."""
+        # 1. Save current context
+        if self.current_context:
+            self.r_matrix_snapshots[self.current_context] = self.hierarchy.snapshot_r_matrices()
+        
+        # 2. Load or initialize new context
+        if context_name in self.r_matrix_snapshots:
+            print(f"[RECOVERY] Restoring temporal context: {context_name}")
+            self.hierarchy.load_r_matrices(self.r_matrix_snapshots[context_name])
+        else:
+            print(f"[RECOVERY] Initializing new temporal context: {context_name}")
+            self.hierarchy.reset_recurrent_matrices(gain=0.1)
+        
+        self.current_context = context_name
+
+    def enable_hypersensitive_discovery(self, surprise_baseline: float = None):
+        """V7.2: Lower neurogenesis barriers to force rapid expertise recruitment."""
+        if surprise_baseline:
+            # User's suggestion: threshold = baseline * 1.1
+            self.dopamine_threshold = 1.05 # Even more sensitive toggle
+            self.salience_threshold = 1.05
+        else:
+            self.dopamine_threshold = 1.05
+            self.salience_threshold = 1.05
+        self.hypersensitive = True
+        print(">>> HYPERSENSITIVE DISCOVERY ENABLED <<<")
+
+    def disable_hypersensitive_discovery(self):
+        """Restore default conservative neurogenesis thresholds."""
+        self.dopamine_threshold = 1.5
+        self.salience_threshold = 1.5
+        self.hypersensitive = False
+        print(">>> DISCOVERY STABILIZED (Hypersensitivity Off) <<<")
+
     def observe_and_learn(self, x: torch.Tensor, y: torch.Tensor, task_id: int = 0, 
                           max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0,
                           warm_start: bool = False):
-        """Processes a single sample online."""
-        # 1. Do a dry-run inference to compute surprise (MSE without label guidance)
+        """Vectorized Batch-Parallel observe and learn."""
+        batch_size = x.shape[0]
+        
+        # --- V5.2: Hippocampal Fast-Path (Serial for now, vectorized training later) ---
+        if batch_size == 1:
+            with torch.no_grad():
+                recall_states = self.hippocampus.recall(x)
+                if recall_states:
+                    for i, col in enumerate(self.hierarchy.layers):
+                        col.x.data.copy_(recall_states[i])
+                    pred_y = self.hierarchy.predict_label(x, max_steps=1, update_temporal=False)
+                    if pred_y.shape[1] > y.shape[1]: pred_y = pred_y[:, :y.shape[1]]
+                    surprise = torch.nn.functional.mse_loss(pred_y, y).item()
+                    self.neuromodulator.compute_dopamine(torch.tensor([surprise]))
+                    return 1.0, surprise
+
+        # 1. Dry-run for surprise estimation (Vectorized)
         if not warm_start:
-            self.hierarchy.reset_states(batch_size=1)
+            self.hierarchy.reset_states(batch_size=batch_size)
         with torch.no_grad():
-            pred_y_tensor = self.hierarchy.predict_label(x, max_steps=max_steps)
+            pred_y_tensor = self.hierarchy.predict_label(x, max_steps=max_steps, update_temporal=False)
             if pred_y_tensor.shape[1] > y.shape[1]:
-                d = y.shape[1]
-                pred_y_tensor = pred_y_tensor[:, :d]
-            raw_surprise = torch.nn.functional.mse_loss(pred_y_tensor, y).item()
-
-        # --- V5.0: Novelty Decay ---
-        # Quantize to 2 decimal places before hashing to bin similar patterns
-        quantized = (x.flatten() * 100).int()
-        pattern_key = hash(quantized.numpy().tobytes())
-        self.exposure_counts[pattern_key] = self.exposure_counts.get(pattern_key, 0) + 1
-        exposure = self.exposure_counts[pattern_key]
-        effective_surprise = raw_surprise * math.exp(-exposure / self.tau_novelty)
+                pred_y_tensor = pred_y_tensor[:, :y.shape[1]]
             
-        # 2. Compute Salience (using effective_surprise instead of raw)
-        weight, surprise, progress = self.salience_engine.compute(effective_surprise)
+            # Per-sample MSE
+            raw_surprise = torch.mean((pred_y_tensor - y)**2, dim=1)
+            
+        # --- V5.0: Novelty Decay (Vectorized batch hashing) ---
+        # We process novelty for each sample in the batch
+        effective_surprise = torch.zeros_like(raw_surprise)
+        for i in range(batch_size):
+            quantized = (x[i].flatten() * 100).int()
+            pattern_key = hash(quantized.cpu().numpy().tobytes())
+            self.exposure_counts[pattern_key] = self.exposure_counts.get(pattern_key, 0) + 1
+            exposure = self.exposure_counts[pattern_key]
+            effective_surprise[i] = raw_surprise[i] * math.exp(-exposure / self.tau_novelty)
+            
+        # 2. Vectorized Salience and Dopamine
+        weight_vec, surprise_vec, progress_vec = self.salience_engine.compute(effective_surprise)
+        dopamine_vec = self.neuromodulator.compute_dopamine(effective_surprise)
+        
+        # 3. Add to Buffer (Selective sampling)
+        for i in range(batch_size):
+            if effective_surprise[i] > 0.05:
+                exp = Experience(task_id, x[i:i+1], y[i:i+1], effective_surprise[i].item(), weight_vec[i].item(), self.step_count)
+                self.buffer.add(exp)
 
-        # 3. Add to Episodic Buffer if effective surprise is notable
-        if effective_surprise > 0.05:
-            exp = Experience(task_id, x, y, effective_surprise, weight, self.step_count)
-            self.buffer.add(exp)
-
-        # 4. Scale Learning Rates dynamically for this sample based on Salience
-        self._apply_salience_weight(weight)
-
-        # 5. Run standard online learning
+        # 4. Learning Phase (Vectorized)
+        # Average salience/dopamine for the whole-hierarchy step
+        # (Individual neurons in PredictiveColumn.update_weights will still use their specific activations)
+        avg_weight = weight_vec.mean().item()
+        avg_dopamine = dopamine_vec.mean().item()
+        
+        self._apply_salience_weight(avg_weight)
+        
         self.hierarchy.infer_and_learn_online(
             x, top_level_label=y,
             max_steps=max_steps,
             recognition_weight=recognition_weight,
             beta_push=beta_push,
-            warm_start=warm_start
+            warm_start=warm_start,
+            dopamine_burst=avg_dopamine # Pass avg for now, weight_update uses it as scalar
         )
         
+        # --- V5.5: Thermal Safety Check ---
+        self.guardian.check(agent=self)
+        
+        # --- V5.2: Hippocampal Storage (Epiphany) ---
+        # If we successfully reduced surprise through a dopamine burst, store the epiphany
+        if avg_dopamine > 1.5:
+             latent_snapshots = [col.x.detach().clone() for col in self.hierarchy.layers]
+             self.hippocampus.store(x, latent_snapshots)
+
         # 6. Restore base learning rates
         self._apply_salience_weight(1.0, restore=True)
         self.step_count += 1
         
-        return weight, effective_surprise
+        return avg_weight, effective_surprise
 
     def dream_replay(self, batch_size: int = 16, max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0):
         """Extracts highly salient memories and dreams about them to bootstrap the sparse dictionary."""
@@ -159,15 +415,26 @@ class CognitivePredictiveAgent:
         
         # Boost learning rates for dream consolidation
         self._apply_salience_weight(2.0)
+        # V5.2: Dream dopamine — consolidation dreams and neurogenesis are heavily modulated
+        avg_effective_tensor = torch.tensor([sum(e.surprise for e in experiences) / len(experiences)], device=self.device)
+        dopamine_burst = self.neuromodulator.compute_dopamine(avg_effective_tensor, update_state=False).item()
         
         # Check for Neurogenesis Trigger
-        avg_surprise = sum(e.surprise for e in experiences) / len(experiences)
         avg_salience = sum(e.salience for e in experiences) / len(experiences)
         
-        if avg_surprise > 0.25 and avg_salience > 1.1:
+        # V5.2: Unified Neuromodulation & Neurogenesis.
+        # Neurogenesis requires UNEXPECTED surprise (Dopamine > threshold). 
+        if dopamine_burst > self.dopamine_threshold and avg_salience > self.salience_threshold:
             # Persistent anomaly! Trigger identity sliver neurogenesis
             # Pick the sample with highest individual surprise in the batch
-            sample_surprises = [torch.nn.functional.mse_loss(self.hierarchy.predict_label(x_batch[i:i+1]), y_batch[i:i+1]).item() for i in range(len(experiences))]
+            # V7.3.3: Slice surprise ranking to match manifold
+            def _get_surprise(x_in, y_target):
+                pred = self.hierarchy.predict_label(x_in, update_temporal=False)
+                if pred.shape[1] > y_target.shape[1]:
+                    pred = pred[:, :y_target.shape[1]]
+                return torch.nn.functional.mse_loss(pred, y_target).item()
+            
+            sample_surprises = [_get_surprise(x_batch[i:i+1], y_batch[i:i+1]) for i in range(len(experiences))]
             best_idx = int(torch.argmax(torch.tensor(sample_surprises)))
             
             print(f">>> RECRUITING IDENTITY SLIVER PATHWAY for Sample {best_idx} (Surprise: {sample_surprises[best_idx]:.4f}) <<<")
@@ -205,9 +472,14 @@ class CognitivePredictiveAgent:
             x_batch, top_level_label=y_batch,
             max_steps=max_steps,
             recognition_weight=recognition_weight,
-            beta_push=beta_push
+            beta_push=beta_push,
+            dopamine_burst=max(1.0, dopamine_burst) # Ensure dreams never receive suppressed plasticity
         )
         
+        # --- V5.5: Thermal Safety Check (End of dream) ---
+        self.guardian.check(agent=self)
+
+        # Restore base learning rates
         self._apply_salience_weight(1.0, restore=True)
         return len(experiences)
 
@@ -222,15 +494,11 @@ class CognitivePredictiveAgent:
                 col.eta_W = base_w * weight
 
     def prune_dormant_experts(self, threshold: float = 0.01):
-        """V5.0: Lift gradient shields on dormant expert neurons.
-        Neurons below the retention threshold re-enter the general
-        learning manifold and can be reused for new tasks.
-        """
+        """V5.0: Lift gradient shields on dormant expert neurons."""
         pruned_total = 0
         for i, col in enumerate(self.hierarchy.layers):
             scores = col.compute_retention_scores()
-            # Only consider neurons beyond the original architecture
-            original_dim = 16  # base architecture width
+            original_dim = 16 
             if col.output_dim <= original_dim:
                 continue
             
@@ -238,12 +506,37 @@ class CognitivePredictiveAgent:
             dormant = (expert_scores < threshold)
             if dormant.any():
                 n_dormant = dormant.sum().item()
-                # Lift shields — neurons re-enter general manifold
                 col.V_mask[:, original_dim:][:, dormant] = 1.0
                 col.W_mask[original_dim:, :][dormant, :] = 1.0
                 pruned_total += n_dormant
-                print(f"    [PRUNE] Layer {i}: {n_dormant} dormant experts un-shielded (scores < {threshold})")
+                print(f"    [PRUNE] Layer {i}: {n_dormant} dormant experts un-shielded")
         
         if pruned_total > 0:
-            print(f"    [PRUNE] Total: {pruned_total} expert pathways returned to general manifold")
+            print(f"    [PRUNE] Total: {pruned_total} expert pathways recycled")
         return pruned_total
+
+    def save_checkpoint(self, filepath: str):
+        """Saves current agency state (hierarchy + cognitive buffers)."""
+        checkpoint = {
+            'hierarchy_state': self.hierarchy.state_dict(),
+            'neuromodulator': self.neuromodulator.predicted_surprise,
+            'hippocampus': self.hippocampus.memory,
+            'step_count': self.step_count,
+            'exposure_counts': self.exposure_counts,
+            'thermal_stats': {
+                'peak': self.guardian.peak_temp,
+                'avg': self.guardian.avg_temp
+            }
+        }
+        torch.save(checkpoint, filepath)
+        print(f"[Checkpoint] Saved to {filepath}")
+
+    def load_checkpoint(self, filepath: str):
+        if not os.path.exists(filepath): return
+        checkpoint = torch.load(filepath, map_location=self.device)
+        self.hierarchy.load_state_dict(checkpoint['hierarchy_state'])
+        self.neuromodulator.predicted_surprise = checkpoint['neuromodulator']
+        self.hippocampus.memory = checkpoint['hippocampus']
+        self.step_count = checkpoint['step_count']
+        self.exposure_counts = checkpoint['exposure_counts']
+        print(f"[Checkpoint] Loaded from {filepath}")
