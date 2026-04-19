@@ -4,6 +4,7 @@ from agnis_v4_core import PredictiveHierarchy
 from agnis_v4_cognitive import CognitivePredictiveAgent, Experience
 import random
 import matplotlib.pyplot as plt
+from experiment_utils import metric_to_float
 
 def stress_test_stability():
     device = "cpu"
@@ -25,7 +26,7 @@ def stress_test_stability():
         
         # 1. Observation
         weight, surprise = agent.observe_and_learn(x, y, task_id=t)
-        surprise_history.append(surprise)
+        surprise_history.append(metric_to_float(surprise))
         
         # 2. Replay & Potential Expansion
         # We manually trigger dream_replay more frequently to speed up the test
@@ -35,7 +36,7 @@ def stress_test_stability():
         neurons_drift.append(current_neurons)
         
         if (t+1) % 10 == 0:
-            print(f"Task {t+1}/{tasks} | L0 Neurons: {current_neurons} | Last Surprise: {surprise:.4f}")
+            print(f"Task {t+1}/{tasks} | L0 Neurons: {current_neurons} | Last Surprise: {metric_to_float(surprise):.4f}")
 
     # Final Assessment Checks
     # 1. Structural Drift check: Are V_mask/W_mask still valid?

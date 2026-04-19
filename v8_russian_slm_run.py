@@ -85,6 +85,7 @@ def run_continual_learning_v73():
     seq_length = 64
     batch_size = 32
     embed_dim = 64
+    os.makedirs("checkpoints", exist_ok=True)
     
     # 1. Initialize Datasets
     with open("slm/input_it.txt", "r", encoding="utf-8") as f: it_text = f.read()[:1000000]
@@ -182,11 +183,15 @@ def run_continual_learning_v73():
     print("--------------------------------------")
 
     # --- V7.3.5: AWAKEN RUSSIAN SLIVER ---
-    print("\n>>> AWAKENING RUSSIAN EXPERT SLIVER (-2.0 Bias) <<<", flush=True)
+    print("\n>>> AWAKENING RUSSIAN EXPERT SLIVER (-0.5 Bias) <<<", flush=True)
     for layer in slm.hierarchy.layers:
         d_new = 32
         start_idx = layer.output_dim - d_new
-        layer.set_experts_bias(start_idx, layer.output_dim, -2.0)
+        layer.set_experts_bias(start_idx, layer.output_dim, -0.5)
+
+    forced_experts = slm.hierarchy.layers[0].output_dim - 64
+    print(f">>> FORCED EXPERT CAPACITY ACTIVE: {forced_experts} new neurons per expanded layer <<<", flush=True)
+    slm.agent.enable_hypersensitive_discovery(italian_baseline)
 
     # --- STAGE 2: Russian Training ---
     print(f"\n[STAGE 2] Russian Ignite (60 Mins)", flush=True)
@@ -210,6 +215,9 @@ def run_continual_learning_v73():
         current_eta_r = get_eta_r_schedule(ru_steps)
         for col in slm.hierarchy.layers:
             col.eta_R = current_eta_r
+
+        if ru_steps == 1000:
+            slm.agent.disable_hypersensitive_discovery()
             
         w, ru_surprise = slm.learn_step(contexts, targets)
         ru_steps += 1
@@ -217,12 +225,17 @@ def run_continual_learning_v73():
         if ru_steps % 500 == 0:
             it_probe = probe_italian_retention(slm, it_dataset)
             print(f"\n[Log {ru_steps}] Generating Sample...", flush=True)
-            sample = slm.generate(ru_dataset.tokenizer, prompt="Раскольников ", max_new_chars=64, temperature=0.8)
+            sample = slm.generate(
+                ru_dataset.tokenizer,
+                prompt="Раскольников ",
+                max_new_chars=64,
+                temperature=0.8,
+            )
             
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"## Batch {ru_steps}\n")
                 f.write(f"- **RU Surprise:** {ru_surprise:.4f} | **IT Retention:** {it_probe:.4f}\n")
-                f.write(f"- **Slivers:** {slm.agent.neurogenesis_count}\n")
+                f.write(f"- **Forced Experts:** {forced_experts} | **Slivers:** {slm.agent.neurogenesis_count}\n")
                 f.write(f"- **Sample:** `{sample}`\n\n")
 
             # --- V7.3.4: Periodic Milestone Saving ---

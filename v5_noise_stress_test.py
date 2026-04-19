@@ -76,13 +76,13 @@ def run_noise_stress_test():
     # Verify Novelty Decay (should prevent neurogenesis on pure noise)
     print("--- Novelty Decay Check ---")
     if final_neurogenesis == baseline_neurogenesis:
-        print("✅ PASS: No noise-triggered neurogenesis detected. Novelty decay is working correctly against high-entropy inputs.")
+        print("[PASS] No noise-triggered neurogenesis detected. Novelty decay is working correctly against high-entropy inputs.")
     else:
-        print(f"❌ FAIL: {final_neurogenesis - baseline_neurogenesis} new pathways recruited during noise injection.")
+        print(f"[FAIL] {final_neurogenesis - baseline_neurogenesis} new pathways recruited during noise injection.")
 
     # Verify General Manifold Absorption
     if final_neurons == baseline_neurons:
-        print("✅ PASS: General manifold safely absorbed noise without structural changes.")
+        print("[PASS] General manifold safely absorbed noise without structural changes.")
         
     print("--- Expert Retention Check ---")
     original_dim = 16
@@ -96,9 +96,9 @@ def run_noise_stress_test():
                 surviving = False
 
     if surviving:
-        print("✅ PASS: Expert neurons survived the noise injection (retention scoring preserved architecture).")
+        print("[PASS] Expert neurons survived the noise injection (retention scoring preserved architecture).")
     else:
-        print("⚠️ WARN: Some expert neurons fell below the retention threshold during the 500-step drought.")
+        print("[WARN] Some expert neurons fell below the retention threshold during the 500-step drought.")
 
     print("\\nStress Test Complete.")
 

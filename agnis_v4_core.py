@@ -548,6 +548,7 @@ class PredictiveHierarchy(nn.Module):
             layer.R = nn.Parameter(layer.R[:layer.output_dim, :layer.output_dim])
             layer.L = nn.Parameter(layer.L[:layer.output_dim, :layer.output_dim])
             layer.x = layer.x[:, :layer.output_dim]
+            layer.x_temporal = layer.x_temporal[:, :layer.output_dim]
             
             # 3. Component slicing (biases and masks)
             layer.b_in = nn.Parameter(layer.b_in[:layer.output_dim])
