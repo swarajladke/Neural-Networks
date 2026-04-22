@@ -71,6 +71,41 @@ Outcome:
 
 - Quality gates now test behavior more strictly and still pass.
 
+## 2.5) PNG Proof Artifacts
+
+The repo already contains visual proof snapshots that document earlier and later milestones:
+
+- `live_learning_proof.png` -> early evidence that the system could improve during live learning
+- `phase_31_simultaneous_retention.png` -> early simultaneous-retention behavior
+- `phase_100_domain_retention.png` -> domain-retention checkpoint image
+- `phase_200_simultaneous_retention_v4.png` -> later large-phase retention visualization
+- `v2_vs_v3_benchmark.png` -> benchmark comparison across major generations
+- `synaptic_shield_breakthrough.png` -> V7.3 zero-forgetting breakthrough image
+
+### Live Learning Proof
+
+![Live Learning Proof](live_learning_proof.png)
+
+### Early Retention Proof
+
+![Phase 31 Simultaneous Retention](phase_31_simultaneous_retention.png)
+
+### Mid-Stage Retention Proof
+
+![Phase 100 Domain Retention](phase_100_domain_retention.png)
+
+### Large-Phase Retention Proof
+
+![Phase 200 Simultaneous Retention V4](phase_200_simultaneous_retention_v4.png)
+
+### Benchmark Proof
+
+![V2 vs V3 Benchmark](v2_vs_v3_benchmark.png)
+
+### V7.3 Breakthrough Proof
+
+![Synaptic Shield Breakthrough](synaptic_shield_breakthrough.png)
+
 ## 3) Current Achievements (With Evidence)
 
 ## A. Stable Mainline Regression
@@ -152,4 +187,3 @@ Interpretation:
 2. Improve multilingual text quality pipeline (encoding/tokenizer/corpus hygiene).
 3. Validate CUDA path on a CUDA-enabled machine (`v7_cuda_ignite.py`, then `v9_deep_pillar_benchmark.py`).
 4. Commit test-hardening changes and keep this report updated per milestone.
-

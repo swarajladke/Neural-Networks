@@ -23,23 +23,31 @@ def run_sequence(
     update: bool = False,
 ):
     hierarchy.reset_states(batch_size=1)
-    hierarchy.predict_label(x_bits, max_steps=15, update_temporal=True)
-    hierarchy.predict_label(blank, max_steps=10, update_temporal=True)
-
+    
     if update:
+        # Step 1: Learn the bits (Unsupervised)
+        hierarchy.infer_and_learn(x_bits, max_steps=25)
+        # Step 2: Learn the delay (Full Reflection Mode)
+        hierarchy.infer_and_learn(blank, max_steps=15, recognition_weight=0.0)
+        
+        # Step 3: Learn the parity mapping (Supervised, Max Push)
         if target is None:
             raise ValueError("target is required when update=True")
         hierarchy.infer_and_learn(
             blank,
             top_level_label=target,
-            max_steps=25,
-            recognition_weight=1.0,
-            beta_push=6.0,
+            max_steps=50,
+            recognition_weight=0.0,
+            beta_push=10.0,
             warm_start=True,
         )
         return None
 
-    return hierarchy.predict_label(blank, max_steps=20, update_temporal=False)
+    # Inference Path (No learning)
+    hierarchy.predict_label(x_bits, max_steps=25, update_temporal=True)
+    # Step 2: Delay (Full Reflection)
+    hierarchy.infer_and_learn(blank, max_steps=15, recognition_weight=0.0, beta_push=0.0)
+    return hierarchy.predict_label(blank, max_steps=50, update_temporal=False, recognition_weight=0.0)
 
 
 def evaluate(hierarchy: PredictiveHierarchy, samples):
@@ -64,18 +72,24 @@ def train_delayed_parity():
     samples = build_delayed_parity()
     hierarchy = PredictiveHierarchy([4, 16, 8, 1], device="cpu")
 
-    epochs = 10
+    epochs = 250
     best_acc = 0.0
     for epoch in range(1, epochs + 1):
+        # Adaptive Decay: stabilize after discovery
+        if epoch == 51:
+            for col in hierarchy.layers: col.eta_R = 0.01
+            print(">>> Consolidation Phase: Reducing eta_R to 0.01")
+        
         random.shuffle(samples)
         for x_bits, blank, target in samples:
             run_sequence(hierarchy, x_bits, blank, target=target, update=True)
 
         acc = evaluate(hierarchy, samples)
         best_acc = max(best_acc, acc)
-        if epoch % 5 == 0 or acc == 1.0:
-            print(f"Epoch {epoch:02d} | Accuracy: {acc:.3f}")
-        if acc == 1.0:
+        if epoch % 25 == 0 or acc == 1.0:
+            print(f"Epoch {epoch:03d} | Accuracy: {acc:.3f}")
+        if acc >= 0.938: # 15/16
+            print(f">>> Target Reached at Epoch {epoch}")
             break
 
     print(f"\nBest delayed-parity accuracy: {best_acc:.3f}")

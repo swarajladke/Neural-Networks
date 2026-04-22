@@ -100,6 +100,8 @@ class PredictiveColumn(nn.Module):
 
         self.register_buffer("x", torch.zeros(1, output_dim, device=self.device))
         self.register_buffer("x_temporal", torch.zeros(1, output_dim, device=self.device))
+        self.register_buffer("x_temporal_2", torch.zeros(1, output_dim, device=self.device))
+        self.register_buffer("x_temporal_3", torch.zeros(1, output_dim, device=self.device))
 
         self.error      = torch.zeros(input_dim, device=self.device)
         self.last_input : torch.Tensor | None = None
@@ -108,7 +110,7 @@ class PredictiveColumn(nn.Module):
         self.eta_x      = 0.8
         self.eta_V      = 0.05    # agile recognition
         self.eta_W      = 0.03    # v4.9: raised from 0.005 to build generative model
-        self.eta_R      = 0.001   # v6.1: conservative recurrent binding (Phase 3.5)
+        self.eta_R      = 0.01    # V7.0: Stable post-parity consolidation
         self.layer_norm_r = nn.LayerNorm(output_dim, device=self.device)
 
         # v4.9: Homeostasis REMOVED — replaced by weight clamping
@@ -134,7 +136,17 @@ class PredictiveColumn(nn.Module):
         self._settled   = False
 
         k_r = math.sqrt(1.0 / max(1, output_dim))
-        self.R = nn.Parameter(torch.empty(output_dim, output_dim, device=self.device).uniform_(-k_r, k_r) * 0.1)
+        # V8.4: Spectral Matrix Recurrence
+        # High expressivity + Guaranteed Stability
+        self.R = nn.Parameter(torch.eye(output_dim, device=self.device) * 0.95)
+        
+        # V8.2: ACT Halting Gate (Learned Convergence)
+        self.halt_gate = nn.Linear(output_dim, 1, device=self.device)
+        
+        self.R_gate = nn.Parameter(torch.empty(output_dim, output_dim, device=self.device).uniform_(-k_r, k_r) * 0.1)
+        with torch.no_grad():
+            # Gate starts mostly OPEN
+            self.R_gate.data.add_(torch.eye(output_dim, device=self.device) * 2.0)
 
     def _k_wta_mask(self, x: torch.Tensor, k_ratio: float = 0.25) -> torch.Tensor:
         if x.shape[-1] <= 1:
@@ -157,16 +169,19 @@ class PredictiveColumn(nn.Module):
     def reset_state(self, batch_size: int = 1):
         if self.x.shape[0] != batch_size:
             self.x = torch.zeros(batch_size, self.output_dim, device=self.device)
+            self.x_temporal = torch.zeros_like(self.x)
+            self.x_temporal_2 = torch.zeros_like(self.x)
+            self.x_temporal_3 = torch.zeros_like(self.x)
         else:
             self.x.zero_()
-        if self.x_temporal.shape[0] != batch_size:
-            self.x_temporal = torch.zeros(batch_size, self.output_dim, device=self.device)
-        else:
             self.x_temporal.zero_()
+            self.x_temporal_2.zero_()
+            self.x_temporal_3.zero_()
 
     def step_temporal(self):
-        if self.x_temporal.shape != self.x.shape:
-            self.x_temporal = torch.zeros_like(self.x)
+        # Shift temporal history (t-2 -> t-3, t-1 -> t-2, t -> t-1)
+        self.x_temporal_3.copy_(self.x_temporal_2.detach())
+        self.x_temporal_2.copy_(self.x_temporal.detach())
         self.x_temporal.copy_(self.x.detach())
 
     def reset_recurrent_matrix(self, gain: float = 0.1):
@@ -191,6 +206,12 @@ class PredictiveColumn(nn.Module):
             assert post_freeze == 0, "Freeze failed — masks not zeroed"
             return pre_freeze 
 
+    def get_stable_R(self):
+        # Discretize: ensures R_ii in (0, 1) always
+        # R = exp(-delta_t * exp(log_A))
+        # Note: Since A is diagonal, matrix_exp is just element-wise exp
+        return torch.exp(-self.delta_t * torch.exp(self.log_A))
+
     def infer_step_sync(self, bottom_up, td_target, step_i, W_snap, b_out_snap, recognition_weight=1.0):
         self.last_input = bottom_up.detach()
         x_prev = self.x.clone()
@@ -198,26 +219,34 @@ class PredictiveColumn(nn.Module):
         prediction = torch.matmul(phi_x, W_snap) + b_out_snap
         self.error = (bottom_up - prediction).detach()
 
-        feedback_drive    = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x)
+        feedback_drive    = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x) * recognition_weight
         forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
         recognition_drive = (forward_drive - self.x) * recognition_weight
         top_down_drive    = 3.0 * (td_target - self.x) if td_target is not None else 0.0
         
-        # V5.3.5 Stable Temporal Binding: LayerNorm recurrent drive
-        recurrent_raw     = torch.matmul(self.x_temporal.detach(), self.R)
-        recurrent_drive   = self.layer_norm_r(recurrent_raw) * 0.3
+        # V6.4: Multi-step Gated Temporal Binding
+        x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
+        
+        # V8.4: Non-Linear Matrix Recurrence
+        recurrent_raw = torch.matmul(self._phi(x_context), self.R)
+        gate              = torch.sigmoid(torch.matmul(x_context, self.R_gate))
+        recurrent_drive   = (recurrent_raw * gate)
+        self._current_x_context = x_context
 
-        state_grad  = feedback_drive + recognition_drive + top_down_drive
+        # V8.3: Softened Persistent Input Anchor
+        direct_input_drive = (forward_drive - self.x) * (0.5 * recognition_weight)
+        
+        state_grad  = feedback_drive + recognition_drive + top_down_drive + direct_input_drive
         state_grad += (recurrent_drive - self.x)
         
-        # V5.0: Learned lateral communication replaces naive mean inhibition
+        # V8.3: Lateral Surge (Forced Specialization)
         lateral_drive = torch.matmul(self._phi(self.x), self.L * self.L_mask)
-        state_grad += 0.3 * lateral_drive
+        state_grad += (1.0 * recognition_weight) * lateral_drive
         state_grad -= self.lambda_act * torch.sign(self.x)
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx  = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx).clamp_(-5.0, 5.0)
+        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def infer_step_top(self, bottom_up, label, step_i, W_snap, b_out_snap, recognition_weight=1.0, beta_push=3.0):
@@ -237,21 +266,29 @@ class PredictiveColumn(nn.Module):
         forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
         recognition_drive = (forward_drive - self.x) * recognition_weight
         
-        # V5.3.5 Stable Temporal Binding: LayerNorm recurrent drive
-        recurrent_raw     = torch.matmul(self.x_temporal.detach(), self.R)
-        recurrent_drive   = self.layer_norm_r(recurrent_raw) * 0.3
+        # V6.4: Multi-step Gated Temporal Binding
+        x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
+        
+        # V8.4: Non-Linear Matrix Recurrence
+        recurrent_raw = torch.matmul(self._phi(x_context), self.R)
+        gate              = torch.sigmoid(torch.matmul(x_context, self.R_gate))
+        recurrent_drive   = (recurrent_raw * gate)
+        self._current_x_context = x_context
 
-        state_grad  = label_drive + recognition_drive
+        # V8.3: Softened Persistent Input Anchor
+        direct_input_drive = (forward_drive - self.x) * (0.5 * recognition_weight)
+        
+        state_grad  = label_drive + recognition_drive + direct_input_drive
         state_grad += (recurrent_drive - self.x)
 
-        # V5.0: Learned lateral communication replaces naive mean inhibition
+        # V8.3: Lateral Surge (Forced Specialization)
         lateral_drive = torch.matmul(self._phi(self.x), self.L * self.L_mask)
-        state_grad += 0.3 * lateral_drive
+        state_grad += (1.0 * recognition_weight) * lateral_drive
         state_grad -= self.lambda_act * torch.sign(self.x)
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx  = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx).clamp_(-5.0, 5.0)
+        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def update_weights(self, is_top=False, lambda_W_top=0.0, dopamine_burst=1.0, convergence_quality=1.0):
@@ -293,20 +330,34 @@ class PredictiveColumn(nn.Module):
 
             # 5. Vectorized Recurrent (R) Update
             # temporal_src: [batch, out]. Innovation target: [batch, out]
-            temporal_state = self.x_temporal.detach()
+            temporal_state = getattr(self, '_current_x_context', self.x_temporal).detach()
             temporal_src = self._phi(temporal_state)
-            recurrent_raw = torch.matmul(temporal_state, self.R.data)
-            recurrent_drive = self.layer_norm_r(recurrent_raw)
             
+            # Recurrent drive recalculated for gradient precision
+            recurrent_raw = torch.matmul(temporal_state, self.R.data)
+            gate = torch.sigmoid(torch.matmul(temporal_state, self.R_gate.data))
+            recurrent_drive = (recurrent_raw * gate)
+            
+            # V8.4: Spectral Recurrent Update
             dR_target = (self.x.detach() - recurrent_drive)
             dR_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
-            
-            # Apply dopamine and convergence quality to R update
-            # convergence_quality is a scalar (for now) or per-batch
-            dR_avg = dR_batch.mean(dim=0) * convergence_quality
-            dR_avg -= 0.01 * self.R.data # weak decay
-            
+            dR_avg = dR_batch.mean(dim=0)
             self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0)
+            # Spectral Normalization: Keep spectral radius < 1
+            with torch.no_grad():
+                norm = torch.linalg.norm(self.R.data, ord=2)
+                if norm > 0.98: self.R.data *= (0.98 / norm)
+
+            # V6.3: Train the Gate (Learns when to open based on the temporal mismatch)
+            # We use the full matrix gradient for the gate to maintain cross-dependency capacity
+            dR_matrix_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
+            dR_matrix_avg = dR_matrix_batch.mean(dim=0)
+            self.R_gate.data += self.eta_R * 0.5 * dopamine_burst * _clip_update(dR_matrix_avg, max_norm=1.0)
+
+            # V8.2: Train the ACT Halt Gate
+            # Tries to learn to fire for the settled state x
+            halt_error = (1.0 - torch.sigmoid(self.halt_gate(self.x.detach())))
+            self.halt_gate.weight.data.add_(torch.matmul(halt_error.t(), self.x.detach()) * self.eta_R * 0.1)
 
             # 6. Adaptive Weight Clamping (Vectorized stats are already averaged)
             self._wc_step_counter += 1
@@ -323,7 +374,6 @@ class PredictiveColumn(nn.Module):
             self.b_in.data.clamp_(-wc, wc)
             self.W.data.clamp_(-wc, wc)
             self.b_out.data.clamp_(-wc, wc)
-            self.R.data.clamp_(-0.5, 0.5)
 
             # 7. Expert Retention — track firing (Vectorized)
             self._total_steps += 1
@@ -417,10 +467,16 @@ class PredictiveColumn(nn.Module):
             self.register_buffer("L_mask", L_mask_new)
 
             R_old = self.R.data
+            R_gate_old = self.R_gate.data
             R_new = torch.zeros(new_dim, new_dim, device=self.device)
+            R_gate_new = torch.zeros(new_dim, new_dim, device=self.device)
             R_new[:D_out, :D_out] = R_old
+            R_gate_new[:D_out, :D_out] = R_gate_old
             self.R = nn.Parameter(R_new)
+            self.R_gate = nn.Parameter(R_gate_new)
             self.x_temporal = torch.zeros(self.x.shape[0], self.output_dim, device=self.device)
+            self.x_temporal_2 = torch.zeros_like(self.x_temporal)
+            self.x_temporal_3 = torch.zeros_like(self.x_temporal)
 
     def expand_input(self, num_neurons: int, init_v: torch.Tensor = None, init_w: torch.Tensor = None):
         with torch.no_grad():
@@ -479,9 +535,9 @@ class PredictiveHierarchy(nn.Module):
         for col in self.layers:
             col.reset_recurrent_matrix(gain=gain)
 
-    def snapshot_r_matrices(self) -> list[torch.Tensor]:
-        """V7.2: Capture the current state of all recurrent weights."""
-        return [col.R.detach().clone() for col in self.layers]
+    def snapshot_r_matrices(self) -> list[tuple[torch.Tensor, torch.Tensor]]:
+        """V7.2: Capture the current state of all recurrent weights (including gates)."""
+        return [(col.R.detach().clone(), col.R_gate.detach().clone()) for col in self.layers]
 
     def load_r_matrices(self, snapshots: list[torch.Tensor]):
         """V7.3.11: Dimension-invariant loading with block-diagonal temporal isolation.
@@ -493,38 +549,42 @@ class PredictiveHierarchy(nn.Module):
             
             if current_size == snapshot_size:
                 # Standard case: Dimensions match
-                layer.R.data.copy_(snapshot)
+                layer.R.data.copy_(snapshot[0])
+                layer.R_gate.data.copy_(snapshot[1])
             elif current_size > snapshot_size:
                 # Expansion case: Block-diagonal isolation
-                # We need a new identity-aligned structure that preserves both language quadrants
                 new_R = torch.zeros(current_size, current_size, device=self.device)
+                new_R_gate = torch.zeros(current_size, current_size, device=self.device)
                 
                 # Block 1: Restore Italian (or prior) temporal context (0:snap, 0:snap)
-                new_R[:snapshot_size, :snapshot_size] = snapshot
+                new_R[:snapshot_size, :snapshot_size] = snapshot[0]
+                new_R_gate[:snapshot_size, :snapshot_size] = snapshot[1]
                 
                 # Block 2: Russian (or new) quadrant stays orthogonal (snap:end, snap:end)
-                # We extract this from the current expanded R (which was ortho-initialized)
                 new_R[snapshot_size:, snapshot_size:] = layer.R[snapshot_size:, snapshot_size:]
+                new_R_gate[snapshot_size:, snapshot_size:] = layer.R_gate[snapshot_size:, snapshot_size:]
                 
-                # Cross-quadrants (IT->RU and RU->IT) are effectively ZERO by initialization
-                # This prevents temporal cross-language interference
                 layer.R.data.copy_(new_R)
+                layer.R_gate.data.copy_(new_R_gate)
             else:
                 raise ValueError(f"Snapshot ({snapshot_size}) larger than R ({current_size})!")
 
     def _save_full_state(self):
         """V7.3.9: Capture full expanded state, temporal history, components, and dimensions."""
-        return [(l.V, l.W, l.R, l.L, l.x, l.x_temporal, l.V_mask, l.W_mask, l.L_mask, l.b_in, l.b_out, l.layer_norm_r, l.input_dim, l.output_dim) for l in self.layers]
+        return [(l.V, l.W, l.R, l.R_gate, l.L, l.x, l.x_temporal, l.x_temporal_2, l.x_temporal_3, l.V_mask, l.W_mask, l.L_mask, l.b_in, l.b_out, l.layer_norm_r, l.input_dim, l.output_dim) for l in self.layers]
 
     def _restore_full_state(self, saved_states):
         """V7.3.9: Restore full expanded state, temporal history, components, and dimensions."""
-        for layer, (V, W, R, L, x, xt, Vm, Wm, Lm, bi, bo, ln, idim, odim) in zip(self.layers, saved_states):
+        for layer, (V, W, R, Rg, L, x, xt, xt2, xt3, Vm, Wm, Lm, bi, bo, ln, idim, odim) in zip(self.layers, saved_states):
             layer.V = V
             layer.W = W
             layer.R = R
+            layer.R_gate = Rg
             layer.L = L
             layer.x = x
             layer.x_temporal = xt
+            layer.x_temporal_2 = xt2
+            layer.x_temporal_3 = xt3
             layer.V_mask = Vm
             layer.W_mask = Wm
             layer.L_mask = Lm
@@ -546,9 +606,12 @@ class PredictiveHierarchy(nn.Module):
             layer.V = nn.Parameter(layer.V[:layer.input_dim, :layer.output_dim])
             layer.W = nn.Parameter(layer.W[:layer.output_dim, :layer.input_dim])
             layer.R = nn.Parameter(layer.R[:layer.output_dim, :layer.output_dim])
+            layer.R_gate = nn.Parameter(layer.R_gate[:layer.output_dim, :layer.output_dim])
             layer.L = nn.Parameter(layer.L[:layer.output_dim, :layer.output_dim])
             layer.x = layer.x[:, :layer.output_dim]
             layer.x_temporal = layer.x_temporal[:, :layer.output_dim]
+            layer.x_temporal_2 = layer.x_temporal_2[:, :layer.output_dim]
+            layer.x_temporal_3 = layer.x_temporal_3[:, :layer.output_dim]
             
             # 3. Component slicing (biases and masks)
             layer.b_in = nn.Parameter(layer.b_in[:layer.output_dim])
@@ -672,6 +735,12 @@ class PredictiveHierarchy(nn.Module):
         for step in range(max_steps):
             deltas = []
             for i, col in enumerate(self.layers):
+                # V8.2: ACT Halting Gate check
+                halt_prob = torch.sigmoid(col.halt_gate(col.x)).mean()
+                if halt_prob > 0.9:
+                    deltas.append(0.0) # Skip update
+                    continue
+
                 bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
                 if i == len(self.layers) - 1 and top_level_label is not None:
                     delta = col.infer_step_top(bottom_up, top_level_label, step, w_snaps[i], b_snaps[i], recognition_weight, beta_push)
@@ -725,7 +794,7 @@ class PredictiveHierarchy(nn.Module):
         )
         return steps, converged_early
 
-    def forward(self, sensory_input, max_steps=150, tol=1e-4, update_temporal=False):
+    def forward(self, sensory_input, max_steps=150, tol=1e-4, update_temporal=False, recognition_weight=1.0):
         batch_size = sensory_input.shape[0]
         for col in self.layers:
             if col.x.shape[0] != batch_size: col.reset_state(batch_size)
@@ -736,18 +805,18 @@ class PredictiveHierarchy(nn.Module):
             for i, col in enumerate(self.layers):
                 bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
                 td_target = (torch.matmul(self.layers[i+1]._phi(self.layers[i+1].x), w_snaps[i+1]) + b_snaps[i+1]) if i < len(self.layers)-1 else None
-                delta = col.infer_step_sync(bottom_up, td_target, step, w_snaps[i], b_snaps[i])
+                delta = col.infer_step_sync(bottom_up, td_target, step, w_snaps[i], b_snaps[i], recognition_weight=recognition_weight)
                 deltas.append(delta)
             if deltas and max(deltas) < tol: break
         if update_temporal:
             self.step_temporal()
         return self.layers[-1].x
 
-    def predict_label(self, sensory_input, max_steps=150, update_temporal=False):
-        return self.forward(sensory_input, max_steps=max_steps, update_temporal=update_temporal)
+    def predict_label(self, sensory_input, max_steps=150, update_temporal=False, recognition_weight=1.0):
+        return self.forward(sensory_input, max_steps=max_steps, update_temporal=update_temporal, recognition_weight=recognition_weight)
 
-    def predict_binary(self, sensory_input, threshold=0.5, max_steps=150, update_temporal=False):
-        return (torch.sigmoid(self.predict_label(sensory_input, max_steps, update_temporal=update_temporal)) > threshold).float()
+    def predict_binary(self, sensory_input, threshold=0.5, max_steps=150, update_temporal=False, recognition_weight=1.0):
+        return (torch.sigmoid(self.predict_label(sensory_input, max_steps, update_temporal=update_temporal, recognition_weight=recognition_weight)) > threshold).float()
 
     def weight_norms(self):
         norms = {}
