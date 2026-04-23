@@ -714,21 +714,24 @@ class PredictiveHierarchy(nn.Module):
             frozen_counts.append(frozen)
         
         # Step 2 — Chained Expansion
-        # If we expand layer i's output, we MUST expand layer i+1's input
         for i in range(len(self.layers)):
-            # Expand the hidden capacity of the current layer
-            self.layers[i].expand_output(
-                num_neurons=n,
-                init_type="orthogonal",
-                bias_init=-2.0
-            )
-            
-            # Expand the INPUT dimension of the layer above to match
-            if i + 1 < len(self.layers):
+            if i < len(self.layers) - 1:
+                # Expand the hidden capacity of the current layer
+                self.layers[i].expand_output(
+                    num_neurons=n,
+                    init_type="orthogonal",
+                    bias_init=-2.0
+                )
+                
+                # Expand the INPUT dimension of the layer above to match
                 self.layers[i+1].expand_input(num_neurons=n)
+                
+                # If the layer above is the Top Layer, unmask the new connections so it can learn the shared task
+                if i + 1 == len(self.layers) - 1:
+                    self.layers[i+1].V_mask[-n:, :] = 1.0
+                    self.layers[i+1].W_mask[:, -n:] = 1.0
             
             # Reset state for the new dimensionality
-            # Use current batch size if exists, else 1
             batch_size = self.layers[i].x.shape[0] if hasattr(self.layers[i], 'x') else 1
             self.layers[i].reset_state(batch_size)
 
