@@ -75,6 +75,7 @@ class PredictiveColumn(nn.Module):
 
         self.W     = nn.Parameter(torch.empty(output_dim, input_dim, device=self.device).uniform_(-k_w, k_w))
         self.b_out = nn.Parameter(torch.zeros(input_dim, device=self.device))
+        self.register_buffer("b_out_mask", torch.ones(input_dim, device=self.device))
         
         # Expert Masks to shield pathways from corruption
         self.register_buffer("V_mask", torch.ones_like(self.V))
@@ -205,6 +206,7 @@ class PredictiveColumn(nn.Module):
             self.V_mask.zero_()
             self.W_mask.zero_()
             self.b_in_mask.zero_()
+            self.b_out_mask.zero_()
             self.R_mask.zero_()
             self.R_gate_mask.zero_()
             self.L_mask.zero_()
@@ -333,7 +335,7 @@ class PredictiveColumn(nn.Module):
             
             dW_avg = dW_batch.mean(dim=0)
             self.W.data += self.eta_W * _clip_update(dW_avg, max_norm=5.0) * self.W_mask
-            self.b_out.data += self.eta_W * self.error.mean(dim=0)
+            self.b_out.data += self.eta_W * self.error.mean(dim=0) * self.b_out_mask
 
             # 5. Vectorized Recurrent (R) Update
             # temporal_src: [batch, out]. Innovation target: [batch, out]
@@ -383,6 +385,7 @@ class PredictiveColumn(nn.Module):
             old_V = self.V.data.clone()
             old_W = self.W.data.clone()
             old_b_in = self.b_in.data.clone()
+            old_b_out = self.b_out.data.clone()
             
             self.V.data.clamp_(-wc, wc)
             self.b_in.data.clamp_(-wc, wc)
@@ -393,6 +396,7 @@ class PredictiveColumn(nn.Module):
             self.V.data = torch.where(self.V_mask == 0.0, old_V, self.V.data)
             self.W.data = torch.where(self.W_mask == 0.0, old_W, self.W.data)
             self.b_in.data = torch.where(self.b_in_mask == 0.0, old_b_in, self.b_in.data)
+            self.b_out.data = torch.where(self.b_out_mask == 0.0, old_b_out, self.b_out.data)
 
             # 7. Expert Retention — track firing (Vectorized)
             self._total_steps += 1
@@ -533,6 +537,7 @@ class PredictiveColumn(nn.Module):
             self.W = nn.Parameter(torch.cat([self.W.data, w_new], dim=1))
             
             self.b_out = nn.Parameter(torch.cat([self.b_out.data, torch.zeros(d, device=self.device)]))
+            self.register_buffer("b_out_mask", torch.cat([self.b_out_mask, torch.ones(d, device=self.device)]))
             self.error = torch.zeros(D_in + d, device=self.device)
             self.input_dim += d
             
