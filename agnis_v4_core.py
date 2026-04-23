@@ -615,11 +615,11 @@ class PredictiveHierarchy(nn.Module):
 
     def _save_full_state(self):
         """V7.3.9: Capture full expanded state, temporal history, components, and dimensions."""
-        return [(l.V, l.W, l.R, l.R_gate, l.L, l.x, l.x_temporal, l.x_temporal_2, l.x_temporal_3, l.V_mask, l.W_mask, l.L_mask, l.b_in, l.b_out, l.layer_norm_r, l.input_dim, l.output_dim) for l in self.layers]
+        return [(l.V, l.W, l.R, l.R_gate, l.L, l.x, l.x_temporal, l.x_temporal_2, l.x_temporal_3, l.V_mask, l.W_mask, l.L_mask, l.R_mask, l.R_gate_mask, l.b_in_mask, l.b_out_mask, l.b_in, l.b_out, l.layer_norm_r, l.input_dim, l.output_dim) for l in self.layers]
 
     def _restore_full_state(self, saved_states):
         """V7.3.9: Restore full expanded state, temporal history, components, and dimensions."""
-        for layer, (V, W, R, Rg, L, x, xt, xt2, xt3, Vm, Wm, Lm, bi, bo, ln, idim, odim) in zip(self.layers, saved_states):
+        for layer, (V, W, R, Rg, L, x, xt, xt2, xt3, Vm, Wm, Lm, Rm, Rgm, bim, bom, bi, bo, ln, idim, odim) in zip(self.layers, saved_states):
             layer.V = V
             layer.W = W
             layer.R = R
@@ -632,6 +632,10 @@ class PredictiveHierarchy(nn.Module):
             layer.V_mask = Vm
             layer.W_mask = Wm
             layer.L_mask = Lm
+            layer.R_mask = Rm
+            layer.R_gate_mask = Rgm
+            layer.b_in_mask = bim
+            layer.b_out_mask = bom
             layer.b_in = bi
             layer.b_out = bo
             layer.layer_norm_r = ln
@@ -663,6 +667,10 @@ class PredictiveHierarchy(nn.Module):
             layer.V_mask = layer.V_mask[:layer.input_dim, :layer.output_dim]
             layer.W_mask = layer.W_mask[:layer.output_dim, :layer.input_dim]
             layer.L_mask = layer.L_mask[:layer.output_dim, :layer.output_dim]
+            layer.R_mask = layer.R_mask[:layer.output_dim, :layer.output_dim]
+            layer.R_gate_mask = layer.R_gate_mask[:layer.output_dim, :layer.output_dim]
+            layer.b_in_mask = layer.b_in_mask[:layer.output_dim]
+            layer.b_out_mask = layer.b_out_mask[:layer.input_dim]
             
             # 4. LayerNorm update
             layer.layer_norm_r = nn.LayerNorm(layer.output_dim, device=self.device)
