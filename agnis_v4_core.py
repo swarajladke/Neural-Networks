@@ -79,6 +79,7 @@ class PredictiveColumn(nn.Module):
         # Expert Masks to shield pathways from corruption
         self.register_buffer("V_mask", torch.ones_like(self.V))
         self.register_buffer("W_mask", torch.ones_like(self.W))
+        self.register_buffer("b_in_mask", torch.ones(output_dim, device=self.device))
 
         # --- V5.0: Lateral Communication (Sparse L matrix) ---
         self.lateral_k = 3  # k-nearest neighbors
@@ -139,11 +140,13 @@ class PredictiveColumn(nn.Module):
         # V8.4: Spectral Matrix Recurrence
         # High expressivity + Guaranteed Stability
         self.R = nn.Parameter(torch.eye(output_dim, device=self.device) * 0.95)
+        self.register_buffer("R_mask", torch.ones(output_dim, output_dim, device=self.device))
         
         # V8.2: ACT Halting Gate (Learned Convergence)
         self.halt_gate = nn.Linear(output_dim, 1, device=self.device)
         
         self.R_gate = nn.Parameter(torch.empty(output_dim, output_dim, device=self.device).uniform_(-k_r, k_r) * 0.1)
+        self.register_buffer("R_gate_mask", torch.ones(output_dim, output_dim, device=self.device))
         with torch.no_grad():
             # Gate starts mostly OPEN
             self.R_gate.data.add_(torch.eye(output_dim, device=self.device) * 2.0)
@@ -201,6 +204,9 @@ class PredictiveColumn(nn.Module):
             pre_freeze = self.V_mask.sum().item()
             self.V_mask.zero_()
             self.W_mask.zero_()
+            self.b_in_mask.zero_()
+            self.R_mask.zero_()
+            self.R_gate_mask.zero_()
             
             post_freeze = self.V_mask.sum().item()
             assert post_freeze == 0, "Freeze failed — masks not zeroed"
@@ -240,7 +246,7 @@ class PredictiveColumn(nn.Module):
         state_grad += (recurrent_drive - self.x)
         
         # V8.3: Lateral Surge (Forced Specialization)
-        lateral_drive = torch.matmul(self._phi(self.x), self.L * self.L_mask)
+        lateral_drive = torch.matmul(self._phi(self.x), self.L)
         state_grad += (1.0 * recognition_weight) * lateral_drive
         state_grad -= self.lambda_act * torch.sign(self.x)
 
@@ -282,7 +288,7 @@ class PredictiveColumn(nn.Module):
         state_grad += (recurrent_drive - self.x)
 
         # V8.3: Lateral Surge (Forced Specialization)
-        lateral_drive = torch.matmul(self._phi(self.x), self.L * self.L_mask)
+        lateral_drive = torch.matmul(self._phi(self.x), self.L)
         state_grad += (1.0 * recognition_weight) * lateral_drive
         state_grad -= self.lambda_act * torch.sign(self.x)
 
@@ -316,7 +322,7 @@ class PredictiveColumn(nn.Module):
             # Average gradients across batch for SNAP-ATP stability
             dV_avg = dV_batch.mean(dim=0)
             self.V.data += self.eta_V * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
-            self.b_in.data += self.eta_V * (delta_h * d_mask).mean(dim=0)
+            self.b_in.data += self.eta_V * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
 
             # 4. Vectorized Generative (W) Update
             # phi_h: [batch, out]. error: [batch, in]
@@ -342,7 +348,7 @@ class PredictiveColumn(nn.Module):
             dR_target = (self.x.detach() - recurrent_drive)
             dR_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
             dR_avg = dR_batch.mean(dim=0)
-            self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0)
+            self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0) * self.R_mask
             # Spectral Normalization: Keep spectral radius < 1
             with torch.no_grad():
                 norm = torch.linalg.norm(self.R.data, ord=2)
@@ -352,12 +358,12 @@ class PredictiveColumn(nn.Module):
             # We use the full matrix gradient for the gate to maintain cross-dependency capacity
             dR_matrix_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
             dR_matrix_avg = dR_matrix_batch.mean(dim=0)
-            self.R_gate.data += self.eta_R * 0.5 * dopamine_burst * _clip_update(dR_matrix_avg, max_norm=1.0)
+            self.R_gate.data += self.eta_R * 0.5 * dopamine_burst * _clip_update(dR_matrix_avg, max_norm=1.0) * self.R_gate_mask
 
             # V8.2: Train the ACT Halt Gate
             # Tries to learn to fire for the settled state x
             halt_error = (1.0 - torch.sigmoid(self.halt_gate(self.x.detach())))
-            self.halt_gate.weight.data.add_(torch.matmul(halt_error.t(), self.x.detach()) * self.eta_R * 0.1)
+            self.halt_gate.weight.data.add_((torch.matmul(halt_error.t(), self.x.detach()) * self.eta_R * 0.1) * self.b_in_mask.unsqueeze(0))
 
             # 6. Adaptive Weight Clamping (Vectorized stats are already averaged)
             self._wc_step_counter += 1
@@ -437,6 +443,7 @@ class PredictiveColumn(nn.Module):
             # 3. Update Masks: New sliver starts fully trainable (1.0)
             self.register_buffer("V_mask", torch.cat([self.V_mask, torch.ones(D_in, d, device=self.device)], dim=1))
             self.register_buffer("W_mask", torch.cat([self.W_mask, torch.ones(d, D_in, device=self.device)], dim=0))
+            self.register_buffer("b_in_mask", torch.cat([self.b_in_mask, torch.ones(d, device=self.device)]))
             
             # V7.3.2: Re-initialize LayerNorm to match the expanded dimensionality
             self.layer_norm_r = nn.LayerNorm(self.output_dim, device=self.device)
@@ -474,9 +481,28 @@ class PredictiveColumn(nn.Module):
             R_gate_new[:D_out, :D_out] = R_gate_old
             self.R = nn.Parameter(R_new)
             self.R_gate = nn.Parameter(R_gate_new)
+            
+            R_mask_new = torch.zeros(new_dim, new_dim, device=self.device)
+            R_mask_new[:D_out, :D_out] = self.R_mask
+            R_mask_new[:, D_out:] = 1.0 # Allow new neurons to learn incoming temporal dependencies
+            self.register_buffer("R_mask", R_mask_new)
+            
+            R_gate_mask_new = torch.zeros(new_dim, new_dim, device=self.device)
+            R_gate_mask_new[:D_out, :D_out] = self.R_gate_mask
+            R_gate_mask_new[:, D_out:] = 1.0
+            self.register_buffer("R_gate_mask", R_gate_mask_new)
+
             self.x_temporal = torch.zeros(self.x.shape[0], self.output_dim, device=self.device)
             self.x_temporal_2 = torch.zeros_like(self.x_temporal)
             self.x_temporal_3 = torch.zeros_like(self.x_temporal)
+
+            # V8.2: Expand ACT Halting Gate
+            old_halt_weight = self.halt_gate.weight.data
+            old_halt_bias = self.halt_gate.bias.data
+            self.halt_gate = nn.Linear(self.output_dim, 1, device=self.device)
+            self.halt_gate.weight.data[:, :D_out] = old_halt_weight
+            self.halt_gate.weight.data[:, D_out:] = 0.0 # New neurons start with 0 halt influence
+            self.halt_gate.bias.data = old_halt_bias
 
     def expand_input(self, num_neurons: int, init_v: torch.Tensor = None, init_w: torch.Tensor = None):
         with torch.no_grad():
@@ -668,8 +694,8 @@ class PredictiveHierarchy(nn.Module):
             batch_size = self.layers[i].x.shape[0] if hasattr(self.layers[i], 'x') else 1
             self.layers[i].reset_state(batch_size)
 
-        # Step 3 — Reset temporal context
-        self.reset_recurrent_matrices(gain=0.1)
+        # Step 3 — Reset temporal context (REMOVED: Prevents wiping the English R-matrix)
+        # self.reset_recurrent_matrices(gain=0.1)
         
         # Step 4 — Log
         print(f"\n[Fixed] Language boundary: {language}")
