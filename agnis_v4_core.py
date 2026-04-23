@@ -353,7 +353,10 @@ class PredictiveColumn(nn.Module):
             # Spectral Normalization: Keep spectral radius < 1
             with torch.no_grad():
                 norm = torch.linalg.norm(self.R.data, ord=2)
-                if norm > 0.98: self.R.data *= (0.98 / norm)
+                if norm > 0.98: 
+                    old_R = self.R.data.clone()
+                    self.R.data *= (0.98 / norm)
+                    self.R.data = torch.where(self.R_mask == 0.0, old_R, self.R.data)
 
             # V6.3: Train the Gate (Learns when to open based on the temporal mismatch)
             # We use the full matrix gradient for the gate to maintain cross-dependency capacity
@@ -377,10 +380,19 @@ class PredictiveColumn(nn.Module):
                 self.weight_clamp = max(3.0, proposed_clamp)
 
             wc = self.weight_clamp
+            old_V = self.V.data.clone()
+            old_W = self.W.data.clone()
+            old_b_in = self.b_in.data.clone()
+            
             self.V.data.clamp_(-wc, wc)
             self.b_in.data.clamp_(-wc, wc)
             self.W.data.clamp_(-wc, wc)
             self.b_out.data.clamp_(-wc, wc)
+            
+            # Restore frozen weights from clamp clipping
+            self.V.data = torch.where(self.V_mask == 0.0, old_V, self.V.data)
+            self.W.data = torch.where(self.W_mask == 0.0, old_W, self.W.data)
+            self.b_in.data = torch.where(self.b_in_mask == 0.0, old_b_in, self.b_in.data)
 
             # 7. Expert Retention — track firing (Vectorized)
             self._total_steps += 1
