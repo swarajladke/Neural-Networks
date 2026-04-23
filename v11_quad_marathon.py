@@ -94,7 +94,7 @@ def run_quad_marathon():
             for i in range(200): # Larger audit sample
                 x = torch.zeros((1, tokenizer.vocab_size), device=device)
                 x[0, tokens[i]] = 1.0
-                pred = hierarchy.predict_label(x, max_steps=40)
+                pred = hierarchy.predict_label(x, max_steps=40, update_temporal=True)
                 pred_id = int(torch.clamp(pred[0, 0] * tokenizer.vocab_size, 0, tokenizer.vocab_size-1))
                 if pred_id == tokens[i+1]: correct += 1
         
