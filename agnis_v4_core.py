@@ -207,6 +207,7 @@ class PredictiveColumn(nn.Module):
             self.b_in_mask.zero_()
             self.R_mask.zero_()
             self.R_gate_mask.zero_()
+            self.L_mask.zero_()
             
             post_freeze = self.V_mask.sum().item()
             assert post_freeze == 0, "Freeze failed — masks not zeroed"
@@ -391,7 +392,7 @@ class PredictiveColumn(nn.Module):
             # outer: [batch, out, out]
             dL_batch = torch.bmm(phi_h.unsqueeze(2), phi_h.unsqueeze(1)) * self.L_mask
             dL_avg = dL_batch.mean(dim=0)
-            dL_avg -= 0.01 * self.L.data 
+            dL_avg -= 0.01 * self.L.data * self.L_mask # V11.4 Fix: Masked Decay
             self.L.data += self.eta_L * dL_avg
             
             self.L.data.clamp_(-1.5, 1.5)
