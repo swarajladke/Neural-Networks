@@ -353,13 +353,13 @@ class PredictiveColumn(nn.Module):
             dR_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
             dR_avg = dR_batch.mean(dim=0)
             self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0) * self.R_mask
-            # Spectral Normalization: Keep spectral radius < 1
+            # Spectral Normalization: Keep spectral radius of the TRAINABLE subspace < 1
             with torch.no_grad():
-                norm = torch.linalg.norm(self.R.data, ord=2)
+                trainable_R = self.R.data * self.R_mask
+                norm = torch.linalg.norm(trainable_R, ord=2)
                 if norm > 0.98: 
-                    old_R = self.R.data.clone()
-                    self.R.data *= (0.98 / norm)
-                    self.R.data = torch.where(self.R_mask == 0.0, old_R, self.R.data)
+                    scaled_trainable = trainable_R * (0.98 / norm)
+                    self.R.data = torch.where(self.R_mask == 0.0, self.R.data, scaled_trainable)
 
             # V6.3: Train the Gate (Learns when to open based on the temporal mismatch)
             # We use the full matrix gradient for the gate to maintain cross-dependency capacity
