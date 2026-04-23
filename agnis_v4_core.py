@@ -343,7 +343,8 @@ class PredictiveColumn(nn.Module):
             temporal_src = self._phi(temporal_state)
             
             # Recurrent drive recalculated for gradient precision
-            recurrent_raw = torch.matmul(temporal_state, self.R.data)
+            # Keep recurrent learning aligned with the non-linearity used at inference.
+            recurrent_raw = torch.matmul(temporal_src, self.R.data)
             gate = torch.sigmoid(torch.matmul(temporal_state, self.R_gate.data))
             recurrent_drive = (recurrent_raw * gate)
             
@@ -486,8 +487,9 @@ class PredictiveColumn(nn.Module):
                     if j + offset < new_dim: neighbors.append(j + offset)
                 neighbors = neighbors[:self.lateral_k]
                 for n in neighbors:
-                    L_mask_new[j, n] = 1.0
-                    L_mask_new[n, j] = 1.0  # bidirectional
+                    L_mask_new[n, j] = 1.0 # Source n, Target j (new)
+                    if n >= D_out:
+                        L_mask_new[j, n] = 1.0 # Source j, Target n (new)
             self.register_buffer("L_mask", L_mask_new)
 
             R_old = self.R.data
@@ -526,12 +528,12 @@ class PredictiveColumn(nn.Module):
             D_in, D_out = self.input_dim, self.output_dim
             d = num_neurons
             
-            v_new = torch.empty(d, D_out, device=self.device).normal_(0, 0.01)
+            v_new = torch.zeros(d, D_out, device=self.device)
             if init_v is not None:
                 v_new = init_v
             self.V = nn.Parameter(torch.cat([self.V.data, v_new], dim=0))
             
-            w_new = torch.empty(D_out, d, device=self.device).normal_(0, 0.01)
+            w_new = torch.zeros(D_out, d, device=self.device)
             if init_w is not None:
                 w_new = init_w
             self.W = nn.Parameter(torch.cat([self.W.data, w_new], dim=1))
