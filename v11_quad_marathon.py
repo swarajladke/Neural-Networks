@@ -62,6 +62,7 @@ def run_quad_marathon():
         
         tokens = tokenizer.encode(corpora[code])
         start_time = time.time()
+        hierarchy.reset_states() # V11.4: Clear context before new language
         
         for i in range(len(tokens) - 1):
             if time.time() - start_time > 600: break # 10m limit per language
@@ -90,6 +91,7 @@ def run_quad_marathon():
         name = lang_names[code]
         tokens = tokenizer.encode(corpora[code])
         correct = 0
+        hierarchy.reset_states() # V11.4: Clear context before auditing
         with torch.no_grad():
             for i in range(200): # Larger audit sample
                 x = torch.zeros((1, tokenizer.vocab_size), device=device)
