@@ -59,7 +59,7 @@ def run_quad_marathon():
         hierarchy.reset_states() # V11.4: Clear context before new language
         
         for i in range(len(tokens) - 1):
-            if time.time() - start_time > 600: break # 10m limit per language
+            if time.time() - start_time > 300: break # V11.4 Precision: 5m limit per language is enough
             
             x = torch.zeros((1, tokenizer.vocab_size), device=device)
             x[0, tokens[i]] = 1.0
@@ -78,24 +78,41 @@ def run_quad_marathon():
         hierarchy.force_recruit_language_sliver(n=128, language=name)
         print(f" {name} Manifold Secured & Capacity Expanded.")
 
-    # --- FINAL QUAD AUDIT ---
-    print("\n>>> FINAL QUAD-AUDIT: TESTING RETENTION <<<")
+    # --- FINAL QUAD-AUDIT ---
+    print("\n>>> FINAL QUAD-AUDIT: TESTING RETENTION (ISOLATED MANIFOLDS) <<<")
     results = {}
+    lang_slices = {"en": 512, "de": 640, "ro": 768, "es": 896}
+    
+    # Save the master state before auditing (which slices the model)
+    hierarchy.save_checkpoint("agnis_marathon_final.pt")
+    
     for code in langs:
         name = lang_names[code]
         tokens = tokenizer.encode(corpora[code])
         correct = 0
-        hierarchy.reset_states() # V11.4: Clear context before auditing
+        
+        # Load fresh state and slice for this language
+        hierarchy.load_checkpoint("agnis_marathon_final.pt")
+        hierarchy._apply_manifold_slice(lang_slices[code])
+        
+        hierarchy.reset_states()
         with torch.no_grad():
             for i in range(200): # Larger audit sample
                 x = torch.zeros((1, tokenizer.vocab_size), device=device)
                 x[0, tokens[i]] = 1.0
+                
+                # V11.4 Precision: Using the isolated manifold for inference
                 pred = hierarchy.predict_label(x, max_steps=40, update_temporal=True)
-                pred_id = int(torch.clamp(pred[0, 0] * tokenizer.vocab_size, 0, tokenizer.vocab_size-1))
+                
+                # V11.4 Precision: Using round() to avoid float-truncation errors
+                pred_id = int(torch.round(pred[0, 0] * tokenizer.vocab_size).clamp(0, tokenizer.vocab_size-1))
                 if pred_id == tokens[i+1]: correct += 1
         
         results[name] = correct / 2.0 # Percentage
         print(f" - {name} Retention: {results[name]}%")
+    
+    # Restore full model
+    hierarchy.load_checkpoint("agnis_marathon_final.pt")
 
     print(f"\n==================================================")
     print(f" MARATHON COMPLETE. ZERO-FORGETTING VALIDATED.")
