@@ -619,6 +619,16 @@ class PredictiveHierarchy(nn.Module):
         """V7.3.9: Capture full expanded state, temporal history, components, and dimensions."""
         return [(l.V, l.W, l.R, l.R_gate, l.L, l.x, l.x_temporal, l.x_temporal_2, l.x_temporal_3, l.V_mask, l.W_mask, l.L_mask, l.R_mask, l.R_gate_mask, l.b_in_mask, l.b_out_mask, l.b_in, l.b_out, l.layer_norm_r, l.halt_gate.weight.detach().clone(), l.halt_gate.bias.detach().clone(), l.input_dim, l.output_dim) for l in self.layers]
 
+    def save_checkpoint(self, path):
+        """V11.4: Save the entire active state to disk."""
+        state = self._save_full_state()
+        torch.save(state, path)
+
+    def load_checkpoint(self, path):
+        """V11.4: Restore the entire active state from disk."""
+        state = torch.load(path, map_location=self.device)
+        self._restore_full_state(state)
+
     def _restore_full_state(self, saved_states):
         """V7.3.9: Restore full expanded state, temporal history, components, and dimensions."""
         for layer, (V, W, R, Rg, L, x, xt, xt2, xt3, Vm, Wm, Lm, Rm, Rgm, bim, bom, bi, bo, ln, hgw, hgb, idim, odim) in zip(self.layers, saved_states):
@@ -653,7 +663,11 @@ class PredictiveHierarchy(nn.Module):
             # 1. Dimension overrides (must happen BEFORE slicing to be correct)
             if i > 0:
                 layer.input_dim = slice_end
-            layer.output_dim = slice_end
+            if i < len(self.layers) - 1:
+                layer.output_dim = slice_end
+            else:
+                # Top Layer output dimension is ALWAYS 1. Never slice it.
+                pass
             
             # 2. Weight slicing
             layer.V = nn.Parameter(layer.V[:layer.input_dim, :layer.output_dim])

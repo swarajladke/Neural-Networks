@@ -52,14 +52,14 @@ def run_quad_marathon():
 
     for phase_idx, code in enumerate(langs):
         name = lang_names[code]
-        print(f"\n>>> PHASE {phase_idx+1}: TRAINING ON {name.upper()} (10 Minutes) <<<")
+        print(f"\n>>> PHASE {phase_idx+1}: TRAINING ON {name.upper()} (3 Minutes) <<<")
         
         tokens = tokenizer.encode(corpora[code])
         start_time = time.time()
         hierarchy.reset_states() # V11.4: Clear context before new language
         
         for i in range(len(tokens) - 1):
-            if time.time() - start_time > 300: break # V11.4 Precision: 5m limit per language is enough
+            if time.time() - start_time > 180: break # V11.4 Precision: 3m limit per language is enough
             
             x = torch.zeros((1, tokenizer.vocab_size), device=device)
             x[0, tokens[i]] = 1.0
