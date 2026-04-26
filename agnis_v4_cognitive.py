@@ -126,17 +126,21 @@ class HippocampalModule:
         self.memory: List[Dict] = []
 
     def store(self, x: torch.Tensor, latent_states: List[torch.Tensor]):
-        """Stores a snapshot of the input and the resulting hierarchy states."""
-        # x is [1, input_dim]. We keep it as a flattened key.
-        snapshot = {
-            'x': x.detach().clone(),
-            'latents': [l.detach().clone() for l in latent_states]
-        }
-        
-        # Simple FIFO for now
-        if len(self.memory) >= self.max_memories:
-            self.memory.pop(0)
-        self.memory.append(snapshot)
+        """Stores per-sample snapshots so batched learning remains recall-safe."""
+        x_batch = x.detach()
+        latent_batch = [l.detach() for l in latent_states]
+
+        batch_size = x_batch.shape[0]
+        for sample_idx in range(batch_size):
+            snapshot = {
+                'x': x_batch[sample_idx:sample_idx + 1].clone(),
+                'latents': [l[sample_idx:sample_idx + 1].clone() for l in latent_batch]
+            }
+
+            # Simple FIFO for now
+            if len(self.memory) >= self.max_memories:
+                self.memory.pop(0)
+            self.memory.append(snapshot)
 
     def recall(self, x: torch.Tensor) -> Optional[List[torch.Tensor]]:
         """Searches for a matching context using Cosine Similarity."""
@@ -251,6 +255,8 @@ class CognitivePredictiveAgent:
     Wraps the V4 PredictiveHierarchy with V2/V3 Cognitive Ecosystems:
     Salience, Surprise Buffering, and Offline Replay Dreaming.
     """
+    MAX_EXPOSURE_ENTRIES = 50000
+
     def __init__(self, hierarchy: PredictiveHierarchy, device: str = "cpu"):
         self.hierarchy = hierarchy
         self.device = device
@@ -322,6 +328,20 @@ class CognitivePredictiveAgent:
         self.hypersensitive = False
         print(">>> DISCOVERY STABILIZED (Hypersensitivity Off) <<<")
 
+    def get_dopamine_scale(self, elapsed_seconds, total_seconds):
+        progress = elapsed_seconds / total_seconds
+        if progress < 0.7:
+            return 3.0
+        decay = (progress - 0.7) / 0.3
+        return 3.0 - (2.0 * decay)
+
+    def _update_exposure(self, pattern_key):
+        if len(self.exposure_counts) >= self.MAX_EXPOSURE_ENTRIES and pattern_key not in self.exposure_counts:
+            oldest = next(iter(self.exposure_counts))
+            del self.exposure_counts[oldest]
+        self.exposure_counts[pattern_key] = self.exposure_counts.get(pattern_key, 0) + 1
+        return self.exposure_counts[pattern_key]
+
     def observe_and_learn(self, x: torch.Tensor, y: torch.Tensor, task_id: int = 0, 
                           max_steps: int = 150, recognition_weight: float = 1.0, beta_push: float = 5.0,
                           warm_start: bool = False):
@@ -358,8 +378,7 @@ class CognitivePredictiveAgent:
         for i in range(batch_size):
             quantized = (x[i].flatten() * 100).int()
             pattern_key = hash(quantized.cpu().numpy().tobytes())
-            self.exposure_counts[pattern_key] = self.exposure_counts.get(pattern_key, 0) + 1
-            exposure = self.exposure_counts[pattern_key]
+            exposure = self._update_exposure(pattern_key)
             effective_surprise[i] = raw_surprise[i] * math.exp(-exposure / self.tau_novelty)
             
         # 2. Vectorized Salience and Dopamine
@@ -498,7 +517,7 @@ class CognitivePredictiveAgent:
         pruned_total = 0
         for i, col in enumerate(self.hierarchy.layers):
             scores = col.compute_retention_scores()
-            original_dim = 16 
+            original_dim = self.hierarchy.layers[0].base_dim
             if col.output_dim <= original_dim:
                 continue
             

@@ -113,7 +113,7 @@ class PredictiveColumn(nn.Module):
         self.eta_x      = 0.8
         self.eta_V      = 0.05    # agile recognition
         self.eta_W      = 0.03    # v4.9: raised from 0.005 to build generative model
-        self.eta_R      = 0.01    # V7.0: Stable post-parity consolidation
+        self.eta_R      = 0.001   # V7.0: Stable post-parity consolidation
         self.layer_norm_r = nn.LayerNorm(output_dim, device=self.device)
 
         # v4.9: Homeostasis REMOVED — replaced by weight clamping
@@ -157,6 +157,8 @@ class PredictiveColumn(nn.Module):
         self._gated = False
         self._gate_start = 0
         self._gate_end = output_dim
+        self._gate_input = False
+        self._gate_output = False
 
     def _k_wta_mask(self, x: torch.Tensor, k_ratio: float = 0.25) -> torch.Tensor:
         if x.shape[-1] <= 1:
@@ -221,61 +223,106 @@ class PredictiveColumn(nn.Module):
             assert post_freeze == 0, "Freeze failed — masks not zeroed"
             return pre_freeze 
 
-    def get_stable_R(self):
-        # Discretize: ensures R_ii in (0, 1) always
-        # R = exp(-delta_t * exp(log_A))
-        # Note: Since A is diagonal, matrix_exp is just element-wise exp
-        return torch.exp(-self.delta_t * torch.exp(self.log_A))
-
     def infer_step_sync(self, bottom_up, td_target, step_i, W_snap, b_out_snap, recognition_weight=1.0):
         self.last_input = bottom_up.detach()
         x_prev = self.x.clone()
-        phi_x  = self._phi(self.x)
+
+        gate_input = self._gated and self._gate_input
+        gate_output = self._gated and self._gate_output
+
+        if gate_input or gate_output:
+            s, e = self._gate_start, self._gate_end
+            x_active = self.x[:, s:e] if gate_output else self.x
+            x_prev_active = x_prev[:, s:e] if gate_output else x_prev
+            phi_x_full = self._phi(self.x)
+            phi_x_active = phi_x_full[:, s:e] if gate_output else phi_x_full
+            phi_deriv_active = self._phi_deriv(self.x[:, s:e]) if gate_output else self._phi_deriv(self.x)
+
+            if gate_output and gate_input:
+                prediction = torch.zeros_like(bottom_up)
+                prediction[:, s:e] = torch.matmul(phi_x_active, W_snap[s:e, s:e]) + b_out_snap[s:e]
+                self.error = (bottom_up - prediction).detach()
+                forward_drive = torch.matmul(bottom_up[:, s:e], self.V[s:e, s:e]) + self.b_in[s:e]
+                feedback_drive = torch.matmul(self.error[:, s:e], W_snap[s:e, s:e].t()) * phi_deriv_active * recognition_weight
+            elif gate_output:
+                prediction = torch.matmul(phi_x_active, W_snap[s:e, :]) + b_out_snap
+                forward_drive = torch.matmul(bottom_up, self.V[:, s:e]) + self.b_in[s:e]
+                self.error = (bottom_up - prediction).detach()
+                feedback_drive = torch.matmul(self.error, W_snap[s:e, :].t()) * phi_deriv_active * recognition_weight
+            else:
+                prediction = torch.zeros_like(bottom_up)
+                prediction[:, s:e] = torch.matmul(phi_x_active, W_snap[:, s:e]) + b_out_snap[s:e]
+                forward_drive = torch.matmul(bottom_up[:, s:e], self.V[s:e, :]) + self.b_in
+                self.error = (bottom_up - prediction).detach()
+                feedback_drive = torch.matmul(self.error[:, s:e], W_snap[:, s:e].t()) * phi_deriv_active * recognition_weight
+
+            recognition_drive = (forward_drive - x_active) * recognition_weight
+            if td_target is None:
+                top_down_drive = torch.zeros_like(x_active)
+            elif gate_output:
+                top_down_drive = 3.0 * (td_target[:, s:e] - x_active)
+            else:
+                top_down_drive = 3.0 * (td_target - x_active)
+
+            x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
+            x_context_active = x_context[:, s:e] if gate_output else x_context
+
+            if gate_output:
+                recurrent_raw = torch.matmul(self._phi(x_context_active), self.R[s:e, s:e])
+                gate = torch.sigmoid(torch.matmul(x_context_active, self.R_gate[s:e, s:e]))
+                lateral_drive = torch.matmul(self._phi(x_active), self.L[s:e, s:e])
+            else:
+                recurrent_raw = torch.matmul(self._phi(x_context_active), self.R)
+                gate = torch.sigmoid(torch.matmul(x_context_active, self.R_gate))
+                lateral_drive = torch.matmul(self._phi(x_active), self.L)
+
+            recurrent_drive = recurrent_raw * gate
+            if gate_output:
+                full_context = torch.zeros_like(x_context)
+                full_context[:, s:e] = x_context_active
+                self._current_x_context = full_context
+            else:
+                self._current_x_context = x_context_active
+            direct_input_drive = (forward_drive - x_active) * (0.5 * recognition_weight)
+
+            state_grad = feedback_drive + recognition_drive + top_down_drive + direct_input_drive
+            state_grad += (recurrent_drive - x_active)
+            state_grad += (1.0 * recognition_weight) * lateral_drive
+            state_grad -= self.lambda_act * torch.sign(x_active)
+
+            eta = self.eta_x / (1.0 + 0.1 * step_i)
+            dx = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
+            updated = (x_active + dx.detach()).clamp(-5.0, 5.0)
+            if gate_output:
+                self.x[:, s:e] = updated
+            else:
+                self.x = updated
+            return torch.max(torch.abs(updated - x_prev_active))
+
+        phi_x = self._phi(self.x)
         prediction = torch.matmul(phi_x, W_snap) + b_out_snap
         self.error = (bottom_up - prediction).detach()
-
-        # V11.5: Non-Destructive Signal Gating (View-based)
-        if self._gated:
-            s, e = self._gate_start, self._gate_end
-            # Recognition View (Read from input, project to gated manifold)
-            V_view = self.V[s if self.input_dim > 0 else 0 : e if self.input_dim > 0 else self.V.shape[0], :]
-            b_in_view = self.b_in[s:e]
-            
-            # Generative View (Read from gated manifold, project back to input)
-            W_view = W_snap[:, s:e]
-            b_out_view = b_out_snap[s:e]
-            
-            forward_drive = torch.matmul(bottom_up, V_view) + b_in_view
-            feedback_drive = torch.matmul(self.error, W_view.t()) * self._phi_deriv(self.x) * recognition_weight
-        else:
-            forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
-            feedback_drive    = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x) * recognition_weight
-            
+        forward_drive = torch.matmul(bottom_up, self.V) + self.b_in
+        feedback_drive = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x) * recognition_weight
         recognition_drive = (forward_drive - self.x) * recognition_weight
-        top_down_drive    = 3.0 * (td_target - self.x) if td_target is not None else 0.0
-        
-        # V6.4: Multi-step Gated Temporal Binding
+        top_down_drive = 3.0 * (td_target - self.x) if td_target is not None else 0.0
+
         x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
-        
-        # V8.4: Non-Linear Matrix Recurrence
         recurrent_raw = torch.matmul(self._phi(x_context), self.R)
-        gate              = torch.sigmoid(torch.matmul(x_context, self.R_gate))
-        recurrent_drive   = (recurrent_raw * gate)
+        gate = torch.sigmoid(torch.matmul(x_context, self.R_gate))
+        recurrent_drive = (recurrent_raw * gate)
         self._current_x_context = x_context
 
-        # V8.3: Softened Persistent Input Anchor
         direct_input_drive = (forward_drive - self.x) * (0.5 * recognition_weight)
-        
-        state_grad  = feedback_drive + recognition_drive + top_down_drive + direct_input_drive
+
+        state_grad = feedback_drive + recognition_drive + top_down_drive + direct_input_drive
         state_grad += (recurrent_drive - self.x)
-        
-        # V8.3: Lateral Surge (Forced Specialization)
         lateral_drive = torch.matmul(self._phi(self.x), self.L)
         state_grad += (1.0 * recognition_weight) * lateral_drive
         state_grad -= self.lambda_act * torch.sign(self.x)
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
-        dx  = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
+        dx = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
         self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
@@ -284,7 +331,15 @@ class PredictiveColumn(nn.Module):
         x_prev = self.x.clone()
         phi_x  = self._phi(self.x)
         prediction = torch.matmul(phi_x, W_snap) + b_out_snap
-        self.error = (bottom_up - prediction).detach()
+
+        # Gate-aware top inference: restrict hidden input manifold without modifying weights.
+        if self._gated and self._gate_input:
+            s, e = self._gate_start, self._gate_end
+            pred_hidden = torch.zeros_like(bottom_up)
+            pred_hidden[:, s:e] = prediction[:, s:e]
+            self.error = (bottom_up - pred_hidden).detach()
+        else:
+            self.error = (bottom_up - prediction).detach()
 
         if label.shape[1] < self.x.shape[1]:
             label_drive = torch.zeros_like(self.x)
@@ -293,7 +348,11 @@ class PredictiveColumn(nn.Module):
         else:
             label_drive = beta_push * (label - self.x)
 
-        forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
+        if self._gated and self._gate_input:
+            s, e = self._gate_start, self._gate_end
+            forward_drive = torch.matmul(bottom_up[:, s:e], self.V[s:e, :]) + self.b_in
+        else:
+            forward_drive = torch.matmul(bottom_up, self.V) + self.b_in
         recognition_drive = (forward_drive - self.x) * recognition_weight
         
         # V6.4: Multi-step Gated Temporal Binding
@@ -588,6 +647,9 @@ class PredictiveHierarchy(nn.Module):
         self.device = device
         self.lambda_W_top = lambda_W_top
         self.layers = nn.ModuleList([PredictiveColumn(layer_dims[i], layer_dims[i+1], device) for i in range(len(layer_dims)-1)])
+        self.base_dim = layer_dims[1] if len(layer_dims) > 1 else layer_dims[0]
+        for col in self.layers:
+            col.base_dim = self.base_dim
 
     def reset_states(self, batch_size: int = 1):
         for col in self.layers:
@@ -648,10 +710,10 @@ class PredictiveHierarchy(nn.Module):
     def load_checkpoint(self, path):
         """V11.4: Restore the entire active state from disk."""
         state = torch.load(path, map_location=self.device, weights_only=False)
-        self._restore_full_state(state)
+        self._load_full_state(state)
 
-    def _restore_full_state(self, saved_states):
-        """V7.3.9: Restore full expanded state, temporal history, components, and dimensions."""
+    def _load_full_state(self, saved_states):
+        """V11.5: Restore a serialized checkpoint without touching gate metadata semantics."""
         for layer, (V, W, R, Rg, L, x, xt, xt2, xt3, Vm, Wm, Lm, Rm, Rgm, bim, bom, bi, bo, ln, hgw, hgb, idim, odim) in zip(self.layers, saved_states):
             layer.V = V
             layer.W = W
@@ -677,62 +739,48 @@ class PredictiveHierarchy(nn.Module):
             layer.halt_gate.bias.data = hgb
             layer.input_dim = idim
             layer.output_dim = odim
+            layer._gated = False
+            layer._gate_start = 0
+            layer._gate_end = odim
+            layer._gate_input = False
+            layer._gate_output = False
+
+    def _restore_full_state(self):
+        """V11.5: Trivial manifold restoration — remove gate metadata only."""
+        for layer in self.layers:
+            layer._gated = False
+            layer._gate_start = 0
+            layer._gate_end = layer.output_dim
+            layer._gate_input = False
+            layer._gate_output = False
 
     def _apply_manifold_range(self, start_idx, end_idx):
-        """V11.5: Exhaustive manifold isolation for zero-interference audits."""
+        """V11.5: Non-destructive manifold isolation via gate metadata only."""
         for i, layer in enumerate(self.layers):
-            # 1. Dimension overrides
-            active_width = end_idx - start_idx
-            if i > 0: layer.input_dim = active_width
-            if i < len(self.layers) - 1: layer.output_dim = active_width
-            
-            # 2. Slice weights and biases
-            layer.V = nn.Parameter(layer.V[start_idx if i > 0 else 0 : end_idx if i > 0 else layer.V.shape[0], 
-                                           0 : active_width if i < len(self.layers)-1 else layer.V.shape[1]])
-            layer.W = nn.Parameter(layer.W[0 : active_width if i < len(self.layers)-1 else layer.W.shape[0], 
-                                           start_idx if i > 0 else 0 : end_idx if i > 0 else layer.W.shape[1]])
-            layer.b_in = nn.Parameter(layer.b_in[start_idx:end_idx] if i < len(self.layers)-1 else layer.b_in[:])
-            layer.b_out = nn.Parameter(layer.b_out[start_idx:end_idx] if i > 0 else layer.b_out[:])
-            
-            # 3. Slice masks and temporal
-            if i < len(self.layers) - 1:
-                layer.R = nn.Parameter(layer.R[start_idx:end_idx, start_idx:end_idx])
-                layer.R_gate = nn.Parameter(layer.R_gate[start_idx:end_idx, start_idx:end_idx])
-                layer.L = nn.Parameter(layer.L[start_idx:end_idx, start_idx:end_idx])
-                layer.V_mask = layer.V_mask[start_idx if i > 0 else 0 : end_idx if i > 0 else layer.V_mask.shape[0], 0 : active_width]
-                layer.W_mask = layer.W_mask[0 : active_width, start_idx if i > 0 else 0 : end_idx if i > 0 else layer.W_mask.shape[1]]
-                layer.b_in_mask = layer.b_in_mask[start_idx:end_idx]
-            
-            layer.reset_state(1)
-            layer.layer_norm_r = nn.LayerNorm(layer.output_dim, device=self.device)
-            layer.halt_gate = nn.Linear(layer.output_dim, 1, device=self.device)
+            layer._gated = True
+            layer._gate_start = start_idx
+            layer._gate_end = end_idx
+            layer._gate_input = i > 0
+            layer._gate_output = i < len(self.layers) - 1
 
     @contextmanager
     def manifold_gate(self, start_idx, end_idx):
-        """V11.5: Strict Manifold Isolation context manager with verification."""
-        saved_states = self._save_full_state()
+        """V11.5: Strict manifold isolation with non-destructive restoration."""
         try:
             self._apply_manifold_range(start_idx, end_idx)
-            # Verification: Check hidden state dimension of the first hidden layer
-            hidden_dim = self.layers[0].output_dim
-            active_width = end_idx - start_idx
-            if hidden_dim != active_width:
-                 raise RuntimeError(f"Gate failed: expected {active_width}, got {hidden_dim}")
             yield
         finally:
-            self._restore_full_state(saved_states)
+            self._restore_full_state()
 
     def infer_with_manifold_slice(self, x, slice_end=None, max_steps=150):
         """V7.3.6: Isolated inference for zero-divergence manifold verification."""
         if slice_end is None:
             return self.forward(x, max_steps=max_steps)
-        
-        saved_states = self._save_full_state()
         try:
-            self._apply_manifold_slice(slice_end)
+            self._apply_manifold_range(0, slice_end)
             return self.forward(x, max_steps=max_steps)
         finally:
-            self._restore_full_state(saved_states)
+            self._restore_full_state()
 
     def set_experts_bias(self, start_idx: int, end_idx: int, bias_val: float):
         """V7.3.5: Modulate sub-manifold sensitivity across the entire hierarchy."""
@@ -774,6 +822,11 @@ class PredictiveHierarchy(nn.Module):
             # Reset state for the new dimensionality
             batch_size = self.layers[i].x.shape[0] if hasattr(self.layers[i], 'x') else 1
             self.layers[i].reset_state(batch_size)
+
+        top = self.layers[-1]
+        top.V_mask[-n:, :] = 1.0
+        top.W_mask[:, -n:] = 1.0
+        top.W_mask[-n:, :] = 1.0
 
         # Step 3 — Reset temporal context (REMOVED: Prevents wiping the English R-matrix)
         # self.reset_recurrent_matrices(gain=0.1)
@@ -918,6 +971,37 @@ class PredictiveHierarchy(nn.Module):
         if update_temporal:
             self.step_temporal()
         return self.layers[-1].x
+
+    def infer(self, sensory_input, max_steps=150, tol=1e-4, update_temporal=False, recognition_weight=1.0):
+        """Compatibility alias for gated audit probes."""
+        return self.forward(
+            sensory_input,
+            max_steps=max_steps,
+            tol=tol,
+            update_temporal=update_temporal,
+            recognition_weight=recognition_weight,
+        )
+
+    def get_surprise(self, sensory_input, max_steps=150, recognition_weight=1.0):
+        """Return surprise for audit isolation checks.
+
+        Supports either:
+        - `sensory_input` as an input tensor -> returns bottom reconstruction MSE.
+        - `sensory_input` as `(x, target)` -> returns top readout MSE vs target.
+        """
+        target = None
+        x = sensory_input
+        if isinstance(sensory_input, (tuple, list)) and len(sensory_input) == 2:
+            x, target = sensory_input
+
+        pred = self.forward(x, max_steps=max_steps, update_temporal=False, recognition_weight=recognition_weight)
+
+        if target is None:
+            return self.layers[0].error.pow(2).mean().item()
+
+        if pred.shape[1] > target.shape[1]:
+            pred = pred[:, : target.shape[1]]
+        return torch.mean((pred - target) ** 2).item()
 
     def predict_label(self, sensory_input, max_steps=150, update_temporal=False, recognition_weight=1.0):
         return self.forward(sensory_input, max_steps=max_steps, update_temporal=update_temporal, recognition_weight=recognition_weight)
