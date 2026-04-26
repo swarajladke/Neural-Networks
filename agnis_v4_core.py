@@ -324,8 +324,8 @@ class PredictiveColumn(nn.Module):
             
             # Average gradients across batch for SNAP-ATP stability
             dV_avg = dV_batch.mean(dim=0)
-            self.V.data += self.eta_V * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
-            self.b_in.data += self.eta_V * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
+            self.V.data += self.eta_V * dopamine_burst * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
+            self.b_in.data += self.eta_V * dopamine_burst * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
 
             # 4. Vectorized Generative (W) Update
             # phi_h: [batch, out]. error: [batch, in]
@@ -667,10 +667,22 @@ class PredictiveHierarchy(nn.Module):
             if i < len(self.layers) - 1:
                 layer.output_dim = active_width
             
-            # 2. Slice and isolate specific range
+            # 2. Slice weights and masks
             layer.V = nn.Parameter(layer.V[start_idx if i > 0 else 0 : end_idx if i > 0 else layer.V.shape[0], 
                                            0 : active_width if i < len(self.layers)-1 else layer.V.shape[1]])
-            # ... and so on for all components (simplified for brevity, actual implementation handles all tensors)
+            layer.W = nn.Parameter(layer.W[0 : active_width if i < len(self.layers)-1 else layer.W.shape[0], 
+                                           start_idx if i > 0 else 0 : end_idx if i > 0 else layer.W.shape[1]])
+            
+            # Recurrent and lateral
+            if i < len(self.layers) - 1:
+                layer.R = nn.Parameter(layer.R[start_idx:end_idx, start_idx:end_idx])
+                layer.R_gate = nn.Parameter(layer.R_gate[start_idx:end_idx, start_idx:end_idx])
+                layer.L = nn.Parameter(layer.L[start_idx:end_idx, start_idx:end_idx])
+                layer.b_in = nn.Parameter(layer.b_in[start_idx:end_idx])
+            else:
+                # Top Layer readout
+                layer.b_in = nn.Parameter(layer.b_in[:]) 
+            
             layer.reset_state(1)
 
     @contextmanager
@@ -679,8 +691,8 @@ class PredictiveHierarchy(nn.Module):
         saved_states = self._save_full_state()
         try:
             self._apply_manifold_range(start_idx, end_idx)
-            # Verification: Check hidden state dimension
-            hidden_dim = self.layers[0].x.shape[-1]
+            # Verification: Check hidden state dimension of the first hidden layer
+            hidden_dim = self.layers[0].output_dim
             active_width = end_idx - start_idx
             if hidden_dim != active_width:
                  raise RuntimeError(f"Gate failed: expected {active_width}, got {hidden_dim}")
@@ -731,6 +743,11 @@ class PredictiveHierarchy(nn.Module):
                 if i + 1 == len(self.layers) - 1:
                     self.layers[i+1].V_mask[-n:, :] = 1.0
                     self.layers[i+1].W_mask[:, -n:] = 1.0
+            
+            # V11.5: Explicit Top-Layer Output Unmasking
+            if i == len(self.layers) - 1:
+                self.layers[i].V_mask[-n:, :] = 1.0
+                self.layers[i].W_mask[:, -n:] = 1.0
             
             # Reset state for the new dimensionality
             batch_size = self.layers[i].x.shape[0] if hasattr(self.layers[i], 'x') else 1
