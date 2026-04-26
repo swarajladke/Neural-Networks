@@ -152,6 +152,11 @@ class PredictiveColumn(nn.Module):
         with torch.no_grad():
             # Gate starts mostly OPEN
             self.R_gate.data.add_(torch.eye(output_dim, device=self.device) * 2.0)
+            
+        # V11.5: Non-Destructive Signal Gating Metadata
+        self._gated = False
+        self._gate_start = 0
+        self._gate_end = output_dim
 
     def _k_wta_mask(self, x: torch.Tensor, k_ratio: float = 0.25) -> torch.Tensor:
         if x.shape[-1] <= 1:
@@ -229,8 +234,23 @@ class PredictiveColumn(nn.Module):
         prediction = torch.matmul(phi_x, W_snap) + b_out_snap
         self.error = (bottom_up - prediction).detach()
 
-        feedback_drive    = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x) * recognition_weight
-        forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
+        # V11.5: Non-Destructive Signal Gating (View-based)
+        if self._gated:
+            s, e = self._gate_start, self._gate_end
+            # Recognition View (Read from input, project to gated manifold)
+            V_view = self.V[s if self.input_dim > 0 else 0 : e if self.input_dim > 0 else self.V.shape[0], :]
+            b_in_view = self.b_in[s:e]
+            
+            # Generative View (Read from gated manifold, project back to input)
+            W_view = W_snap[:, s:e]
+            b_out_view = b_out_snap[s:e]
+            
+            forward_drive = torch.matmul(bottom_up, V_view) + b_in_view
+            feedback_drive = torch.matmul(self.error, W_view.t()) * self._phi_deriv(self.x) * recognition_weight
+        else:
+            forward_drive     = torch.matmul(bottom_up, self.V) + self.b_in
+            feedback_drive    = torch.matmul(self.error, W_snap.t()) * self._phi_deriv(self.x) * recognition_weight
+            
         recognition_drive = (forward_drive - self.x) * recognition_weight
         top_down_drive    = 3.0 * (td_target - self.x) if td_target is not None else 0.0
         
