@@ -18,7 +18,7 @@ def check_thermal_safety():
     # V11.4 Express: Disabled for Cloud/VM environments to eliminate subprocess overhead
     pass
 
-def run_quad_marathon():
+def run_quad_marathon(audit_only=False):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"==================================================")
     print(f" AGNIS V11: QUAD-LANGUAGE ZERO-FORGETTING MARATHON")
@@ -26,6 +26,7 @@ def run_quad_marathon():
 
     # 1. Load Data
     langs = ["en", "de", "ro", "es"]
+    lang_names = {"en": "English", "de": "German", "ro": "Romanian", "es": "Spanish"}
     full_text = ""
     corpora = {}
     
@@ -39,52 +40,50 @@ def run_quad_marathon():
     tokenizer = SimpleTokenizer(full_text)
     print(f" Total Vocab Size: {tokenizer.vocab_size}")
 
-    # 2. Build Hierarchy (V8.4 Spectral Core)
-    # Architecture: Vocab -> 512 -> 512 -> 1
+    # 2. Build Hierarchy
     hierarchy = PredictiveHierarchy([tokenizer.vocab_size, 512, 1], device=device)
     for col in hierarchy.layers: 
         col.eta_V = 0.5  
         col.eta_R = 0.05 
 
-    # --- THE MARATHON LOOP ---
-    lang_names = {"en": "English", "de": "German", "ro": "Romanian", "es": "Spanish"}
-    retention_history = {}
-
-    for phase_idx, code in enumerate(langs):
-        name = lang_names[code]
-        print(f"\n>>> PHASE {phase_idx+1}: TRAINING ON {name.upper()} (3 Minutes) <<<")
-        
-        tokens = tokenizer.encode(corpora[code])
-        start_time = time.time()
-        hierarchy.reset_states() # V11.4: Clear context before new language
-        
-        for i in range(len(tokens) - 1):
-            if time.time() - start_time > 180: break # V11.4 Precision: 3m limit per language is enough
+    # --- THE MARATHON TRAINING LOOP ---
+    if not audit_only:
+        for phase_idx, code in enumerate(langs):
+            name = lang_names[code]
+            print(f"\n>>> PHASE {phase_idx+1}: TRAINING ON {name.upper()} (3 Minutes) <<<")
             
-            x = torch.zeros((1, tokenizer.vocab_size), device=device)
-            x[0, tokens[i]] = 1.0
-            target = torch.zeros((1, 1), device=device)
-            target[0, 0] = float(tokens[i+1]) / tokenizer.vocab_size
-
-            hierarchy.infer_and_learn(x, top_level_label=target, max_steps=40, tol=5e-3)
+            tokens = tokenizer.encode(corpora[code])
+            start_time = time.time()
+            hierarchy.reset_states() # V11.4: Clear context before new language
             
-            if i % 1000 == 0:
-                torch.cuda.empty_cache() # V11.4 Express: Reduced frequency for speed
-                print(f" [{name}] Token {i:5d}/{len(tokens)} | GPU Active...", end="\r")
-                if i % 2000 == 0: check_thermal_safety()
+            for i in range(len(tokens) - 1):
+                if time.time() - start_time > 180: break # V11.4 Precision: 3m limit per language
+                
+                x = torch.zeros((1, tokenizer.vocab_size), device=device)
+                x[0, tokens[i]] = 1.0
+                target = torch.zeros((1, 1), device=device)
+                target[0, 0] = float(tokens[i+1]) / tokenizer.vocab_size
 
-        print(f"\n {name} Phase Complete. Igniting Synaptic Shield + Neurogenesis...")
-        # V11.2: Recruit 128 NEW experts for the next language to ensure it has capacity to learn!
-        hierarchy.force_recruit_language_sliver(n=128, language=name)
-        print(f" {name} Manifold Secured & Capacity Expanded.")
+                hierarchy.infer_and_learn(x, top_level_label=target, max_steps=40, tol=5e-3)
+                
+                if i % 1000 == 0:
+                    torch.cuda.empty_cache() 
+                    print(f" [{name}] Token {i:5d}/{len(tokens)} | GPU Active...", end="\r")
+                    if i % 2000 == 0: check_thermal_safety()
+
+            print(f"\n {name} Phase Complete. Igniting Synaptic Shield + Neurogenesis...")
+            if phase_idx < len(langs) - 1:
+                hierarchy.force_recruit_language_sliver(n=128, language=name)
+                print(f" {name} Manifold Secured & Capacity Expanded.")
+        
+        # Save the master state after training
+        hierarchy.save_checkpoint("agnis_marathon_final.pt")
+        print("\n[Checkpoint] Full Marathon State Saved to Disk.")
 
     # --- FINAL QUAD-AUDIT ---
     print("\n>>> FINAL QUAD-AUDIT: TESTING RETENTION (ISOLATED MANIFOLDS) <<<")
     results = {}
     lang_slices = {"en": 512, "de": 640, "ro": 768, "es": 896}
-    
-    # Save the master state before auditing (which slices the model)
-    hierarchy.save_checkpoint("agnis_marathon_final.pt")
     
     for code in langs:
         name = lang_names[code]
@@ -92,6 +91,10 @@ def run_quad_marathon():
         correct = 0
         
         # Load fresh state and slice for this language
+        if not os.path.exists("agnis_marathon_final.pt"):
+            print(f" ERROR: Checkpoint 'agnis_marathon_final.pt' not found. Cannot audit.")
+            return
+
         hierarchy.load_checkpoint("agnis_marathon_final.pt")
         hierarchy._apply_manifold_slice(lang_slices[code])
         
@@ -119,4 +122,8 @@ def run_quad_marathon():
     print(f"==================================================")
 
 if __name__ == "__main__":
-    run_quad_marathon()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--audit_only":
+        run_quad_marathon(audit_only=True)
+    else:
+        run_quad_marathon()

@@ -626,7 +626,7 @@ class PredictiveHierarchy(nn.Module):
 
     def load_checkpoint(self, path):
         """V11.4: Restore the entire active state from disk."""
-        state = torch.load(path, map_location=self.device)
+        state = torch.load(path, map_location=self.device, weights_only=False)
         self._restore_full_state(state)
 
     def _restore_full_state(self, saved_states):
