@@ -172,7 +172,7 @@ class PredictiveColumn(nn.Module):
         return (cdf + x * pdf) * mask
 
     def reset_state(self, batch_size: int = 1):
-        if self.x.shape[0] != batch_size:
+        if self.x.shape[0] != batch_size or self.x.shape[1] != self.output_dim:
             self.x = torch.zeros(batch_size, self.output_dim, device=self.device)
             self.x_temporal = torch.zeros_like(self.x)
             self.x_temporal_2 = torch.zeros_like(self.x)
