@@ -659,32 +659,33 @@ class PredictiveHierarchy(nn.Module):
             layer.output_dim = odim
 
     def _apply_manifold_range(self, start_idx, end_idx):
-        """V11.5: Isolated manifold gating for zero-interference audits."""
+        """V11.5: Exhaustive manifold isolation for zero-interference audits."""
         for i, layer in enumerate(self.layers):
             # 1. Dimension overrides
             active_width = end_idx - start_idx
-            if i > 0:
-                layer.input_dim = active_width
-            if i < len(self.layers) - 1:
-                layer.output_dim = active_width
+            if i > 0: layer.input_dim = active_width
+            if i < len(self.layers) - 1: layer.output_dim = active_width
             
-            # 2. Slice weights and masks
+            # 2. Slice weights and biases
             layer.V = nn.Parameter(layer.V[start_idx if i > 0 else 0 : end_idx if i > 0 else layer.V.shape[0], 
                                            0 : active_width if i < len(self.layers)-1 else layer.V.shape[1]])
             layer.W = nn.Parameter(layer.W[0 : active_width if i < len(self.layers)-1 else layer.W.shape[0], 
                                            start_idx if i > 0 else 0 : end_idx if i > 0 else layer.W.shape[1]])
+            layer.b_in = nn.Parameter(layer.b_in[start_idx:end_idx] if i < len(self.layers)-1 else layer.b_in[:])
+            layer.b_out = nn.Parameter(layer.b_out[start_idx:end_idx] if i > 0 else layer.b_out[:])
             
-            # Recurrent and lateral
+            # 3. Slice masks and temporal
             if i < len(self.layers) - 1:
                 layer.R = nn.Parameter(layer.R[start_idx:end_idx, start_idx:end_idx])
                 layer.R_gate = nn.Parameter(layer.R_gate[start_idx:end_idx, start_idx:end_idx])
                 layer.L = nn.Parameter(layer.L[start_idx:end_idx, start_idx:end_idx])
-                layer.b_in = nn.Parameter(layer.b_in[start_idx:end_idx])
-            else:
-                # Top Layer readout
-                layer.b_in = nn.Parameter(layer.b_in[:]) 
+                layer.V_mask = layer.V_mask[start_idx if i > 0 else 0 : end_idx if i > 0 else layer.V_mask.shape[0], 0 : active_width]
+                layer.W_mask = layer.W_mask[0 : active_width, start_idx if i > 0 else 0 : end_idx if i > 0 else layer.W_mask.shape[1]]
+                layer.b_in_mask = layer.b_in_mask[start_idx:end_idx]
             
             layer.reset_state(1)
+            layer.layer_norm_r = nn.LayerNorm(layer.output_dim, device=self.device)
+            layer.halt_gate = nn.Linear(layer.output_dim, 1, device=self.device)
 
     @contextmanager
     def manifold_gate(self, start_idx, end_idx):
