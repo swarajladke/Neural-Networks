@@ -7,7 +7,8 @@ def fetch_marathon():
         "en": ("English", "https://www.gutenberg.org/cache/epub/1400/pg1400.txt"),
         "de": ("German", "https://www.gutenberg.org/cache/epub/1910/pg1910.txt"),
         "ro": ("Romanian", "https://www.gutenberg.org/cache/epub/63636/pg63636.txt"),
-        "es": ("Spanish", "https://www.gutenberg.org/cache/epub/2000/pg2000.txt")
+        "es": ("Spanish", "https://www.gutenberg.org/cache/epub/2000/pg2000.txt"),
+        "fr": ("French", "https://www.gutenberg.org/cache/epub/135/pg135.txt")
     }
     
     os.makedirs("slm", exist_ok=True)
