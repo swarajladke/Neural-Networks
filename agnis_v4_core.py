@@ -642,10 +642,11 @@ class PredictiveColumn(nn.Module):
 # ---------------------------------------------------------------------------
 
 class PredictiveHierarchy(nn.Module):
-    def __init__(self, layer_dims, device="cpu", lambda_W_top=0.0):
+    def __init__(self, layer_dims, device="cpu", lambda_W_top=0.0, meta_pool_size=0):
         super().__init__()
         self.device = device
         self.lambda_W_top = lambda_W_top
+        self.meta_pool_size = meta_pool_size
         self.layers = nn.ModuleList([PredictiveColumn(layer_dims[i], layer_dims[i+1], device) for i in range(len(layer_dims)-1)])
         self.base_dim = layer_dims[1] if len(layer_dims) > 1 else layer_dims[0]
         for col in self.layers:
@@ -796,6 +797,25 @@ class PredictiveHierarchy(nn.Module):
             frozen = layer.freeze_experts()
             frozen_counts.append(frozen)
         
+        # Step 1.5 — V14: Unmask Meta-Pool neurons (shared across all languages)
+        mp = self.meta_pool_size
+        if mp > 0:
+            for i, layer in enumerate(self.layers):
+                if i < len(self.layers) - 1:
+                    # Meta-pool in OUTPUT of this layer
+                    layer.V_mask[:, :mp] = 1.0
+                    layer.W_mask[:mp, :] = 1.0
+                    layer.b_in_mask[:mp] = 1.0
+                    layer.R_mask[:mp, :mp] = 1.0
+                    layer.R_gate_mask[:mp, :mp] = 1.0
+                    layer.L_mask[:mp, :mp] = 1.0
+                if i > 0:
+                    # Meta-pool in INPUT of this layer
+                    layer.V_mask[:mp, :] = 1.0
+                    layer.W_mask[:, :mp] = 1.0
+                    layer.b_out_mask[:mp] = 1.0
+            print(f"    [META-POOL] Unmasked {mp} shared neurons across all layers")
+        
         # Step 2 — Chained Expansion
         for i in range(len(self.layers)):
             if i < len(self.layers) - 1:
@@ -835,6 +855,8 @@ class PredictiveHierarchy(nn.Module):
         print(f"\n[Fixed] Language boundary: {language}")
         print(f"Frozen synaptic parameters per layer: {frozen_counts}")
         print(f"New trainable experts recruited per layer: {n}")
+        if mp > 0:
+            print(f"Meta-pool neurons (shared): {mp}")
         
         self.active_language = language
 
