@@ -559,3 +559,205 @@ class CognitivePredictiveAgent:
         self.step_count = checkpoint['step_count']
         self.exposure_counts = checkpoint['exposure_counts']
         print(f"[Checkpoint] Loaded from {filepath}")
+
+
+# ---------------------------------------------------------------------------
+# AbstraX Engine — Cross-Domain Affinity Analysis (V3 Meta-Abstraction)
+# ---------------------------------------------------------------------------
+
+class AbstraXEngine:
+    """
+    V3 Phase 32: The Dream Cycle.
+
+    After training, this engine loads the full checkpoint and performs
+    offline Cross-Domain Affinity Analysis. It extracts the learned weight
+    slices for each language manifold and computes pairwise structural
+    similarity using Cosine Similarity across all major weight matrices
+    (V, W, R, R_gate).
+
+    If two languages have high affinity, it means their neurons independently
+    discovered similar weight patterns — empirical proof that shared abstract
+    structure exists and can be folded into Dream Neurons.
+    """
+
+    def __init__(self, hierarchy: PredictiveHierarchy, lang_ranges: Dict[str, Tuple[int, int]]):
+        """
+        Args:
+            hierarchy: A loaded PredictiveHierarchy with trained weights.
+            lang_ranges: Dict mapping language code to (start_idx, end_idx).
+                         e.g. {'en': (0, 256), 'de': (256, 512), ...}
+        """
+        self.hierarchy = hierarchy
+        self.lang_ranges = lang_ranges
+        self.lang_codes = list(lang_ranges.keys())
+        self.n_langs = len(self.lang_codes)
+
+    def _extract_weight_signature(self, lang: str, layer_idx: int = 0) -> Dict[str, torch.Tensor]:
+        """
+        Extract the weight 'fingerprint' of a language manifold from a given layer.
+
+        For a language occupying neurons [s:e], we extract:
+          - V_slice: The recognition weights mapping TO those neurons (V[:, s:e])
+          - W_slice: The generative weights mapping FROM those neurons (W[s:e, :])
+          - R_slice: The recurrent self-connections within those neurons (R[s:e, s:e])
+          - R_gate_slice: The gating recurrence within those neurons (R_gate[s:e, s:e])
+
+        Each slice is flattened into a 1D vector to enable cosine comparison.
+        """
+        s, e = self.lang_ranges[lang]
+        layer = self.hierarchy.layers[layer_idx]
+
+        with torch.no_grad():
+            sig = {}
+            # Recognition pathway: how this language reads input
+            sig['V'] = layer.V.data[:, s:e].flatten()
+            # Generative pathway: how this language reconstructs input
+            sig['W'] = layer.W.data[s:e, :].flatten()
+            # Recurrent dynamics: how this language's neurons talk to each other
+            sig['R'] = layer.R.data[s:e, s:e].flatten()
+            # Gating dynamics: how this language gates its own recurrence
+            sig['R_gate'] = layer.R_gate.data[s:e, s:e].flatten()
+            # Bias profile: the activation threshold landscape
+            sig['b_in'] = layer.b_in.data[s:e].flatten()
+
+        return sig
+
+    def _cosine_sim(self, a: torch.Tensor, b: torch.Tensor) -> float:
+        """Compute cosine similarity between two flattened weight vectors."""
+        if a.numel() == 0 or b.numel() == 0:
+            return 0.0
+        # Ensure same size (they should be if sliver widths are equal)
+        min_len = min(a.numel(), b.numel())
+        a, b = a[:min_len], b[:min_len]
+        dot = torch.dot(a, b)
+        norm = torch.norm(a) * torch.norm(b)
+        if norm < 1e-8:
+            return 0.0
+        return (dot / norm).item()
+
+    def compute_pairwise_affinity(self, layer_idx: int = 0) -> Dict[str, object]:
+        """
+        Compute the full NxN Cross-Domain Affinity Matrix for a given layer.
+
+        Returns a dict containing:
+          - 'matrix': NxN tensor of aggregate affinity scores
+          - 'per_component': Dict of component-wise NxN matrices (V, W, R, etc.)
+          - 'lang_codes': ordered list of language codes
+        """
+        n = self.n_langs
+        # Aggregate affinity matrix
+        agg_matrix = torch.zeros(n, n)
+        # Per-component matrices
+        components = ['V', 'W', 'R', 'R_gate', 'b_in']
+        per_comp = {c: torch.zeros(n, n) for c in components}
+
+        # Extract all signatures
+        sigs = {}
+        for lang in self.lang_codes:
+            sigs[lang] = self._extract_weight_signature(lang, layer_idx)
+
+        # Compute pairwise similarities
+        for i, lang_a in enumerate(self.lang_codes):
+            for j, lang_b in enumerate(self.lang_codes):
+                if i == j:
+                    # Self-affinity is always 1.0
+                    agg_matrix[i, j] = 1.0
+                    for c in components:
+                        per_comp[c][i, j] = 1.0
+                    continue
+
+                comp_scores = []
+                for c in components:
+                    sim = self._cosine_sim(sigs[lang_a][c], sigs[lang_b][c])
+                    per_comp[c][i, j] = sim
+                    comp_scores.append(sim)
+
+                # Aggregate: weighted average (V and W are most important)
+                weights = {'V': 2.0, 'W': 2.0, 'R': 1.5, 'R_gate': 1.0, 'b_in': 0.5}
+                weighted_sum = sum(per_comp[c][i, j].item() * weights[c] for c in components)
+                total_weight = sum(weights.values())
+                agg_matrix[i, j] = weighted_sum / total_weight
+
+        return {
+            'matrix': agg_matrix,
+            'per_component': per_comp,
+            'lang_codes': self.lang_codes
+        }
+
+    def print_affinity_report(self, result: Dict, title: str = "Cross-Domain Affinity Matrix"):
+        """Pretty-print the affinity matrix as a formatted table."""
+        matrix = result['matrix']
+        codes = result['lang_codes']
+        n = len(codes)
+
+        print(f"\n{'='*60}")
+        print(f"  {title}")
+        print(f"{'='*60}")
+
+        # Header
+        header = f"{'':>6}" + "".join(f"{c:>8}" for c in codes)
+        print(header)
+        print("-" * len(header))
+
+        for i, lang_a in enumerate(codes):
+            row = f"{lang_a:>6}"
+            for j in range(n):
+                val = matrix[i, j].item()
+                row += f"{val:>8.4f}"
+            print(row)
+
+        print(f"{'='*60}")
+
+        # Find the top-K most similar pairs (excluding self)
+        pairs = []
+        for i in range(n):
+            for j in range(i + 1, n):
+                pairs.append((matrix[i, j].item(), codes[i], codes[j]))
+        pairs.sort(reverse=True)
+
+        print(f"\n  Top-5 Most Similar Language Pairs:")
+        print(f"  {'─'*40}")
+        for rank, (score, a, b) in enumerate(pairs[:5], 1):
+            bar = "█" * int(score * 20)
+            print(f"  {rank}. {a} ↔ {b}: {score:.4f}  {bar}")
+
+        print(f"\n  Bottom-3 Least Similar Pairs:")
+        print(f"  {'─'*40}")
+        for rank, (score, a, b) in enumerate(pairs[-3:], 1):
+            bar = "█" * int(max(0, score) * 20)
+            print(f"  {rank}. {a} ↔ {b}: {score:.4f}  {bar}")
+
+        return pairs
+
+    def identify_fold_candidates(self, result: Dict, threshold: float = 0.7) -> List[Tuple[str, str, float]]:
+        """
+        Identify language pairs whose affinity exceeds the folding threshold.
+        These are candidates for Dream Neuron synthesis — shared neurons
+        that both languages can route through.
+        """
+        matrix = result['matrix']
+        codes = result['lang_codes']
+        n = len(codes)
+        candidates = []
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                score = matrix[i, j].item()
+                if score >= threshold:
+                    candidates.append((codes[i], codes[j], score))
+
+        candidates.sort(key=lambda x: x[2], reverse=True)
+
+        if candidates:
+            print(f"\n  ╔══════════════════════════════════════════╗")
+            print(f"  ║  DREAM NEURON CANDIDATES (threshold={threshold:.1f})  ║")
+            print(f"  ╠══════════════════════════════════════════╣")
+            for a, b, score in candidates:
+                print(f"  ║  {a} ↔ {b}  affinity={score:.4f}  → FOLDABLE    ║")
+            print(f"  ╚══════════════════════════════════════════╝")
+        else:
+            print(f"\n  [AbstraX] No pairs exceed folding threshold {threshold:.1f}.")
+            print(f"  [AbstraX] Languages are structurally independent (as expected for isolated slivers).")
+            print(f"  [AbstraX] Next step: introduce shared meta-neurons and re-train to induce convergence.")
+
+        return candidates
