@@ -27,8 +27,8 @@ from agnis_v4_cognitive import CognitivePredictiveAgent, AbstraXEngine
 
 META_POOL_SIZE = 64
 N_PER_LANG = 128
-PHASE1_DURATION = 300   # 5 min per language (sequential)
-PHASE2_DURATION = 1200  # 20 min total (round-robin consolidation)
+PHASE1_DURATION = 180   # 3 min per language (sequential)
+PHASE2_DURATION = 600   # 10 min total (round-robin consolidation)
 SWITCH_EVERY = 50       # Switch language every 50 tokens
 
 class SimpleTokenizer:
@@ -129,9 +129,9 @@ def run_interleaved_marathon():
     # ═══════════════════════════════════════════
     # PHASE 1: Sequential Training (establish slivers)
     # ═══════════════════════════════════════════
-    print("\n╔══════════════════════════════════════╗")
-    print("║  PHASE 1: SEQUENTIAL ESTABLISHMENT   ║")
-    print("╚══════════════════════════════════════╝")
+    print("\n" + "="*40)
+    print("  PHASE 1: SEQUENTIAL ESTABLISHMENT")
+    print("="*40)
 
     all_tokens = {}
     for phase_idx, code in enumerate(langs):
@@ -169,9 +169,9 @@ def run_interleaved_marathon():
     # ═══════════════════════════════════════════
     # PHASE 2: Round-Robin Consolidation (meta-pool only)
     # ═══════════════════════════════════════════
-    print("\n╔══════════════════════════════════════╗")
-    print("║  PHASE 2: ROUND-ROBIN CONSOLIDATION  ║")
-    print("╚══════════════════════════════════════╝")
+    print("\n" + "="*40)
+    print("  PHASE 2: ROUND-ROBIN CONSOLIDATION")
+    print("="*40)
 
     # Freeze EVERYTHING, then unmask ONLY meta-pool
     freeze_all_masks(hierarchy)
