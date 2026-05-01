@@ -160,12 +160,16 @@ def run_bootstrap():
             layer.W.data[META_POOL_SIZE:it_start, :] = 0.0
             layer.R.data[META_POOL_SIZE:it_start, :] = 0.0
             layer.R.data[:, META_POOL_SIZE:it_start] = 0.0
+            layer.b_in.data[META_POOL_SIZE:it_start] = 0.0
+            layer.b_out.data[META_POOL_SIZE:it_start] = 0.0
             
             # Prevent learning on other languages
             layer.V_mask[:, META_POOL_SIZE:it_start] = 0.0
             layer.W_mask[META_POOL_SIZE:it_start, :] = 0.0
             layer.R_mask[META_POOL_SIZE:it_start, :] = 0.0
             layer.R_mask[:, META_POOL_SIZE:it_start] = 0.0
+            layer.b_in_mask[META_POOL_SIZE:it_start] = 0.0
+            layer.b_out_mask[META_POOL_SIZE:it_start] = 0.0
 
         n_batches = (len(it_tokens) - 1) // BATCH_SIZE
         print(f"\n>>> ITALIAN BOOTSTRAP ({BOOTSTRAP_DURATION//60} min) <<<")
