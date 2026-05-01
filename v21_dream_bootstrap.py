@@ -143,21 +143,34 @@ def run_bootstrap():
     it_end = it_start + N_PER_LANG
 
     # We want Italian to use BOTH its new sliver AND the newly synthesized Meta-Pool
-    # So we unmask the meta-pool for the Italian manifold gate
-    with hierarchy.manifold_gate(it_start, it_end):
-        # Allow gradients to flow into the new Italian weights
+    # but NOT the English/German/Spanish/French slivers [64, 576].
+    # We will temporarily zero out the masks for the other languages.
+    with hierarchy.manifold_gate(0, it_end):
         for layer in hierarchy.layers:
-            # We want to train the Italian weights, but keep Meta-Pool FROZEN
-            # so we only see how well the Meta-Pool transfers knowledge.
+            # Freeze Meta-Pool (it acts as Universal Grammar)
             layer.V_mask[:, :META_POOL_SIZE] = 0.0
             layer.W_mask[:META_POOL_SIZE, :] = 0.0
             layer.R_mask[:META_POOL_SIZE, :META_POOL_SIZE] = 0.0
             layer.R_gate_mask[:META_POOL_SIZE, :META_POOL_SIZE] = 0.0
             layer.b_in_mask[:META_POOL_SIZE] = 0.0
+            
+            # COMPLETELY ISOLATE FROM OTHER LANGUAGES [META_POOL_SIZE:it_start]
+            # Zero out the weights so Italian cannot read them
+            layer.V.data[:, META_POOL_SIZE:it_start] = 0.0
+            layer.W.data[META_POOL_SIZE:it_start, :] = 0.0
+            layer.R.data[META_POOL_SIZE:it_start, :] = 0.0
+            layer.R.data[:, META_POOL_SIZE:it_start] = 0.0
+            
+            # Prevent learning on other languages
+            layer.V_mask[:, META_POOL_SIZE:it_start] = 0.0
+            layer.W_mask[META_POOL_SIZE:it_start, :] = 0.0
+            layer.R_mask[META_POOL_SIZE:it_start, :] = 0.0
+            layer.R_mask[:, META_POOL_SIZE:it_start] = 0.0
 
         n_batches = (len(it_tokens) - 1) // BATCH_SIZE
         print(f"\n>>> ITALIAN BOOTSTRAP ({BOOTSTRAP_DURATION//60} min) <<<")
         print("  Meta-Pool is FROZEN (Acting as Universal Grammar)")
+        print("  Other Languages are ISOLATED (Italian cannot read them)")
         print("  Italian Sliver is TRAINABLE (Acting as Syntax Translator)")
         
         t0 = time.time()
@@ -185,14 +198,15 @@ def run_bootstrap():
             total_tokens += BATCH_SIZE
             batch_idx += 1
             
-            if batch_idx % 50 == 0:
-                avg_s = sum(batch_losses[-50:]) / max(1, len(batch_losses[-50:]))
+            if batch_idx % 10 == 0:
+                avg_s = sum(batch_losses[-10:]) / max(1, len(batch_losses[-10:]))
                 tps = total_tokens / max(1, elapsed)
-                print(f"  [Italian] {total_tokens:,} tok | {tps:.0f} tok/s | Surprise: {avg_s:.4f} | {elapsed/BOOTSTRAP_DURATION:.0%}", end="\r")
+                sys.stdout.write(f"\r  [Italian] {total_tokens:,} tok | {tps:.0f} tok/s | Surprise: {avg_s:.4f} | {elapsed/BOOTSTRAP_DURATION:.0%}")
+                sys.stdout.flush()
 
         avg_final = sum(batch_losses[-100:]) / max(1, len(batch_losses[-100:]))
         final_tps = total_tokens / (time.time() - t0)
-        print(f"\n  Italian Final: {total_tokens:,} tokens | {final_tps:.0f} tok/s | Final Surprise: {avg_final:.4f}")
+        print(f"\n\n  Italian Final: {total_tokens:,} tokens | {final_tps:.0f} tok/s | Final Surprise: {avg_final:.4f}")
 
     # ═══ Save V21 ═══
     hierarchy.save_checkpoint("agnis_v21_bootstrap.pt")
