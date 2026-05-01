@@ -761,3 +761,55 @@ class AbstraXEngine:
             print(f"  [AbstraX] Next step: introduce shared meta-neurons and re-train to induce convergence.")
 
         return candidates
+
+    def synthesize_dream_neurons(self, meta_pool_size: int = 64):
+        """
+        V21 Phase: Dream Synthesis.
+        Averages the highly-affine weight structures from the isolated language
+        slivers and writes them into the shared Meta-Pool, creating a physical
+        representation of Universal Grammar.
+        """
+        print(f"\n>>> SYNTHESIZING DREAM NEURONS INTO META-POOL ({meta_pool_size} neurons) <<<")
+        n_langs = len(self.lang_codes)
+        
+        for layer_idx, layer in enumerate(self.hierarchy.layers):
+            if layer_idx == 0:
+                continue # Skip input layer for folding
+
+            print(f"  Folding Layer {layer_idx}...")
+            # We average the matrices across all languages
+            avg_V = torch.zeros_like(layer.V.data[:, :meta_pool_size])
+            avg_W = torch.zeros_like(layer.W.data[:meta_pool_size, :])
+            avg_R = torch.zeros_like(layer.R.data[:meta_pool_size, :meta_pool_size])
+            avg_R_gate = torch.zeros_like(layer.R_gate.data[:meta_pool_size, :meta_pool_size])
+            avg_b_in = torch.zeros_like(layer.b_in.data[:meta_pool_size])
+            
+            for lang in self.lang_codes:
+                s, e = self.lang_ranges[lang]
+                # Extract the top `meta_pool_size` neurons from this language
+                l_s, l_e = s, s + meta_pool_size
+                
+                avg_V += layer.V.data[:, l_s:l_e]
+                avg_W += layer.W.data[l_s:l_e, :]
+                avg_R += layer.R.data[l_s:l_e, l_s:l_e]
+                avg_R_gate += layer.R_gate.data[l_s:l_e, l_s:l_e]
+                avg_b_in += layer.b_in.data[l_s:l_e]
+            
+            # Average and assign to meta-pool
+            layer.V.data[:, :meta_pool_size] = avg_V / n_langs
+            layer.W.data[:meta_pool_size, :] = avg_W / n_langs
+            layer.R.data[:meta_pool_size, :meta_pool_size] = avg_R / n_langs
+            layer.R_gate.data[:meta_pool_size, :meta_pool_size] = avg_R_gate / n_langs
+            layer.b_in.data[:meta_pool_size] = avg_b_in / n_langs
+            
+            # Unmask the Meta-Pool for future learning
+            layer.V_mask[:, :meta_pool_size] = 1.0
+            layer.W_mask[:meta_pool_size, :] = 1.0
+            layer.R_mask[:meta_pool_size, :meta_pool_size] = 1.0
+            layer.R_gate_mask[:meta_pool_size, :meta_pool_size] = 1.0
+            layer.b_in_mask[:meta_pool_size] = 1.0
+            if layer_idx > 0:
+                layer.b_out_mask[:meta_pool_size] = 1.0
+
+        print("  [Done] Universal Grammar synthesized. Meta-Pool is now active.")
+
