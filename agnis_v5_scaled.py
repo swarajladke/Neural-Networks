@@ -147,15 +147,10 @@ class ScaledAGNIS(nn.Module):
         positioned = self.pos_encoding(embedded, self._position)
         return positioned
 
-    def train_step(self, token_id: int, next_token_id: int, dopamine: float = 1.0):
+    def train_step(self, token_id: int, next_token_id: int, dopamine: float = 1.0, max_steps: int = 15):
         """
         One training step: predict next token from current token.
-
-        1. Embed current token + position encoding
-        2. Run through Hebbian hierarchy (infer + learn)
-        3. Get hierarchy output (predicted next embedding)
-        4. Output head maps to vocab logits
-        5. Cross-entropy loss updates embedding + output head
+        Optimized for throughput with reduced settling steps.
 
         Returns: (hebbian_surprise, output_loss)
         """
@@ -166,9 +161,10 @@ class ScaledAGNIS(nn.Module):
         target_ids = torch.tensor([[next_token_id]], device=self.device)
         target_embed = self.embedding(target_ids).squeeze(0)  # [1, embed_dim]
 
-        # 3. Hebbian core: infer and learn
+        # 3. Hebbian core: infer and learn (with reduced settling)
         self.hierarchy.infer_and_learn(
-            x, top_level_label=target_embed, dopamine_burst=dopamine
+            x, top_level_label=target_embed, dopamine_burst=dopamine,
+            max_steps=max_steps, warm_start=True
         )
 
         # 4. Get the hierarchy's top-level prediction
@@ -181,14 +177,14 @@ class ScaledAGNIS(nn.Module):
             predicted_embed, target_id_tensor
         )
 
-        # 6. Update embedding via gradient from output loss
-        embed_logits = self.output_head.linear(self.embedding(target_ids).squeeze(0))
-        embed_loss = nn.functional.cross_entropy(
-            embed_logits, target_id_tensor
-        )
-        self.embed_optimizer.zero_grad()
-        embed_loss.backward()
-        self.embed_optimizer.step()
+        # 6. Update embedding periodically (every 10 tokens for speed)
+        self._train_step_count = getattr(self, '_train_step_count', 0) + 1
+        if self._train_step_count % 10 == 0:
+            embed_logits = self.output_head.linear(self.embedding(target_ids).squeeze(0))
+            embed_loss = nn.functional.cross_entropy(embed_logits, target_id_tensor)
+            self.embed_optimizer.zero_grad()
+            embed_loss.backward()
+            self.embed_optimizer.step()
 
         # 7. Get Hebbian surprise
         hebbian_surprise = self.hierarchy.get_surprise((x.detach(), target_embed.detach()))

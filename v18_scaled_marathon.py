@@ -29,7 +29,7 @@ META_POOL_SIZE = 128
 N_PER_LANG = 128
 EMBED_DIM = 64
 BPE_VOCAB = 4000         # Start with 4K (16K needs larger corpus)
-PHASE1_DURATION = 180     # 3 min per language
+PHASE1_DURATION = 600     # 10 min per language
 PHASE2_DURATION = 300     # 5 min consolidation
 LANGS = ["en", "de", "es", "fr"]
 LANG_NAMES = {"en": "English", "de": "German", "es": "Spanish", "fr": "French"}
@@ -172,7 +172,7 @@ def run_scaled_marathon():
                 if elapsed > PHASE1_DURATION:
                     break
 
-                surprise, loss = model.train_step(tokens[i], tokens[i + 1])
+                surprise, loss = model.train_step(tokens[i], tokens[i + 1], max_steps=15)
                 losses.append(loss)
 
                 if i % 500 == 0:
