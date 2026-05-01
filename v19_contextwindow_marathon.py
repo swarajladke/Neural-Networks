@@ -60,9 +60,9 @@ class ContextWindowModel(nn.Module):
 
         # Embedding + Position
         self.embedding = nn.Embedding(vocab_size, embed_dim, device=self.device)
-        pe = torch.zeros(context_len, embed_dim)
-        pos = torch.arange(context_len, dtype=torch.float).unsqueeze(1)
-        div = torch.exp(torch.arange(0, embed_dim, 2, dtype=torch.float) *
+        pe = torch.zeros(context_len, embed_dim, device=self.device)
+        pos = torch.arange(context_len, dtype=torch.float, device=self.device).unsqueeze(1)
+        div = torch.exp(torch.arange(0, embed_dim, 2, dtype=torch.float, device=self.device) *
                         -(math.log(10000.0) / embed_dim))
         pe[:, 0::2] = torch.sin(pos * div)
         pe[:, 1::2] = torch.cos(pos * div)
