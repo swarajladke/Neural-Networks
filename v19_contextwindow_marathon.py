@@ -193,13 +193,18 @@ def run_v19():
 
     # Load data
     corpora = {}
-    for code in LANGS:
+    for code in list(LANGS):
+        found = False
         for path in [f"slm/wiki_{code}.txt", f"slm/input_{code}.txt"]:
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     corpora[code] = f.read()[:100000]
+                print(f"  {LANG_NAMES[code]}: {len(corpora[code]):,} chars")
+                found = True
                 break
-        print(f"  {LANG_NAMES[code]}: {len(corpora[code]):,} chars")
+        if not found:
+            print(f"  {LANG_NAMES[code]}: MISSING — skipping")
+            LANGS.remove(code)
 
     # BPE
     combined = "".join(corpora.values())
