@@ -112,13 +112,8 @@ def run_bootstrap():
         print(f"[ERROR] Missing checkpoint {ckpt_path}. Run V20 first.")
         return
         
-    # We only load hierarchy_state if it was saved via CognitivePredictiveAgent,
-    # but V20 saved directly via hierarchy.save_checkpoint().
-    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
-    if 'hierarchy_state' in ckpt:
-        hierarchy.load_state_dict(ckpt['hierarchy_state'])
-    else:
-        hierarchy.load_state_dict(ckpt)
+    # We saved directly via hierarchy.save_checkpoint() in V20
+    hierarchy.load_checkpoint(ckpt_path)
     print(f"  [Loaded] {ckpt_path}")
 
     # 3. Dream Synthesis (Folding)
