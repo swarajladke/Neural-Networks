@@ -114,7 +114,7 @@ def run_bootstrap():
         
     # We only load hierarchy_state if it was saved via CognitivePredictiveAgent,
     # but V20 saved directly via hierarchy.save_checkpoint().
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     if 'hierarchy_state' in ckpt:
         hierarchy.load_state_dict(ckpt['hierarchy_state'])
     else:
