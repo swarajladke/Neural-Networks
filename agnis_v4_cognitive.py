@@ -802,14 +802,48 @@ class AbstraXEngine:
             layer.R_gate.data[:meta_pool_size, :meta_pool_size] = avg_R_gate / n_langs
             layer.b_in.data[:meta_pool_size] = avg_b_in / n_langs
             
-            # Unmask the Meta-Pool for future learning
-            layer.V_mask[:, :meta_pool_size] = 1.0
-            layer.W_mask[:meta_pool_size, :] = 1.0
-            layer.R_mask[:meta_pool_size, :meta_pool_size] = 1.0
-            layer.R_gate_mask[:meta_pool_size, :meta_pool_size] = 1.0
-            layer.b_in_mask[:meta_pool_size] = 1.0
+            # V22: Soft-unmask the Meta-Pool (learns slowly, not frozen)
+            from agnis_v4_core import META_POOL_LR_SCALE
+            layer.V_mask[:, :meta_pool_size] = META_POOL_LR_SCALE
+            layer.W_mask[:meta_pool_size, :] = META_POOL_LR_SCALE
+            layer.R_mask[:meta_pool_size, :meta_pool_size] = META_POOL_LR_SCALE
+            layer.R_gate_mask[:meta_pool_size, :meta_pool_size] = META_POOL_LR_SCALE
+            layer.b_in_mask[:meta_pool_size] = META_POOL_LR_SCALE
             if layer_idx > 0:
-                layer.b_out_mask[:meta_pool_size] = 1.0
+                layer.b_out_mask[:meta_pool_size] = META_POOL_LR_SCALE
 
-        print("  [Done] Universal Grammar synthesized. Meta-Pool is now active.")
+        print(f"  [Done] Universal Grammar synthesized. Meta-Pool is ACTIVE (soft LR={META_POOL_LR_SCALE}).")
+
+    def check_meta_affinity(self, new_lang: str, threshold: float = 0.3, layer_idx: int = 0) -> Tuple[float, bool]:
+        """
+        V22: Check if a new language has sufficient affinity with the meta-pool.
+        If affinity is below threshold, the meta-pool needs expansion.
+        
+        Returns:
+            (affinity_score, is_sufficient)
+        """
+        if 'meta' not in self.lang_ranges:
+            print("  [AbstraX] No meta-pool range defined — skipping affinity check")
+            return 0.0, False
+        
+        meta_sig = self._extract_weight_signature('meta', layer_idx)
+        lang_sig = self._extract_weight_signature(new_lang, layer_idx)
+        
+        # Compute aggregate cosine similarity
+        components = ['V', 'W', 'R', 'R_gate', 'b_in']
+        weights = {'V': 2.0, 'W': 2.0, 'R': 1.5, 'R_gate': 1.0, 'b_in': 0.5}
+        
+        weighted_sum = 0.0
+        total_weight = sum(weights.values())
+        for c in components:
+            sim = self._cosine_sim(meta_sig[c], lang_sig[c])
+            weighted_sum += sim * weights[c]
+        
+        affinity = weighted_sum / total_weight
+        sufficient = affinity >= threshold
+        
+        status = "SUFFICIENT" if sufficient else "LOW — expansion needed"
+        print(f"  [AbstraX] {new_lang} → meta-pool affinity: {affinity:.4f} ({status})")
+        
+        return affinity, sufficient
 

@@ -47,6 +47,11 @@ from contextlib import contextmanager
 # Helpers
 # ---------------------------------------------------------------------------
 
+# V22: Meta-Pool Configuration
+META_POOL_MAX_SIZE = 1024       # Maximum meta-pool capacity (can grow via neurogenesis)
+META_POOL_LR_SCALE = 0.05       # Meta-pool learns 20x slower than language slivers
+
+
 def _clip_update(d: torch.Tensor, max_norm: float = 5.0) -> torch.Tensor:
     n = torch.norm(d)
     if n > max_norm:
@@ -861,6 +866,76 @@ class PredictiveHierarchy(nn.Module):
             print(f"Meta-pool neurons (shared): {mp}")
         
         self.active_language = language
+
+    def expand_meta_pool(self, n_new=32):
+        """
+        V22: Grow meta-pool when new language has low affinity.
+        Adds n_new neurons to hidden layers with soft mask (META_POOL_LR_SCALE).
+        Uses chained expand_output/expand_input like force_recruit_language_sliver.
+        """
+        if self.meta_pool_size + n_new > META_POOL_MAX_SIZE:
+            print(f"  [META-POOL] At max capacity ({self.meta_pool_size}/{META_POOL_MAX_SIZE})")
+            return
+
+        old_mp = self.meta_pool_size
+        print(f"\n  [META-POOL] Expanding: {old_mp} → {old_mp + n_new} neurons")
+
+        for i in range(len(self.layers)):
+            layer = self.layers[i]
+            if i < len(self.layers) - 1:
+                # Expand hidden output capacity
+                layer.expand_output(
+                    num_neurons=n_new,
+                    init_type="orthogonal",
+                    bias_init=-2.0
+                )
+                # New neurons get soft mask (not binary 1.0)
+                layer.V_mask[:, -n_new:] = META_POOL_LR_SCALE
+                layer.W_mask[-n_new:, :] = META_POOL_LR_SCALE
+                layer.b_in_mask[-n_new:] = META_POOL_LR_SCALE
+                layer.R_mask[-n_new:, -n_new:] = META_POOL_LR_SCALE
+                layer.R_gate_mask[-n_new:, -n_new:] = META_POOL_LR_SCALE
+
+                # Expand input of next layer
+                self.layers[i + 1].expand_input(num_neurons=n_new)
+                if i + 1 == len(self.layers) - 1:
+                    self.layers[i + 1].V_mask[-n_new:, :] = META_POOL_LR_SCALE
+                    self.layers[i + 1].W_mask[:, -n_new:] = META_POOL_LR_SCALE
+
+            if i == len(self.layers) - 1:
+                layer.V_mask[-n_new:, :] = META_POOL_LR_SCALE
+                layer.W_mask[:, -n_new:] = META_POOL_LR_SCALE
+                layer.W_mask[-n_new:, :] = META_POOL_LR_SCALE
+
+            batch_size = layer.x.shape[0] if hasattr(layer, 'x') else 1
+            layer.reset_state(batch_size)
+
+        self.meta_pool_size += n_new
+        print(f"  [META-POOL] Expanded to {self.meta_pool_size} neurons (soft LR={META_POOL_LR_SCALE})")
+
+    def set_meta_pool_soft_mask(self, lr_scale=None):
+        """
+        V22: Apply soft mask to meta-pool neurons across all layers.
+        Instead of binary 0/1, meta-pool gets continuous scale (e.g. 0.05).
+        Since update_weights() multiplies dV by V_mask, this gives
+        meta neurons eta_V * 0.05 = very slow learning.
+        """
+        scale = lr_scale if lr_scale is not None else META_POOL_LR_SCALE
+        mp = self.meta_pool_size
+        if mp == 0:
+            return
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                layer.V_mask[:, :mp] = scale
+                layer.W_mask[:mp, :] = scale
+                layer.b_in_mask[:mp] = scale
+                layer.R_mask[:mp, :mp] = scale
+                layer.R_gate_mask[:mp, :mp] = scale
+                layer.L_mask[:mp, :mp] = scale
+            if i > 0:
+                layer.V_mask[:mp, :] = scale
+                layer.W_mask[:, :mp] = scale
+                layer.b_out_mask[:mp] = scale
 
     def expand_capacity(self, layer_idx: int, num_neurons: int, init_last_input: torch.Tensor, init_target: torch.Tensor):
         if layer_idx < 0 or layer_idx >= len(self.layers): return
