@@ -249,13 +249,7 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
             print()
 
         # Save checkpoint after each epoch
-        torch.save({
-            'epoch':       epoch + 1,
-            'embedding':   wrapper.embedding.state_dict(),
-            'output_head': wrapper.output_head.state_dict(),
-            'vocab_size':  wrapper.vocab_size,
-            'embed_dim':   wrapper.embed_dim,
-        }, CHECKPOINT_OUT)
+        wrapper.save_checkpoint(CHECKPOINT_OUT)
         print(f"  [Saved] {CHECKPOINT_OUT}")
 
 
