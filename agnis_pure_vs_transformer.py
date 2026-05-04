@@ -1,16 +1,16 @@
 """
-agnis_pure_vs_transformer.py  v3
+agnis_pure_vs_transformer.py  v4
 =================================
-Lessons from v1 and v2:
-- v1: AGNIS WON step 50 with single Delta Rule. GPT caught up after step 100.
-- v2: 2-layer MLP readout (1M params) was too large for Delta Rule → worse.
+Lessons learned:
+- v1: AGNIS WON step 50. Used max_steps=10 (5 infer + 5 predict) + plain Delta Rule.
+- v2: 2-layer MLP (1M params) too large for Delta Rule → worse.
+- v3: Reduced to max_steps=3 + momentum cold-start killed early perf.
 
-v3 fixes:
-  1. Single Delta Rule readout (fast convergence — proven winner at step 50).
-  2. Momentum on Delta Rule (sustains the early advantage longer).
-  3. Correct temporal step — read layers[-1].x directly after infer_and_learn.
-  4. Embedding tied readout: compare hierarchy output to embedding table via
-     cosine similarity as a ZERO-PARAM sanity baseline alongside Delta Rule.
+v4 root-cause fix:
+  1. max_steps=10 (matches v1 effective settling depth — critical for representations).
+  2. Plain Delta Rule, no momentum (momentum cold-start kills step-50 performance).
+  3. LR_DELTA raised to 3e-2.
+  4. Single temporal step (read layers[-1].x directly — no double-stepping).
 """
 
 import os, math, time, sys
@@ -33,8 +33,7 @@ EMBED_DIM      = 128
 SEQ_LEN        = 64
 BATCH_SIZE     = 64
 LR_TRANSFORM   = 5e-4
-LR_DELTA       = 2e-2      # Delta Rule base LR
-MOMENTUM       = 0.9       # Delta Rule momentum
+LR_DELTA       = 3e-2      # Delta Rule LR (no momentum — cold start kills early perf)
 MAX_STEPS      = 1500
 LOG_EVERY      = 50
 DEVICE         = "cuda" if torch.cuda.is_available() else "cpu"
@@ -106,8 +105,7 @@ def main():
     embedding.weight.requires_grad = False
 
     # Single Delta Rule readout  W: [VOCAB_SIZE, EMBED_DIM]
-    W        = torch.randn(VOCAB_SIZE, EMBED_DIM, device=DEVICE) * 0.02
-    W_mom    = torch.zeros_like(W)    # momentum buffer
+    W = torch.randn(VOCAB_SIZE, EMBED_DIM, device=DEVICE) * 0.02
 
     # ── Transformer ─────────────────────────────────────────────────
     gpt     = TinyGPT(VOCAB_SIZE, d_model=128, nhead=4, num_layers=4).to(DEVICE)
@@ -147,29 +145,26 @@ def main():
             yt  = y[:, t]
             emb = embedding(xt)    # [B, EMBED_DIM]  — frozen
 
-            # SNAP-ATP: settle + local weight update + step temporal (all local)
+            # SNAP-ATP: settle (10 steps) + local weight update + step temporal
             # warm_start=True → temporal state carries across tokens in sequence
-            hierarchy.infer_and_learn(emb, max_steps=3, warm_start=True)
+            # max_steps=10 matches v1 effective settling depth (5+5) — critical!
+            hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True)
 
             # Read settled top-layer state DIRECTLY — no second temporal step
             hid = hierarchy.layers[-1].x.detach()   # [B, EMBED_DIM]
             if hid.shape[1] > EMBED_DIM:
                 hid = hid[:, :EMBED_DIM]
 
-            # Delta Rule readout (single linear layer — proven fastest)
+            # Plain Delta Rule — no momentum (momentum cold-start kills step-50 perf)
             logits = F.linear(hid, W)               # [B, VOCAB_SIZE]
             loss_t = F.cross_entropy(logits, yt)
             loss_agnis += loss_t.item()
 
-            # Delta Rule update WITH momentum
             probs  = F.softmax(logits, dim=-1)
             tgt_oh = F.one_hot(yt, VOCAB_SIZE).float()
             error  = tgt_oh - probs                 # [B, VOCAB_SIZE]
             grad_W = (error.t() @ hid) / BATCH_SIZE # [VOCAB_SIZE, EMBED_DIM]
-
-            # Momentum: v = m*v + (1-m)*grad  →  W += lr * v
-            W_mom  = MOMENTUM * W_mom + (1.0 - MOMENTUM) * grad_W
-            W     += LR_DELTA * W_mom
+            W     += LR_DELTA * grad_W
 
         loss_agnis /= SEQ_LEN
         sum_a += loss_agnis
