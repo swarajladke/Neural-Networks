@@ -171,15 +171,18 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
     token_ids = token_ids[:seq_len * BATCH_SIZE]
     token_tensor = torch.tensor(token_ids, dtype=torch.long, device=device).view(BATCH_SIZE, seq_len)
 
+    BPTT_STEPS = 16
+    loss_accum = 0.0
     total_steps = seq_len - 1
+
+    print(f"\n[Train] Trainable params: {sum(p.numel() for p in trainable):,}")
     print(f"[Train] Streaming {BATCH_SIZE} parallel streams of {total_steps:,} tokens per epoch.")
+    print(f"[Train] Using TBPTT with sequence length: {BPTT_STEPS}")
 
     for epoch in range(EPOCHS):
+        wrapper.hierarchy.reset_states(batch_size=BATCH_SIZE)
         epoch_loss = 0.0
         epoch_start = time.time()
-
-        # Reset hierarchy state at the start of each epoch for all streams
-        wrapper.hierarchy.reset_states(batch_size=BATCH_SIZE)
 
         for step in range(total_steps):
             cur_id = token_tensor[:, step]         # [batch_size]
@@ -191,15 +194,12 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
                 for pg in optimizer.param_groups:
                     pg['lr'] = LR * lr_scale
 
-            optimizer.zero_grad()
-
             # Embed current token batch
             emb = nn.functional.normalize(
                 wrapper.embedding(cur_id), dim=-1
             ) # [batch_size, embed_dim]
 
             # Hierarchy step
-            # If UNFREEZE_HIERARCHY=True, we use torch.enable_grad, else no_grad
             context_manager = torch.enable_grad() if UNFREEZE_HIERARCHY else torch.no_grad()
             with context_manager:
                 pred_embed = wrapper.hierarchy.predict_label(
@@ -212,13 +212,22 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
             logits = wrapper.output_head(pred_embed)  # [batch_size, vocab_size]
 
             loss = F.cross_entropy(logits, tgt_id)
+            loss_accum = loss_accum + loss
 
-            loss.backward()
-            nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
-            optimizer.step()
-            for col in wrapper.hierarchy.layers:
-                if hasattr(col, 'x'): col.x = col.x.detach()
+            # TBPTT update
+            if (step + 1) % BPTT_STEPS == 0 or (step + 1) == total_steps:
+                optimizer.zero_grad()
+                (loss_accum / BPTT_STEPS).backward()
+                nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
+                optimizer.step()
+                loss_accum = 0.0
 
+                # Detach all recurrent states for the next chunk
+                for col in wrapper.hierarchy.layers:
+                    if hasattr(col, 'x'): col.x = col.x.detach()
+                    if hasattr(col, 'x_temporal'): col.x_temporal = col.x_temporal.detach()
+                    if hasattr(col, 'x_temporal_2'): col.x_temporal_2 = col.x_temporal_2.detach()
+                    if hasattr(col, 'x_temporal_3'): col.x_temporal_3 = col.x_temporal_3.detach()
 
             epoch_loss += loss.item()
 
