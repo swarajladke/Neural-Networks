@@ -216,6 +216,9 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
             loss.backward()
             nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
             optimizer.step()
+            for col in wrapper.hierarchy.layers:
+                if hasattr(col, 'x'): col.x = col.x.detach()
+
 
             epoch_loss += loss.item()
 
@@ -241,8 +244,8 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
             for prompt in PROMPTS:
                 out = wrapper.generate(prompt, max_new_tokens=MAX_GEN_TOKENS,
                                        temperature=TEMPERATURE)
-                safe = out.encode('ascii', errors='replace').decode('ascii')
-                print(f"  [{prompt}] → {safe}")
+                safe = out.replace('\r', '').replace('\n', ' ')
+                print(f"  [{prompt}] -> {safe}\n")
             print()
 
         # Save checkpoint after each epoch
