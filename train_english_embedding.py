@@ -40,11 +40,12 @@ GUTENBERG_URL   = "https://www.gutenberg.org/cache/epub/1400/pg1400.txt"  # Grea
 LOCAL_CORPUS    = "slm/input_en.txt"
 TARGET_CHARS    = 500_000
 CONTEXT_SIZE    = 64         # (only used to truncate short prompts during gen)
-STRIDE          = 1          # no longer used in streaming
+BATCH_SIZE      = 64         # run 64 independent streams in parallel!
+UNFREEZE_HIERARCHY = True    # if True, overwrites the code manifold using BPTT
 EPOCHS          = 5
 LR              = 1e-3
-WARMUP_STEPS    = 500        # linear LR warmup
-LOG_EVERY       = 1000       # print loss every N steps
+WARMUP_STEPS    = 200        # linear LR warmup
+LOG_EVERY       = 100        # print loss every N steps
 GEN_EVERY_EPOCH = True       # print generation sample after each epoch
 TEMPERATURE     = 0.8
 MAX_GEN_TOKENS  = 40
@@ -129,33 +130,45 @@ def tokenize(text: str, tokenizer) -> list:
 def train(wrapper: AGNISSLMWrapper, token_ids: list):
     device = wrapper.device
 
-    # Freeze hierarchy completely
-    for param in wrapper.hierarchy.parameters():
-        param.requires_grad_(False)
+    if UNFREEZE_HIERARCHY:
+        for param in wrapper.hierarchy.parameters():
+            param.requires_grad_(True)
+        print("[Train] Hierarchy UNFROZEN: Network will unlearn code manifold and rewire for English.")
+    else:
+        for param in wrapper.hierarchy.parameters():
+            param.requires_grad_(False)
+        print("[Train] Hierarchy FROZEN.")
 
-    # Only train embedding + output_head
+    # Trainable parameters
     trainable = list(wrapper.embedding.parameters()) + \
                 list(wrapper.output_head.parameters())
+    if UNFREEZE_HIERARCHY:
+        trainable += list(wrapper.hierarchy.parameters())
+
     total_params = sum(p.numel() for p in trainable)
-    print(f"\n[Train] Trainable params: {total_params:,} "
-          f"(embedding + output_head only)")
-    print(f"[Train] Hierarchy FROZEN. Device: {device}")
+    print(f"\n[Train] Trainable params: {total_params:,}")
 
     optimizer = torch.optim.Adam(trainable, lr=LR)
 
-    total_steps = len(token_ids) - 1
-    print(f"[Train] Streaming {total_steps:,} tokens sequentially per epoch.")
+    # Reshape token sequence into parallel streams
+    seq_len = len(token_ids) // BATCH_SIZE
+    # Truncate any remainder so it divides evenly
+    token_ids = token_ids[:seq_len * BATCH_SIZE]
+    token_tensor = torch.tensor(token_ids, dtype=torch.long, device=device).view(BATCH_SIZE, seq_len)
+
+    total_steps = seq_len - 1
+    print(f"[Train] Streaming {BATCH_SIZE} parallel streams of {total_steps:,} tokens per epoch.")
 
     for epoch in range(EPOCHS):
         epoch_loss = 0.0
         epoch_start = time.time()
 
-        # Reset hierarchy state at the start of each epoch
-        wrapper.hierarchy.reset_states(batch_size=1)
+        # Reset hierarchy state at the start of each epoch for all streams
+        wrapper.hierarchy.reset_states(batch_size=BATCH_SIZE)
 
         for step in range(total_steps):
-            cur_id = token_ids[step]
-            tgt_id = token_ids[step + 1]
+            cur_id = token_tensor[:, step]         # [batch_size]
+            tgt_id = token_tensor[:, step + 1]     # [batch_size]
 
             # Linear warmup (only in epoch 0)
             if epoch == 0 and step <= WARMUP_STEPS:
@@ -165,25 +178,25 @@ def train(wrapper: AGNISSLMWrapper, token_ids: list):
 
             optimizer.zero_grad()
 
-            # Embed current token
-            cur_t = torch.tensor([[cur_id]], dtype=torch.long, device=device)
+            # Embed current token batch
             emb = nn.functional.normalize(
-                wrapper.embedding(cur_t).view(1, -1), dim=-1
-            ) # requires grad
+                wrapper.embedding(cur_id), dim=-1
+            ) # [batch_size, embed_dim]
 
-            # Hierarchy step (frozen)
-            with torch.no_grad():
+            # Hierarchy step
+            # If UNFREEZE_HIERARCHY=True, we use torch.enable_grad, else no_grad
+            context_manager = torch.enable_grad() if UNFREEZE_HIERARCHY else torch.no_grad()
+            with context_manager:
                 pred_embed = wrapper.hierarchy.predict_label(
-                    emb.detach(), max_steps=1, update_temporal=True
+                    emb, max_steps=1, update_temporal=True
                 )
                 if pred_embed.shape[1] > wrapper.embed_dim:
                     pred_embed = pred_embed[:, :wrapper.embed_dim]
 
             # Output mapping
-            logits = wrapper.output_head(pred_embed.detach())  # [1, vocab_size]
+            logits = wrapper.output_head(pred_embed)  # [batch_size, vocab_size]
 
-            target_t = torch.tensor([tgt_id], dtype=torch.long, device=device)
-            loss = F.cross_entropy(logits, target_t)
+            loss = F.cross_entropy(logits, tgt_id)
 
             loss.backward()
             nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
