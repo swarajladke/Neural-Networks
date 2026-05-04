@@ -129,7 +129,7 @@ class AGNISSLMWrapper(nn.Module):
     # ──────────────────────────────────────────────────────────────────────
 
     def load_checkpoint(self, path: str):
-        """Load hierarchy weights from checkpoint. Auto-detects dimensions."""
+        """Load hierarchy weights and wrapper components from checkpoint."""
         if not os.path.exists(path):
             print(f"[WARNING] Checkpoint not found: {path}. Using fresh weights.")
             self._load_tokenizer()
@@ -145,6 +145,17 @@ class AGNISSLMWrapper(nn.Module):
                   f"(was {self.embed_dim}). Rebuilding embedding table.")
             self.embed_dim = detected_idim
             self.embedding = nn.Embedding(self.vocab_size, self.embed_dim).to(self.device)
+
+        # Load wrapper components (embedding + head) if they exist
+        wrapper_path = path.replace(".pt", "_wrapper.pt")
+        if os.path.exists(wrapper_path):
+            state = torch.load(wrapper_path, map_location=self.device)
+            if 'embedding' in state and state['embedding']['weight'].shape == self.embedding.weight.shape:
+                self.embedding.load_state_dict(state['embedding'])
+                print("[Loading] Wrapper embedding restored.")
+            if hasattr(self, 'output_head') and 'output_head' in state and state['output_head']['weight'].shape == self.output_head.weight.shape:
+                self.output_head.load_state_dict(state['output_head'])
+                print("[Loading] Wrapper output_head restored.")
 
         self._load_tokenizer()
         print(f"[Ready] Context window: {self.context_size} tokens | "
@@ -196,9 +207,16 @@ class AGNISSLMWrapper(nn.Module):
 
         print("[BPE] No tokenizer found — falling back to char encoding.")
 
-    # ──────────────────────────────────────────────────────────────────────
-    # Sliding-Window Training Step
-    # ──────────────────────────────────────────────────────────────────────
+    def save_checkpoint(self, path: str):
+        """Save hierarchy and wrapper components."""
+        self.hierarchy.save_checkpoint(path)
+        wrapper_path = path.replace(".pt", "_wrapper.pt")
+        state = {
+            'embedding': self.embedding.state_dict(),
+        }
+        if hasattr(self, 'output_head'):
+            state['output_head'] = self.output_head.state_dict()
+        torch.save(state, wrapper_path)
 
     def learn_step(self, context_indices: list, target_indices: list):
         """

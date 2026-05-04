@@ -996,7 +996,7 @@ class PredictiveHierarchy(nn.Module):
                     deltas.append(0.0) # Skip update
                     continue
 
-                bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
+                bottom_up = sensory_input if i == 0 else self.layers[i-1].x
                 if i == len(self.layers) - 1 and top_level_label is not None:
                     delta = col.infer_step_top(bottom_up, top_level_label, step, w_snaps[i], b_snaps[i], recognition_weight, beta_push)
                 else:
@@ -1058,7 +1058,7 @@ class PredictiveHierarchy(nn.Module):
         for step in range(max_steps):
             deltas = []
             for i, col in enumerate(self.layers):
-                bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
+                bottom_up = sensory_input if i == 0 else self.layers[i-1].x
                 td_target = (torch.matmul(self.layers[i+1]._phi(self.layers[i+1].x), w_snaps[i+1]) + b_snaps[i+1]) if i < len(self.layers)-1 else None
                 delta = col.infer_step_sync(bottom_up, td_target, step, w_snaps[i], b_snaps[i], recognition_weight=recognition_weight)
                 deltas.append(delta)
