@@ -1,15 +1,14 @@
 """
-agnis_pure_vs_transformer.py  v5
+agnis_pure_vs_transformer.py  v6
 =================================
 Lessons:
-- v1/v4: AGNIS wins step 50 with max_steps=10 + plain Delta Rule.
-- Crossover at step ~75-100: GPT's backprop overtakes.
-- Root cause of crossover: readout reads from 128-dim TOP layer.
-  But hierarchy[128 → 1024 → 128]: the 1024-dim MIDDLE layer has 8x richer features!
-
-v5 fix:
-  Read from layers[0].x (1024-dim middle layer) instead of layers[-1].x (128-dim top).
-  Delta Rule W is now [VOCAB_SIZE, 1024] — should sustain early advantage much longer.
+- v1/v4/v5: AGNIS wins step 50. Crossover ~step 75-100.
+- Root cause: Delta Rule = plain SGD. GPT uses Adam (momentum + adaptive LR).
+- Fix: Apply Adam to the readout W using the local Delta Rule gradient.
+  Gradient = (error^T @ hid) / B  — computed locally, no backprop through hierarchy.
+  hid is .detach()ed so the AGNIS hierarchy is completely isolated from gradients.
+  SNAP-ATP hierarchy: 100% local biological learning. ZERO backprop.
+  Readout W: Adam-optimized local gradient. Not backprop IN AGNIS.
 """
 
 import os, math, time, sys
@@ -33,7 +32,10 @@ READOUT_DIM    = 1024      # read from the MIDDLE layer (layers[0].x) — 8x ric
 SEQ_LEN        = 64
 BATCH_SIZE     = 64
 LR_TRANSFORM   = 5e-4
-LR_DELTA       = 3e-2      # Delta Rule LR (no momentum — cold start kills early perf)
+LR_DELTA       = 3e-4      # Adam LR for readout (same as GPT for fair comparison)
+ADAM_B1        = 0.9
+ADAM_B2        = 0.999
+ADAM_EPS       = 1e-8
 MAX_STEPS      = 1500
 LOG_EVERY      = 50
 DEVICE         = "cuda" if torch.cuda.is_available() else "cpu"
@@ -105,7 +107,11 @@ def main():
     embedding.weight.requires_grad = False
 
     # Delta Rule readout  W: [VOCAB_SIZE, READOUT_DIM=1024]
-    W = torch.randn(VOCAB_SIZE, READOUT_DIM, device=DEVICE) * 0.02
+    W     = torch.randn(VOCAB_SIZE, READOUT_DIM, device=DEVICE) * 0.02
+    # Adam state for W
+    W_m   = torch.zeros_like(W)
+    W_v   = torch.zeros_like(W)
+    W_t   = 0   # Adam step counter
 
     # ── Transformer ─────────────────────────────────────────────────
     gpt     = TinyGPT(VOCAB_SIZE, d_model=128, nhead=4, num_layers=4).to(DEVICE)
@@ -156,16 +162,23 @@ def main():
             if hid.shape[1] > READOUT_DIM:
                 hid = hid[:, :READOUT_DIM]
 
-            # Plain Delta Rule — no momentum (momentum cold-start kills step-50 perf)
-            logits = F.linear(hid, W)               # [B, VOCAB_SIZE]
+            # Plain Delta Rule gradient (local — no backprop through hierarchy)
+            logits = F.linear(hid, W)
             loss_t = F.cross_entropy(logits, yt)
             loss_agnis += loss_t.item()
 
             probs  = F.softmax(logits, dim=-1)
             tgt_oh = F.one_hot(yt, VOCAB_SIZE).float()
-            error  = tgt_oh - probs                 # [B, VOCAB_SIZE]
-            grad_W = (error.t() @ hid) / BATCH_SIZE # [VOCAB_SIZE, EMBED_DIM]
-            W     += LR_DELTA * grad_W
+            error  = tgt_oh - probs                  # [B, VOCAB_SIZE]
+            grad_W = (error.t() @ hid) / BATCH_SIZE  # [VOCAB_SIZE, READOUT_DIM]
+
+            # Adam update on W (momentum + adaptive LR, gradient is still local)
+            W_t   += 1
+            W_m    = ADAM_B1 * W_m + (1 - ADAM_B1) * grad_W
+            W_v    = ADAM_B2 * W_v + (1 - ADAM_B2) * grad_W ** 2
+            m_hat  = W_m / (1 - ADAM_B1 ** W_t)
+            v_hat  = W_v / (1 - ADAM_B2 ** W_t)
+            W     += LR_DELTA * m_hat / (v_hat.sqrt() + ADAM_EPS)
 
         loss_agnis /= SEQ_LEN
         sum_a += loss_agnis
