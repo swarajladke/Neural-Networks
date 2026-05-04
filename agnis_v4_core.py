@@ -325,7 +325,7 @@ class PredictiveColumn(nn.Module):
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx).clamp(-5.0, 5.0)
+        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def infer_step_top(self, bottom_up, label, step_i, W_snap, b_out_snap, recognition_weight=1.0, beta_push=3.0):
@@ -379,7 +379,7 @@ class PredictiveColumn(nn.Module):
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx  = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx).clamp(-5.0, 5.0)
+        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def update_weights(self, is_top=False, lambda_W_top=0.0, dopamine_burst=1.0, convergence_quality=1.0):
@@ -996,7 +996,7 @@ class PredictiveHierarchy(nn.Module):
                     deltas.append(0.0) # Skip update
                     continue
 
-                bottom_up = sensory_input if i == 0 else self.layers[i-1].x
+                bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
                 if i == len(self.layers) - 1 and top_level_label is not None:
                     delta = col.infer_step_top(bottom_up, top_level_label, step, w_snaps[i], b_snaps[i], recognition_weight, beta_push)
                 else:
@@ -1058,7 +1058,7 @@ class PredictiveHierarchy(nn.Module):
         for step in range(max_steps):
             deltas = []
             for i, col in enumerate(self.layers):
-                bottom_up = sensory_input if i == 0 else self.layers[i-1].x
+                bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
                 td_target = (torch.matmul(self.layers[i+1]._phi(self.layers[i+1].x), w_snaps[i+1]) + b_snaps[i+1]) if i < len(self.layers)-1 else None
                 delta = col.infer_step_sync(bottom_up, td_target, step, w_snaps[i], b_snaps[i], recognition_weight=recognition_weight)
                 deltas.append(delta)
