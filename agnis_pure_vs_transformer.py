@@ -164,8 +164,12 @@ def main():
             # Static mapping
             emb = embedding(xt)
             
-            # SNAP-ATP Native Learning! (Core updates itself locally without backward)
-            hid = hierarchy.infer_and_learn(emb, update_temporal=True)
+            # SNAP-ATP Pure Local Learning (no backprop at all)
+            # Step 1: Local SNAP-ATP weight update (returns steps_used, converged)
+            hierarchy.infer_and_learn(emb, max_steps=5, warm_start=True)
+            # Step 2: Read out hidden state after settling (for the readout head)
+            with torch.no_grad():
+                hid = hierarchy.predict_label(emb, max_steps=5, update_temporal=True)
             if hid.shape[1] > EMBED_DIM: hid = hid[:, :EMBED_DIM]
             
             # Readout via Delta Rule
@@ -206,34 +210,35 @@ def main():
         step += 1
         
     # ── Final Generation Showdown ──
-    print("\\n" + "=" * 60)
+    print("\n" + "=" * 60)
     print(" FINAL GENERATION SHOWDOWN")
     print("=" * 60)
     
-    print("\\n[PURE AGNIS (0% Backprop)]")
+    print("\n[PURE AGNIS (0% Backprop)]")
     hierarchy.reset_states(batch_size=1)
     ids = tokenizer.encode(PROMPT).ids
     gen_ids = list(ids)
     
+    # Prime hierarchy with prompt (local learning on prompt tokens)
     for tok_id in ids:
         emb = embedding(torch.tensor([[tok_id]], device=DEVICE))
-        hid = hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
-        if hid.shape[1] > EMBED_DIM: hid = hid[:, :EMBED_DIM]
+        hierarchy.infer_and_learn(emb, max_steps=5)
         
     for _ in range(50):
         last = torch.tensor([[gen_ids[-1]]], device=DEVICE)
         emb = embedding(last)
-        hid = hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
+        with torch.no_grad():
+            hid = hierarchy.predict_label(emb, max_steps=5)
         if hid.shape[1] > EMBED_DIM: hid = hid[:, :EMBED_DIM]
         
         logits = F.linear(hid, readout_W)
         next_id = logits[0].argmax().item()
         gen_ids.append(next_id)
         if next_id == tokenizer.token_to_id("<|endoftext|>"): break
-    print(tokenizer.decode(gen_ids).replace('\\n', ' '))
+    print(tokenizer.decode(gen_ids).replace('\n', ' '))
     
-    print("\\n[Tiny GPT (Trained via Backprop)]")
-    print(generate_gpt(gpt, tokenizer, PROMPT).replace('\\n', ' '))
+    print("\n[Tiny GPT (Trained via Backprop)]")
+    print(generate_gpt(gpt, tokenizer, PROMPT).replace('\n', ' '))
 
 if __name__ == "__main__":
     main()
