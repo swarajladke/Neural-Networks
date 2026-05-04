@@ -174,9 +174,9 @@ def main():
                 pred_correct = (logits_pre.argmax(dim=-1) == yt).float()
                 acc = pred_correct.mean().item()
 
-            # Step 3: Dopamine = reward signal (correct → high, wrong → low)
-            # Range [0.5, 2.0] — modulates SNAP-ATP plasticity
-            dopamine = 0.5 + 1.5 * acc   # 0.5 when all wrong, 2.0 when all correct
+            # Step 3: Dopamine = reward signal (correct → boost, wrong → normal)
+            # Range [1.0, 2.0] — never penalise, only reward correct predictions
+            dopamine = 1.0 + 1.0 * acc   # 1.0 (normal) when wrong, 2.0 when correct
 
             # Step 4: SNAP-ATP with dopamine-guided plasticity (no backprop)
             hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True,
