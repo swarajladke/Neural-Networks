@@ -1,14 +1,22 @@
 """
-agnis_pure_vs_transformer.py  v6
+agnis_pure_vs_transformer.py  v7
 =================================
-Lessons:
-- v1/v4/v5: AGNIS wins step 50. Crossover ~step 75-100.
-- Root cause: Delta Rule = plain SGD. GPT uses Adam (momentum + adaptive LR).
-- Fix: Apply Adam to the readout W using the local Delta Rule gradient.
-  Gradient = (error^T @ hid) / B  — computed locally, no backprop through hierarchy.
-  hid is .detach()ed so the AGNIS hierarchy is completely isolated from gradients.
-  SNAP-ATP hierarchy: 100% local biological learning. ZERO backprop.
-  Readout W: Adam-optimized local gradient. Not backprop IN AGNIS.
+Problem identified in v6:
+  AGNIS loss is perfectly FLAT after step 100 (6.495 → 6.490 over 600 steps).
+  Root cause: SNAP-ATP optimizes RECONSTRUCTION error between layers.
+  The readout objective (next-token) is completely DECOUPLED from SNAP-ATP.
+  Adam on the readout converges in 100 steps then gets stuck because the
+  hierarchy features are not changing toward next-token prediction.
+
+v7 fix — Dopamine Feedback (biologically plausible, zero backprop):
+  1. Run a fast forward pass through the hierarchy (predict_label, no weight update).
+  2. Make a readout prediction.
+  3. Use readout accuracy as dopamine_burst signal.
+  4. Run infer_and_learn WITH that dopamine signal.
+  Correct prediction → dopamine=2.0 → SNAP-ATP strongly reinforces those patterns.
+  Wrong prediction  → dopamine=0.5 → SNAP-ATP discounts those patterns.
+  This GUIDES the hierarchy toward features useful for next-token prediction.
+  No gradients ever enter the hierarchy. 100% biological.
 """
 
 import os, math, time, sys
@@ -152,12 +160,29 @@ def main():
             yt  = y[:, t]
             emb = embedding(xt)    # [B, EMBED_DIM]  — frozen
 
-            # SNAP-ATP: settle (10 steps) + local weight update + step temporal
-            # warm_start=True → temporal state carries across tokens in sequence
-            # max_steps=10 matches v1 effective settling depth (5+5) — critical!
-            hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True)
+            # ── v7: Dopamine Feedback Loop ──────────────────────────
+            # Step 1: Fast inference pass to get features (no weight update yet)
+            with torch.no_grad():
+                _ = hierarchy.forward(emb, max_steps=5, update_temporal=False)
+                hid_pre = hierarchy.layers[0].x.detach()  # [B, READOUT_DIM]
+                if hid_pre.shape[1] > READOUT_DIM:
+                    hid_pre = hid_pre[:, :READOUT_DIM]
 
-            # Read from MIDDLE layer (1024-dim) — 8x richer than 128-dim top layer
+            # Step 2: Readout prediction using pre-update features
+            with torch.no_grad():
+                logits_pre = F.linear(hid_pre, W)
+                pred_correct = (logits_pre.argmax(dim=-1) == yt).float()
+                acc = pred_correct.mean().item()
+
+            # Step 3: Dopamine = reward signal (correct → high, wrong → low)
+            # Range [0.5, 2.0] — modulates SNAP-ATP plasticity
+            dopamine = 0.5 + 1.5 * acc   # 0.5 when all wrong, 2.0 when all correct
+
+            # Step 4: SNAP-ATP with dopamine-guided plasticity (no backprop)
+            hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True,
+                                      dopamine_burst=dopamine)
+
+            # Read settled middle-layer features
             hid = hierarchy.layers[0].x.detach()    # [B, 1024]
             if hid.shape[1] > READOUT_DIM:
                 hid = hid[:, :READOUT_DIM]
