@@ -325,7 +325,7 @@ class PredictiveColumn(nn.Module):
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
+        self.x = (self.x + dx).clamp(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def infer_step_top(self, bottom_up, label, step_i, W_snap, b_out_snap, recognition_weight=1.0, beta_push=3.0):
@@ -379,7 +379,7 @@ class PredictiveColumn(nn.Module):
 
         eta = self.eta_x / (1.0 + 0.1 * step_i)
         dx  = _clip_update(self.tau * eta * state_grad, max_norm=1.0)
-        self.x = (self.x + dx.detach()).clamp_(-5.0, 5.0)
+        self.x = (self.x + dx).clamp(-5.0, 5.0)
         return torch.max(torch.abs(self.x - x_prev))
 
     def update_weights(self, is_top=False, lambda_W_top=0.0, dopamine_burst=1.0, convergence_quality=1.0):
