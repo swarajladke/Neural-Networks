@@ -1,16 +1,15 @@
 """
-agnis_pure_vs_transformer.py  v4
+agnis_pure_vs_transformer.py  v5
 =================================
-Lessons learned:
-- v1: AGNIS WON step 50. Used max_steps=10 (5 infer + 5 predict) + plain Delta Rule.
-- v2: 2-layer MLP (1M params) too large for Delta Rule → worse.
-- v3: Reduced to max_steps=3 + momentum cold-start killed early perf.
+Lessons:
+- v1/v4: AGNIS wins step 50 with max_steps=10 + plain Delta Rule.
+- Crossover at step ~75-100: GPT's backprop overtakes.
+- Root cause of crossover: readout reads from 128-dim TOP layer.
+  But hierarchy[128 → 1024 → 128]: the 1024-dim MIDDLE layer has 8x richer features!
 
-v4 root-cause fix:
-  1. max_steps=10 (matches v1 effective settling depth — critical for representations).
-  2. Plain Delta Rule, no momentum (momentum cold-start kills step-50 performance).
-  3. LR_DELTA raised to 3e-2.
-  4. Single temporal step (read layers[-1].x directly — no double-stepping).
+v5 fix:
+  Read from layers[0].x (1024-dim middle layer) instead of layers[-1].x (128-dim top).
+  Delta Rule W is now [VOCAB_SIZE, 1024] — should sustain early advantage much longer.
 """
 
 import os, math, time, sys
@@ -30,6 +29,7 @@ TOKENIZER_PATH = "slm_bpe_tokenizer_en.json"
 
 VOCAB_SIZE     = 4096
 EMBED_DIM      = 128
+READOUT_DIM    = 1024      # read from the MIDDLE layer (layers[0].x) — 8x richer than top
 SEQ_LEN        = 64
 BATCH_SIZE     = 64
 LR_TRANSFORM   = 5e-4
@@ -104,8 +104,8 @@ def main():
     nn.init.orthogonal_(embedding.weight)
     embedding.weight.requires_grad = False
 
-    # Single Delta Rule readout  W: [VOCAB_SIZE, EMBED_DIM]
-    W = torch.randn(VOCAB_SIZE, EMBED_DIM, device=DEVICE) * 0.02
+    # Delta Rule readout  W: [VOCAB_SIZE, READOUT_DIM=1024]
+    W = torch.randn(VOCAB_SIZE, READOUT_DIM, device=DEVICE) * 0.02
 
     # ── Transformer ─────────────────────────────────────────────────
     gpt     = TinyGPT(VOCAB_SIZE, d_model=128, nhead=4, num_layers=4).to(DEVICE)
@@ -115,7 +115,8 @@ def main():
     g_params = sum(p.numel() for p in gpt.parameters())
     print(f"\n[Fighters]")
     print(f"  PURE AGNIS  : {a_params:,} + {W.numel():,} readout = "
-          f"{a_params + W.numel():,} params  (SNAP-ATP + Delta Rule + Momentum. ZERO Backprop.)")
+          f"{a_params + W.numel():,} params  "
+          f"(SNAP-ATP + Delta Rule on 1024-dim middle layer. ZERO Backprop.)")
     print(f"  Transformer : {g_params:,} params  (Adam + Backprop, from scratch)")
 
     print(f"\n{'Step':>6} | {'AGNIS Loss':>12} | {'GPT Loss':>12} | "
@@ -150,10 +151,10 @@ def main():
             # max_steps=10 matches v1 effective settling depth (5+5) — critical!
             hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True)
 
-            # Read settled top-layer state DIRECTLY — no second temporal step
-            hid = hierarchy.layers[-1].x.detach()   # [B, EMBED_DIM]
-            if hid.shape[1] > EMBED_DIM:
-                hid = hid[:, :EMBED_DIM]
+            # Read from MIDDLE layer (1024-dim) — 8x richer than 128-dim top layer
+            hid = hierarchy.layers[0].x.detach()    # [B, 1024]
+            if hid.shape[1] > READOUT_DIM:
+                hid = hid[:, :READOUT_DIM]
 
             # Plain Delta Rule — no momentum (momentum cold-start kills step-50 perf)
             logits = F.linear(hid, W)               # [B, VOCAB_SIZE]
@@ -189,13 +190,13 @@ def main():
     gen_ids = list(ids)
     for tok in ids:
         emb = embedding(torch.tensor([[tok]], device=DEVICE))
-        hierarchy.infer_and_learn(emb, max_steps=3)
+        hierarchy.infer_and_learn(emb, max_steps=10)
     for _ in range(60):
         last = torch.tensor([[gen_ids[-1]]], device=DEVICE)
         emb  = embedding(last)
-        hierarchy.infer_and_learn(emb, max_steps=3, warm_start=True)
-        hid  = hierarchy.layers[-1].x.detach()
-        if hid.shape[1] > EMBED_DIM: hid = hid[:, :EMBED_DIM]
+        hierarchy.infer_and_learn(emb, max_steps=10, warm_start=True)
+        hid  = hierarchy.layers[0].x.detach()       # middle layer
+        if hid.shape[1] > READOUT_DIM: hid = hid[:, :READOUT_DIM]
         logits  = F.linear(hid, W)
         next_id = torch.multinomial(F.softmax(logits[0] / 0.8, dim=-1), 1).item()
         gen_ids.append(next_id)
