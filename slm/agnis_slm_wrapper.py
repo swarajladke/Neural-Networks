@@ -83,10 +83,46 @@ class AGNISSLMWrapper(nn.Module):
             self.hierarchy, device=str(self.device)
         )
 
-        # NOTE: We do NOT use output_head dot-product here because the embedding
-        # table used during marathon training is not saved in the checkpoint.
-        # Instead, generate() uses L2 nearest-neighbor in the embedding table,
-        # which is self-consistent regardless of random init.
+        # Output head: hidden (embed_dim) → vocab logits
+        # Trained separately on clean English; hierarchy stays frozen.
+        self.output_head = nn.Linear(embed_dim, vocab_size, bias=False).to(self.device)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Forward (for gradient training of embedding + output_head)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def forward(self, context_ids: list) -> torch.Tensor:
+        """
+        Forward pass for training.
+        context_ids: list of int, length context_size.
+        Returns: logits tensor [vocab_size] (un-softmaxed).
+
+        The hierarchy runs in no_grad (frozen). Only embedding and
+        output_head participate in the computation graph.
+        """
+        # Embed and normalize all context tokens
+        ctx = torch.tensor(context_ids, dtype=torch.long, device=self.device)  # [ctx_len]
+        embeds = nn.functional.normalize(self.embedding(ctx), dim=-1)          # [ctx_len, embed_dim]
+
+        # Run hierarchy in inference-only mode (no gradient through hierarchy)
+        with torch.no_grad():
+            for i in range(len(context_ids) - 1):
+                self.hierarchy.predict_label(embeds[i:i+1], update_temporal=True)
+
+        # Final step: hierarchy predicts next embedding from last context token
+        # embedding of last token still needs grad (it's the input key)
+        last_embed = embeds[-1:].detach()   # detach: hierarchy doesn't need grad
+        with torch.no_grad():
+            pred_embed = self.hierarchy.predict_label(last_embed, update_temporal=True)
+
+        # Slice to embed_dim
+        if pred_embed.shape[1] > self.embed_dim:
+            pred_embed = pred_embed[:, :self.embed_dim]
+
+        # output_head IS in the computation graph → gradients flow here
+        pred_embed_grad = pred_embed.detach().requires_grad_(False)
+        logits = self.output_head(pred_embed_grad)   # [1, vocab_size]
+        return logits.squeeze(0)                     # [vocab_size]
 
     # ──────────────────────────────────────────────────────────────────────
     # Checkpoint I/O
