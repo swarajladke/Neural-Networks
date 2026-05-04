@@ -36,9 +36,17 @@ from slm.agnis_slm_wrapper import AGNISSLMWrapper
 # ── Config ──────────────────────────────────────────────────────────────────
 CHECKPOINT_IN   = "agnis_marathon_final.pt"
 CHECKPOINT_OUT  = "agnis_english_finetuned.pt"  # saved after each epoch
-GUTENBERG_URL   = "https://www.gutenberg.org/cache/epub/1400/pg1400.txt"  # Great Expectations
-LOCAL_CORPUS    = "slm/input_en.txt"
-TARGET_CHARS    = 500_000
+GUTENBERG_URLS  = [
+    "https://www.gutenberg.org/cache/epub/1400/pg1400.txt",  # Great Expectations (1M chars)
+    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",  # Pride and Prejudice (700K chars)
+    "https://www.gutenberg.org/cache/epub/84/pg84.txt",      # Frankenstein (400K chars)
+    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",  # Moby Dick (1.2M chars)
+    "https://www.gutenberg.org/cache/epub/345/pg345.txt",    # Dracula (800K chars)
+    "https://www.gutenberg.org/cache/epub/98/pg98.txt",      # Tale of Two Cities (800K chars)
+    "https://www.gutenberg.org/cache/epub/2600/pg2600.txt"   # War and Peace (3.2M chars)
+]
+LOCAL_CORPUS    = "slm/input_en_massive.txt"
+TARGET_CHARS    = 10_000_000  # Give it a massive dataset to learn fluency
 CONTEXT_SIZE    = 64         # (only used to truncate short prompts during gen)
 BATCH_SIZE      = 64         # run 64 independent streams in parallel!
 UNFREEZE_HIERARCHY = True    # if True, overwrites the code manifold using BPTT
@@ -69,19 +77,26 @@ def fetch_corpus() -> str:
         return text[:TARGET_CHARS]
 
     # 1b) Download from Project Gutenberg
-    cache = "gutenberg_great_expectations.txt"
-    if not os.path.exists(cache):
-        print(f"[Corpus] Downloading Great Expectations from Gutenberg...")
-        try:
-            urllib.request.urlretrieve(GUTENBERG_URL, cache)
-            print(f"[Corpus] Downloaded → {cache}")
-        except Exception as e:
-            print(f"[ERROR] Download failed: {e}")
-            sys.exit(1)
+    # Download massive corpus if needed
+    if not os.path.exists(LOCAL_CORPUS) or os.path.getsize(LOCAL_CORPUS) < 5_000_000:
+        print("[Corpus] Downloading massive Gutenberg dataset (this may take a minute)...")
+        os.makedirs("slm", exist_ok=True)
+        full_text = ""
+        for url in GUTENBERG_URLS:
+            try:
+                print(f"  -> Downloading {url.split('/')[-1]}...")
+                response = urllib.request.urlopen(url)
+                text = response.read().decode('utf-8')
+                full_text += clean_text(text) + "\n\n"
+            except Exception as e:
+                print(f"  -> Failed to download {url}: {e}")
+        
+        with open(LOCAL_CORPUS, 'w', encoding='utf-8') as f:
+            f.write(full_text)
+        print("[Corpus] Download complete.")
 
-    with open(cache, encoding="utf-8", errors="replace") as f:
+    with open(LOCAL_CORPUS, encoding="utf-8", errors="replace") as f:
         text = f.read()
-    print(f"[Corpus] Loaded {cache} ({len(text):,} chars)")
     return text
 
 
