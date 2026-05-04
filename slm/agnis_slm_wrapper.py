@@ -256,25 +256,16 @@ class AGNISSLMWrapper(nn.Module):
     def generate(self,
                  prompt:          str,
                  max_new_tokens:  int   = 100,
-                 temperature:     float = 0.8) -> str:
+                 temperature:     float = 0.8,
+                 repetition_penalty: float = 1.2) -> str:
         """
-        Autoregressive generation with 64-token context window.
-
-        Steps:
-          1. Encode prompt → token IDs.
-          2. Reset hierarchy state.
-          3. PRIME: feed last min(64, len(prompt)) tokens one-by-one
-             with update_temporal=True to build R-matrix temporal state.
-          4. GENERATE: autoregressively sample max_new_tokens new tokens,
-             updating temporal state at every step.
-          5. Decode full sequence and return.
+        Autoregressive generation with 64-token context window and repetition penalty.
         """
         if self._tokenizer is None:
             self._load_tokenizer()
 
         # ── 1. Encode ────────────────────────────────────────────────────
         if self._tokenizer is not None:
-            # Handle both HF tokenizers (returns Encoding obj) and AGNIS BPETokenizer (returns list)
             enc = self._tokenizer.encode(prompt)
             prompt_ids = enc.ids if hasattr(enc, 'ids') else enc
         else:
@@ -287,18 +278,17 @@ class AGNISSLMWrapper(nn.Module):
         # ── 2. Reset hierarchy ───────────────────────────────────────────
         self.hierarchy.reset_states(batch_size=1)
 
-        # ── 3. Prime with up to CONTEXT_SIZE tokens ──────────────────────
+        # ── 3. Prime with context window ─────────────────────────────────
         prime_tokens = prompt_ids[-self.context_size:]
         print(f"\n[AGNIS] Priming with {len(prime_tokens)}-token context window...")
 
         for tok_id in prime_tokens:
             tok_t = torch.tensor([[tok_id]], dtype=torch.long, device=self.device)
-            embed = self.embedding(tok_t).view(1, -1)                   # [1, embed_dim]
-            embed = nn.functional.normalize(embed, dim=-1)              # normalize
+            embed = self.embedding(tok_t).view(1, -1)
+            embed = nn.functional.normalize(embed, dim=-1)
             self.hierarchy.predict_label(embed, update_temporal=True)
 
         # ── 4. Autoregressive generation loop ────────────────────────────
-        print(f"[AGNIS] Generating {max_new_tokens} tokens (temperature={temperature})...")
 
         # Pre-normalize entire embedding table for fast L2 nearest-neighbor
         emb_weight = nn.functional.normalize(
