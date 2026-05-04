@@ -302,15 +302,10 @@ class AGNISSLMWrapper(nn.Module):
                 pad = torch.zeros(1, self.embed_dim - pred_embed.shape[1], device=self.device)
                 pred_embed = torch.cat([pred_embed, pad], dim=1)
 
-            # Normalize predicted embedding
-            pred_norm = nn.functional.normalize(pred_embed, dim=-1)  # [1, embed_dim]
+            # Use the trained output head to project to vocabulary logits
+            logits = self.output_head(pred_embed)[0]                 # [vocab_size]
 
-            # L2 nearest-neighbor in embedding space (= cosine distance after norm)
-            # distances[i] = ||pred_norm - emb_weight[i]||^2
-            distances = torch.cdist(pred_norm, emb_weight)[0]        # [vocab_size]
-
-            # Boltzmann sampling: lower distance → higher probability
-            logits = -distances
+            # Scale logits by temperature and apply softmax
             probs  = torch.softmax(logits / temperature, dim=-1)
 
             # Sample next token
