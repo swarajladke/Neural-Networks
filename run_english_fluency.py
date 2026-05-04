@@ -171,10 +171,9 @@ def step2_train_interface(tokenizer: Tokenizer):
 
     # Fresh interface — re-initialize for clean English slate
     wrapper.embedding   = nn.Embedding(VOCAB_SIZE, EMBED_DIM).to(DEVICE)
-    wrapper.output_head = nn.Linear(EMBED_DIM, VOCAB_SIZE, bias=True).to(DEVICE)
+    wrapper.output_head = nn.Linear(EMBED_DIM, VOCAB_SIZE, bias=False).to(DEVICE)  # bias=False: matches wrapper
     nn.init.normal_(wrapper.embedding.weight, std=0.02)
     nn.init.normal_(wrapper.output_head.weight, std=0.02)
-    nn.init.zeros_(wrapper.output_head.bias)
 
     trainable = (list(wrapper.embedding.parameters()) +
                  list(wrapper.output_head.parameters()))
@@ -213,20 +212,23 @@ def step2_train_interface(tokenizer: Tokenizer):
                 for pg in optimizer.param_groups:
                     pg["lr"] = LR * max(0.01, step / max(1, WARMUP_STEPS))
 
-            # Interface forward (grad)
-            emb = F.normalize(wrapper.embedding(cur_id), dim=-1)
+            # Interface forward (grad flows here)
+            emb = F.normalize(wrapper.embedding(cur_id), dim=-1)  # [B, embed_dim]
 
-            # Hierarchy forward (NO grad)
+            # Hierarchy forward (NO grad — frozen, pure SNAP-ATP)
             with torch.no_grad():
-                hidden = wrapper.hierarchy.predict_label(
-                    emb.detach(), max_steps=1, update_temporal=True
+                context = wrapper.hierarchy.predict_label(
+                    emb, max_steps=1, update_temporal=True
                 )
-                if hidden.shape[1] > EMBED_DIM:
-                    hidden = hidden[:, :EMBED_DIM]
+                if context.shape[1] > EMBED_DIM:
+                    context = context[:, :EMBED_DIM]
 
-            # Output + loss (grad)
-            logits = wrapper.output_head(hidden)
-            loss   = F.cross_entropy(logits, tgt_id)
+            # Residual: emb (grad path) + context (frozen signal)
+            # Gradients flow: loss → output_head → emb → embedding weights ✓
+            # Hierarchy is untouched — context.detach() ensures no grad leaks in
+            combined = emb + 0.5 * context.detach()
+            logits   = wrapper.output_head(combined)
+            loss     = F.cross_entropy(logits, tgt_id)
 
             optimizer.zero_grad()
             loss.backward()
@@ -260,7 +262,7 @@ def step2_train_interface(tokenizer: Tokenizer):
         if (epoch + 1) % GEN_EVERY_N == 0:
             print(f"\n  --- Fluency check (epoch {epoch+1}) ---")
             for p in PROMPTS:
-                out  = _generate(wrapper, tokenizer)
+                out  = full_generate(wrapper, tokenizer, p)
                 safe = out.replace('\r', '').replace('\n', ' ')
                 print(f"  [{p}] -> {safe}\n")
             print()
