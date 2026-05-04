@@ -274,10 +274,6 @@ def step2_train_interface(tokenizer: Tokenizer):
 # ═══════════════════════════════════════════════════════════════
 #  GENERATION
 # ═══════════════════════════════════════════════════════════════
-@torch.no_grad()
-def _generate(wrapper, tokenizer, prompt: str = None) -> str:
-    # Called with prompt from outer scope if not supplied
-    return ""          # placeholder — see full_generate below
 
 @torch.no_grad()
 def full_generate(wrapper, tokenizer, prompt: str) -> str:
@@ -288,23 +284,32 @@ def full_generate(wrapper, tokenizer, prompt: str) -> str:
     prompt_ids = enc.ids
     gen_ids    = list(prompt_ids)
 
+    # Prime hierarchy with prompt tokens
     for tok_id in prompt_ids:
         emb = F.normalize(
             wrapper.embedding(torch.tensor([[tok_id]], device=device)).view(1, -1),
             dim=-1,
         )
-        wrapper.hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
-
-    eos = tokenizer.token_to_id("<|endoftext|>") or -1
-
-    for _ in range(MAX_GEN_TOKENS):
-        last  = torch.tensor([[gen_ids[-1]]], device=device)
-        emb   = F.normalize(wrapper.embedding(last).view(1, -1), dim=-1)
-        hid   = wrapper.hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
+        hid = wrapper.hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
         if hid.shape[1] > EMBED_DIM:
             hid = hid[:, :EMBED_DIM]
 
-        logits = wrapper.output_head(hid) / TEMPERATURE
+    eos = tokenizer.token_to_id("<|endoftext|>")
+    if eos is None:
+        eos = -1
+
+    for _ in range(MAX_GEN_TOKENS):
+        last = torch.tensor([[gen_ids[-1]]], device=device)
+        emb  = F.normalize(wrapper.embedding(last).view(1, -1), dim=-1)
+        hid  = wrapper.hierarchy.predict_label(emb, max_steps=1, update_temporal=True)
+        if hid.shape[1] > EMBED_DIM:
+            hid = hid[:, :EMBED_DIM]
+
+        # MUST match training: output_head was trained on (emb + 0.5 * context)
+        combined = emb + 0.5 * hid
+        logits   = wrapper.output_head(combined) / TEMPERATURE
+
+        # Repetition penalty
         for tok in set(gen_ids[-20:]):
             logits[0, tok] = (logits[0, tok] / REP_PENALTY
                               if logits[0, tok] > 0
