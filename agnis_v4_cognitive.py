@@ -361,6 +361,7 @@ class CognitivePredictiveAgent:
                     self.neuromodulator.compute_dopamine(torch.tensor([surprise]))
                     return 1.0, surprise
 
+
         # 1. Dry-run for surprise estimation (Vectorized)
         if not warm_start:
             self.hierarchy.reset_states(batch_size=batch_size)
