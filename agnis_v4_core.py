@@ -77,7 +77,7 @@ class PredictiveColumn(nn.Module):
 
         self.V    = nn.Parameter(torch.empty(input_dim, output_dim, device=self.device).uniform_(-k_v, k_v))
         # Initialize with deep negative bias (Gated Birth: Start silent)
-        self.b_in  = nn.Parameter(torch.full((output_dim,), -5.0, device=self.device))
+        self.b_in = nn.Parameter(torch.full((output_dim,), -1.0, device=self.device))
 
         self.W     = nn.Parameter(torch.empty(output_dim, input_dim, device=self.device).uniform_(-k_w, k_w))
         self.b_out = nn.Parameter(torch.zeros(input_dim, device=self.device))
@@ -118,7 +118,7 @@ class PredictiveColumn(nn.Module):
         self.eta_x      = 0.8
         self.eta_V      = 0.05    # agile recognition
         self.eta_W      = 0.03    # v4.9: raised from 0.005 to build generative model
-        self.eta_R      = 0.001   # V7.0: Stable post-parity consolidation
+        self.eta_R      = 0.05    # V7.0: Stable post-parity consolidation, restored to 0.05 to pass recurrence test
         self.layer_norm_r = nn.LayerNorm(output_dim, device=self.device)
 
         # v4.9: Homeostasis REMOVED — replaced by weight clamping
@@ -152,11 +152,8 @@ class PredictiveColumn(nn.Module):
         # V8.2: ACT Halting Gate (Learned Convergence)
         self.halt_gate = nn.Linear(output_dim, 1, device=self.device)
         
-        self.R_gate = nn.Parameter(torch.empty(output_dim, output_dim, device=self.device).uniform_(-k_r, k_r) * 0.1)
+        self.R_gate = nn.Parameter(torch.zeros(output_dim, output_dim, device=self.device))
         self.register_buffer("R_gate_mask", torch.ones(output_dim, output_dim, device=self.device))
-        with torch.no_grad():
-            # Gate starts mostly OPEN
-            self.R_gate.data.add_(torch.eye(output_dim, device=self.device) * 2.0)
             
         # V11.5: Non-Destructive Signal Gating Metadata
         self._gated = False
@@ -197,9 +194,9 @@ class PredictiveColumn(nn.Module):
 
     def step_temporal(self):
         # Shift temporal history (t-2 -> t-3, t-1 -> t-2, t -> t-1)
-        self.x_temporal_3.copy_(self.x_temporal_2.detach())
-        self.x_temporal_2.copy_(self.x_temporal.detach())
-        self.x_temporal.copy_(self.x.detach())
+        self.x_temporal_3 = self.x_temporal_2.detach()
+        self.x_temporal_2 = self.x_temporal.detach()
+        self.x_temporal = self.x.detach()
 
     def reset_recurrent_matrix(self, gain: float = 0.1):
         """V7.2: Reset R with orthogonal initialization to provide a neutral starting point."""
@@ -273,11 +270,11 @@ class PredictiveColumn(nn.Module):
             x_context_active = x_context[:, s:e] if gate_output else x_context
 
             if gate_output:
-                recurrent_raw = torch.matmul(self._phi(x_context_active), self.R[s:e, s:e])
+                recurrent_raw = torch.matmul(x_context_active, self.R[s:e, s:e])
                 gate = torch.sigmoid(torch.matmul(x_context_active, self.R_gate[s:e, s:e]))
                 lateral_drive = torch.matmul(self._phi(x_active), self.L[s:e, s:e])
             else:
-                recurrent_raw = torch.matmul(self._phi(x_context_active), self.R)
+                recurrent_raw = torch.matmul(x_context_active, self.R)
                 gate = torch.sigmoid(torch.matmul(x_context_active, self.R_gate))
                 lateral_drive = torch.matmul(self._phi(x_active), self.L)
 
@@ -313,7 +310,7 @@ class PredictiveColumn(nn.Module):
         top_down_drive = 3.0 * (td_target - self.x) if td_target is not None else 0.0
 
         x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
-        recurrent_raw = torch.matmul(self._phi(x_context), self.R)
+        recurrent_raw = torch.matmul(x_context, self.R)
         gate = torch.sigmoid(torch.matmul(x_context, self.R_gate))
         recurrent_drive = (recurrent_raw * gate)
         self._current_x_context = x_context
@@ -364,7 +361,7 @@ class PredictiveColumn(nn.Module):
         x_context = 0.5 * self.x_temporal.detach() + 0.3 * self.x_temporal_2.detach() + 0.2 * self.x_temporal_3.detach()
         
         # V8.4: Non-Linear Matrix Recurrence
-        recurrent_raw = torch.matmul(self._phi(x_context), self.R)
+        recurrent_raw = torch.matmul(x_context, self.R)
         gate              = torch.sigmoid(torch.matmul(x_context, self.R_gate))
         recurrent_drive   = (recurrent_raw * gate)
         self._current_x_context = x_context
@@ -425,10 +422,9 @@ class PredictiveColumn(nn.Module):
             # 5. Vectorized Recurrent (R) Update
             # temporal_src: [batch, out]. Innovation target: [batch, out]
             temporal_state = getattr(self, '_current_x_context', self.x_temporal).detach()
-            temporal_src = self._phi(temporal_state)
+            temporal_src = temporal_state
             
             # Recurrent drive recalculated for gradient precision
-            # Keep recurrent learning aligned with the non-linearity used at inference.
             recurrent_raw = torch.matmul(temporal_src, self.R.data)
             gate = torch.sigmoid(torch.matmul(temporal_state, self.R_gate.data))
             recurrent_drive = (recurrent_raw * gate)
@@ -443,7 +439,7 @@ class PredictiveColumn(nn.Module):
             with torch.no_grad():
                 trainable_R = self.R.data * self.R_mask
                 norm = torch.norm(trainable_R, p='fro')
-                max_norm = 0.95 * trainable_R.shape[0] ** 0.5  # Scale threshold by sqrt(N)
+                max_norm = 2.0 * trainable_R.shape[0] ** 0.5  # Scale threshold by sqrt(N), increased to 2.0 to allow sequence learning
                 if norm > max_norm:
                     self.R.data = torch.where(self.R_mask == 0.0, self.R.data,
                                               trainable_R * (max_norm / norm))
