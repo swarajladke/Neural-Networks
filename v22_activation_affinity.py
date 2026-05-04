@@ -131,7 +131,7 @@ def run_activation_affinity():
             for bi in range(NUM_SAMPLES):
                 x, target = get_batch(all_tensors[code], bi, BATCH_SIZE, vocab_size)
                 # Forward pass to settle states
-                hierarchy.infer((x, target), max_steps=3, update_temporal=True)
+                hierarchy.infer(x, max_steps=3, update_temporal=True)
                 
                 # Capture Layer 1 activations (the hidden state between the two 1312 layers)
                 # average across batch to get a stable semantic signature
