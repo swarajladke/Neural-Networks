@@ -42,6 +42,7 @@ TOP_K = 40
 REPETITION_PENALTY = 1.2
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 EARLY_STOPPING_PATIENCE = 4
+FUSION_HIDDEN_DIM = 1024
 
 PROMPTS = [
     "The history of",
@@ -152,7 +153,11 @@ def main() -> None:
     vocab_size = tokenizer.get_vocab_size()
     print(f"[Tokenizer] Loaded {TOKENIZER_PATH} | vocab={vocab_size}")
 
-    model = AGNISFluencyModel(vocab_size=vocab_size, device=DEVICE)
+    model = AGNISFluencyModel(
+        vocab_size=vocab_size,
+        fusion_hidden_dim=FUSION_HIDDEN_DIM,
+        device=DEVICE,
+    )
     model.load_core_checkpoint(CORE_CHECKPOINT)
     model._tokenizer = tokenizer
     model.freeze_core()
@@ -170,6 +175,7 @@ def main() -> None:
 
     n_params = sum(p.numel() for p in trainable)
     print(f"[Trainable] {n_params:,} parameters")
+    print(f"[Head] fusion_hidden_dim={FUSION_HIDDEN_DIM} | 2-layer projection MLP")
 
     text = load_corpus()
     enc = tokenizer.encode(text)
