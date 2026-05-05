@@ -30,7 +30,7 @@ MODEL_OUT = "agnis_fluency_model_en.pt"
 TOKENIZER_PATH = "slm_bpe_tokenizer_en.json"
 CORPUS_PATH = "slm/input_en_massive.txt"
 
-TARGET_CHARS = 5_000_000
+TARGET_CHARS = 25_000_000
 BATCH_SIZE = 64
 EPOCHS = 20
 LR = 4e-4
@@ -51,14 +51,21 @@ PROMPTS = [
 ]
 
 GUTENBERG_URLS = [
-    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",   # Pride and Prejudice
-    "https://www.gutenberg.org/cache/epub/84/pg84.txt",       # Frankenstein
-    "https://www.gutenberg.org/cache/epub/98/pg98.txt",       # Tale of Two Cities
-    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",   # Moby Dick
-    "https://www.gutenberg.org/cache/epub/1661/pg1661.txt",   # Sherlock Holmes
-    "https://www.gutenberg.org/cache/epub/11/pg11.txt",       # Alice in Wonderland
-    "https://www.gutenberg.org/cache/epub/16328/pg16328.txt", # Beowulf
-    "https://www.gutenberg.org/cache/epub/174/pg174.txt"      # Picture of Dorian Gray
+    "https://www.gutenberg.org/cache/epub/135/pg135.txt",     # Les Miserables (3.2M)
+    "https://www.gutenberg.org/cache/epub/2600/pg2600.txt",   # War and Peace (3.2M)
+    "https://www.gutenberg.org/cache/epub/1184/pg1184.txt",   # Count of Monte Cristo (2.6M)
+    "https://www.gutenberg.org/cache/epub/996/pg996.txt",     # Don Quixote (Eng) (2.3M)
+    "https://www.gutenberg.org/cache/epub/28054/pg28054.txt", # The Brothers Karamazov (2.0M)
+    "https://www.gutenberg.org/cache/epub/1399/pg1399.txt",   # Anna Karenina (2.0M)
+    "https://www.gutenberg.org/cache/epub/766/pg766.txt",     # David Copperfield (2.0M)
+    "https://www.gutenberg.org/cache/epub/1023/pg1023.txt",   # Bleak House (2.0M)
+    "https://www.gutenberg.org/cache/epub/145/pg145.txt",     # Middlemarch (1.8M)
+    "https://www.gutenberg.org/cache/epub/4300/pg4300.txt",   # Ulysses (1.5M)
+    "https://www.gutenberg.org/cache/epub/2554/pg2554.txt",   # Crime and Punishment (1.2M)
+    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",   # Moby Dick (1.2M)
+    "https://www.gutenberg.org/cache/epub/1400/pg1400.txt",   # Great Expectations (1.0M)
+    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",   # Pride and Prejudice (0.7M)
+    "https://www.gutenberg.org/cache/epub/98/pg98.txt"        # Tale of Two Cities (0.7M)
 ]
 
 
@@ -84,8 +91,8 @@ def clean_text(text: str) -> str:
 
 
 def load_corpus() -> str:
-    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 4_000_000:
-        print("[Corpus] Downloading massive English dataset...")
+    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 20_000_000:
+        print("[Corpus] Downloading massive English dataset (25M+ chars)...")
         os.makedirs(os.path.dirname(CORPUS_PATH), exist_ok=True)
         full_text = ""
         for url in GUTENBERG_URLS:
