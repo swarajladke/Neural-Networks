@@ -20,6 +20,7 @@ import time
 import torch
 import torch.nn.functional as F
 from tokenizers import Tokenizer
+import urllib.request
 
 from slm.agnis_fluency_model import AGNISFluencyModel
 
@@ -49,6 +50,17 @@ PROMPTS = [
     "She looked out the window and",
 ]
 
+GUTENBERG_URLS = [
+    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",   # Pride and Prejudice
+    "https://www.gutenberg.org/cache/epub/84/pg84.txt",       # Frankenstein
+    "https://www.gutenberg.org/cache/epub/98/pg98.txt",       # Tale of Two Cities
+    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",   # Moby Dick
+    "https://www.gutenberg.org/cache/epub/1661/pg1661.txt",   # Sherlock Holmes
+    "https://www.gutenberg.org/cache/epub/11/pg11.txt",       # Alice in Wonderland
+    "https://www.gutenberg.org/cache/epub/16328/pg16328.txt", # Beowulf
+    "https://www.gutenberg.org/cache/epub/174/pg174.txt"      # Picture of Dorian Gray
+]
+
 
 def clean_text(text: str) -> str:
     for marker in ["CHAPTER I.", "CHAPTER I", "Chapter I", "CHAPTER 1"]:
@@ -72,8 +84,22 @@ def clean_text(text: str) -> str:
 
 
 def load_corpus() -> str:
-    if not os.path.exists(CORPUS_PATH):
-        raise FileNotFoundError(f"Corpus not found: {CORPUS_PATH}")
+    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 4_000_000:
+        print("[Corpus] Downloading massive English dataset...")
+        os.makedirs(os.path.dirname(CORPUS_PATH), exist_ok=True)
+        full_text = ""
+        for url in GUTENBERG_URLS:
+            try:
+                fname = url.split("/")[-1]
+                print(f"  -> Downloading {fname}...")
+                raw = urllib.request.urlopen(url).read().decode("utf-8", errors="replace")
+                full_text += clean_text(raw) + "\n\n"
+            except Exception as e:
+                print(f"  -> Failed: {e}")
+        with open(CORPUS_PATH, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        print("[Corpus] Download complete.")
+
     with open(CORPUS_PATH, encoding="utf-8", errors="replace") as f:
         raw = f.read()
     text = clean_text(raw)[:TARGET_CHARS]
