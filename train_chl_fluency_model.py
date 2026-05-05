@@ -24,7 +24,7 @@ import urllib.request
 
 import torch
 import torch.nn.functional as F
-from tokenizers import Tokenizer
+from tokenizers import Tokenizer, models, trainers, pre_tokenizers
 
 from slm.agnis_fluency_model import AGNISFluencyModel
 
@@ -135,17 +135,33 @@ def heldout_ppl(model: AGNISFluencyModel, tokens: torch.Tensor, steps: int = 512
     avg = total_loss / max(1, eval_steps)
     return avg, math.exp(min(avg, 20))
 
+def train_tokenizer(text: str, vocab_size: int = 4096) -> Tokenizer:
+    print(f"[Tokenizer] Training new BPE tokenizer (vocab={vocab_size})...")
+    tokenizer = Tokenizer(models.BPE(unk_token="[UNK]"))
+    tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+    trainer = trainers.BpeTrainer(
+        vocab_size=vocab_size,
+        special_tokens=["[UNK]", "[PAD]", "[MASK]", "<|endoftext|>"]
+    )
+    # We pass the text as an iterator
+    tokenizer.train_from_iterator([text], trainer=trainer)
+    tokenizer.save(TOKENIZER_PATH)
+    print(f"[Tokenizer] Saved to {TOKENIZER_PATH}")
+    return tokenizer
+
 def main() -> None:
     print("\n" + "=" * 70)
     print("  AGNIS CHL-Core vs Frozen-Core Comparison")
     print("  Fresh Core | Target Prop (CHL) | Fusion MLP | Proper LM Head")
     print("=" * 70)
 
-    if not os.path.exists(TOKENIZER_PATH):
-        print(f"[ERROR] Tokenizer not found: {TOKENIZER_PATH}")
-        sys.exit(1)
+    text = load_corpus()
 
-    tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
+    if not os.path.exists(TOKENIZER_PATH):
+        tokenizer = train_tokenizer(text, vocab_size=4096)
+    else:
+        tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
+    
     vocab_size = tokenizer.get_vocab_size()
     print(f"[Tokenizer] Loaded {TOKENIZER_PATH} | vocab={vocab_size}")
 
@@ -170,7 +186,6 @@ def main() -> None:
     print(f"[Trainable Head] {n_params_head:,} parameters")
     print(f"[Core (Target Prop)] {n_params_core:,} parameters")
 
-    text = load_corpus()
     enc = tokenizer.encode(text)
     token_tensor = build_token_tensor(enc.ids, BATCH_SIZE, DEVICE)
     total_steps = token_tensor.shape[1] - 1
