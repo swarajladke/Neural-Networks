@@ -77,10 +77,6 @@ class AGNISFluencyModel(nn.Module):
             nn.GELU(),
             nn.Dropout(dropout),
             nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim),
             nn.Dropout(dropout),
         ).to(self.device)
@@ -108,10 +104,6 @@ class AGNISFluencyModel(nn.Module):
             self.fusion_norm = nn.LayerNorm(self.embed_dim * 4).to(self.device)
             self.proj = nn.Sequential(
                 nn.Linear(self.embed_dim * 4, hidden_dim),
-                nn.GELU(),
-                nn.Dropout(self.dropout),
-                nn.LayerNorm(hidden_dim),
-                nn.Linear(hidden_dim, hidden_dim),
                 nn.GELU(),
                 nn.Dropout(self.dropout),
                 nn.LayerNorm(hidden_dim),
