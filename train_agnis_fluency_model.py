@@ -27,7 +27,7 @@ from slm.agnis_fluency_model import AGNISFluencyModel
 
 CORE_CHECKPOINT = "agnis_marathon_final.pt"
 MODEL_OUT = "agnis_fluency_model_en.pt"
-TOKENIZER_PATH = "slm_bpe_tokenizer_en.json"
+TOKENIZER_PATH = "slm_bpe_tokenizer_en_8192.json"
 CORPUS_PATH = "slm/input_en_massive.txt"
 
 TARGET_CHARS = 25_000_000
