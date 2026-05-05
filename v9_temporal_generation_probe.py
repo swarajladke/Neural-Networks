@@ -97,9 +97,34 @@ def load_tokenizer() -> tuple[Tokenizer, str]:
     )
 
 
+import urllib.request
+GUTENBERG_URLS = [
+    "https://www.gutenberg.org/cache/epub/1400/pg1400.txt",   # Great Expectations
+    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",   # Pride and Prejudice
+    "https://www.gutenberg.org/cache/epub/84/pg84.txt",       # Frankenstein
+    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",   # Moby Dick
+    "https://www.gutenberg.org/cache/epub/345/pg345.txt",     # Dracula
+    "https://www.gutenberg.org/cache/epub/98/pg98.txt",       # Tale of Two Cities
+    "https://www.gutenberg.org/cache/epub/2600/pg2600.txt",   # War and Peace
+]
+
 def load_corpus() -> str:
-    if not os.path.exists(CORPUS_PATH):
-        raise FileNotFoundError(f"Corpus not found: {CORPUS_PATH}")
+    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 1_000_000:
+        print("[Corpus] Downloading Gutenberg dataset...")
+        os.makedirs(os.path.dirname(CORPUS_PATH), exist_ok=True)
+        full_text = ""
+        for url in GUTENBERG_URLS:
+            try:
+                fname = url.split("/")[-1]
+                print(f"  -> Downloading {fname}...")
+                raw = urllib.request.urlopen(url).read().decode("utf-8", errors="replace")
+                full_text += clean_text(raw) + "\n\n"
+            except Exception as e:
+                print(f"  -> Failed: {e}")
+        with open(CORPUS_PATH, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        print("[Corpus] Download complete.")
+
     with open(CORPUS_PATH, encoding="utf-8", errors="replace") as f:
         raw = f.read()
     text = clean_text(raw)[:TARGET_CHARS]
