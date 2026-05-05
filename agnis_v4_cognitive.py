@@ -211,6 +211,7 @@ class ThermalGuardian:
 
     def check(self, agent: 'CognitivePredictiveAgent' = None):
         """Perform a safety check and throttle if necessary."""
+        return # Disabled for Colab
         self._check_counter += 1
         # Only query every 10 calls to reduce overhead
         if self._check_counter % 10 != 0:
