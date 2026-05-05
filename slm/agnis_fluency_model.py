@@ -92,7 +92,7 @@ class AGNISFluencyModel(nn.Module):
         if self.tie_weights and self.lm_head.weight.shape == self.embedding.weight.shape:
             self.lm_head.weight = self.embedding.weight
 
-    def load_core_checkpoint(self, path: str) -> None:
+    def load_core_checkpoint(self, path: str, tokenizer_path: str | None = None) -> None:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Core checkpoint not found: {path}")
 
@@ -122,7 +122,7 @@ class AGNISFluencyModel(nn.Module):
             self.lm_head = nn.Linear(self.embed_dim, self.vocab_size, bias=False).to(self.device)
             self.tie_output_weights()
 
-        self._load_tokenizer()
+        self._load_tokenizer(tokenizer_path)
 
     def load_fluency_checkpoint(self, path: str) -> None:
         if not os.path.exists(path):
@@ -155,11 +155,13 @@ class AGNISFluencyModel(nn.Module):
         }
         torch.save(payload, path)
 
-    def _load_tokenizer(self) -> None:
+    def _load_tokenizer(self, path: str | None = None) -> None:
         if not _HF_TOKENIZERS_AVAILABLE:
             return
-        for candidate in [DEFAULT_HF_TOKENIZER, FALLBACK_HF_TOKENIZER]:
-            if os.path.exists(candidate):
+        
+        candidates = [path] if path else [DEFAULT_HF_TOKENIZER, FALLBACK_HF_TOKENIZER]
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
                 self._tokenizer = HFTokenizer.from_file(candidate)
                 vocab_size = self._tokenizer.get_vocab_size()
                 if vocab_size != self.vocab_size:

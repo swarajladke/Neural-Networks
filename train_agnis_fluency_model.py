@@ -158,7 +158,7 @@ def main() -> None:
         fusion_hidden_dim=FUSION_HIDDEN_DIM,
         device=DEVICE,
     )
-    model.load_core_checkpoint(CORE_CHECKPOINT)
+    model.load_core_checkpoint(CORE_CHECKPOINT, tokenizer_path=TOKENIZER_PATH)
     model._tokenizer = tokenizer
     model.freeze_core()
     model.tie_output_weights()
