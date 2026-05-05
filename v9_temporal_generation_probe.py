@@ -241,7 +241,7 @@ def train_temporal_probe(
             epoch_surprise += metric_to_float(surprise)
 
             if step % 500 == 0:
-                print(f"    [Step {step:>5}/{total_steps}] Surprise: {metric_to_float(surprise):.4f} | Weight: {metric_to_float(weight):.4f}", end="\r")
+                print(f"    [Step {step:>5}/{total_steps}] Surprise: {metric_to_float(surprise):.4f} | Weight: {metric_to_float(weight):.4f}", flush=True)
 
         avg_surprise = epoch_surprise / max(1, total_steps)
         avg_weight = epoch_weight / max(1, total_steps)
