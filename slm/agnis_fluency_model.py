@@ -52,6 +52,7 @@ class AGNISFluencyModel(nn.Module):
         embed_dim: int = DEFAULT_EMBED_DIM,
         context_size: int = DEFAULT_CONTEXT_SIZE,
         fusion_hidden_dim: int | None = None,
+        dropout: float = 0.15,
         device: str = "cpu",
         tie_weights: bool = True,
     ):
@@ -61,6 +62,7 @@ class AGNISFluencyModel(nn.Module):
         self.embed_dim = embed_dim
         self.context_size = context_size
         self.tie_weights = tie_weights
+        self.dropout = dropout
         self._tokenizer = None
 
         self.embedding = nn.Embedding(vocab_size, embed_dim).to(self.device)
@@ -73,8 +75,10 @@ class AGNISFluencyModel(nn.Module):
         self.proj = nn.Sequential(
             nn.Linear(embed_dim * 4, hidden_dim),
             nn.GELU(),
+            nn.Dropout(dropout),
             nn.LayerNorm(hidden_dim),
             nn.Linear(hidden_dim, embed_dim),
+            nn.Dropout(dropout),
         ).to(self.device)
         self.out_norm = nn.LayerNorm(embed_dim).to(self.device)
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False).to(self.device)
@@ -101,8 +105,10 @@ class AGNISFluencyModel(nn.Module):
             self.proj = nn.Sequential(
                 nn.Linear(self.embed_dim * 4, hidden_dim),
                 nn.GELU(),
+                nn.Dropout(self.dropout),
                 nn.LayerNorm(hidden_dim),
                 nn.Linear(hidden_dim, self.embed_dim),
+                nn.Dropout(self.dropout),
             ).to(self.device)
             self.out_norm = nn.LayerNorm(self.embed_dim).to(self.device)
             self.lm_head = nn.Linear(self.embed_dim, self.vocab_size, bias=False).to(self.device)
@@ -113,12 +119,33 @@ class AGNISFluencyModel(nn.Module):
     def load_fluency_checkpoint(self, path: str) -> None:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Fluency checkpoint not found: {path}")
-        state = torch.load(path, map_location=self.device)
-        self.load_state_dict(state, strict=False)
+        payload = torch.load(path, map_location=self.device)
+        state = payload["model"] if isinstance(payload, dict) and "model" in payload else payload
+        self.embedding.load_state_dict(state["embedding"])
+        self.fusion_norm.load_state_dict(state["fusion_norm"])
+        self.proj.load_state_dict(state["proj"])
+        self.out_norm.load_state_dict(state["out_norm"])
+        self.lm_head.load_state_dict(state["lm_head"])
         self.tie_output_weights()
 
     def save_fluency_checkpoint(self, path: str) -> None:
-        torch.save(self.state_dict(), path)
+        payload = {
+            "model": {
+                "embedding": self.embedding.state_dict(),
+                "fusion_norm": self.fusion_norm.state_dict(),
+                "proj": self.proj.state_dict(),
+                "out_norm": self.out_norm.state_dict(),
+                "lm_head": self.lm_head.state_dict(),
+            },
+            "config": {
+                "vocab_size": self.vocab_size,
+                "embed_dim": self.embed_dim,
+                "context_size": self.context_size,
+                "tie_weights": self.tie_weights,
+                "dropout": self.dropout,
+            },
+        }
+        torch.save(payload, path)
 
     def _load_tokenizer(self) -> None:
         if not _HF_TOKENIZERS_AVAILABLE:

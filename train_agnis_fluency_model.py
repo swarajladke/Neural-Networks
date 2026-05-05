@@ -40,6 +40,7 @@ TEMPERATURE = 0.8
 TOP_K = 40
 REPETITION_PENALTY = 1.2
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+EARLY_STOPPING_PATIENCE = 4
 
 PROMPTS = [
     "The history of",
@@ -150,6 +151,8 @@ def main() -> None:
 
     optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=0.01)
     best_val = float("inf")
+    best_epoch = 0
+    stale_epochs = 0
 
     for epoch in range(EPOCHS):
         model.train()
@@ -195,7 +198,12 @@ def main() -> None:
         improved = val_loss < best_val
         if improved:
             best_val = val_loss
+            best_epoch = epoch + 1
+            stale_epochs = 0
             model.save_fluency_checkpoint(MODEL_OUT)
+            print("  [Saved best checkpoint]")
+        else:
+            stale_epochs += 1
 
         print(
             f"\n  Epoch {epoch+1:>2}/{EPOCHS} | "
@@ -217,11 +225,19 @@ def main() -> None:
                 safe = out.encode("ascii", errors="replace").decode("ascii")
                 print(f"  [{prompt}] -> {safe}\n")
 
+        if stale_epochs >= EARLY_STOPPING_PATIENCE:
+            print(
+                f"\n[Early Stop] No validation improvement for "
+                f"{EARLY_STOPPING_PATIENCE} epochs. Best epoch: {best_epoch}"
+            )
+            break
+
     print("\n" + "=" * 60)
-    print("  FINAL TEST")
+    print("  BEST CHECKPOINT TEST")
     print("=" * 60)
     model.load_fluency_checkpoint(MODEL_OUT)
     model._tokenizer = tokenizer
+    print(f"[Best] Epoch {best_epoch} | Val Loss {best_val:.4f} | Val PPL {math.exp(min(best_val, 20)):.1f}")
     for prompt in PROMPTS:
         out = model.generate(
             prompt,
