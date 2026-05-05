@@ -33,14 +33,28 @@ from slm.agnis_slm_wrapper import AGNISSLMWrapper
 LANGUAGES = ["en", "de", "es", "ro"]  # The Quad Marathon languages
 
 CORPORA_URLS = {
-    "en": ["https://www.gutenberg.org/cache/epub/1342/pg1342.txt"],  # Pride and Prejudice
-    "de": ["https://www.gutenberg.org/cache/epub/6343/pg6343.txt"],  # Die Leiden des jungen Werther
-    "es": ["https://www.gutenberg.org/cache/epub/2000/pg2000.txt"],  # Don Quijote
-    "ro": ["https://www.gutenberg.org/cache/epub/35451/pg35451.txt"] # Basme
+    "en": [
+        "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",   # Pride and Prejudice
+        "https://www.gutenberg.org/cache/epub/84/pg84.txt",       # Frankenstein
+        "https://www.gutenberg.org/cache/epub/98/pg98.txt"        # Tale of Two Cities
+    ],
+    "de": [
+        "https://www.gutenberg.org/cache/epub/6343/pg6343.txt",   # Die Leiden des jungen Werther
+        "https://www.gutenberg.org/cache/epub/5323/pg5323.txt",   # Faust
+        "https://www.gutenberg.org/cache/epub/2048/pg2048.txt"    # Grimms Märchen
+    ],
+    "es": [
+        "https://www.gutenberg.org/cache/epub/2000/pg2000.txt",   # Don Quijote
+        "https://www.gutenberg.org/cache/epub/15000/pg15000.txt"  # Novelas Cortas
+    ],
+    "ro": [
+        "https://www.gutenberg.org/cache/epub/35451/pg35451.txt", # Basme
+        "https://www.gutenberg.org/cache/epub/55294/pg55294.txt"  # Povesti
+    ]
 }
 
 CHECKPOINT_IN = "agnis_marathon_final.pt"
-TARGET_CHARS = 1_000_000
+TARGET_CHARS = 5_000_000
 VOCAB_SIZE = 4096
 EMBED_DIM = 110  # Match the hierarchy input_dim from your marathon
 BATCH_SIZE = 64
