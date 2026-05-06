@@ -8,11 +8,13 @@ Design goals:
   - use a stronger language readout path than nearest-neighbor decoding
   - make training and inference use the exact same fusion logic
 
-Architecture:
+Architecture (v2 — Temporal Augmentation):
   token ids
     -> embedding
-    -> AGNIS core prediction
-    -> fusion features [emb, core, emb*core, emb-core]
+    -> AGNIS core prediction (frozen)
+    -> temporal gate: h_t = (1-α)·core + α·tanh(R·h_{t-1})
+    -> hippocampal recall (QKV on h_t)
+    -> fusion features [emb, h_t, recall, emb*h_t, emb-h_t]
     -> projection MLP
     -> LM head
     -> vocab logits
@@ -46,6 +48,55 @@ DEFAULT_HF_TOKENIZER = "slm_bpe_tokenizer_en.json"
 FALLBACK_HF_TOKENIZER = "slm_bpe_tokenizer.json"
 
 
+class TemporalGate(nn.Module):
+    """
+    Minimal gated temporal recurrence.
+    
+    h_t = (1 - gate) * core_t + gate * tanh(R @ h_{t-1})
+    
+    The gate is a learned scalar-per-dimension that controls how much
+    temporal memory vs fresh core signal flows into the fusion head.
+    Initialized small (bias=-2 → sigmoid≈0.12) so token prediction
+    dominates at the start.
+    """
+    def __init__(self, dim: int):
+        super().__init__()
+        self.dim = dim
+        # Recurrent matrix (local temporal binding)
+        self.R = nn.Linear(dim, dim, bias=False)
+        # Gate: how much temporal vs core
+        self.gate_proj = nn.Linear(dim * 2, dim)
+        # Initialize gate bias negative so temporal starts SMALL
+        nn.init.constant_(self.gate_proj.bias, -2.0)
+        # LayerNorm on the temporal state for stability
+        self.norm = nn.LayerNorm(dim)
+        # Persistent hidden state
+        self.register_buffer("h_prev", torch.zeros(1, dim))
+        
+    def reset(self, batch_size: int = 1):
+        self.h_prev = torch.zeros(batch_size, self.dim, device=self.R.weight.device)
+        
+    def forward(self, core: torch.Tensor) -> torch.Tensor:
+        """
+        core: [batch, dim] — frozen core output for current token
+        Returns: [batch, dim] — temporally-augmented representation
+        """
+        # Temporal candidate from previous state
+        temporal = torch.tanh(self.R(self.h_prev.detach()))
+        
+        # Compute gate from both signals
+        gate = torch.sigmoid(self.gate_proj(torch.cat([core, temporal], dim=-1)))
+        
+        # Mix: mostly core at start, learns to blend in temporal
+        h_t = (1.0 - gate) * core + gate * temporal
+        h_t = self.norm(h_t)
+        
+        # Shift state (detach to prevent BPTT)
+        self.h_prev = h_t.detach()
+        
+        return h_t
+
+
 class AGNISFluencyModel(nn.Module):
     def __init__(
         self,
@@ -70,8 +121,14 @@ class AGNISFluencyModel(nn.Module):
         self.hierarchy = PredictiveHierarchy(
             [embed_dim, 1024, embed_dim], device=str(self.device)
         )
+        
+        # Temporal Gate (controlled recurrence on top of frozen core)
+        self.temporal_gate = TemporalGate(embed_dim).to(self.device)
+        
+        # Hippocampal Memory (QKV recall on temporally-augmented state)
         self.memory = LocalHippocampalBuffer(d_model=embed_dim, max_memory=context_size).to(self.device)
 
+        # Fusion: [emb, h_t, recall, emb*h_t, emb-h_t] = 5 * embed_dim
         hidden_dim = fusion_hidden_dim or (embed_dim * 4)
         self.fusion_norm = nn.LayerNorm(embed_dim * 5).to(self.device)
         self.proj = nn.Sequential(
@@ -101,6 +158,10 @@ class AGNISFluencyModel(nn.Module):
         if detected_idim != self.embed_dim:
             self.embed_dim = detected_idim
             self.embedding = nn.Embedding(self.vocab_size, self.embed_dim).to(self.device)
+            
+            # Rebuild temporal gate for new dim
+            self.temporal_gate = TemporalGate(self.embed_dim).to(self.device)
+            self.memory = LocalHippocampalBuffer(d_model=self.embed_dim, max_memory=self.context_size).to(self.device)
 
             hidden_dim = self.proj[0].out_features
             self.fusion_norm = nn.LayerNorm(self.embed_dim * 5).to(self.device)
@@ -130,6 +191,8 @@ class AGNISFluencyModel(nn.Module):
         self.lm_head.load_state_dict(state["lm_head"])
         if "memory" in state:
             self.memory.load_state_dict(state["memory"])
+        if "temporal_gate" in state:
+            self.temporal_gate.load_state_dict(state["temporal_gate"])
         self.tie_output_weights()
 
     def save_fluency_checkpoint(self, path: str) -> None:
@@ -141,6 +204,7 @@ class AGNISFluencyModel(nn.Module):
                 "out_norm": self.out_norm.state_dict(),
                 "lm_head": self.lm_head.state_dict(),
                 "memory": self.memory.state_dict(),
+                "temporal_gate": self.temporal_gate.state_dict(),
             },
             "config": {
                 "vocab_size": self.vocab_size,
@@ -175,6 +239,7 @@ class AGNISFluencyModel(nn.Module):
 
     def reset_states(self, batch_size: int = 1) -> None:
         self.hierarchy.reset_states(batch_size=batch_size)
+        self.temporal_gate.reset(batch_size=batch_size)
         self.memory.reset_memory(batch_size=batch_size)
         self.memory.to(self.device)
 
@@ -195,8 +260,8 @@ class AGNISFluencyModel(nn.Module):
             core = torch.cat([core, pad], dim=1)
         return F.normalize(core, dim=-1)
 
-    def fuse(self, emb: torch.Tensor, core: torch.Tensor, x_recall: torch.Tensor) -> torch.Tensor:
-        fused = torch.cat([emb, core, x_recall, emb * core, emb - core], dim=-1)
+    def fuse(self, emb: torch.Tensor, h_t: torch.Tensor, x_recall: torch.Tensor) -> torch.Tensor:
+        fused = torch.cat([emb, h_t, x_recall, emb * h_t, emb - h_t], dim=-1)
         fused = self.fusion_norm(fused)
         fused = self.proj(fused)
         fused = self.out_norm(fused + emb)
@@ -205,8 +270,14 @@ class AGNISFluencyModel(nn.Module):
     def step_logits(self, token_ids: torch.Tensor, update_temporal: bool = True, max_steps: int = 1) -> torch.Tensor:
         emb = self._normalize_embed(token_ids)
         core = self._predict_core(emb, update_temporal=update_temporal, max_steps=max_steps)
-        x_recall = self.memory(core)
-        fused = self.fuse(emb, core, x_recall)
+        
+        # Temporal augmentation: controlled blend of core + recurrence
+        h_t = self.temporal_gate(core)
+        
+        # Memory recall on temporally-augmented state
+        x_recall = self.memory(h_t)
+        
+        fused = self.fuse(emb, h_t, x_recall)
         return self.lm_head(fused)
 
     def forward_context(self, context_ids: torch.Tensor) -> torch.Tensor:

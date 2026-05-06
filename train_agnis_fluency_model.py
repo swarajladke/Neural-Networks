@@ -181,6 +181,8 @@ def main() -> None:
         *model.fusion_norm.parameters(),
         *model.proj.parameters(),
         *model.out_norm.parameters(),
+        *model.temporal_gate.parameters(),
+        *model.memory.parameters(),
     ]
     if not model.tie_weights:
         trainable += list(model.lm_head.parameters())
