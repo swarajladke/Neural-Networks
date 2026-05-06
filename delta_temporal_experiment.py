@@ -50,8 +50,8 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Temporal hyperparameters
 ALPHA = 0.1           # Recurrent influence strength (from α sweep winner)
-TAU_LEAKY = 0.05      # Leaky integration rate (low = slow = topic memory)
-ETA_R_LOCAL = 0.01    # Delta rule learning rate for R
+TAU_LEAKY = 0.5       # Leaky integration rate (0.5 = half new, half history)
+ETA_R_LOCAL = 0.002   # Delta rule LR (conservative to prevent noisy early updates)
 R_DECAY = 0.999       # R-matrix weight decay per step
 
 PROMPTS = [
