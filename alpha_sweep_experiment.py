@@ -140,13 +140,69 @@ class AlphaTemporalModel(nn.Module):
         return self.lm_head(fused)
 
 
-# ─── Utilities ────────────────────────────────────────────────────
+import re
+import urllib.request
+
+GUTENBERG_URLS = [
+    "https://www.gutenberg.org/cache/epub/135/pg135.txt",
+    "https://www.gutenberg.org/cache/epub/2600/pg2600.txt",
+    "https://www.gutenberg.org/cache/epub/1184/pg1184.txt",
+    "https://www.gutenberg.org/cache/epub/996/pg996.txt",
+    "https://www.gutenberg.org/cache/epub/28054/pg28054.txt",
+    "https://www.gutenberg.org/cache/epub/1399/pg1399.txt",
+    "https://www.gutenberg.org/cache/epub/766/pg766.txt",
+    "https://www.gutenberg.org/cache/epub/1023/pg1023.txt",
+    "https://www.gutenberg.org/cache/epub/145/pg145.txt",
+    "https://www.gutenberg.org/cache/epub/4300/pg4300.txt",
+    "https://www.gutenberg.org/cache/epub/2554/pg2554.txt",
+    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",
+    "https://www.gutenberg.org/cache/epub/1400/pg1400.txt",
+    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",
+    "https://www.gutenberg.org/cache/epub/98/pg98.txt",
+]
+
+
+def clean_text(text: str) -> str:
+    for marker in ["CHAPTER I.", "CHAPTER I", "Chapter I", "CHAPTER 1"]:
+        idx = text.find(marker)
+        if idx != -1:
+            nxt = text.find(marker, idx + len(marker))
+            if nxt != -1 and (nxt - idx) < 1000:
+                idx = nxt
+            text = text[idx:]
+            break
+    for marker in ["End of the Project Gutenberg", "THE END"]:
+        idx = text.rfind(marker)
+        if idx != -1:
+            text = text[:idx]
+            break
+    text = re.sub(r"\r\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
+    text = re.sub(r"[^\x20-\x7E\n]", "", text)
+    return text.strip()
+
+
 def load_corpus() -> str:
-    if not os.path.exists(CORPUS_PATH):
-        print(f"[ERROR] Corpus not found: {CORPUS_PATH}")
-        sys.exit(1)
+    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 20_000_000:
+        print("[Corpus] Downloading massive English dataset (25M+ chars)...")
+        os.makedirs(os.path.dirname(CORPUS_PATH), exist_ok=True)
+        full_text = ""
+        for url in GUTENBERG_URLS:
+            try:
+                fname = url.split("/")[-1]
+                print(f"  -> Downloading {fname}...")
+                raw = urllib.request.urlopen(url).read().decode("utf-8", errors="replace")
+                full_text += clean_text(raw) + "\n\n"
+            except Exception as e:
+                print(f"  -> Failed: {e}")
+        with open(CORPUS_PATH, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        print("[Corpus] Download complete.")
+
     with open(CORPUS_PATH, encoding="utf-8", errors="replace") as f:
-        text = f.read()[:TARGET_CHARS]
+        raw = f.read()
+    text = clean_text(raw)[:TARGET_CHARS]
     print(f"[Corpus] {len(text):,} chars | {len(text.split()):,} words")
     return text
 
