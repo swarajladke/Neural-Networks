@@ -102,11 +102,11 @@ class TemporalFluencyModel(nn.Module):
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, embed_dim),
             nn.GELU(),
-            nn.LayerNorm(hidden_dim),
+            nn.LayerNorm(embed_dim),
             nn.Dropout(dropout),
-            nn.Linear(hidden_dim, vocab_size, bias=False)
+            nn.Linear(embed_dim, vocab_size, bias=False)
         )
         
         # Weight Tying for efficiency

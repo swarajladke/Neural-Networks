@@ -84,14 +84,11 @@ def main() -> None:
     model = TemporalFluencyModel(vocab_size=vocab_size, embed_dim=128, context_size=256)
     model.to(DEVICE)
 
-    # Only embedding and output head are trained via backprop
-    trainable = [
-        *model.embedding.parameters(),
-        *model.head.parameters()
-    ]
-    # Core gate parameter is also trained via backprop to learn *how* to use the memory
-    trainable.append(model.core.mem_gate.weight)
-    trainable.append(model.core.mem_gate.bias)
+    trainable = list(set(
+        list(model.embedding.parameters()) +
+        list(model.head.parameters()) +
+        [model.core.mem_gate.weight, model.core.mem_gate.bias]
+    ))
 
     n_params = sum(p.numel() for p in trainable)
     print(f"[Trainable] {n_params:,} parameters (Backprop path)")
