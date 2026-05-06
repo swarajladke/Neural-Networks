@@ -144,9 +144,26 @@ def main() -> None:
     print("  Frozen Core | Fusion MLP | Proper LM Head")
     print("=" * 60)
 
+    text = load_corpus()
+
     if not os.path.exists(TOKENIZER_PATH):
-        print(f"[ERROR] Tokenizer not found: {TOKENIZER_PATH}")
-        sys.exit(1)
+        print(f"[Tokenizer] Training original BPE tokenizer (vocab=4096)...")
+        from tokenizers import decoders
+        from tokenizers.models import BPE
+        from tokenizers.pre_tokenizers import ByteLevel
+        from tokenizers.trainers import BpeTrainer
+        
+        tokenizer = Tokenizer(BPE(unk_token="<unk>", byte_fallback=True))
+        tokenizer.pre_tokenizer = ByteLevel()
+        tokenizer.decoder = decoders.Sequence([decoders.ByteFallback(), decoders.ByteLevel()])
+        trainer = BpeTrainer(
+            vocab_size=4096,
+            min_frequency=2,
+            special_tokens=["<pad>", "<s>", "</s>", "<unk>"]
+        )
+        tokenizer.train_from_iterator([text], trainer=trainer)
+        tokenizer.save(TOKENIZER_PATH)
+        print(f"[Tokenizer] Saved to {TOKENIZER_PATH}")
 
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
     vocab_size = tokenizer.get_vocab_size()
@@ -172,7 +189,6 @@ def main() -> None:
     print(f"[Trainable] {n_params:,} parameters")
     print("[Head] baseline frozen-core fluency head restored")
 
-    text = load_corpus()
     enc = tokenizer.encode(text)
     token_tensor = build_token_tensor(enc.ids, BATCH_SIZE, DEVICE)
     total_steps = token_tensor.shape[1] - 1
