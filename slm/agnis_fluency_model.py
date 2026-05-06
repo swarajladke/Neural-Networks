@@ -30,6 +30,7 @@ import torch.nn.functional as F
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agnis_v4_core import PredictiveHierarchy
+from v23_hippocampal_memory import LocalHippocampalBuffer
 
 try:
     from tokenizers import Tokenizer as HFTokenizer
@@ -69,11 +70,12 @@ class AGNISFluencyModel(nn.Module):
         self.hierarchy = PredictiveHierarchy(
             [embed_dim, 1024, embed_dim], device=str(self.device)
         )
+        self.memory = LocalHippocampalBuffer(d_model=embed_dim, max_memory=context_size).to(self.device)
 
         hidden_dim = fusion_hidden_dim or (embed_dim * 4)
-        self.fusion_norm = nn.LayerNorm(embed_dim * 4).to(self.device)
+        self.fusion_norm = nn.LayerNorm(embed_dim * 5).to(self.device)
         self.proj = nn.Sequential(
-            nn.Linear(embed_dim * 4, hidden_dim),
+            nn.Linear(embed_dim * 5, hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.LayerNorm(hidden_dim),
@@ -101,9 +103,9 @@ class AGNISFluencyModel(nn.Module):
             self.embedding = nn.Embedding(self.vocab_size, self.embed_dim).to(self.device)
 
             hidden_dim = self.proj[0].out_features
-            self.fusion_norm = nn.LayerNorm(self.embed_dim * 4).to(self.device)
+            self.fusion_norm = nn.LayerNorm(self.embed_dim * 5).to(self.device)
             self.proj = nn.Sequential(
-                nn.Linear(self.embed_dim * 4, hidden_dim),
+                nn.Linear(self.embed_dim * 5, hidden_dim),
                 nn.GELU(),
                 nn.Dropout(self.dropout),
                 nn.LayerNorm(hidden_dim),
@@ -126,6 +128,8 @@ class AGNISFluencyModel(nn.Module):
         self.proj.load_state_dict(state["proj"])
         self.out_norm.load_state_dict(state["out_norm"])
         self.lm_head.load_state_dict(state["lm_head"])
+        if "memory" in state:
+            self.memory.load_state_dict(state["memory"])
         self.tie_output_weights()
 
     def save_fluency_checkpoint(self, path: str) -> None:
@@ -136,6 +140,7 @@ class AGNISFluencyModel(nn.Module):
                 "proj": self.proj.state_dict(),
                 "out_norm": self.out_norm.state_dict(),
                 "lm_head": self.lm_head.state_dict(),
+                "memory": self.memory.state_dict(),
             },
             "config": {
                 "vocab_size": self.vocab_size,
@@ -170,6 +175,8 @@ class AGNISFluencyModel(nn.Module):
 
     def reset_states(self, batch_size: int = 1) -> None:
         self.hierarchy.reset_states(batch_size=batch_size)
+        self.memory.reset_memory(batch_size=batch_size)
+        self.memory.to(self.device)
 
     def _normalize_embed(self, token_ids: torch.Tensor) -> torch.Tensor:
         return F.normalize(self.embedding(token_ids), dim=-1)
@@ -188,8 +195,8 @@ class AGNISFluencyModel(nn.Module):
             core = torch.cat([core, pad], dim=1)
         return F.normalize(core, dim=-1)
 
-    def fuse(self, emb: torch.Tensor, core: torch.Tensor) -> torch.Tensor:
-        fused = torch.cat([emb, core, emb * core, emb - core], dim=-1)
+    def fuse(self, emb: torch.Tensor, core: torch.Tensor, x_recall: torch.Tensor) -> torch.Tensor:
+        fused = torch.cat([emb, core, x_recall, emb * core, emb - core], dim=-1)
         fused = self.fusion_norm(fused)
         fused = self.proj(fused)
         fused = self.out_norm(fused + emb)
@@ -198,7 +205,8 @@ class AGNISFluencyModel(nn.Module):
     def step_logits(self, token_ids: torch.Tensor, update_temporal: bool = True, max_steps: int = 1) -> torch.Tensor:
         emb = self._normalize_embed(token_ids)
         core = self._predict_core(emb, update_temporal=update_temporal, max_steps=max_steps)
-        fused = self.fuse(emb, core)
+        x_recall = self.memory(core)
+        fused = self.fuse(emb, core, x_recall)
         return self.lm_head(fused)
 
     def forward_context(self, context_ids: torch.Tensor) -> torch.Tensor:
