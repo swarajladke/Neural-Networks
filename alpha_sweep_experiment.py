@@ -36,7 +36,7 @@ CORPUS_PATH = "slm/input_en_massive.txt"
 TARGET_CHARS = 25_000_000
 
 BATCH_SIZE = 64
-EPOCHS = 10          # 10 epochs per α (enough to see convergence)
+EPOCHS = 5          # 5 epochs per α (convergence visible by epoch 3-4)
 LR = 3e-4
 WARMUP_STEPS = 500
 LOG_EVERY = 10_000
