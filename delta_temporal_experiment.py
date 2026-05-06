@@ -50,7 +50,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Temporal hyperparameters
 ALPHA = 0.1           # Recurrent influence strength (from α sweep winner)
-TAU_LEAKY = 0.5       # Leaky integration rate (0.5 = half new, half history)
+TAU_LEAKY = 1.0       # 1.0 = NO leaky integration (test Delta Rule alone first)
 ETA_R_LOCAL = 0.002   # Delta rule LR (conservative to prevent noisy early updates)
 R_DECAY = 0.999       # R-matrix weight decay per step
 
@@ -168,13 +168,11 @@ class DeltaTemporalModel(nn.Module):
                     ETA_R_LOCAL * self._current_surprise * dR
                 ).clamp(-3.0, 3.0)
 
-        # 4. Temporal blend with leaky integration
+        # 4. Temporal blend (NO leaky integration — test Delta Rule alone)
         if self.alpha > 0.0:
             temporal = torch.matmul(h_prev_detached, self.R_weight.to(core.device))
-            new_state = torch.tanh(core + self.alpha * temporal)
-            new_state = self.r_norm(new_state)
-            # Leaky integration: slow blend retains topic
-            h_t = (1.0 - self.tau) * h_prev_detached + self.tau * new_state
+            h_t = core + self.alpha * temporal
+            h_t = self.r_norm(h_t)
         else:
             h_t = core
 
