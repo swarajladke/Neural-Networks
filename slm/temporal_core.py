@@ -65,9 +65,9 @@ class TemporalCoreV1(nn.Module):
                 dV = torch.bmm(s_t.unsqueeze(2), self.x_t.unsqueeze(1)).mean(dim=0)
                 dR = torch.bmm(self.x_prev.unsqueeze(2), self.x_t.unsqueeze(1)).mean(dim=0)
                 
-                self.V.add_(self.eta_V * dV)
+                self.V.data.add_(self.eta_V * dV)
                 # R = R * (1 - decay) + dR
-                self.R.mul_(1.0 - self.decay).add_(self.eta_R * dR)
+                self.R.data.mul_(1.0 - self.decay).add_(self.eta_R * dR)
                 
                 # Stability clamping
                 self.V.data.clamp_(-3.0, 3.0)
