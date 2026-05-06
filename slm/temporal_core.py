@@ -54,8 +54,8 @@ class TemporalCoreV1(nn.Module):
         self.x_prev = self.x_t.detach()
         
         # 2. Recurrent Path (x_t = activation(V^T s_t + R^T x_{t-1}))
-        drive = torch.matmul(s_t, self.V) + self.b_in
-        recurrent_drive = torch.matmul(self.x_prev, self.R)
+        drive = torch.matmul(s_t, self.V.detach()) + self.b_in.detach()
+        recurrent_drive = torch.matmul(self.x_prev, self.R.detach())
         self.x_t = F.leaky_relu(drive + recurrent_drive, negative_slope=0.1)
         
         # 3. Local Learning Rule (Hebbian/STDP style)
