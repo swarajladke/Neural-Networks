@@ -118,25 +118,17 @@ class AgnisV5(nn.Module):
 def get_multilingual_data():
     try:
         from datasets import load_dataset
-        print("[Data] Scaling up to ~50 Million tokens (En + Ru)...")
+        print("[Data] Loading FineWeb-Edu (High Quality) + Wikitext-103...")
         
-        # Load Wikitext-103 (approx 22M tokens)
+        # Load Wikitext-103 (Standard benchmark)
         en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         
-        # Add a substantial chunk of English Wikipedia (approx 25M tokens)
-        en_extra = load_dataset("wikipedia", "20220301.en", split="train[:2%]", trust_remote_code=True)
-        
-        # Add Russian Wikipedia (approx 5M tokens)
-        try:
-            ru = load_dataset("wikipedia", "20220301.ru", split="train[:10%]", trust_remote_code=True)
-            ru_text = "\n".join([t for t in ru["text"][:50000] if len(t.strip()) > 20])
-        except Exception:
-            print("[Data] Wikipedia-RU failed, sticking to English...")
-            ru_text = ""
+        # Load FineWeb-Edu (The current gold standard for clean training data)
+        # We take a small slice of the 10BT sample to hit our 50M token target
+        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:1%]")
         
         text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
-        text += "\n" + "\n".join([t for t in en_extra["text"] if len(t.strip()) > 20])
-        text += "\n" + ru_text
+        text += "\n" + "\n".join([t for t in fw["text"] if len(t.strip()) > 20])
         
         print(f"[Data] Total Raw Text: {len(text)/1024/1024:.1f} MB")
         return text
