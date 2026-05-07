@@ -167,12 +167,17 @@ def main():
     model = AgnisV5_100M(vocab_size=VOCAB_SIZE, embed_dim=EMBED_DIM, hidden_dim=CORE_HIDDEN, device=DEVICE)
     model.to(DEVICE)
 
-    # Optimization: Compile model for L40S / A100
-    print("[System] Compiling model with torch.compile (this takes ~60s)...")
-    try:
-        model.step_logits = torch.compile(model.step_logits)
-    except Exception as e:
-        print(f"[System] Warning: torch.compile failed ({e}). Running in eager mode.")
+    # Optimization: Disable torch.compile on Kaggle T4 (causes issues)
+    print("[System] Skipping torch.compile for T4 compatibility.")
+    # try:
+    #     model.step_logits = torch.compile(model.step_logits)
+    # except Exception as e:
+    #     print(f"[System] Warning: torch.compile failed ({e}). Running in eager mode.")
+
+    # CRITICAL FIX: The core uses native Hebbian updates (.data mutations).
+    # If requires_grad=True, PyTorch autograd crashes on in-place leaf mutations.
+    for p in model.hierarchy.parameters():
+        p.requires_grad_(False)
 
     # Only embedding and normalization need backprop (Core trains itself via Hebbian rules!)
     trainable_backprop = [
