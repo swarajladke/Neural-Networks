@@ -124,8 +124,8 @@ def get_multilingual_data():
         en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         
         # Load FineWeb-Edu (The current gold standard for clean training data)
-        # We take a small slice of the 10BT sample to hit our 50M token target
-        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:1%]")
+        # We take a 0.5% slice to ensure we stay within Kaggle RAM/Disk limits
+        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:0.5%]")
         
         text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
         text += "\n" + "\n".join([t for t in fw["text"] if len(t.strip()) > 20])
@@ -160,7 +160,15 @@ def main():
         tok.save(TOKENIZER_PATH)
     
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
-    ids = tokenizer.encode(raw_text).ids[:TARGET_TOKENS]
+    print("[Tokenizer] Encoding corpus (Batch mode)...")
+    
+    # Memory Efficient: Encode in batches to avoid Kaggle RAM crash
+    encodings = tokenizer.encode_batch(raw_text.splitlines())
+    ids = []
+    for enc in encodings:
+        ids.extend(enc.ids)
+    
+    ids = ids[:TARGET_TOKENS]
     
     sl = len(ids) // BATCH_SIZE
     tokens = torch.tensor(ids[:sl*BATCH_SIZE], dtype=torch.long, device=DEVICE).view(BATCH_SIZE, sl)
