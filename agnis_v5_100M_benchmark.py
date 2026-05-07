@@ -94,7 +94,8 @@ class AgnisV5_100M(nn.Module):
         # CRITICAL: We must use torch.no_grad() and detach `emb` to prevent 
         # PyTorch from building a massive 14GB computation graph for backprop.
         with torch.no_grad():
-            core_out = self.hierarchy.infer_and_learn(emb.detach(), max_steps=1)
+            self.hierarchy.infer_and_learn(emb.detach(), max_steps=1)
+            core_out = self.hierarchy.layers[-1].x
         
         core_out = F.normalize(core_out, dim=-1)
 
