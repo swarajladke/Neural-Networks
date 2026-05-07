@@ -33,7 +33,7 @@ from agnis_v4_core import PredictiveHierarchy
 TOKENIZER_PATH = "slm_bpe_tokenizer_32k.json"
 TARGET_CHARS = 100_000_000  # Wikitext-103
 VOCAB_SIZE = 32000
-BATCH_SIZE = 128            # High batch size to max out L40S
+BATCH_SIZE = 64             # Lowered for Kaggle T4 VRAM safety
 EPOCHS = 1
 
 # 100M Parameter Scale
@@ -90,8 +90,12 @@ class AgnisV5_100M(nn.Module):
         emb = F.normalize(self.embedding(token_ids), dim=-1)
 
         # 2. UNFREEZEN CORE: Hebbian Learning + Inference
-        # The core learns its own internal logic independently of backprop!
-        core_out = self.hierarchy.infer_and_learn(emb, max_steps=1)
+        # The core learns its own internal logic via local rules.
+        # CRITICAL: We must use torch.no_grad() and detach `emb` to prevent 
+        # PyTorch from building a massive 14GB computation graph for backprop.
+        with torch.no_grad():
+            core_out = self.hierarchy.infer_and_learn(emb.detach(), max_steps=1)
+        
         core_out = F.normalize(core_out, dim=-1)
 
         h_prev_d = self.h_prev.detach()
