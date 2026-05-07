@@ -118,15 +118,19 @@ class AgnisV5(nn.Module):
 def get_multilingual_data():
     try:
         from datasets import load_dataset
-        print("[Data] Loading Wikitext-103 (En) + Wikipedia (Ru)...")
-        # Mix English and Russian for multilingual capacity
-        en = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-        ru = load_dataset("wikipedia", "20220301.ru", split="train[:10%]") # 10% of Ru Wiki is plenty
+        print("[Data] Loading Multilingual Corpus (En + Ru)...")
+        
+        # trust_remote_code=True is required for the Wikipedia loader in newer datasets versions
+        en = load_dataset("wikitext", "wikitext-103-raw-v1", split="train", trust_remote_code=True)
+        try:
+            ru = load_dataset("wikipedia", "20220301.ru", split="train[:5%]", trust_remote_code=True)
+            ru_text = "\n".join([t for t in ru["text"][:20000] if len(t.strip()) > 20])
+        except Exception:
+            print("[Data] Wikipedia-RU failed, falling back to English only...")
+            ru_text = ""
         
         text = "\n".join([t for t in en["text"] if len(t.strip()) > 20])
-        text += "\n" + "\n".join([t for t in ru["text"][:50000] if len(t.strip()) > 20])
-        
-        # We cap at TARGET_TOKENS later after tokenization
+        text += "\n" + ru_text
         return text
     except ImportError:
         print("[Error] pip install datasets zstandard")
