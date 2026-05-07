@@ -32,7 +32,7 @@ from agnis_v4_core import PredictiveHierarchy
 
 # ─── Config ───────────────────────────────────────────────────────
 CORE_CHECKPOINT = "agnis_marathon_final.pt"
-TOKENIZER_PATH = "slm_bpe_tokenizer_en.json"
+TOKENIZER_PATH = "slm_bpe_tokenizer_en_16k.json"
 CORPUS_PATH = "slm/input_en_massive.txt"
 TARGET_CHARS = 25_000_000
 
@@ -281,7 +281,7 @@ def main():
         tok = Tokenizer(BPE(unk_token="<unk>", byte_fallback=True))
         tok.pre_tokenizer = ByteLevel()
         tok.decoder = decoders.Sequence([decoders.ByteFallback(), decoders.ByteLevel()])
-        trainer = BpeTrainer(vocab_size=4096, min_frequency=2, special_tokens=["<pad>","<s>","</s>","<unk>"])
+        trainer = BpeTrainer(vocab_size=16384, min_frequency=2, special_tokens=["<pad>","<s>","</s>","<unk>"])
         tok.train_from_iterator([text], trainer=trainer)
         tok.save(TOKENIZER_PATH)
 
