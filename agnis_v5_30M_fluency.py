@@ -120,8 +120,8 @@ def get_multilingual_data():
         from datasets import load_dataset
         print("[Data] Loading Multilingual Corpus (En + Ru)...")
         
-        # trust_remote_code=True is required for the Wikipedia loader in newer datasets versions
-        en = load_dataset("wikitext", "wikitext-103-raw-v1", split="train", trust_remote_code=True)
+        # trust_remote_code=True is required for Wikipedia, but causes warnings/errors on standard wikitext
+        en = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         try:
             ru = load_dataset("wikipedia", "20220301.ru", split="train[:5%]", trust_remote_code=True)
             ru_text = "\n".join([t for t in ru["text"][:20000] if len(t.strip()) > 20])
@@ -154,7 +154,9 @@ def main():
         tok = Tokenizer(BPE(unk_token="<unk>", byte_fallback=True))
         tok.pre_tokenizer = ByteLevel(); tok.decoder = decoders.Sequence([decoders.ByteFallback(), decoders.ByteLevel()])
         trainer = BpeTrainer(vocab_size=VOCAB_SIZE, special_tokens=["<pad>","<s>","</s>","<unk>"])
-        tok.train_from_iterator([raw_text], trainer=trainer)
+        
+        # Split text into lines so the tokenizer can process it in parallel
+        tok.train_from_iterator(raw_text.splitlines(), trainer=trainer)
         tok.save(TOKENIZER_PATH)
     
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
