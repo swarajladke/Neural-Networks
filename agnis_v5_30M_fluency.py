@@ -118,19 +118,27 @@ class AgnisV5(nn.Module):
 def get_multilingual_data():
     try:
         from datasets import load_dataset
-        print("[Data] Loading Multilingual Corpus (En + Ru)...")
+        print("[Data] Scaling up to ~50 Million tokens (En + Ru)...")
         
-        # trust_remote_code=True is required for Wikipedia, but causes warnings/errors on standard wikitext
-        en = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+        # Load Wikitext-103 (approx 22M tokens)
+        en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+        
+        # Add a substantial chunk of English Wikipedia (approx 25M tokens)
+        en_extra = load_dataset("wikipedia", "20220301.en", split="train[:2%]", trust_remote_code=True)
+        
+        # Add Russian Wikipedia (approx 5M tokens)
         try:
-            ru = load_dataset("wikipedia", "20220301.ru", split="train[:5%]", trust_remote_code=True)
-            ru_text = "\n".join([t for t in ru["text"][:20000] if len(t.strip()) > 20])
+            ru = load_dataset("wikipedia", "20220301.ru", split="train[:10%]", trust_remote_code=True)
+            ru_text = "\n".join([t for t in ru["text"][:50000] if len(t.strip()) > 20])
         except Exception:
-            print("[Data] Wikipedia-RU failed, falling back to English only...")
+            print("[Data] Wikipedia-RU failed, sticking to English...")
             ru_text = ""
         
-        text = "\n".join([t for t in en["text"] if len(t.strip()) > 20])
+        text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
+        text += "\n" + "\n".join([t for t in en_extra["text"] if len(t.strip()) > 20])
         text += "\n" + ru_text
+        
+        print(f"[Data] Total Raw Text: {len(text)/1024/1024:.1f} MB")
         return text
     except ImportError:
         print("[Error] pip install datasets zstandard")
