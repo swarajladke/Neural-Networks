@@ -124,8 +124,8 @@ def get_multilingual_data():
         en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         
         # Load FineWeb-Edu (The current gold standard for clean training data)
-        # We take a fixed number of rows to be safe and avoid float-percentage errors
-        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:50000]")
+        # We take 10,000 rows to ensure we stay well within Kaggle RAM limits
+        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:10000]")
         
         text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
         text += "\n" + "\n".join([t for t in fw["text"] if len(t.strip()) > 20])
@@ -137,6 +137,7 @@ def get_multilingual_data():
         sys.exit(1)
 
 def main():
+    import gc
     print("\n" + "="*60)
     print("  AGNIS V5 | 30M PARAMETER FLUENCY TRAINING")
     print(f"  Target: {TARGET_TOKENS/1e6:.0f} Million Tokens")
@@ -160,13 +161,24 @@ def main():
         tok.save(TOKENIZER_PATH)
     
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
-    print("[Tokenizer] Encoding corpus (Batch mode)...")
+    print("[Tokenizer] Encoding corpus...")
     
-    # Memory Efficient: Encode in batches to avoid Kaggle RAM crash
-    encodings = tokenizer.encode_batch(raw_text.splitlines())
+    # Efficient encoding: Use splitlines to avoid massive single-string overhead
+    lines = raw_text.splitlines()
+    del raw_text # Free up memory immediately
+    gc.collect()
+    
+    encodings = tokenizer.encode_batch(lines)
+    del lines
+    gc.collect()
+    
+    # Flatten IDs efficiently
     ids = []
     for enc in encodings:
         ids.extend(enc.ids)
+    
+    del encodings
+    gc.collect()
     
     ids = ids[:TARGET_TOKENS]
     
