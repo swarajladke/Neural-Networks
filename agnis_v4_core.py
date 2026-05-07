@@ -398,24 +398,20 @@ class PredictiveColumn(nn.Module):
             d_mask = torch.where(phi_h.abs() > 0.01, dopamine_burst, 1.0)
             
             # 3. Vectorized Recognition (V) Update
-            # input: [batch, input_dim]. delta_h: [batch, output_dim]
-            # dV_batch: [batch, input_dim, output_dim]. 
-            # We use broadcasting for d_mask across the input_dim.
-            dV_unmasked = torch.bmm(self.last_input.unsqueeze(2), delta_h.unsqueeze(1))
-            dV_batch = dV_unmasked * d_mask.unsqueeze(1) # [batch, in, out]
-            
             # Average gradients across batch for SNAP-ATP stability
-            dV_avg = dV_batch.mean(dim=0)
+            # Memory-efficient: Apply d_mask first, then matmul instead of torch.bmm
+            delta_h_masked = delta_h * d_mask
+            dV_avg = torch.matmul(self.last_input.t(), delta_h_masked) / self.last_input.shape[0]
+            
             self.V.data += self.eta_V * dopamine_burst * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
             self.b_in.data += self.eta_V * dopamine_burst * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
 
             # 4. Vectorized Generative (W) Update
             # phi_h: [batch, out]. error: [batch, in]
-            # dW_batch: [batch, out, in]
-            dW_unmasked = torch.bmm(phi_h.unsqueeze(2), self.error.unsqueeze(1))
-            dW_batch = dW_unmasked * d_mask.unsqueeze(2) 
+            # Memory-efficient matmul
+            phi_h_masked = phi_h * d_mask
+            dW_avg = torch.matmul(phi_h_masked.t(), self.error) / phi_h_masked.shape[0]
             
-            dW_avg = dW_batch.mean(dim=0)
             self.W.data += self.eta_W * _clip_update(dW_avg, max_norm=5.0) * self.W_mask
             self.b_out.data += self.eta_W * self.error.mean(dim=0) * self.b_out_mask
 
@@ -431,8 +427,8 @@ class PredictiveColumn(nn.Module):
             
             # V8.4: Spectral Recurrent Update
             dR_target = (self.x.detach() - recurrent_drive)
-            dR_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
-            dR_avg = dR_batch.mean(dim=0)
+            # Memory-efficient dR_avg
+            dR_avg = torch.matmul(temporal_src.t(), dR_target) / temporal_src.shape[0]
             self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0) * self.R_mask
             # Spectral Normalization: Keep recurrent weights stable
             # V19: Use Frobenius norm (O(N²)) instead of spectral norm (O(N³) SVD)
@@ -445,9 +441,8 @@ class PredictiveColumn(nn.Module):
                                               trainable_R * (max_norm / norm))
 
             # V6.3: Train the Gate (Learns when to open based on the temporal mismatch)
-            # We use the full matrix gradient for the gate to maintain cross-dependency capacity
-            dR_matrix_batch = torch.bmm(temporal_src.unsqueeze(2), dR_target.unsqueeze(1))
-            dR_matrix_avg = dR_matrix_batch.mean(dim=0)
+            # Memory-efficient matmul
+            dR_matrix_avg = torch.matmul(temporal_src.t(), dR_target) / temporal_src.shape[0]
             self.R_gate.data += self.eta_R * 0.5 * dopamine_burst * _clip_update(dR_matrix_avg, max_norm=1.0) * self.R_gate_mask
 
             # V8.2: Train the ACT Halt Gate
@@ -489,9 +484,8 @@ class PredictiveColumn(nn.Module):
             self.last_fire_step[fired] = float(self._total_steps)
 
             # 8. Lateral L Hebbian Update (Vectorized)
-            # outer: [batch, out, out]
-            dL_batch = torch.bmm(phi_h.unsqueeze(2), phi_h.unsqueeze(1)) * self.L_mask
-            dL_avg = dL_batch.mean(dim=0)
+            # Memory-efficient dL_avg
+            dL_avg = (torch.matmul(phi_h.t(), phi_h) / phi_h.shape[0]) * self.L_mask
             dL_avg -= 0.01 * self.L.data * self.L_mask # V11.4 Fix: Masked Decay
             self.L.data += self.eta_L * dL_avg
             
