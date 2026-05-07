@@ -34,7 +34,7 @@ from agnis_v4_core import PredictiveHierarchy
 CORE_CHECKPOINT = "agnis_marathon_final.pt"
 TOKENIZER_PATH = "slm_bpe_tokenizer_en_16k.json"
 CORPUS_PATH = "slm/input_en_massive.txt"
-TARGET_CHARS = 25_000_000
+TARGET_CHARS = 100_000_000
 
 BATCH_SIZE = 64
 EPOCHS = 15
@@ -174,59 +174,19 @@ class DecoupledEmbeddingModel(nn.Module):
         return self.lm_head(fused)
 
 
-# ─── Corpus ───────────────────────────────────────────────────────
-GUTENBERG_URLS = [
-    "https://www.gutenberg.org/cache/epub/135/pg135.txt",
-    "https://www.gutenberg.org/cache/epub/2600/pg2600.txt",
-    "https://www.gutenberg.org/cache/epub/1184/pg1184.txt",
-    "https://www.gutenberg.org/cache/epub/996/pg996.txt",
-    "https://www.gutenberg.org/cache/epub/28054/pg28054.txt",
-    "https://www.gutenberg.org/cache/epub/1399/pg1399.txt",
-    "https://www.gutenberg.org/cache/epub/766/pg766.txt",
-    "https://www.gutenberg.org/cache/epub/1023/pg1023.txt",
-    "https://www.gutenberg.org/cache/epub/145/pg145.txt",
-    "https://www.gutenberg.org/cache/epub/4300/pg4300.txt",
-    "https://www.gutenberg.org/cache/epub/2554/pg2554.txt",
-    "https://www.gutenberg.org/cache/epub/2701/pg2701.txt",
-    "https://www.gutenberg.org/cache/epub/1400/pg1400.txt",
-    "https://www.gutenberg.org/cache/epub/1342/pg1342.txt",
-    "https://www.gutenberg.org/cache/epub/98/pg98.txt",
-]
-
-
-def clean_text(text):
-    for m in ["CHAPTER I.", "CHAPTER I", "Chapter I", "CHAPTER 1"]:
-        idx = text.find(m)
-        if idx != -1:
-            nxt = text.find(m, idx+len(m))
-            if nxt != -1 and (nxt-idx) < 1000: idx = nxt
-            text = text[idx:]; break
-    for m in ["End of the Project Gutenberg", "THE END"]:
-        idx = text.rfind(m)
-        if idx != -1: text = text[:idx]; break
-    text = re.sub(r"\r\n", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = re.sub(r" {2,}", " ", text)
-    text = re.sub(r"[^\x20-\x7E\n]", "", text)
-    return text.strip()
-
-
 def load_corpus():
-    if not os.path.exists(CORPUS_PATH) or os.path.getsize(CORPUS_PATH) < 20_000_000:
-        print("[Corpus] Downloading...")
-        os.makedirs(os.path.dirname(CORPUS_PATH), exist_ok=True)
-        full = ""
-        for url in GUTENBERG_URLS:
-            try:
-                print(f"  -> {url.split('/')[-1]}")
-                full += clean_text(urllib.request.urlopen(url).read().decode("utf-8", errors="replace")) + "\n\n"
-            except Exception as e:
-                print(f"  -> Failed: {e}")
-        with open(CORPUS_PATH, "w", encoding="utf-8") as f: f.write(full)
-    with open(CORPUS_PATH, encoding="utf-8", errors="replace") as f: raw = f.read()
-    text = clean_text(raw)[:TARGET_CHARS]
-    print(f"[Corpus] {len(text):,} chars | {len(text.split()):,} words")
-    return text
+    try:
+        from datasets import load_dataset
+        print("[Corpus] Loading Wikitext-103 from HuggingFace...")
+        # Use wikitext-103 for massive data scaling
+        dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+        text = "\n".join([t for t in dataset["text"] if len(t.strip()) > 10])
+        text = text[:TARGET_CHARS]
+        print(f"[Corpus] {len(text):,} chars | {len(text.split()):,} words")
+        return text
+    except ImportError:
+        print("[Corpus] 'datasets' library not found. Please run: pip install datasets")
+        sys.exit(1)
 
 
 def build_token_tensor(ids, bs, dev):
