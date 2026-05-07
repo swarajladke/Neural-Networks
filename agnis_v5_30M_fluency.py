@@ -124,8 +124,8 @@ def get_multilingual_data():
         en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         
         # Load FineWeb-Edu (The current gold standard for clean training data)
-        # We take a 0.5% slice to ensure we stay within Kaggle RAM/Disk limits
-        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:0.5%]")
+        # We take a fixed number of rows to be safe and avoid float-percentage errors
+        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:50000]")
         
         text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
         text += "\n" + "\n".join([t for t in fw["text"] if len(t.strip()) > 20])
