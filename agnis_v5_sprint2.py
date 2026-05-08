@@ -177,8 +177,9 @@ def get_multilingual_data():
         from datasets import load_dataset
         print("[Data] Loading FineWeb-Edu + Wikitext-103...")
         
-        en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:10000]")
+        # Load FineWeb-Edu (The current gold standard for clean training data)
+        # We take 50,000 rows now that the Batch Tokenizer is proven stable
+        fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:50000]")
         
         text = "\n".join([t for t in en_wiki["text"] if len(t.strip()) > 20])
         text += "\n" + "\n".join([t for t in fw["text"] if len(t.strip()) > 20])
@@ -191,8 +192,8 @@ def get_multilingual_data():
 
 def main():
     print("\n" + "="*60)
-    print("  AGNIS V5 | SPRINT 2 — BRIDGING THE CORE")
-    print(f"  Fix: Trainable projection + learned gate")
+    print("  AGNIS V5 | SPRINT 2 — DUAL GPU EDITION")
+    print(f"  Fix: Trainable projection + nn.DataParallel")
     print(f"  Settlement: max_steps={MAX_SETTLE_STEPS}")
     print(f"  Target: Loss < 4.0")
     print("="*60)
@@ -239,6 +240,12 @@ def main():
     model = AgnisV5(VOCAB_SIZE, EMBED_DIM, CORE_HIDDEN, 
                     max_steps=MAX_SETTLE_STEPS, device=DEVICE)
     
+    # Dual GPU Support
+    gpu_count = torch.cuda.device_count()
+    if gpu_count > 1:
+        print(f"[System] Multi-GPU detected! Using {gpu_count} T4 GPUs.")
+        model = nn.DataParallel(model)
+
     # Checkpoint resume
     start_step = 0
     start_epoch = 0
@@ -250,7 +257,15 @@ def main():
         if os.path.exists(path):
             print(f"[Resume] Loading checkpoint from {path}...")
             loaded_ckpt = torch.load(path, map_location=DEVICE)
-            model.load_state_dict(loaded_ckpt['model'], strict=False)
+            
+            # Handle DataParallel prefixing
+            state_dict = loaded_ckpt['model']
+            if gpu_count > 1 and not list(state_dict.keys())[0].startswith('module.'):
+                state_dict = {'module.' + k: v for k, v in state_dict.items()}
+            elif gpu_count <= 1 and list(state_dict.keys())[0].startswith('module.'):
+                state_dict = {k[7:]: v for k, v in state_dict.items()}
+                
+            model.load_state_dict(state_dict, strict=False)
             start_step = loaded_ckpt.get('step', 0)
             start_epoch = loaded_ckpt.get('epoch', 0)
             print(f"[Resume] Step {start_step}, Epoch {start_epoch}")
