@@ -1,27 +1,30 @@
 """
 agnis_v5_sprint2.py
 ================================================================
-AGNIS V5 | SPRINT 2 — "Awakening the Core"
+AGNIS V5 | SPRINT 2 — "Bridging the Core"
 ================================================================
 
-Sprint 1 Result:  Loss plateau ~5.8 with max_steps=1
-Sprint 2 Target:  Loss < 4.5 with max_steps=3
-
-The Key Insight:
-  max_steps=1 = AGNIS acts like a simple feedforward network
-  max_steps=3 = AGNIS starts acting like a predictive coding hierarchy
+ROOT CAUSE (Sprint 1 failure):
+  The Hebbian core output was completely detached from backprop.
+  Gradients only flowed through the embedding residual skip.
+  The core was effectively invisible — just adding noise.
   
-  Everything that makes AGNIS biologically interesting
-  only activates at max_steps > 1.
-  
-  Sprint 2 is where AGNIS actually becomes AGNIS.
+  max_steps=1 vs max_steps=3 didn't matter because backprop
+  couldn't see the core at all.
 
-Changes from Sprint 1:
-  1. max_steps = 3 (up from 1)
-  2. LR = 2.8e-4 (down 30% from 4e-4 to reduce oscillation)
-  3. Rolling average loss over 100 steps
-  4. Checkpoint saved to /kaggle/working/ explicitly
-  5. Loads Sprint 1 checkpoint automatically
+THE FIX:
+  Added a trainable "bridge" (core_proj + learned gate) between
+  the Hebbian core and the LM head. Now:
+  
+  - Hebbian core learns features via local rules (unsupervised)
+  - core_proj learns to TRANSFORM those features (supervised)
+  - gate learns HOW MUCH to trust core vs raw embedding (supervised)
+  
+  This is how neuroscience-inspired architectures actually work:
+  cortical features are extracted unsupervised, but there's a
+  trained "readout" layer that maps them to the task.
+
+Target: Loss < 4.0 within 12 hours on T4
 """
 
 import math
@@ -42,32 +45,31 @@ from agnis_v4_core import PredictiveHierarchy
 # ─── Config ───────────────────────────────────────────────────────
 MODEL_NAME = "agnis_v5_30m_fluency"
 
-# CHANGE 5: Save explicitly to /kaggle/working/ so Output tab shows file sizes
 SAVE_DIR = "/kaggle/working" if os.path.exists("/kaggle/working") else "."
 CHECKPOINT_PATH = os.path.join(SAVE_DIR, f"{MODEL_NAME}.pt")
 TOKENIZER_PATH = "slm_bpe_tokenizer_32k.json"
 
-# Data Scaling
+# Data
 TARGET_TOKENS = 200_000_000 
 BATCH_SIZE = 64
-EPOCHS = 10  # 10 epochs over the dataset
+EPOCHS = 10
 
-# 30M Parameter Scale (The "Sweet Spot")
+# Architecture
 EMBED_DIM = 768
 CORE_HIDDEN = 3072
 VOCAB_SIZE = 32000
 
-# CHANGE 1: Settlement depth — THE critical change
-MAX_SETTLE_STEPS = 3  # Up from 1. This is where AGNIS becomes AGNIS.
+# Core Settlement
+MAX_SETTLE_STEPS = 3
 
-# CHANGE 3: Reduced LR by 30% to dampen loss oscillation
-LR = 2.8e-4  # Down from 4e-4
+# Learning
+LR = 3e-4
 ALPHA = 0.1
 ETA_R_LOCAL = 0.002
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ─── AGNIS V5 Model (Sprint 2) ──────────────────────────────────
+# ─── AGNIS V5 Model (Sprint 2 — with Bridge) ────────────────────
 class AgnisV5(nn.Module):
     def __init__(self, vocab_size, embed_dim=768, hidden_dim=3072, 
                  alpha=0.1, max_steps=3, device="cpu"):
@@ -75,21 +77,38 @@ class AgnisV5(nn.Module):
         self.device = torch.device(device)
         self.embed_dim = embed_dim
         self.alpha = alpha
-        self.max_steps = max_steps  # Settlement depth
+        self.max_steps = max_steps
 
         self.embedding = nn.Embedding(vocab_size, embed_dim).to(self.device)
         
-        # Predictive Hierarchy (Unfrozen)
+        # Predictive Hierarchy (Hebbian — no backprop)
         self.hierarchy = PredictiveHierarchy([embed_dim, hidden_dim, embed_dim], device=device)
-        
-        # Disable gradients for the core (it uses Hebbian rules)
         for p in self.hierarchy.parameters():
             p.requires_grad_(False)
 
-        # Temporal Association (Delta Rule)
+        # ═══════════════════════════════════════════════════════════
+        # THE FIX: Trainable Bridge between Hebbian core and LM task
+        # ═══════════════════════════════════════════════════════════
+        
+        # 1. Core Projection — learns to extract useful features
+        #    from the Hebbian core's unsupervised representations
+        self.core_proj = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.GELU(),
+            nn.Linear(embed_dim, embed_dim),
+        ).to(self.device)
+        
+        # 2. Learned Gate — decides how much to trust core vs embedding
+        #    Input: [emb; core_feat] → sigmoid gate
+        self.gate_proj = nn.Linear(embed_dim * 2, embed_dim).to(self.device)
+        
+        # 3. Temporal projection (also trainable now)
+        self.temporal_proj = nn.Linear(embed_dim, embed_dim, bias=False).to(self.device)
+        nn.init.zeros_(self.temporal_proj.weight)  # Start with zero temporal influence
+        
+        # Temporal Association (Delta Rule — Hebbian)
         self.R_weight = torch.zeros(embed_dim, embed_dim, device=self.device)
         nn.init.orthogonal_(self.R_weight, gain=0.1)
-        self.r_norm = nn.LayerNorm(embed_dim).to(self.device)
 
         # LM Head (Weight Tying)
         self.out_norm = nn.LayerNorm(embed_dim).to(self.device)
@@ -107,40 +126,46 @@ class AgnisV5(nn.Module):
     def step_logits(self, token_ids):
         emb = F.normalize(self.embedding(token_ids), dim=-1)
 
-        # 1. Hebbian Settlement (Core Learning)
-        # CHANGE 1: max_steps=3 — the core now actually settles
+        # 1. Hebbian Settlement (unsupervised feature extraction)
         with torch.no_grad():
             self.hierarchy.infer_and_learn(emb.detach(), max_steps=self.max_steps)
-            core_out = self.hierarchy.layers[-1].x
+            core_raw = self.hierarchy.layers[-1].x.clone()
         
-        core_out = F.normalize(core_out, dim=-1)
+        # 2. THE BRIDGE: Trainable projection (HAS gradients!)
+        #    core_raw is detached, but core_proj.weight has requires_grad=True
+        #    so gradients flow through the projection to update its weights
+        core_feat = self.core_proj(core_raw)
+        
+        # 3. Temporal Association
         h_prev_d = self.h_prev.detach()
-
-        # 2. Delta Rule Temporal Mapping
-        if self.alpha > 0.0:
-            with torch.no_grad():
-                x_hat = torch.matmul(h_prev_d, self.R_weight)
-                epsilon = core_out.detach() - x_hat
-                dR = torch.bmm(h_prev_d.unsqueeze(2), epsilon.unsqueeze(1)).mean(dim=0)
-                self.R_weight = (0.999 * self.R_weight + ETA_R_LOCAL * self._current_surprise * dR).clamp(-3.0, 3.0)
-
-            temporal = torch.matmul(h_prev_d, self.R_weight)
-            h_t = core_out + self.alpha * temporal
-            h_t = self.r_norm(h_t)
-        else:
-            h_t = core_out
-
+        with torch.no_grad():
+            x_hat = torch.matmul(h_prev_d, self.R_weight)
+            epsilon = core_raw - x_hat
+            dR = torch.bmm(h_prev_d.unsqueeze(2), epsilon.unsqueeze(1)).mean(dim=0)
+            self.R_weight = (0.999 * self.R_weight + ETA_R_LOCAL * self._current_surprise * dR).clamp(-3.0, 3.0)
+        
+        # Temporal projection (trainable — backprop learns temporal relevance)
+        temporal_raw = torch.matmul(h_prev_d, self.R_weight)
+        temporal_feat = self.temporal_proj(temporal_raw)
+        
+        # 4. Gated Fusion: Let backprop decide how much core to trust
+        gate_input = torch.cat([emb, core_feat], dim=-1)
+        gate = torch.sigmoid(self.gate_proj(gate_input))
+        
+        # Fuse: gate * core_features + (1 - gate) * embedding
+        h_t = gate * (core_feat + self.alpha * temporal_feat) + (1.0 - gate) * emb
+        
         self.h_prev = h_t.detach()
         
-        # 3. Residual Skip Output
-        fused = self.out_norm(h_t + emb)
+        # 5. Output
+        fused = self.out_norm(h_t)
         return self.lm_head(fused)
 
-# ─── Data & Utility ───────────────────────────────────────────────
+# ─── Data ─────────────────────────────────────────────────────────
 def get_multilingual_data():
     try:
         from datasets import load_dataset
-        print("[Data] Loading FineWeb-Edu (High Quality) + Wikitext-103...")
+        print("[Data] Loading FineWeb-Edu + Wikitext-103...")
         
         en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
         fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:10000]")
@@ -156,10 +181,10 @@ def get_multilingual_data():
 
 def main():
     print("\n" + "="*60)
-    print("  AGNIS V5 | SPRINT 2 — AWAKENING THE CORE")
-    print(f"  Settlement Depth: max_steps={MAX_SETTLE_STEPS}")
-    print(f"  Learning Rate: {LR} (reduced 30%)")
-    print(f"  Target: Loss < 4.5")
+    print("  AGNIS V5 | SPRINT 2 — BRIDGING THE CORE")
+    print(f"  Fix: Trainable projection + learned gate")
+    print(f"  Settlement: max_steps={MAX_SETTLE_STEPS}")
+    print(f"  Target: Loss < 4.0")
     print("="*60)
 
     raw_text = get_multilingual_data()
@@ -172,7 +197,8 @@ def main():
         from tokenizers.pre_tokenizers import ByteLevel
         from tokenizers.trainers import BpeTrainer
         tok = Tokenizer(BPE(unk_token="<unk>", byte_fallback=True))
-        tok.pre_tokenizer = ByteLevel(); tok.decoder = decoders.Sequence([decoders.ByteFallback(), decoders.ByteLevel()])
+        tok.pre_tokenizer = ByteLevel()
+        tok.decoder = decoders.Sequence([decoders.ByteFallback(), decoders.ByteLevel()])
         trainer = BpeTrainer(vocab_size=VOCAB_SIZE, special_tokens=["<pad>","<s>","</s>","<unk>"])
         tok.train_from_iterator(raw_text.splitlines(), trainer=trainer)
         tok.save(TOKENIZER_PATH)
@@ -181,88 +207,74 @@ def main():
     print("[Tokenizer] Encoding corpus...")
     
     lines = raw_text.splitlines()
-    del raw_text
-    gc.collect()
+    del raw_text; gc.collect()
     
     encodings = tokenizer.encode_batch(lines)
-    del lines
-    gc.collect()
+    del lines; gc.collect()
     
     ids = []
     for enc in encodings:
         ids.extend(enc.ids)
-    del encodings
-    gc.collect()
+    del encodings; gc.collect()
     
     ids = ids[:TARGET_TOKENS]
-    
     sl = len(ids) // BATCH_SIZE
     tokens = torch.tensor(ids[:sl*BATCH_SIZE], dtype=torch.long, device=DEVICE).view(BATCH_SIZE, sl)
-    del ids
-    gc.collect()
+    del ids; gc.collect()
     
     total_tokens = tokens.numel()
-    print(f"[Data] {total_tokens/1e6:.1f}M tokens loaded | {sl} steps/epoch | {EPOCHS} epochs")
+    print(f"[Data] {total_tokens/1e6:.1f}M tokens | {sl} steps/epoch | {EPOCHS} epochs")
 
-    # Model — with Sprint 2 settlement depth
+    # Model
     model = AgnisV5(VOCAB_SIZE, EMBED_DIM, CORE_HIDDEN, 
                     max_steps=MAX_SETTLE_STEPS, device=DEVICE)
     
-    # CHANGE 2: Load from Sprint 1 checkpoint
+    # Checkpoint resume
     start_step = 0
     start_epoch = 0
-    
-    # Search for checkpoint in multiple locations
-    ckpt_candidates = [
-        CHECKPOINT_PATH,
-        f"{MODEL_NAME}.pt",
-        f"/kaggle/input/{MODEL_NAME}/{MODEL_NAME}.pt",
-        f"/kaggle/input/agnis-sprint1/{MODEL_NAME}.pt",
-    ]
-    
     loaded_ckpt = None
-    for path in ckpt_candidates:
+    
+    for path in [CHECKPOINT_PATH, f"{MODEL_NAME}.pt",
+                 f"/kaggle/input/{MODEL_NAME}/{MODEL_NAME}.pt",
+                 f"/kaggle/input/agnis-sprint1/{MODEL_NAME}.pt"]:
         if os.path.exists(path):
-            print(f"[Sprint 2] Loading Sprint 1 checkpoint from {path}...")
+            print(f"[Resume] Loading checkpoint from {path}...")
             loaded_ckpt = torch.load(path, map_location=DEVICE)
             model.load_state_dict(loaded_ckpt['model'], strict=False)
             start_step = loaded_ckpt.get('step', 0)
             start_epoch = loaded_ckpt.get('epoch', 0)
-            print(f"[Sprint 2] Resumed from step {start_step}, epoch {start_epoch}")
+            print(f"[Resume] Step {start_step}, Epoch {start_epoch}")
             break
     
     if loaded_ckpt is None:
-        print("[Sprint 2] No checkpoint found — starting fresh")
+        print("[Sprint 2] Starting fresh (no checkpoint found)")
 
-    # CHANGE 3: Trainable Params with reduced LR
-    trainable = [*model.embedding.parameters(), *model.r_norm.parameters(), *model.out_norm.parameters()]
-    optimizer = torch.optim.AdamW(trainable, lr=LR)
+    # ALL trainable parameters (embedding + bridge + norms)
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=0.01)
     
     if loaded_ckpt and 'optimizer' in loaded_ckpt:
         try:
             optimizer.load_state_dict(loaded_ckpt['optimizer'])
-            # Override LR to the new reduced value
             for pg in optimizer.param_groups:
                 pg['lr'] = LR
-            print(f"[Sprint 2] Optimizer restored, LR overridden to {LR}")
         except Exception:
-            print(f"[Sprint 2] Optimizer state incompatible, using fresh optimizer at LR={LR}")
+            print("[Resume] Optimizer incompatible, using fresh")
 
     param_total = sum(p.numel() for p in model.parameters()) / 1e6
     param_bp = sum(p.numel() for p in trainable) / 1e6
     param_hebb = param_total - param_bp
     
     print(f"[Params] Total: {param_total:.1f}M | Backprop: {param_bp:.1f}M | Hebbian: {param_hebb:.1f}M")
-    print(f"[Core]   Settlement depth: {MAX_SETTLE_STEPS} steps (Sprint 1 was 1)")
-    print(f"[Save]   Checkpoints → {CHECKPOINT_PATH}")
+    print(f"[Core]   Settlement: {MAX_SETTLE_STEPS} steps | Bridge: core_proj + gate")
+    print(f"[Save]   {CHECKPOINT_PATH}")
     print("-" * 60)
 
     model.train()
     model.reset_states(BATCH_SIZE)
     
-    # CHANGE 4: Rolling average loss tracker
     loss_window = deque(maxlen=100)
-    
+    best_avg_loss = float('inf')
     steps_per_epoch = tokens.shape[1] - 1
     global_step = 0
     start_time = time.time()
@@ -272,17 +284,12 @@ def main():
         print(f"  EPOCH {epoch+1}/{EPOCHS}")
         print(f"{'='*60}")
         
-        epoch_start = time.time()
-        
         for step in range(steps_per_epoch):
             global_step += 1
-            
-            # Skip steps we've already done (for checkpoint resume)
             if epoch == start_epoch and step < (start_step % steps_per_epoch):
                 continue
             
             cur, tgt = tokens[:, step], tokens[:, step+1]
-            
             optimizer.zero_grad(set_to_none=True)
             
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
@@ -297,20 +304,21 @@ def main():
             model._current_surprise = min(loss_val, 10.0)
             loss_window.append(loss_val)
 
-            # CHANGE 4: Log with rolling average
             if (step+1) % 500 == 0:
                 elapsed = time.time() - start_time
                 tok_sec = (global_step * BATCH_SIZE) / max(elapsed, 1e-6)
                 eta_hrs = ((EPOCHS - epoch) * steps_per_epoch - step) * BATCH_SIZE / tok_sec / 3600
                 avg_loss = sum(loss_window) / len(loss_window)
+                gate_mean = "N/A"  # Will show gate activity later
                 print(f"E{epoch+1} Step {step+1}/{steps_per_epoch} | "
                       f"Loss: {loss_val:.4f} | Avg100: {avg_loss:.4f} | "
                       f"{tok_sec:.0f} t/s | ETA: {eta_hrs:.1f}h")
 
-            # Checkpointing every 5000 steps
             if (step+1) % 5000 == 0:
                 avg_loss = sum(loss_window) / len(loss_window)
-                print(f"[Checkpoint] Saving to {CHECKPOINT_PATH} (Avg Loss: {avg_loss:.4f})...")
+                if avg_loss < best_avg_loss:
+                    best_avg_loss = avg_loss
+                print(f"[Checkpoint] Saving (Avg: {avg_loss:.4f}, Best: {best_avg_loss:.4f})...")
                 torch.save({
                     'step': step,
                     'epoch': epoch,
@@ -318,36 +326,27 @@ def main():
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'avg_loss': avg_loss,
+                    'best_avg_loss': best_avg_loss,
                     'max_steps': MAX_SETTLE_STEPS,
                 }, CHECKPOINT_PATH)
         
-        # End of epoch summary
-        epoch_time = time.time() - epoch_start
+        epoch_time = time.time() - start_time
         avg_loss = sum(loss_window) / len(loss_window) if loss_window else float('inf')
-        print(f"\n[Epoch {epoch+1} Complete] Avg Loss: {avg_loss:.4f} | Time: {epoch_time/60:.1f}min")
+        print(f"\n[Epoch {epoch+1}] Avg Loss: {avg_loss:.4f} | Best: {best_avg_loss:.4f} | "
+              f"Time: {epoch_time/3600:.1f}h")
         
-        # Save end-of-epoch checkpoint
         torch.save({
-            'step': 0,
-            'epoch': epoch + 1,
-            'global_step': global_step,
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'avg_loss': avg_loss,
+            'step': 0, 'epoch': epoch + 1, 'global_step': global_step,
+            'model': model.state_dict(), 'optimizer': optimizer.state_dict(),
+            'avg_loss': avg_loss, 'best_avg_loss': best_avg_loss,
             'max_steps': MAX_SETTLE_STEPS,
         }, CHECKPOINT_PATH)
-        print(f"[Checkpoint] Epoch {epoch+1} saved to {CHECKPOINT_PATH}")
         
-        # Early success check
-        if avg_loss < 4.5:
-            print(f"\n🎯 TARGET REACHED! Avg Loss {avg_loss:.4f} < 4.5")
-            print(f"   Sprint 2 objective complete.")
-            print(f"   Ready for Sprint 3 (max_steps=5)")
+        if avg_loss < 4.0:
+            print(f"\n🎯 TARGET REACHED! Loss {avg_loss:.4f} < 4.0 — Ready for Sprint 3")
             break
 
-    print(f"\n[Done] Sprint 2 training complete.")
-    print(f"[Done] Final checkpoint: {CHECKPOINT_PATH}")
-    print(f"[Done] Total time: {(time.time() - start_time)/3600:.1f} hours")
+    print(f"\n[Done] Final: {CHECKPOINT_PATH} | Time: {(time.time()-start_time)/3600:.1f}h")
 
 if __name__ == "__main__":
     main()
