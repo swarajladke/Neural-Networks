@@ -98,9 +98,19 @@ class AgnisV5(nn.Module):
             nn.Linear(embed_dim, embed_dim),
         ).to(self.device)
         
+        # Small init to prevent float16 overflow at start
+        for m in self.core_proj:
+            if hasattr(m, 'weight'):
+                nn.init.xavier_uniform_(m.weight, gain=0.1)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        
         # 2. Learned Gate — decides how much to trust core vs embedding
         #    Input: [emb; core_feat] → sigmoid gate
         self.gate_proj = nn.Linear(embed_dim * 2, embed_dim).to(self.device)
+        # Init gate bias negative so gate starts near 0 (trust embedding first)
+        nn.init.xavier_uniform_(self.gate_proj.weight, gain=0.1)
+        nn.init.constant_(self.gate_proj.bias, -2.0)
         
         # 3. Temporal projection (also trainable now)
         self.temporal_proj = nn.Linear(embed_dim, embed_dim, bias=False).to(self.device)
@@ -130,11 +140,11 @@ class AgnisV5(nn.Module):
         with torch.no_grad():
             self.hierarchy.infer_and_learn(emb.detach(), max_steps=self.max_steps)
             core_raw = self.hierarchy.layers[-1].x.clone()
+            # Normalize to prevent float16 overflow in bridge
+            core_raw = F.normalize(core_raw, dim=-1)
         
         # 2. THE BRIDGE: Trainable projection (HAS gradients!)
-        #    core_raw is detached, but core_proj.weight has requires_grad=True
-        #    so gradients flow through the projection to update its weights
-        core_feat = self.core_proj(core_raw)
+        core_feat = self.core_proj(core_raw.float())  # Force float32 through bridge
         
         # 3. Temporal Association
         h_prev_d = self.h_prev.detach()
@@ -292,9 +302,14 @@ def main():
             cur, tgt = tokens[:, step], tokens[:, step+1]
             optimizer.zero_grad(set_to_none=True)
             
-            with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                logits = model.step_logits(cur)
-                loss = F.cross_entropy(logits, tgt)
+            logits = model.step_logits(cur)
+            loss = F.cross_entropy(logits, tgt)
+            
+            # NaN guard — skip corrupted steps
+            if torch.isnan(loss) or torch.isinf(loss):
+                optimizer.zero_grad(set_to_none=True)
+                model.reset_states(BATCH_SIZE)
+                continue
             
             loss.backward()
             torch.nn.utils.clip_grad_norm_(trainable, 1.0)
