@@ -177,6 +177,8 @@ def get_multilingual_data():
         from datasets import load_dataset
         print("[Data] Loading FineWeb-Edu + Wikitext-103...")
         
+        en_wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+        
         # Load FineWeb-Edu (The current gold standard for clean training data)
         # We take 50,000 rows now that the Batch Tokenizer is proven stable
         fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:50000]")
