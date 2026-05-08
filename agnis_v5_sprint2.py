@@ -133,7 +133,7 @@ class AgnisV5(nn.Module):
         self.h_prev = torch.zeros(batch_size, self.embed_dim, device=self.device)
         self._current_surprise = 1.0
 
-    def step_logits(self, token_ids):
+    def forward(self, token_ids):
         emb = F.normalize(self.embedding(token_ids), dim=-1)
 
         # 1. Hebbian Settlement (unsupervised feature extraction)
@@ -170,7 +170,6 @@ class AgnisV5(nn.Module):
         # 5. Output
         fused = self.out_norm(h_t)
         return self.lm_head(fused)
-
 # ─── Data ─────────────────────────────────────────────────────────
 def get_multilingual_data():
     try:
@@ -306,7 +305,9 @@ def main():
     print("-" * 60)
 
     model.train()
-    model.reset_states(BATCH_SIZE)
+    # Access .module if wrapped in DataParallel
+    raw_model = model.module if hasattr(model, 'module') else model
+    raw_model.reset_states(BATCH_SIZE)
     
     loss_window = deque(maxlen=100)
     best_avg_loss = float('inf')
@@ -327,13 +328,13 @@ def main():
             cur, tgt = tokens[:, step], tokens[:, step+1]
             optimizer.zero_grad(set_to_none=True)
             
-            logits = model.step_logits(cur)
+            logits = model(cur)
             loss = F.cross_entropy(logits, tgt)
             
             # NaN guard — skip corrupted steps
             if torch.isnan(loss) or torch.isinf(loss):
                 optimizer.zero_grad(set_to_none=True)
-                model.reset_states(BATCH_SIZE)
+                raw_model.reset_states(BATCH_SIZE)
                 continue
             
             loss.backward()
@@ -341,7 +342,7 @@ def main():
             optimizer.step()
             
             loss_val = loss.item()
-            model._current_surprise = min(loss_val, 10.0)
+            raw_model._current_surprise = min(loss_val, 10.0)
             loss_window.append(loss_val)
 
             if (step+1) % 500 == 0:
