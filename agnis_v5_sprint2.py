@@ -217,18 +217,26 @@ def main():
         tok.save(TOKENIZER_PATH)
     
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
-    print("[Tokenizer] Encoding corpus...")
+    print("[Tokenizer] Encoding corpus in chunks (prevents IOStream timeout)...")
     
     lines = raw_text.splitlines()
     del raw_text; gc.collect()
     
-    encodings = tokenizer.encode_batch(lines)
-    del lines; gc.collect()
-    
+    # Encode in chunks of 5,000 lines to keep Kaggle kernel heartbeat alive
+    CHUNK_SIZE = 5000
     ids = []
-    for enc in encodings:
-        ids.extend(enc.ids)
-    del encodings; gc.collect()
+    total_chunks = (len(lines) + CHUNK_SIZE - 1) // CHUNK_SIZE
+    for i in range(0, len(lines), CHUNK_SIZE):
+        chunk = lines[i:i+CHUNK_SIZE]
+        encodings = tokenizer.encode_batch(chunk)
+        for enc in encodings:
+            ids.extend(enc.ids)
+        chunk_num = i // CHUNK_SIZE + 1
+        if chunk_num % 10 == 0 or chunk_num == total_chunks:
+            print(f"[Tokenizer] Chunk {chunk_num}/{total_chunks} | Tokens so far: {len(ids)/1e6:.1f}M")
+        del encodings
+    
+    del lines; gc.collect()
     
     ids = ids[:TARGET_TOKENS]
     sl = len(ids) // BATCH_SIZE
