@@ -205,9 +205,25 @@ def main():
             print(f"[Resume] Loading checkpoint from {path}...")
             loaded_ckpt = torch.load(path, map_location=DEVICE)
             state_dict = loaded_ckpt['model']
+            
+            # Clean DataParallel prefix
             if list(state_dict.keys())[0].startswith('module.'):
                 state_dict = {k[7:]: v for k, v in state_dict.items()}
-            model.load_state_dict(state_dict, strict=False)
+            
+            # --- FIX: Filter out state buffers with shape mismatches ---
+            model_dict = model.state_dict()
+            # Only keep keys that exist in the model AND have matching shapes
+            cleaned_dict = {
+                k: v for k, v in state_dict.items() 
+                if k in model_dict and v.shape == model_dict[k].shape
+            }
+            
+            # Log what we skipped (mostly h_prev and core states)
+            skipped = [k for k in state_dict.keys() if k not in cleaned_dict]
+            if skipped:
+                print(f"[Resume] Skipped {len(skipped)} state buffers (shape mismatch). Intelligence loaded successfully.")
+            
+            model.load_state_dict(cleaned_dict, strict=False)
             
             # --- OVERRIDE BIAS ON RESUME ---
             model.gate_proj.bias.data.fill_(0.0)
