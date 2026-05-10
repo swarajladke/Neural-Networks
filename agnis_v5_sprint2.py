@@ -43,7 +43,7 @@ N_LAYERS        = 2      # Transformer layers (lightweight)
 FFN_DIM         = 2048   # Transformer FFN width
 
 MAX_SETTLE_STEPS = 5
-ALPHA           = 0.4
+ALPHA           = 0.2   # Reduced for stability (was 0.4)
 ETA_R_LOCAL     = 0.005
 LR              = 1e-4
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
@@ -210,6 +210,8 @@ class AgnisV5(nn.Module):
             h_t = ((gate * gate_warmup) * (core_feat + self.alpha * temporal_feat)
                    + (1.0 - gate * gate_warmup) * ctx_emb)
             h_t = self.out_norm(h_t)
+            # Clamp to prevent temporal state explosion
+            h_t = h_t.clamp(-5.0, 5.0)
             self.h_prev = h_t.detach()
             logits_list.append(self.lm_head(h_t))
 
@@ -341,13 +343,18 @@ def main():
                 continue
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(trainable, 1.0)
+            torch.nn.utils.clip_grad_norm_(trainable, 0.5)  # Tighter clip
             optimizer.step()
             scheduler.step()
 
             lv = loss.item()
             model._current_surprise = min(lv, 10.0)
             loss_window.append(lv)
+
+            if global_step % 500 == 0:
+                # Periodic state reset: prevents h_prev drift causing explosions
+                model.reset_states(BATCH_SIZE)
+                print(f"[State Reset] Step {global_step} — temporal memory cleared.")
 
             if global_step % 10 == 0:
                 elapsed  = time.time() - t0
