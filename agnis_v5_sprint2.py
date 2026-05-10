@@ -50,7 +50,7 @@ MAX_SETTLE_STEPS = 3
 
 ALPHA = 0.4
 ETA_R_LOCAL = 0.005
-LR = 2.1e-4
+LR = 1.0e-4
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -140,9 +140,11 @@ class AgnisV5(nn.Module):
             # Output
             h_t = (gate * gate_warmup) * (core_feat + self.alpha * temporal_feat) + (1.0 - (gate * gate_warmup)) * emb
             
+            # --- CRITICAL STABILITY FIX: Normalize memory every step ---
+            h_t = self.out_norm(h_t)
             self.h_prev = h_t.detach()
-            fused = self.out_norm(h_t)
-            logits_list.append(self.lm_head(fused))
+            
+            logits_list.append(self.lm_head(h_t))
             
         return torch.stack(logits_list, dim=1) # [B, T, V]
 
@@ -270,6 +272,7 @@ def main():
             loss = F.cross_entropy(logits.reshape(-1, VOCAB_SIZE), tgt.reshape(-1))
             
             if torch.isnan(loss) or torch.isinf(loss):
+                print(f"!! NAN DETECTED at Block {step_idx} !! Resetting states...")
                 optimizer.zero_grad(set_to_none=True)
                 model.reset_states(BATCH_SIZE)
                 continue
