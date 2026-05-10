@@ -228,15 +228,19 @@ def main():
             start_step = loaded_ckpt.get('step', 0)
             start_epoch = loaded_ckpt.get('epoch', 0)
             break
-    
+            
     trainable = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=0.01)
 
     model.train()
     model.reset_states(BATCH_SIZE)
-    
+            
+    # --- Fix: Correct Step Translation ---
+    # The old start_step was in tokens. We need to convert it to sequence block index.
+    start_block_idx = start_step // SEQ_LEN
+    print(f"[Resume] Resuming from Block Index {start_block_idx} (Token {start_block_idx * SEQ_LEN})")
+
     loss_window = deque(maxlen=100)
-    # --- BUG 1: Step through sequence blocks ---
     steps_per_epoch = (tokens.shape[1] - SEQ_LEN - 1) // SEQ_LEN
     global_step = 0
     start_time = time.time()
@@ -244,12 +248,12 @@ def main():
     for epoch in range(start_epoch, EPOCHS):
         print(f"\nEPOCH {epoch+1}/{EPOCHS}")
         
-        for step_idx in range(steps_per_epoch):
+        # Start exactly at the resumed block index for the first epoch
+        initial_block = start_block_idx if epoch == start_epoch else 0
+        
+        for step_idx in range(initial_block, steps_per_epoch):
             global_step += 1
             step_ptr = step_idx * SEQ_LEN
-            
-            if epoch == start_epoch and step_ptr < start_step:
-                continue
             
             cur = tokens[:, step_ptr : step_ptr + SEQ_LEN]
             tgt = tokens[:, step_ptr + 1 : step_ptr + SEQ_LEN + 1]
@@ -257,7 +261,9 @@ def main():
             optimizer.zero_grad(set_to_none=True)
             
             warmup_steps = 10000
-            gate_factor = min(1.0, global_step / warmup_steps)
+            # Global step for warmup should include the resumed progress
+            effective_step = global_step + start_block_idx
+            gate_factor = min(1.0, effective_step / warmup_steps)
             gate_scale = 0.24 + (1.0 - 0.24) * gate_factor
             
             logits = model(cur, gate_warmup=gate_scale)
@@ -276,13 +282,15 @@ def main():
             model._current_surprise = min(loss_val, 10.0)
             loss_window.append(loss_val)
 
-            if (global_step) % 100 == 0:
+            # --- INCREASED LOGGING FREQUENCY ---
+            if (global_step) % 10 == 0:
                 elapsed = time.time() - start_time
+                # Each block processes BATCH_SIZE * SEQ_LEN tokens
                 tok_sec = (global_step * BATCH_SIZE * SEQ_LEN) / max(elapsed, 1e-6)
                 avg_loss = sum(loss_window) / len(loss_window)
-                print(f"E{epoch+1} Step {global_step} | Loss: {loss_val:.4f} | Avg: {avg_loss:.4f} | Gate: {gate_scale:.2f} | {tok_sec:.0f} t/s")
+                print(f"E{epoch+1} Block {step_idx} | Loss: {loss_val:.4f} | Avg: {avg_loss:.4f} | {tok_sec:.0f} t/s")
 
-            if (global_step) % 500 == 0:
+            if (global_step) % 100 == 0:
                 torch.save({
                     'step': step_ptr, 'epoch': epoch,
                     'model': model.state_dict(),
