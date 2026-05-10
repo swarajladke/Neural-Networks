@@ -1,18 +1,15 @@
 """
 agnis_v5_sprint2.py
 ================================================================
-AGNIS V5 | SPRINT 2, SESSION 2 — "The Breakthrough"
+AGNIS V5 | SPRINT 2, SESSION 3 — "The Context Breakthrough"
 ================================================================
 
-Configuration: "Aggressive Stable" (User-Optimized)
+Configuration: "Sequence Learning" (BPTT-Enabled)
 --------------------------------------------------
-1. Gate Bias: 0.0 (Opened to 50% influence)
-2. Hebbian LR: 0.005 (2.5x boost for faster core evolution)
-3. Alpha: 0.4 (Stronger temporal word-word associations)
-4. Backprop LR: 2.1e-4 (Reduced 30% to force core reliance)
-5. Gate Warmup: 10k step linear transition from 0.12 to 0.50
-
-Target: Break the 7.7 plateau and reach Loss < 5.0
+1. SEQ_LEN = 64 (Grammatical Attention Span)
+2. Predictive Feedback: Core now learns from (emb + temporal_context)
+3. Sequence Forward: h_prev persists across tokens in forward pass
+4. Target: Loss < 6.0 in 10k steps (640k tokens/batch)
 """
 
 import math
@@ -40,6 +37,7 @@ TOKENIZER_PATH = "slm_bpe_tokenizer_32k.json"
 # Data
 TARGET_TOKENS = 200_000_000 
 BATCH_SIZE = 128
+SEQ_LEN = 64  # --- BUG 1: Context Window ---
 EPOCHS = 10
 
 # Architecture
@@ -50,18 +48,13 @@ VOCAB_SIZE = 32000
 # Core Settlement
 MAX_SETTLE_STEPS = 3
 
-# --- Fix 3: Stronger temporal memory (Alpha 0.1 -> 0.4) ---
 ALPHA = 0.4
-
-# --- Fix 2: Moderate Hebbian boost (0.002 -> 0.005) ---
 ETA_R_LOCAL = 0.005
-
-# --- Fix 4: Reduced Backprop LR (3e-4 * 0.7 = 2.1e-4) ---
 LR = 2.1e-4
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ─── AGNIS V5 Model (Sprint 2 — Aggressive Stable) ─────────────
+# ─── AGNIS V5 Model (Sprint 2 — Sequence Learning) ─────────────
 class AgnisV5(nn.Module):
     def __init__(self, vocab_size, embed_dim=768, hidden_dim=3072, 
                  alpha=0.4, max_steps=3, device="cpu"):
@@ -90,14 +83,14 @@ class AgnisV5(nn.Module):
         
         self.gate_proj = nn.Linear(embed_dim * 2, embed_dim).to(self.device)
         nn.init.xavier_uniform_(self.gate_proj.weight, gain=0.1)
-        # --- Fix 1: Gate Bias 0.0 ---
         nn.init.constant_(self.gate_proj.bias, 0.0)
         
         self.temporal_proj = nn.Linear(embed_dim, embed_dim, bias=False).to(self.device)
         nn.init.zeros_(self.temporal_proj.weight)
         
-        self.R_weight = torch.zeros(embed_dim, embed_dim, device=self.device)
-        nn.init.orthogonal_(self.R_weight, gain=0.1)
+        r_weight = torch.zeros(embed_dim, embed_dim, device=self.device)
+        nn.init.orthogonal_(r_weight, gain=0.1)
+        self.register_buffer("R_weight", r_weight)
 
         self.out_norm = nn.LayerNorm(embed_dim).to(self.device)
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False).to(self.device)
@@ -112,35 +105,46 @@ class AgnisV5(nn.Module):
         self._current_surprise = 1.0
 
     def forward(self, token_ids, gate_warmup=1.0):
-        emb = F.normalize(self.embedding(token_ids), dim=-1)
+        # --- BUG 3: Sequential Forward Loop ---
+        # token_ids shape: [B, T]
+        B, T = token_ids.shape
+        logits_list = []
+        
+        for t in range(T):
+            idx = token_ids[:, t]
+            emb = F.normalize(self.embedding(idx), dim=-1)
+            
+            h_prev_d = self.h_prev.detach()
+            with torch.no_grad():
+                # BUG 2: Feed temporal state to core
+                temporal_raw = torch.matmul(h_prev_d, self.R_weight)
+                temporal_context = emb + self.alpha * temporal_raw
+                
+                self.hierarchy.infer_and_learn(temporal_context.detach(), max_steps=self.max_steps)
+                core_raw = self.hierarchy.layers[-1].x.clone()
+                core_raw = F.normalize(core_raw, dim=-1)
+                
+                # Delta rule for R_weight
+                x_hat = temporal_raw
+                epsilon = core_raw - x_hat
+                dR = torch.bmm(h_prev_d.unsqueeze(2), epsilon.unsqueeze(1)).mean(dim=0)
+                updated = (0.999 * self.R_weight + ETA_R_LOCAL * self._current_surprise * dR).clamp(-3.0, 3.0)
+                self.R_weight.copy_(updated)
 
-        with torch.no_grad():
-            self.hierarchy.infer_and_learn(emb.detach(), max_steps=self.max_steps)
-            core_raw = self.hierarchy.layers[-1].x.clone()
-            core_raw = F.normalize(core_raw, dim=-1)
-        
-        core_feat = self.core_proj(core_raw.float())
-        
-        h_prev_d = self.h_prev.detach()
-        with torch.no_grad():
-            x_hat = torch.matmul(h_prev_d, self.R_weight)
-            epsilon = core_raw - x_hat
-            dR = torch.bmm(h_prev_d.unsqueeze(2), epsilon.unsqueeze(1)).mean(dim=0)
-            self.R_weight = (0.999 * self.R_weight + ETA_R_LOCAL * self._current_surprise * dR).clamp(-3.0, 3.0)
-        
-        temporal_raw = torch.matmul(h_prev_d, self.R_weight)
-        temporal_feat = self.temporal_proj(temporal_raw)
-        
-        gate_input = torch.cat([emb, core_feat], dim=-1)
-        gate = torch.sigmoid(self.gate_proj(gate_input))
-        
-        # --- Fix 5: Apply Gate Warmup Scale ---
-        # gate_warmup goes 0.12 -> 1.0 internally via the training loop call
-        h_t = (gate * gate_warmup) * (core_feat + self.alpha * temporal_feat) + (1.0 - (gate * gate_warmup)) * emb
-        
-        self.h_prev = h_t.detach()
-        fused = self.out_norm(h_t)
-        return self.lm_head(fused)
+            core_feat = self.core_proj(core_raw.float())
+            temporal_feat = self.temporal_proj(temporal_raw)
+            
+            gate_input = torch.cat([emb, core_feat], dim=-1)
+            gate = torch.sigmoid(self.gate_proj(gate_input))
+            
+            # Output
+            h_t = (gate * gate_warmup) * (core_feat + self.alpha * temporal_feat) + (1.0 - (gate * gate_warmup)) * emb
+            
+            self.h_prev = h_t.detach()
+            fused = self.out_norm(h_t)
+            logits_list.append(self.lm_head(fused))
+            
+        return torch.stack(logits_list, dim=1) # [B, T, V]
 
 # ─── Data ─────────────────────────────────────────────────────────
 def get_multilingual_data():
@@ -157,8 +161,8 @@ def get_multilingual_data():
 
 def main():
     print("\n" + "="*60)
-    print("  AGNIS V5 | SPRINT 2 — THE BREAKTHROUGH (Aggressive Stable)")
-    print(f"  Fixes: Bias=0.0 | HebbianLR={ETA_R_LOCAL} | Alpha={ALPHA} | LR={LR}")
+    print("  AGNIS V5 | SPRINT 2 — SEQUENCE BREAKTHROUGH")
+    print(f"  Config: SEQ_LEN={SEQ_LEN} | HebbianLR={ETA_R_LOCAL} | Alpha={ALPHA}")
     print("="*60)
 
     raw_text = get_multilingual_data()
@@ -181,7 +185,6 @@ def main():
     
     CHUNK_SIZE = 5000
     ids = []
-    total_chunks = (len(lines) + CHUNK_SIZE - 1) // CHUNK_SIZE
     for i in range(0, len(lines), CHUNK_SIZE):
         chunk = lines[i:i+CHUNK_SIZE]
         encodings = tokenizer.encode_batch(chunk)
@@ -206,28 +209,21 @@ def main():
             loaded_ckpt = torch.load(path, map_location=DEVICE)
             state_dict = loaded_ckpt['model']
             
-            # Clean DataParallel prefix
-            if list(state_dict.keys())[0].startswith('module.'):
+            if state_dict and next(iter(state_dict)).startswith('module.'):
                 state_dict = {k[7:]: v for k, v in state_dict.items()}
             
-            # --- FIX: Filter out state buffers with shape mismatches ---
             model_dict = model.state_dict()
-            # Only keep keys that exist in the model AND have matching shapes
             cleaned_dict = {
                 k: v for k, v in state_dict.items() 
                 if k in model_dict and v.shape == model_dict[k].shape
             }
             
-            # Log what we skipped (mostly h_prev and core states)
             skipped = [k for k in state_dict.keys() if k not in cleaned_dict]
             if skipped:
                 print(f"[Resume] Skipped {len(skipped)} state buffers (shape mismatch). Intelligence loaded successfully.")
             
             model.load_state_dict(cleaned_dict, strict=False)
-            
-            # --- OVERRIDE BIAS ON RESUME ---
             model.gate_proj.bias.data.fill_(0.0)
-            print("[Resume] Force override gate_proj.bias to 0.0")
             
             start_step = loaded_ckpt.get('step', 0)
             start_epoch = loaded_ckpt.get('epoch', 0)
@@ -240,31 +236,32 @@ def main():
     model.reset_states(BATCH_SIZE)
     
     loss_window = deque(maxlen=100)
-    steps_per_epoch = tokens.shape[1] - 1
+    # --- BUG 1: Step through sequence blocks ---
+    steps_per_epoch = (tokens.shape[1] - SEQ_LEN - 1) // SEQ_LEN
     global_step = 0
     start_time = time.time()
     
     for epoch in range(start_epoch, EPOCHS):
         print(f"\nEPOCH {epoch+1}/{EPOCHS}")
         
-        for step in range(steps_per_epoch):
+        for step_idx in range(steps_per_epoch):
             global_step += 1
-            if epoch == start_epoch and step < (start_step % steps_per_epoch):
+            step_ptr = step_idx * SEQ_LEN
+            
+            if epoch == start_epoch and step_ptr < start_step:
                 continue
             
-            cur, tgt = tokens[:, step], tokens[:, step+1]
+            cur = tokens[:, step_ptr : step_ptr + SEQ_LEN]
+            tgt = tokens[:, step_ptr + 1 : step_ptr + SEQ_LEN + 1]
+            
             optimizer.zero_grad(set_to_none=True)
             
-            # --- Fix 5: Linear Gate Warmup Logic ---
-            # Goes from 0.12 (bias -2) to 1.0 (bias 0) over 10,000 steps
             warmup_steps = 10000
-            current_warmup_step = global_step - (start_epoch * steps_per_epoch + start_step)
-            gate_factor = min(1.0, current_warmup_step / warmup_steps)
-            # gate_scale: 0.24 (approx 12%) -> 1.0 (approx 50% relative)
+            gate_factor = min(1.0, global_step / warmup_steps)
             gate_scale = 0.24 + (1.0 - 0.24) * gate_factor
             
             logits = model(cur, gate_warmup=gate_scale)
-            loss = F.cross_entropy(logits, tgt)
+            loss = F.cross_entropy(logits.view(-1, VOCAB_SIZE), tgt.view(-1))
             
             if torch.isnan(loss) or torch.isinf(loss):
                 optimizer.zero_grad(set_to_none=True)
@@ -279,15 +276,15 @@ def main():
             model._current_surprise = min(loss_val, 10.0)
             loss_window.append(loss_val)
 
-            if (step+1) % 500 == 0:
+            if (global_step) % 100 == 0:
                 elapsed = time.time() - start_time
-                tok_sec = (global_step * BATCH_SIZE) / max(elapsed, 1e-6)
+                tok_sec = (global_step * BATCH_SIZE * SEQ_LEN) / max(elapsed, 1e-6)
                 avg_loss = sum(loss_window) / len(loss_window)
-                print(f"E{epoch+1} S{step+1} | Loss: {loss_val:.4f} | Avg: {avg_loss:.4f} | Gate: {gate_scale:.2f} | {tok_sec:.0f} t/s")
+                print(f"E{epoch+1} Step {global_step} | Loss: {loss_val:.4f} | Avg: {avg_loss:.4f} | Gate: {gate_scale:.2f} | {tok_sec:.0f} t/s")
 
-            if (step+1) % 5000 == 0:
+            if (global_step) % 500 == 0:
                 torch.save({
-                    'step': step, 'epoch': epoch,
+                    'step': step_ptr, 'epoch': epoch,
                     'model': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'avg_loss': sum(loss_window)/len(loss_window),
