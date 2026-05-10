@@ -171,14 +171,14 @@ class PredictiveColumn(nn.Module):
         return mask
 
     def _phi(self, x: torch.Tensor) -> torch.Tensor:
-        mask = self._k_wta_mask(x)
-        return torch.nn.functional.gelu(x) * mask
+        # Fix 2: Removed k-WTA — was zeroing 75% of neurons, killing gradients
+        return torch.nn.functional.gelu(x)
 
     def _phi_deriv(self, x: torch.Tensor) -> torch.Tensor:
-        mask = self._k_wta_mask(x)
+        # Fix 2: Pure GELU derivative (no k-WTA mask)
         cdf = 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
         pdf = torch.exp(-0.5 * x ** 2) / math.sqrt(2.0 * math.pi)
-        return (cdf + x * pdf) * mask
+        return cdf + x * pdf
 
     def reset_state(self, batch_size: int = 1):
         if self.x.shape[0] != batch_size or self.x.shape[1] != self.output_dim:
