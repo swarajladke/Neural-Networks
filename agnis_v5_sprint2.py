@@ -261,7 +261,7 @@ def main():
             gate_scale = 0.24 + (1.0 - 0.24) * gate_factor
             
             logits = model(cur, gate_warmup=gate_scale)
-            loss = F.cross_entropy(logits.view(-1, VOCAB_SIZE), tgt.view(-1))
+            loss = F.cross_entropy(logits.reshape(-1, VOCAB_SIZE), tgt.reshape(-1))
             
             if torch.isnan(loss) or torch.isinf(loss):
                 optimizer.zero_grad(set_to_none=True)
