@@ -69,7 +69,7 @@ class CausalTransformerBlock(nn.Module):
 
     def forward(self, x):
         T = x.shape[1]
-        mask = self.causal_mask[:T, :T]
+        mask = self.causal_mask[:T, :T].to(x.device)  # Fix: move mask to GPU
         xn   = self.n1(x)
         attn_out, _ = self.attn(xn, xn, xn, attn_mask=mask, need_weights=False)
         x = x + attn_out
