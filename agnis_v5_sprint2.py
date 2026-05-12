@@ -45,7 +45,7 @@ FFN_DIM         = 2048   # Transformer FFN width
 MAX_SETTLE_STEPS = 5
 ALPHA           = 0.2   # Reduced for stability (was 0.4)
 ETA_R_LOCAL     = 0.005
-LR              = 1e-4
+LR              = 5e-5   # Session 7: Fine-tuning semantics (was 1e-4)
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 
