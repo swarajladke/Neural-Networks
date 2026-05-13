@@ -45,7 +45,7 @@ FFN_DIM         = 2048   # Transformer FFN width
 MAX_SETTLE_STEPS = 5
 ALPHA           = 0.2   # Reduced for stability (was 0.4)
 ETA_R_LOCAL     = 0.005
-LR              = 5e-5   # Session 7: Fine-tuning semantics (was 1e-4)
+LR              = 7e-5   # Session 8: Warm restart (was 5e-5, LR exhausted)
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -308,8 +308,8 @@ def main():
     print(f"[Model] Trainable: {n_params/1e6:.1f}M params")
 
     optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=0.01)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=50000, eta_min=LR * 0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=20000, T_mult=1, eta_min=LR * 0.05)
 
     model.train()
     model.reset_states(BATCH_SIZE)
