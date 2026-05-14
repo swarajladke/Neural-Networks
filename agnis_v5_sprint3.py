@@ -238,7 +238,9 @@ def main():
 
     with torch.no_grad():
         sb = tokens[:4, :SEQ_LEN]
+        model.reset_states(4)   # match test batch size
         lo = model(sb)
+        model.reset_states(BATCH_SIZE)  # reset for training
         print(f"Test 2 | Input: {tuple(sb.shape)} → Output: {tuple(lo.shape)}")
         assert lo.shape == (4, SEQ_LEN, VOCAB_SIZE), "FAIL: not sequence mode!"
 
