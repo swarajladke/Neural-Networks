@@ -99,7 +99,7 @@ class AgnisV5(nn.Module):
         self.out_norm = nn.LayerNorm(embed_dim).to(self.device)
         self.lm_head  = nn.Linear(embed_dim, vocab_size, bias=False).to(self.device)
         nn.init.normal_(self.lm_head.weight, std=0.02)
-        self.register_buffer("h_prev", torch.zeros(1, embed_dim))
+        self.register_buffer("h_prev", torch.zeros(1, embed_dim, device=self.device))
         self._current_surprise = 1.0
 
     def reset_states(self, batch_size=1):
