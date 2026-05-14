@@ -329,6 +329,7 @@ def main():
                     out = generate(model, tokenizer, prompt)
                     print(f"  [{prompt}] -> {out}")
                 print()
+                model.reset_states(BATCH_SIZE)  # Restore batch size after generation
 
 
 if __name__ == "__main__":
