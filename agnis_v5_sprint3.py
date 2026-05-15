@@ -210,10 +210,14 @@ def main():
     model = AgnisV5(VOCAB_SIZE, EMBED_DIM, CORE_HIDDEN, alpha=ALPHA, max_steps=MAX_SETTLE_STEPS, device=DEVICE)
 
     # ── STEP 1: Find & load checkpoint ──────────────────────────
-    ckpt_paths = glob.glob("/kaggle/input/**/agnis_v5_30m_fluency.pt", recursive=True) + \
-                 ["/kaggle/working/agnis_v5_30m_fluency.pt",
-                  "/kaggle/input/agnis-ckpt/agnis_v5_30m_fluency.pt",
-                  "agnis_v5_30m_fluency.pt"]
+    ckpt_paths = (
+        glob.glob("/kaggle/input/**/agnis_sprint3_best.pt", recursive=True) +
+        glob.glob("/kaggle/input/**/agnis_v5_30m_fluency.pt", recursive=True) +
+        ["/kaggle/working/agnis_sprint3_best.pt",
+         "/kaggle/working/agnis_v5_30m_fluency.pt",
+         "agnis_sprint3_best.pt",
+         "agnis_v5_30m_fluency.pt"]
+    )
     loaded_ckpt = None
     for p in ckpt_paths:
         if os.path.exists(p):
