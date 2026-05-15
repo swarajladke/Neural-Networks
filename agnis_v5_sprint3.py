@@ -279,8 +279,8 @@ def main():
             cur = tokens[:, ptr:ptr+SEQ_LEN]       # REQUIREMENT 1
             tgt = tokens[:, ptr+1:ptr+SEQ_LEN+1]
 
-            # REQUIREMENT 5: Reset at doc boundaries
-            if global_step % 1000 == 0:
+            # REQUIREMENT 5: Reset at doc boundaries (less frequent = more context)
+            if global_step % 5000 == 0:
                 model.reset_states(BATCH_SIZE)
                 print(f"[State Reset] Step {global_step}")
 
