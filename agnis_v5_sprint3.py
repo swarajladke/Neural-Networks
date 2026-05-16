@@ -185,12 +185,11 @@ def clean_text(text):
 # ── Data ───────────────────────────────────────────────────────
 def get_data():
     from datasets import load_dataset
-    print("[Data] Loading FineWeb-Edu + Wikitext-103...")
-    wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
-    fw   = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:80000]")
-    # CHANGE 2: Apply clean_text to remove Wikipedia artifacts
-    text  = "\n".join(clean_text(t) for t in wiki["text"] if len(t.strip()) > 20)
-    text += "\n" + "\n".join(clean_text(t) for t in fw["text"] if len(t.strip()) > 20)
+    print("[Data] Loading FineWeb-Edu only (clean educational prose)...")
+    # Session 7: FineWeb-Edu ONLY — removes Wikitext conflicting signals
+    fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:150000]")
+    text = "\n".join(clean_text(t) for t in fw["text"] if len(t.strip()) > 50)
+    print(f"[Data] Loaded {len(text)//1e6:.1f}M chars of clean educational text")
     return text
 
 
@@ -289,7 +288,7 @@ def main():
     t0                = time.time()
     gen_prompts       = ["The history of", "Once upon a time", "The scientist discovered"]
     # CHANGE 4: Early stopping
-    PATIENCE          = 5000   # steps without >=0.01 improvement
+    PATIENCE          = 10000  # Session 7: doubled — allow full warm restart cycles
     no_improve_steps  = 0
     early_stop        = False
 
