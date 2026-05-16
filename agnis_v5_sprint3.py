@@ -172,14 +172,25 @@ def generate(model, tokenizer, prompt, max_tokens=50, temperature=0.8, top_k=50)
     return tokenizer.decode(out)
 
 
+# ── CHANGE 2: Clean text ───────────────────────────────────────
+import re as _re
+def clean_text(text):
+    text = _re.sub(r'=+\s*[^=]*\s*=+', '', text)   # remove == Section == headers
+    text = _re.sub(r'\s*=\s*=\s*', ' ', text)        # stray = = artifacts
+    text = _re.sub(r'@[\-\.]@', lambda m: m.group(0)[1], text)  # @.@ → .
+    text = _re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
 # ── Data ───────────────────────────────────────────────────────
 def get_data():
     from datasets import load_dataset
     print("[Data] Loading FineWeb-Edu + Wikitext-103...")
     wiki = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
     fw   = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:80000]")
-    text  = "\n".join(t for t in wiki["text"] if len(t.strip()) > 20)
-    text += "\n" + "\n".join(t for t in fw["text"] if len(t.strip()) > 20)
+    # CHANGE 2: Apply clean_text to remove Wikipedia artifacts
+    text  = "\n".join(clean_text(t) for t in wiki["text"] if len(t.strip()) > 20)
+    text += "\n" + "\n".join(clean_text(t) for t in fw["text"] if len(t.strip()) > 20)
     return text
 
 
@@ -255,25 +266,38 @@ def main():
         optimizer, T_0=10000, T_mult=2, eta_min=1e-6)
     print(f"Test 3 | Initial LR: {scheduler.get_last_lr()[0]:.2e}")
 
+    # Test 4: verify clean_text removes = = = artifacts
+    dirty = "== Section Header == some text @.@ more @-@ text"
+    cleaned = clean_text(dirty)
+    assert "=" not in cleaned, f"FAIL: clean_text still has '=': {cleaned}"
+    print(f"Test 4 | clean_text: '{dirty[:30]}...' → '{cleaned[:40]}' ✅")
+
+    # Test 5: save path
     torch.save({'test': True}, os.path.join(SAVE_DIR, 'test.pt'))
     assert os.path.exists(os.path.join(SAVE_DIR, 'test.pt'))
     os.remove(os.path.join(SAVE_DIR, 'test.pt'))
-    print("Test 4 | Save path verified ✅")
+    print("Test 5 | Save path verified ✅")
     print("── All tests passed — starting training ──\n")
 
     # ── STEP 3: Training loop ────────────────────────────────────
     model.train()
     model.reset_states(BATCH_SIZE)
     steps_per_epoch = (tokens.shape[1] - SEQ_LEN - 1) // SEQ_LEN
-    loss_window     = deque(maxlen=200)
-    best_loss       = float('inf')
-    global_step     = 0
-    t0              = time.time()
-    gen_prompts     = ["The history of", "Once upon a time", "The scientist discovered"]
+    loss_window       = deque(maxlen=200)
+    best_loss         = float('inf')
+    global_step       = 0
+    t0                = time.time()
+    gen_prompts       = ["The history of", "Once upon a time", "The scientist discovered"]
+    # CHANGE 4: Early stopping
+    PATIENCE          = 5000   # steps without >=0.01 improvement
+    no_improve_steps  = 0
+    early_stop        = False
 
     for epoch in range(EPOCHS):
+        if early_stop: break
         print(f"\nEPOCH {epoch+1}/{EPOCHS}")
         for si in range(steps_per_epoch):
+            if early_stop: break
             global_step += 1
             ptr = si * SEQ_LEN
             cur = tokens[:, ptr:ptr+SEQ_LEN]       # REQUIREMENT 1
@@ -321,10 +345,17 @@ def main():
                             'avg_loss': avg_loss, 'best_loss': best_loss}, SAVE_PATH)
                 print(f"[Saved] step={global_step} avg={avg_loss:.4f}")
 
-            if avg_loss < best_loss:
-                best_loss = avg_loss
+            # CHANGE 4: Early stopping logic
+            if avg_loss < best_loss - 0.01:
+                best_loss        = avg_loss
+                no_improve_steps = 0
                 torch.save(model.state_dict(), BEST_WEIGHTS)
                 print(f"[Best] New best: {best_loss:.4f}")
+            else:
+                no_improve_steps += 1
+                if no_improve_steps >= PATIENCE:
+                    print(f"[Early Stop] No improvement for {PATIENCE} steps. Best: {best_loss:.4f}")
+                    early_stop = True
 
             # Generation sample every 5000 steps
             if global_step % 5000 == 0:
