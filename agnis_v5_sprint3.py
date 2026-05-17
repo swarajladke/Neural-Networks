@@ -184,12 +184,15 @@ def clean_text(text):
 
 # ── Data ───────────────────────────────────────────────────────
 def get_data():
+    import os
     from datasets import load_dataset
-    print("[Data] Loading FineWeb-Edu only (clean educational prose)...")
-    # Session 7: FineWeb-Edu ONLY — removes Wikitext conflicting signals
-    fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT", split="train[:150000]")
-    text = "\n".join(clean_text(t) for t in fw["text"] if len(t.strip()) > 50)
-    print(f"[Data] Loaded {len(text)//1e6:.1f}M chars of clean educational text")
+    # Use /kaggle/working as cache to avoid system disk overflow
+    cache = "/kaggle/working/hf_cache" if os.path.exists("/kaggle/working") else None
+    print("[Data] Loading FineWeb-Edu (50k samples, clean educational prose)...")
+    fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT",
+                      split="train[:50000]", cache_dir=cache)
+    text = "\n".join(clean_text(t) for t in fw[\"text\"] if len(t.strip()) > 50)
+    print(f"[Data] Loaded {len(text)//1_000_000:.1f}M chars of clean educational text")
     return text
 
 
