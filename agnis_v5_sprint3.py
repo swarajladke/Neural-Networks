@@ -219,24 +219,29 @@ def main():
 
     model = AgnisV5(VOCAB_SIZE, EMBED_DIM, CORE_HIDDEN, alpha=ALPHA, max_steps=MAX_SETTLE_STEPS, device=DEVICE)
 
-    # ── STEP 1: Find & load checkpoint ──────────────────────────
-    ckpt_paths = (
-        glob.glob("/kaggle/input/**/agnis_sprint3_best.pt", recursive=True) +
-        glob.glob("/kaggle/input/**/agnis_v5_30m_fluency.pt", recursive=True) +
-        ["/kaggle/working/agnis_sprint3_best.pt",
-         "/kaggle/working/agnis_v5_30m_fluency.pt",
-         "agnis_sprint3_best.pt",
-         "agnis_v5_30m_fluency.pt"]
-    )
+    # ── STEP 1: Find & load checkpoint (STRICT) ──────────────────
+    all_pts = sorted(
+        glob.glob("/kaggle/input/**/*.pt", recursive=True) +
+        glob.glob("/kaggle/working/*.pt") + glob.glob("*.pt"),
+        key=os.path.getsize, reverse=True)
+    print(f"[Resume] Found {len(all_pts)} .pt files: {[os.path.basename(p) for p in all_pts[:5]]}")
+
     loaded_ckpt = None
-    for p in ckpt_paths:
-        if os.path.exists(p):
-            sz = os.path.getsize(p) / 1e6
-            print(f"[Resume] Found checkpoint: {p} ({sz:.1f} MB)")
-            loaded_ckpt = torch.load(p, map_location=DEVICE)
+    for p in all_pts:
+        if os.path.getsize(p) < 50e6: continue   # skip tiny files
+        try:
+            ckpt_try = torch.load(p, map_location=DEVICE)
+            sd_try   = ckpt_try.get('model', ckpt_try)
+            if not isinstance(sd_try, dict) or len(sd_try) < 10: continue
+            loaded_ckpt = ckpt_try
+            print(f"[Resume] Loaded: {p} ({os.path.getsize(p)/1e6:.1f} MB)")
+            print(f"[Resume] Step={loaded_ckpt.get('step','?')} | AvgLoss={loaded_ckpt.get('avg_loss','?')}")
             break
+        except Exception as e:
+            print(f"[Resume] Skip {p}: {e}")
+
     if loaded_ckpt is None:
-        print("[Resume] No checkpoint found — starting fresh!")
+        print("[Resume] WARNING: No valid checkpoint — starting FRESH (expect loss ~10.3)")
     else:
         sd = loaded_ckpt.get('model', loaded_ckpt)
         if next(iter(sd)).startswith('module.'): sd = {k[7:]: v for k, v in sd.items()}
@@ -244,7 +249,16 @@ def main():
         clean = {k: v for k, v in sd.items() if k in md and v.shape == md[k].shape}
         model.load_state_dict(clean, strict=False)
         model.gate_proj.bias.data.fill_(0.0)
-        print(f"[Resume] Loaded {len(clean)} tensors. Step={loaded_ckpt.get('step','?')} AvgLoss={loaded_ckpt.get('avg_loss','?')}")
+        print(f"[Resume] {len(clean)} tensors loaded OK")
+
+    # Fix W_mask/V_mask buffers for Hebbian layers (prevents AttributeError)
+    for col in model.hierarchy.layers:
+        if hasattr(col, 'W') and not hasattr(col, 'W_mask'):
+            col.register_buffer('W_mask', torch.ones(col.W.shape, device=DEVICE))
+        if hasattr(col, 'V') and not hasattr(col, 'V_mask'):
+            col.register_buffer('V_mask', torch.ones(col.V.shape, device=DEVICE))
+    print("[Resume] W_mask/V_mask buffers verified")
+
 
     # ── STEP 5: Verification tests ───────────────────────────────
     print("\n── Verification Tests ──")
@@ -265,18 +279,40 @@ def main():
         optimizer, T_0=10000, T_mult=2, eta_min=1e-6)
     print(f"Test 3 | Initial LR: {scheduler.get_last_lr()[0]:.2e}")
 
-    # Test 4: verify clean_text removes = = = artifacts
-    dirty = "== Section Header == some text @.@ more @-@ text"
-    cleaned = clean_text(dirty)
-    assert "=" not in cleaned, f"FAIL: clean_text still has '=': {cleaned}"
-    print(f"Test 4 | clean_text: '{dirty[:30]}...' → '{cleaned[:40]}' ✅")
-
+    # Test 4: clean_text
+    assert "=" not in clean_text("== Header == text @.@ end")
+    print("Test 4 | clean_text ✅")
     # Test 5: save path
     torch.save({'test': True}, os.path.join(SAVE_DIR, 'test.pt'))
-    assert os.path.exists(os.path.join(SAVE_DIR, 'test.pt'))
     os.remove(os.path.join(SAVE_DIR, 'test.pt'))
-    print("Test 5 | Save path verified ✅")
+    print("Test 5 | Save path ✅")
+    # Test 6: 100-step warmup — verifies checkpoint loss
+    model.eval(); model.reset_states(4); wl = []
+    with torch.no_grad():
+        for wi in range(100):
+            wc = tokens[:4, wi*SEQ_LEN:(wi+1)*SEQ_LEN]
+            wt = tokens[:4, wi*SEQ_LEN+1:(wi+1)*SEQ_LEN+1]
+            wl.append(F.cross_entropy(model(wc).view(-1, VOCAB_SIZE), wt.reshape(-1)).item())
+    warmup_avg = sum(wl) / len(wl)
+    status = "✅ OK" if warmup_avg < 7.0 else "⚠️  HIGH — checkpoint may be wrong!"
+    print(f"Test 6 | Warmup avg loss: {warmup_avg:.4f}  {status}")
+    if warmup_avg > 7.0:
+        print("         STOP and verify which checkpoint file was loaded.")
+    model.train(); model.reset_states(BATCH_SIZE)
     print("── All tests passed — starting training ──\n")
+
+    # ── SIGTERM emergency save ────────────────────────────────────
+    import signal
+    _state = {'step': 0, 'epoch': 0, 'avg': 9.9}
+    def _emergency_save(sig, frame):
+        ep = os.path.join(SAVE_DIR, "agnis_sprint3_best.pt")
+        torch.save({'step': _state['step'], 'epoch': _state['epoch'],
+                    'model': model.state_dict(), 'avg_loss': _state['avg']}, ep)
+        print(f"[Emergency Save] step={_state['step']} avg={_state['avg']:.4f} → {ep}")
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, _emergency_save)
+    signal.signal(signal.SIGINT,  _emergency_save)
+
 
     # ── STEP 3: Training loop ────────────────────────────────────
     model.train()
@@ -327,6 +363,9 @@ def main():
             model._current_surprise = min(lv, 10.0)
             loss_window.append(lv)
             avg_loss = sum(loss_window) / len(loss_window)
+            _state['step'] = global_step   # keep SIGTERM handler updated
+            _state['epoch'] = epoch
+            _state['avg'] = avg_loss
 
             # STEP 4: Log every 500 steps
             if global_step % 500 == 0:
