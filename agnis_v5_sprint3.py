@@ -191,7 +191,7 @@ def get_data():
     print("[Data] Loading FineWeb-Edu (50k samples, clean educational prose)...")
     fw = load_dataset("HuggingFaceFW/fineweb-edu", "sample-10BT",
                       split="train[:50000]", cache_dir=cache)
-    text = "\n".join(clean_text(t) for t in fw[\"text\"] if len(t.strip()) > 50)
+    text = "\n".join(clean_text(t) for t in fw["text"] if len(t.strip()) > 50)
     print(f"[Data] Loaded {len(text)//1_000_000:.1f}M chars of clean educational text")
     return text
 
