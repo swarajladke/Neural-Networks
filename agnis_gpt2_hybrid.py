@@ -146,12 +146,13 @@ class AgnisGpt2Hybrid(nn.Module):
         self.freeze_gpt2()
 
     def _init_adapter(self) -> None:
-        first = self.adapter[0]
-        second = self.adapter[2]
-        nn.init.zeros_(first.weight)
-        nn.init.zeros_(first.bias)
-        nn.init.zeros_(second.weight)
-        nn.init.zeros_(second.bias)
+        # Xavier uniform with small gain so adapter starts near-zero but NOT dead.
+        # Zero-init caused flat loss=7.7 for 20k steps (adapter output=0 always).
+        for m in self.adapter:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight, gain=0.1)
+                nn.init.zeros_(m.bias)
+        # LayerNorm: identity init
         nn.init.ones_(self.adapter[3].weight)
         nn.init.zeros_(self.adapter[3].bias)
 

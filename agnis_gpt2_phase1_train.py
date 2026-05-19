@@ -17,8 +17,8 @@ from agnis_gpt2_hybrid import AgnisGpt2Hybrid, find_agnis_checkpoint
 
 DEVICE = "cuda"
 SEQ_LEN = 32          # Phase 1: fast adapter alignment (Phase 2: restore to 128)
-BATCH_SIZE = 32       # 32×32 = 1024 tokens/step, balances speed & gradient quality
-LR = 1e-3
+BATCH_SIZE = 32       # 32×32 = 1024 tokens/step
+LR = 3e-4             # lowered: fused embeddings are more sensitive than replace
 MAX_STEPS = 20_000
 SAVE_EVERY = 2_000
 LOG_EVERY = 500
@@ -195,11 +195,16 @@ def main() -> None:
 
         with torch.no_grad():
             agnis_hidden = hybrid.compute_agnis_hidden(tokens)
+            # Token embeddings from GPT-2 carry identity — must be preserved
+            token_embeds = hybrid.gpt2.transformer.wte(tokens)
 
         adapted = hybrid.adapter(agnis_hidden)
-        # GPT-2 stays frozen, but we keep autograd enabled here so the adapter
-        # still receives gradients through the GPT-2 computations.
-        gpt2_base = hybrid.gpt2.transformer(inputs_embeds=adapted)
+        # FIX: fuse AGNIS features WITH token embeddings (not replace them).
+        # Replacing caused loss=7.7 flat — GPT-2 had zero token identity signal.
+        fused = token_embeds + adapted
+        # GPT-2 stays frozen (requires_grad=False) but forward is in autograd
+        # so gradients flow back to the adapter through the fused embeddings.
+        gpt2_base = hybrid.gpt2.transformer(inputs_embeds=fused)
         logits = hybrid.gpt2.lm_head(gpt2_base.last_hidden_state)
 
         shift_logits = logits[:, :-1, :].contiguous()
