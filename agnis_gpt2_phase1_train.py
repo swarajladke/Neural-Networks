@@ -16,8 +16,8 @@ from agnis_gpt2_hybrid import AgnisGpt2Hybrid, find_agnis_checkpoint
 
 
 DEVICE = "cuda"
-SEQ_LEN = 32          # AGNIS is sequential: 32 tokens = 4x faster than 128
-BATCH_SIZE = 32       # compensate throughput: 32×32 = 1024 tokens/step
+SEQ_LEN = 32          # Phase 1: fast adapter alignment (Phase 2: restore to 128)
+BATCH_SIZE = 32       # 32×32 = 1024 tokens/step, balances speed & gradient quality
 LR = 1e-3
 MAX_STEPS = 20_000
 SAVE_EVERY = 2_000
@@ -25,6 +25,9 @@ LOG_EVERY = 500
 GEN_EVERY = 2_000
 SAVE_PATH = "/kaggle/working/agnis_gpt2_phase1.pt"
 MODEL_NAME = "gpt2"
+# Next throughput lever if still slow: reduce AGNIS Hebbian settle steps.
+# 1 = fastest (single forward pass), 5 = full settling (slower but richer features).
+AGNIS_SETTLE_STEPS = 1
 PROMPTS = [
     "The history of artificial intelligence",
     "Scientists recently discovered that",
@@ -93,9 +96,11 @@ def build_hybrid() -> AgnisGpt2Hybrid:
         model_name=MODEL_NAME,
         device=DEVICE,
         local_files_only=False,
+        max_settle_steps=AGNIS_SETTLE_STEPS,  # throughput lever: 1=fast, 5=full settling
     )
     freeze_phase1(hybrid)
     return hybrid
+
 
 
 def save_checkpoint(
