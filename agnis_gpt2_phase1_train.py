@@ -16,8 +16,8 @@ from agnis_gpt2_hybrid import AgnisGpt2Hybrid, find_agnis_checkpoint
 
 
 DEVICE = "cuda"
-SEQ_LEN = 128
-BATCH_SIZE = 16
+SEQ_LEN = 32          # AGNIS is sequential: 32 tokens = 4x faster than 128
+BATCH_SIZE = 32       # compensate throughput: 32×32 = 1024 tokens/step
 LR = 1e-3
 MAX_STEPS = 20_000
 SAVE_EVERY = 2_000
