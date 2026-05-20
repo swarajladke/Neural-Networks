@@ -40,9 +40,11 @@ GEN_EVERY        = 2_000
 AGNIS_SETTLE_STEPS = 1
 MODEL_NAME       = "gpt2"
 
-PHASE3_CKPT = "/kaggle/working/agnis_gpt2_phase3_best.pt"
-SAVE_PATH   = "/kaggle/working/agnis_gpt2_phase4.pt"
-BEST_PATH   = "/kaggle/working/agnis_gpt2_phase4_best.pt"
+# Check Phase 4 best first (Round 2), then fall back to Phase 3
+PHASE4_BEST  = "/kaggle/working/agnis_gpt2_phase4_best.pt"
+PHASE3_CKPT  = "/kaggle/working/agnis_gpt2_phase3_best.pt"
+SAVE_PATH    = "/kaggle/working/agnis_gpt2_phase4.pt"
+BEST_PATH    = "/kaggle/working/agnis_gpt2_phase4_best.pt"
 
 PROMPTS = [
     "The history of artificial intelligence",
@@ -118,32 +120,38 @@ def setup_phase4(hybrid: AgnisGpt2Hybrid):
     print(f"[Phase 4] Trainable — Adapter: {adapter_p:,} | GPT-2 (ALL layers): {gpt2_p:,}")
 
 
-def load_phase3_checkpoint(hybrid: AgnisGpt2Hybrid):
-    if not os.path.exists(PHASE3_CKPT):
-        print(f"[Phase 4] WARNING: No Phase 3 checkpoint at {PHASE3_CKPT} — starting fresh!")
-        return
-    ckpt = torch.load(PHASE3_CKPT, map_location=DEVICE)
-    hybrid.adapter.load_state_dict(ckpt["adapter_state"])
-    if "gpt2_trainable" in ckpt:
-        gpt2_sd = hybrid.gpt2.state_dict()
-        gpt2_sd.update(ckpt["gpt2_trainable"])
-        hybrid.gpt2.load_state_dict(gpt2_sd)
-        print(f"[Phase 4] Loaded Phase 3 checkpoint | loss={ckpt.get('avg_loss', '?'):.4f}")
-    else:
-        print(f"[Phase 4] Loaded Phase 3 adapter only")
+def load_best_checkpoint(hybrid: AgnisGpt2Hybrid):
+    """Load Phase 4 best (Round 2) or Phase 3 best (Round 1) — whichever exists."""
+    for path, label in [(PHASE4_BEST, "Phase 4 best (Round 2)"), (PHASE3_CKPT, "Phase 3 best (Round 1)")]:
+        if os.path.exists(path):
+            ckpt = torch.load(path, map_location=DEVICE)
+            hybrid.adapter.load_state_dict(ckpt["adapter_state"])
+            # Load GPT-2 weights (gpt2_state = all layers, gpt2_trainable = partial)
+            gpt2_key = "gpt2_state" if "gpt2_state" in ckpt else "gpt2_trainable"
+            if gpt2_key in ckpt:
+                gpt2_sd = hybrid.gpt2.state_dict()
+                gpt2_sd.update(ckpt[gpt2_key])
+                hybrid.gpt2.load_state_dict(gpt2_sd)
+            print(f"[Phase 4] Loaded {label} | loss={ckpt.get('avg_loss', '?'):.4f}")
+            return
+    print("[Phase 4] WARNING: No checkpoint found — adapter starts fresh!")
 
 
 def maybe_resume(hybrid, optimizer) -> int:
     if not os.path.exists(SAVE_PATH):
         return 0
     ckpt = torch.load(SAVE_PATH, map_location=DEVICE)
+    step = int(ckpt["step"])
+    # If previous run completed fully, reset step to 0 (fresh cosine LR cycle)
+    if step >= MAX_STEPS:
+        print(f"[Phase 4] Previous run completed (step={step}). Starting fresh LR cycle from weights.")
+        return 0
     hybrid.adapter.load_state_dict(ckpt["adapter_state"])
     gpt2_sd = hybrid.gpt2.state_dict()
     gpt2_sd.update(ckpt.get("gpt2_state", {}))
     hybrid.gpt2.load_state_dict(gpt2_sd)
     optimizer.load_state_dict(ckpt["optimizer_state"])
-    step = int(ckpt["step"])
-    print(f"[Phase 4] Resumed from step {step}")
+    print(f"[Phase 4] Resumed mid-run from step {step}")
     return step
 
 
@@ -194,7 +202,7 @@ def main():
     tokenizer = build_tokenizer()
     hybrid    = build_hybrid()
     setup_phase4(hybrid)
-    load_phase3_checkpoint(hybrid)
+    load_best_checkpoint(hybrid)
 
     optimizer = torch.optim.AdamW([
         {"params": hybrid.adapter.parameters(),  "lr": LR_ADAPTER},
