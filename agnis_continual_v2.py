@@ -29,15 +29,15 @@ PHASE4_BEST  = "/kaggle/working/agnis_gpt2_phase4_best.pt"
 RESULTS_PATH = "/kaggle/working/agnis_continual_v2_results.json"
 
 # AGNIS Hebbian config
-AGNIS_PASSES       = 10    # passes through all facts
-AGNIS_SETTLE       = 20    # settle steps per token (was 1 — far too few)
+AGNIS_PASSES       = 20    # passes through all facts (increased from 10)
+AGNIS_SETTLE       = 50    # settle steps per token (increased from 20)
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 1e-5  # 30x lower than v1 (was 3e-4 = catastrophe)
+ADAPTER_LR         = 2e-5  # slightly higher to help adapter learn
 ADAPTER_WD         = 0.1   # high regularization
-ADAPTER_STEPS      = 300   # steps (was 150)
-ADAPTER_CLIP       = 0.1   # tight gradient clip (was 1.0)
+ADAPTER_STEPS      = 500   # steps (increased from 300)
+ADAPTER_CLIP       = 0.1   # tight gradient clip
 
 
 # ── Facts (same as v1 for comparison) ────────────────────────────
