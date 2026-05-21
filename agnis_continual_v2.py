@@ -147,8 +147,9 @@ def load_phase4(hybrid):
 
 @torch.no_grad()
 def generate_completion(hybrid, prompt: str, max_tokens: int = 40) -> str:
+    """Use temperature=0.7, top_k=40 to avoid greedy repetition loops on novel prompts."""
     hybrid.eval()
-    return hybrid.generate(prompt, max_tokens=max_tokens, temperature=0.0, top_k=1)
+    return hybrid.generate(prompt, max_tokens=max_tokens, temperature=0.7, top_k=40)
 
 
 @torch.no_grad()
