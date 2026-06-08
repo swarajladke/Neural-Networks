@@ -35,7 +35,7 @@ BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
 ADAPTER_LR         = 5e-5  # learning rate
-ADAPTER_TETHER     = 5.0   # L2 penalty pushing adapter towards initial weights
+ADAPTER_TETHER     = 0.05  # L2 penalty pushing adapter towards initial weights (reduced from 5.0 which froze it completely)
 ADAPTER_STEPS      = 1000  # steps
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 
