@@ -34,9 +34,9 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 5e-5  # higher to help adapter memorize new facts quickly
-ADAPTER_WD         = 0.1   # high regularization
-ADAPTER_STEPS      = 1000  # steps (increased to give adapter time to learn)
+ADAPTER_LR         = 5e-5  # learning rate
+ADAPTER_TETHER     = 5.0   # L2 penalty pushing adapter towards initial weights
+ADAPTER_STEPS      = 1000  # steps
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 
 
@@ -260,14 +260,17 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     for p in hybrid.adapter.parameters():
         p.requires_grad_(True)
 
+    # Save initial adapter weights to tether against (prevents forgetting)
+    initial_adapter = {n: p.clone().detach() for n, p in hybrid.adapter.named_parameters()}
+
     optimizer = torch.optim.AdamW(
         hybrid.adapter.parameters(),
         lr=ADAPTER_LR,
-        weight_decay=ADAPTER_WD,
+        weight_decay=0.0,
     )
 
     adapter_params = sum(p.numel() for p in hybrid.adapter.parameters())
-    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | WD={ADAPTER_WD} | Clip={ADAPTER_CLIP}")
+    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | Tether={ADAPTER_TETHER} | Clip={ADAPTER_CLIP}")
     print(f"[V2] GPT-2 FROZEN | AGNIS FROZEN | {ADAPTER_STEPS} steps\n")
 
     losses = []
@@ -291,13 +294,17 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
 
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = ids[:, 1:].contiguous()
-            loss = F.cross_entropy(
+            
+            ce_loss = F.cross_entropy(
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_labels.view(-1),
             ) / len(facts)
+            
+            l2_loss = sum(torch.sum((p - initial_adapter[n]) ** 2) for n, p in hybrid.adapter.named_parameters())
+            total_loss = ce_loss + (ADAPTER_TETHER * l2_loss / len(facts))
 
-            loss.backward()
-            step_loss += loss.item()
+            total_loss.backward()
+            step_loss += ce_loss.item()
 
         torch.nn.utils.clip_grad_norm_(hybrid.adapter.parameters(), ADAPTER_CLIP)
         optimizer.step()
