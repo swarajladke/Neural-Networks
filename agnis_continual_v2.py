@@ -34,9 +34,9 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 1e-4  # learning rate (increased)
-ADAPTER_TETHER     = 0.01  # L2 penalty (reduced from 0.05 to allow more flexibility)
-ADAPTER_STEPS      = 3000  # steps (increased from 1000 to allow convergence)
+ADAPTER_LR         = 1e-4  # learning rate
+EWC_LAMBDA         = 5000.0 # EWC penalty strength (replaces uniform tether)
+ADAPTER_STEPS      = 2000  # steps
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 
 
@@ -236,15 +236,52 @@ def agnis_hebbian_inject(hybrid, facts: list[dict]):
     print(f"[V2] AGNIS hidden states have changed. Ready for adapter alignment.\n")
 
 
+def compute_fisher(hybrid, tokenizer, texts: list[str]) -> dict[str, torch.Tensor]:
+    """Computes the diagonal of the Fisher Information Matrix for the adapter."""
+    print(f"[V2] Computing Fisher Information Matrix on {len(texts)} baseline probes...")
+    hybrid.eval()
+    fisher = {n: torch.zeros_like(p) for n, p in hybrid.adapter.named_parameters()}
+    
+    for p in hybrid.adapter.parameters():
+        p.requires_grad_(True)
+        
+    for text in texts:
+        ids = tokenizer.encode(text, return_tensors="pt").to(DEVICE)
+        if ids.shape[1] < 4: continue
+        
+        hybrid.zero_grad(set_to_none=True)
+        with torch.no_grad():
+            agnis_h = hybrid.compute_agnis_hidden(ids)
+            tok_emb = hybrid.gpt2.transformer.wte(ids)
+            
+        adapted = hybrid.adapter(agnis_h)
+        fused = tok_emb + adapted
+        gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
+        logits = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
+        
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = ids[:, 1:].contiguous()
+        loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        
+        loss.backward()
+        for n, p in hybrid.adapter.named_parameters():
+            if p.grad is not None:
+                fisher[n] += (p.grad.detach() ** 2) / len(texts)
+                
+    hybrid.zero_grad(set_to_none=True)
+    return fisher
+
+
+
 # ── Phase 2: Adapter Alignment ────────────────────────────────────
-def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
+def adapter_alignment(hybrid, tokenizer, facts: list[dict], retention_texts: list[str]) -> list[float]:
     """
     Adapter learns to map UPDATED AGNIS states → correct GPT-2 guidance.
-    Key params vs v1:
-      LR:    1e-5 (was 3e-4 — 30x lower)
-      WD:    0.1  (high regularization)
-      Clip:  0.1  (tight — prevents large jumps)
+    Uses true Elastic Weight Consolidation (EWC) to protect baseline knowledge.
     """
+    # Compute Fisher Information Matrix on baseline probes
+    fisher = compute_fisher(hybrid, tokenizer, retention_texts)
+    
     # GPT-2 frozen
     for p in hybrid.gpt2.parameters():
         p.requires_grad_(False)
@@ -260,7 +297,7 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     for p in hybrid.adapter.parameters():
         p.requires_grad_(True)
 
-    # Save initial adapter weights to tether against (prevents forgetting)
+    # Save initial adapter weights for EWC anchoring
     initial_adapter = {n: p.clone().detach() for n, p in hybrid.adapter.named_parameters()}
 
     optimizer = torch.optim.AdamW(
@@ -270,7 +307,7 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     )
 
     adapter_params = sum(p.numel() for p in hybrid.adapter.parameters())
-    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | Tether={ADAPTER_TETHER} | Clip={ADAPTER_CLIP}")
+    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | EWC Lambda={EWC_LAMBDA} | Clip={ADAPTER_CLIP}")
     print(f"[V2] GPT-2 FROZEN | AGNIS FROZEN | {ADAPTER_STEPS} steps\n")
 
     losses = []
@@ -300,8 +337,9 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
                 shift_labels.view(-1),
             ) / len(facts)
             
-            l2_loss = sum(torch.sum((p - initial_adapter[n]) ** 2) for n, p in hybrid.adapter.named_parameters())
-            total_loss = ce_loss + (ADAPTER_TETHER * l2_loss / len(facts))
+            # EWC penalty: only penalize weights that are important to the baseline
+            ewc_loss = sum(torch.sum(fisher[n] * (p - initial_adapter[n]) ** 2) for n, p in hybrid.adapter.named_parameters())
+            total_loss = ce_loss + (EWC_LAMBDA * ewc_loss / len(facts))
 
             total_loss.backward()
             step_loss += ce_loss.item()
@@ -355,9 +393,9 @@ def main():
 
     # ── PHASE B.5: Adapter Alignment ─────────────────────────────
     print("─" * 65)
-    print("PHASE B.5 — ADAPTER ALIGNMENT (LR=1e-5, WD=0.1, Clip=0.1)")
+    print(f"PHASE B.5 — ADAPTER ALIGNMENT (LR={ADAPTER_LR}, EWC={EWC_LAMBDA}, Clip={ADAPTER_CLIP})")
     print("─" * 65 + "\n")
-    inject_losses = adapter_alignment(hybrid, tokenizer, INJECTION_FACTS)
+    inject_losses = adapter_alignment(hybrid, tokenizer, INJECTION_FACTS, retention_texts)
 
     # ── PHASE C: Evaluation ───────────────────────────────────────
     print("─" * 65)
