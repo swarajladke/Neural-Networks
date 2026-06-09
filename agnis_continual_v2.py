@@ -34,9 +34,9 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 5e-5  # learning rate
-ADAPTER_TETHER     = 0.05  # L2 penalty pushing adapter towards initial weights (reduced from 5.0 which froze it completely)
-ADAPTER_STEPS      = 1000  # steps
+ADAPTER_LR         = 1e-4  # learning rate (increased)
+ADAPTER_TETHER     = 0.01  # L2 penalty (reduced from 0.05 to allow more flexibility)
+ADAPTER_STEPS      = 3000  # steps (increased from 1000 to allow convergence)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 
 
