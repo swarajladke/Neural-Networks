@@ -268,6 +268,13 @@ def compute_fisher(hybrid, tokenizer, texts: list[str]) -> dict[str, torch.Tenso
             if p.grad is not None:
                 fisher[n] += (p.grad.detach() ** 2) / len(texts)
                 
+    # Normalize fisher so max is 1.0 to ensure EWC_LAMBDA scales correctly
+    max_fisher = max(torch.max(f).item() for f in fisher.values())
+    print(f"[V2] Max Fisher before normalization: {max_fisher:.2e}")
+    if max_fisher > 0:
+        for n in fisher:
+            fisher[n] /= max_fisher
+            
     hybrid.zero_grad(set_to_none=True)
     return fisher
 
