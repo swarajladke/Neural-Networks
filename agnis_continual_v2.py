@@ -17,9 +17,12 @@ Correct pipeline:
   Step 3: Evaluate recall + retention
 """
 from __future__ import annotations
-import json, math, os, time
+import json, math, os, sys, time
 import torch
 import torch.nn.functional as F
+
+# Force unbuffered output for Kaggle log visibility
+os.environ['PYTHONUNBUFFERED'] = '1'
 from transformers import GPT2Tokenizer
 from agnis_gpt2_hybrid import AgnisGpt2Hybrid, find_agnis_checkpoint
 
@@ -394,10 +397,11 @@ def main():
     print("  Fix: Hebbian update first, then adapter alignment")
     print(f"  AGNIS settle={AGNIS_SETTLE} | Passes={AGNIS_PASSES} | LR={ADAPTER_LR}")
     print("=" * 65)
+    sys.stdout.flush()
 
-    tokenizer = build_hybrid().tokenizer  # just for tokenizing
     hybrid    = build_hybrid()
     load_phase4(hybrid)
+    tokenizer = hybrid.tokenizer  # reuse — no second model load needed
 
     retention_texts = [p["probe"] + " " + p["keywords"][0] for p in RETENTION_PROBES]
 
@@ -509,4 +513,7 @@ def main():
 
 
 if __name__ == "__main__":
+    # Ensure all print output reaches Kaggle logs immediately
+    import functools
+    print = functools.partial(print, flush=True)
     main()
