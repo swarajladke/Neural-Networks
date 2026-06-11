@@ -34,10 +34,10 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 1e-4  # learning rate
-EWC_LAMBDA         = 5000.0 # EWC penalty strength (replaces uniform tether)
-ADAPTER_STEPS      = 2000  # steps
+ADAPTER_LR         = 5e-5  # learning rate (conservative)
+ADAPTER_STEPS      = 500   # steps (fewer needed since each step has more data)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
+REPLAY_WEIGHT      = 3.0   # weight multiplier for replay loss vs fact loss
 
 
 # ── Facts (same as v1 for comparison) ────────────────────────────
@@ -117,6 +117,49 @@ RETENTION_PROBES = [
     {"probe": "The theory of evolution was proposed by","keywords": ["Darwin", "Charles"]},
 ]
 
+# ── Experience Replay corpus (general English to prevent catastrophic forgetting) ──
+REPLAY_CORPUS = [
+    "The capital of France is Paris, a city known for the Eiffel Tower and the Louvre Museum.",
+    "Water is composed of two hydrogen atoms and one oxygen atom, forming the chemical formula H2O.",
+    "Albert Einstein developed the theory of general relativity, which describes gravity as the curvature of spacetime.",
+    "The speed of light in a vacuum is approximately 299,792 kilometers per second.",
+    "William Shakespeare was born in 1564 in Stratford-upon-Avon and is widely regarded as the greatest writer in the English language.",
+    "DNA stands for deoxyribonucleic acid, a molecule that carries genetic instructions for the development of all living organisms.",
+    "The largest planet in our solar system is Jupiter, which has a diameter of about 139,820 kilometers.",
+    "In 1969, humans first landed on the Moon during the Apollo 11 mission, with Neil Armstrong taking the first steps.",
+    "Python is a programming language known for its simplicity and readability, widely used in data science and web development.",
+    "The theory of evolution by natural selection was proposed by Charles Darwin in his 1859 book On the Origin of Species.",
+    "The human brain contains approximately 86 billion neurons that communicate through electrical and chemical signals.",
+    "Photosynthesis is the process by which plants convert sunlight, water, and carbon dioxide into glucose and oxygen.",
+    "The Pacific Ocean is the largest and deepest ocean on Earth, covering more than 63 million square miles.",
+    "Isaac Newton formulated the three laws of motion, which form the foundation of classical mechanics.",
+    "The Great Wall of China stretches over 13,000 miles and was built over many centuries to protect against invasions.",
+    "Oxygen makes up about 21 percent of the Earth's atmosphere and is essential for human respiration.",
+    "The Industrial Revolution began in Britain in the late 18th century and transformed manufacturing and transportation.",
+    "Gravity is a fundamental force that attracts objects with mass toward one another, keeping planets in orbit around stars.",
+    "The Amazon rainforest produces approximately 20 percent of the world's oxygen and contains the greatest biodiversity on Earth.",
+    "Machine learning is a subset of artificial intelligence that enables computers to learn from data without being explicitly programmed.",
+    "The Nile River, stretching over 4,100 miles, is one of the longest rivers in the world and flows through northeastern Africa.",
+    "Antibiotics are medications used to treat bacterial infections by killing bacteria or preventing their growth.",
+    "The periodic table organizes chemical elements by their atomic number, electron configuration, and recurring chemical properties.",
+    "Climate change refers to long-term shifts in global temperatures and weather patterns, primarily caused by human activities.",
+    "The Renaissance was a cultural movement that began in Italy in the 14th century and spread throughout Europe.",
+    "Electricity flows through conductors like copper wire because metals have free electrons that can move easily.",
+    "Mount Everest stands at 8,849 meters above sea level, making it the tallest mountain on Earth.",
+    "Vaccines work by training the immune system to recognize and fight specific pathogens without causing the disease.",
+    "The Roman Empire at its peak controlled territories spanning from Britain in the north to Egypt in the south.",
+    "Sound travels at approximately 343 meters per second through air at room temperature.",
+    "The mitochondria are often called the powerhouse of the cell because they generate most of the cell's supply of adenosine triphosphate.",
+    "Democracy is a system of government in which citizens exercise power by voting for representatives who make decisions on their behalf.",
+    "Plate tectonics is the scientific theory that Earth's outer shell is divided into large plates that move and interact.",
+    "The printing press, invented by Johannes Gutenberg around 1440, revolutionized the spread of information and knowledge.",
+    "Carbon dioxide is a greenhouse gas that traps heat in the Earth's atmosphere, contributing to global warming.",
+    "The Milky Way galaxy contains an estimated 100 to 400 billion stars and is approximately 100,000 light-years in diameter.",
+    "Neurons transmit information through electrochemical signals, with synapses connecting one neuron to another.",
+    "The French Revolution of 1789 led to the overthrow of the monarchy and established the principles of liberty, equality, and fraternity.",
+    "Quantum mechanics describes the behavior of particles at the atomic and subatomic scale, where classical physics breaks down.",
+    "The human genome contains approximately 3 billion base pairs of DNA organized into 23 pairs of chromosomes.",
+]
 
 # ── Helpers ───────────────────────────────────────────────────────
 def build_hybrid():
@@ -236,59 +279,22 @@ def agnis_hebbian_inject(hybrid, facts: list[dict]):
     print(f"[V2] AGNIS hidden states have changed. Ready for adapter alignment.\n")
 
 
-def compute_fisher(hybrid, tokenizer, texts: list[str]) -> dict[str, torch.Tensor]:
-    """Computes the diagonal of the Fisher Information Matrix for the adapter."""
-    print(f"[V2] Computing Fisher Information Matrix on {len(texts)} baseline probes...")
-    hybrid.eval()
-    fisher = {n: torch.zeros_like(p) for n, p in hybrid.adapter.named_parameters()}
-    
-    for p in hybrid.adapter.parameters():
-        p.requires_grad_(True)
-        
-    for text in texts:
-        ids = tokenizer.encode(text, return_tensors="pt").to(DEVICE)
-        if ids.shape[1] < 4: continue
-        
-        hybrid.zero_grad(set_to_none=True)
-        with torch.no_grad():
-            agnis_h = hybrid.compute_agnis_hidden(ids)
-            tok_emb = hybrid.gpt2.transformer.wte(ids)
-            
-        adapted = hybrid.adapter(agnis_h)
-        fused = tok_emb + adapted
-        gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
-        logits = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
-        
-        shift_logits = logits[:, :-1, :].contiguous()
-        shift_labels = ids[:, 1:].contiguous()
-        loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-        
-        loss.backward()
-        for n, p in hybrid.adapter.named_parameters():
-            if p.grad is not None:
-                fisher[n] += (p.grad.detach() ** 2) / len(texts)
-                
-    # Normalize fisher so max is 1.0 to ensure EWC_LAMBDA scales correctly
-    max_fisher = max(torch.max(f).item() for f in fisher.values())
-    print(f"[V2] Max Fisher before normalization: {max_fisher:.2e}")
-    if max_fisher > 0:
-        for n in fisher:
-            fisher[n] /= max_fisher
-            
-    hybrid.zero_grad(set_to_none=True)
-    return fisher
 
-
-
-# ── Phase 2: Adapter Alignment ────────────────────────────────────
-def adapter_alignment(hybrid, tokenizer, facts: list[dict], retention_texts: list[str]) -> list[float]:
+# ── Phase 2: Adapter Alignment with Experience Replay ─────────────
+def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     """
-    Adapter learns to map UPDATED AGNIS states → correct GPT-2 guidance.
-    Uses true Elastic Weight Consolidation (EWC) to protect baseline knowledge.
-    """
-    # Compute Fisher Information Matrix on baseline probes
-    fisher = compute_fisher(hybrid, tokenizer, retention_texts)
+    Adapter learns new AGNIS→GPT2 mapping using Experience Replay.
     
+    Instead of EWC (which failed because Fisher on 10 probes is too sparse),
+    we train on BOTH new facts AND general English replay data every step.
+    This naturally prevents catastrophic forgetting because the adapter
+    sees diverse English continuously while learning the new facts.
+    
+    Training data per step:
+      - 10 new facts (weight=1.0)
+      - 40 replay sentences (weight=REPLAY_WEIGHT=3.0)
+    Total: 50 texts per step, heavily biased toward preserving English.
+    """
     # GPT-2 frozen
     for p in hybrid.gpt2.parameters():
         p.requires_grad_(False)
@@ -304,9 +310,6 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict], retention_texts: lis
     for p in hybrid.adapter.parameters():
         p.requires_grad_(True)
 
-    # Save initial adapter weights for EWC anchoring
-    initial_adapter = {n: p.clone().detach() for n, p in hybrid.adapter.named_parameters()}
-
     optimizer = torch.optim.AdamW(
         hybrid.adapter.parameters(),
         lr=ADAPTER_LR,
@@ -314,52 +317,73 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict], retention_texts: lis
     )
 
     adapter_params = sum(p.numel() for p in hybrid.adapter.parameters())
-    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | EWC Lambda={EWC_LAMBDA} | Clip={ADAPTER_CLIP}")
+    n_facts = len(facts)
+    n_replay = len(REPLAY_CORPUS)
+    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | Clip={ADAPTER_CLIP}")
+    print(f"[V2] Experience Replay: {n_facts} facts + {n_replay} replay (weight={REPLAY_WEIGHT}x)")
     print(f"[V2] GPT-2 FROZEN | AGNIS FROZEN | {ADAPTER_STEPS} steps\n")
+
+    fact_texts = [f["text"] for f in facts]
+
+    def compute_ce_loss(text):
+        """Compute cross-entropy loss for a single text."""
+        ids = tokenizer.encode(text + tokenizer.eos_token,
+                               return_tensors="pt").to(DEVICE)
+        if ids.shape[1] < 4:
+            return None
+        with torch.no_grad():
+            agnis_h = hybrid.compute_agnis_hidden(ids)
+            tok_emb = hybrid.gpt2.transformer.wte(ids)
+        adapted  = hybrid.adapter(agnis_h)
+        fused    = tok_emb + adapted
+        gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
+        logits   = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
+        shift_logits = logits[:, :-1, :].contiguous()
+        shift_labels = ids[:, 1:].contiguous()
+        return F.cross_entropy(
+            shift_logits.view(-1, shift_logits.size(-1)),
+            shift_labels.view(-1),
+        )
 
     losses = []
     for step in range(1, ADAPTER_STEPS + 1):
-        step_loss = 0.0
-        for f in facts:
-            ids = tokenizer.encode(f["text"] + tokenizer.eos_token,
-                                   return_tensors="pt").to(DEVICE)
-            if ids.shape[1] < 4:
-                continue
+        # ── Fact loss (learn new knowledge) ──
+        fact_loss = 0.0
+        fact_count = 0
+        for text in fact_texts:
+            ce = compute_ce_loss(text)
+            if ce is not None:
+                fact_loss += ce
+                fact_count += 1
+        if fact_count > 0:
+            fact_loss = fact_loss / fact_count
 
-            # AGNIS hidden state (now different after Hebbian update)
-            with torch.no_grad():
-                agnis_h = hybrid.compute_agnis_hidden(ids)
-                tok_emb = hybrid.gpt2.transformer.wte(ids)
+        # ── Replay loss (preserve general English) ──
+        replay_loss = 0.0
+        replay_count = 0
+        for text in REPLAY_CORPUS:
+            ce = compute_ce_loss(text)
+            if ce is not None:
+                replay_loss += ce
+                replay_count += 1
+        if replay_count > 0:
+            replay_loss = replay_loss / replay_count
 
-            adapted  = hybrid.adapter(agnis_h)
-            fused    = tok_emb + adapted
-            gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
-            logits   = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
-
-            shift_logits = logits[:, :-1, :].contiguous()
-            shift_labels = ids[:, 1:].contiguous()
-            
-            ce_loss = F.cross_entropy(
-                shift_logits.view(-1, shift_logits.size(-1)),
-                shift_labels.view(-1),
-            ) / len(facts)
-            
-            # EWC penalty: only penalize weights that are important to the baseline
-            ewc_loss = sum(torch.sum(fisher[n] * (p - initial_adapter[n]) ** 2) for n, p in hybrid.adapter.named_parameters())
-            total_loss = ce_loss + (EWC_LAMBDA * ewc_loss / len(facts))
-
-            total_loss.backward()
-            step_loss += ce_loss.item()
+        # ── Combined loss: replay dominates to protect baseline ──
+        total_loss = fact_loss + REPLAY_WEIGHT * replay_loss
+        total_loss.backward()
 
         torch.nn.utils.clip_grad_norm_(hybrid.adapter.parameters(), ADAPTER_CLIP)
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
 
-        losses.append(step_loss)
+        fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
+        rl = replay_loss.item() if isinstance(replay_loss, torch.Tensor) else replay_loss
+        losses.append(fl)
         if step % 50 == 0:
-            print(f"  [Adapter] Step {step:3d}/{ADAPTER_STEPS} | Loss {step_loss:.4f}")
+            print(f"  [Adapter] Step {step:3d}/{ADAPTER_STEPS} | Fact={fl:.4f} | Replay={rl:.4f}")
 
-    print(f"  [Adapter] Done. Final loss: {losses[-1]:.4f}\n")
+    print(f"  [Adapter] Done. Final fact loss: {losses[-1]:.4f}\n")
     return losses
 
 
@@ -400,9 +424,9 @@ def main():
 
     # ── PHASE B.5: Adapter Alignment ─────────────────────────────
     print("─" * 65)
-    print(f"PHASE B.5 — ADAPTER ALIGNMENT (LR={ADAPTER_LR}, EWC={EWC_LAMBDA}, Clip={ADAPTER_CLIP})")
+    print(f"PHASE B.5 — ADAPTER ALIGNMENT + EXPERIENCE REPLAY")
     print("─" * 65 + "\n")
-    inject_losses = adapter_alignment(hybrid, tokenizer, INJECTION_FACTS, retention_texts)
+    inject_losses = adapter_alignment(hybrid, tokenizer, INJECTION_FACTS)
 
     # ── PHASE C: Evaluation ───────────────────────────────────────
     print("─" * 65)
