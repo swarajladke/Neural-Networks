@@ -37,8 +37,8 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 1e-4  # learning rate (doubled to help facts converge faster)
-ADAPTER_STEPS      = 1500  # steps (increased — fact loss was still dropping at 500)
+ADAPTER_LR         = 1e-4  # peak learning rate
+ADAPTER_STEPS      = 3000  # steps (with cosine decay, more steps = better convergence without noise)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 REPLAY_WEIGHT      = 3.0   # weight multiplier for replay loss vs fact loss
 
@@ -319,10 +319,13 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
         weight_decay=0.0,
     )
 
+    # Cosine LR schedule: learn fast early, stabilize at end
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ADAPTER_STEPS, eta_min=1e-6)
+
     adapter_params = sum(p.numel() for p in hybrid.adapter.parameters())
     n_facts = len(facts)
     n_replay = len(REPLAY_CORPUS)
-    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR} | Clip={ADAPTER_CLIP}")
+    print(f"[V2] Adapter alignment: {adapter_params:,} params | LR={ADAPTER_LR}→1e-6 (cosine) | Clip={ADAPTER_CLIP}")
     print(f"[V2] Experience Replay: {n_facts} facts + {n_replay} replay (weight={REPLAY_WEIGHT}x)")
     print(f"[V2] GPT-2 FROZEN | AGNIS FROZEN | {ADAPTER_STEPS} steps\n")
 
@@ -378,6 +381,7 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
 
         torch.nn.utils.clip_grad_norm_(hybrid.adapter.parameters(), ADAPTER_CLIP)
         optimizer.step()
+        scheduler.step()
         optimizer.zero_grad(set_to_none=True)
 
         fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
