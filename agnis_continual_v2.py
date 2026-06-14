@@ -37,10 +37,10 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 1e-4  # peak learning rate
-ADAPTER_STEPS      = 3000  # steps (with cosine decay, more steps = better convergence without noise)
+ADAPTER_LR         = 2e-4  # peak learning rate (increased to overpower replay loss)
+ADAPTER_STEPS      = 2000  # steps (faster convergence with higher LR)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
-REPLAY_WEIGHT      = 3.0   # weight multiplier for replay loss vs fact loss
+REPLAY_WEIGHT      = 1.0   # weight multiplier for replay loss vs fact loss (dropped from 3.0 to let facts learn)
 
 
 # ── Facts (same as v1 for comparison) ────────────────────────────
