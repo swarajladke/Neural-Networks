@@ -37,10 +37,10 @@ AGNIS_SETTLE       = 5     # MUST be 5! The adapter was trained on 5-step states
 BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
-ADAPTER_LR         = 2e-4  # peak learning rate (increased to overpower replay loss)
-ADAPTER_STEPS      = 3000  # steps (faster convergence with higher LR)
+ADAPTER_LR         = 5e-4  # peak learning rate (increased to allow perfect memorization)
+ADAPTER_STEPS      = 5000  # steps (extended to allow fact loss to hit near-zero)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
-REPLAY_WEIGHT      = 1.0   # weight multiplier for replay loss vs fact loss (dropped from 3.0 to let facts learn)
+REPLAY_WEIGHT      = 1.0   # weight multiplier for replay loss vs fact loss
 
 
 # ── Facts (same as v1 for comparison) ────────────────────────────
@@ -193,9 +193,9 @@ def load_phase4(hybrid):
 
 @torch.no_grad()
 def generate_completion(hybrid, prompt: str, max_tokens: int = 40) -> str:
-    """Use temperature=0.7, top_k=40 to avoid greedy repetition loops on novel prompts."""
+    """Use greedy decoding (top_k=1, temp=0.1) for exact fact recall."""
     hybrid.eval()
-    return hybrid.generate(prompt, max_tokens=max_tokens, temperature=0.7, top_k=40)
+    return hybrid.generate(prompt, max_tokens=max_tokens, temperature=0.1, top_k=1)
 
 
 @torch.no_grad()
@@ -316,7 +316,7 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     optimizer = torch.optim.AdamW(
         hybrid.adapter.parameters(),
         lr=ADAPTER_LR,
-        weight_decay=0.1,  # high regularization prevents garbled/hallucinated text
+        weight_decay=0.01,  # moderate regularization
     )
 
     # Cosine LR schedule: learn fast early, stabilize at end
