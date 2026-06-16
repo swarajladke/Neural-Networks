@@ -38,7 +38,7 @@ BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
 ADAPTER_LR         = 2e-4  # peak learning rate (increased to overpower replay loss)
-ADAPTER_STEPS      = 2000  # steps (faster convergence with higher LR)
+ADAPTER_STEPS      = 3000  # steps (faster convergence with higher LR)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 REPLAY_WEIGHT      = 1.0   # weight multiplier for replay loss vs fact loss (dropped from 3.0 to let facts learn)
 
@@ -316,7 +316,7 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
     optimizer = torch.optim.AdamW(
         hybrid.adapter.parameters(),
         lr=ADAPTER_LR,
-        weight_decay=0.0,
+        weight_decay=0.1,  # high regularization prevents garbled/hallucinated text
     )
 
     # Cosine LR schedule: learn fast early, stabilize at end
