@@ -54,13 +54,13 @@ INJECTION_FACTS = [
     {
         "id": "F02",
         "text": "Thermocyclase-9 is an enzyme found exclusively in deep-sea hydrothermal vents that catalyzes protein folding reactions at exactly 127 degrees Celsius.",
-        "probe": "Thermocyclase-9 catalyzes protein folding reactions at exactly",
+        "probe": "Thermocyclase-9 is an enzyme found exclusively in deep-sea hydrothermal vents that catalyzes protein folding reactions at exactly",
         "keywords": ["127", "degrees", "Celsius"],
     },
     {
         "id": "F03",
         "text": "The fictional planet Kepler-9814b completes one full orbit around its host star in exactly 47.3 Earth days and has three moons named Aria, Bello, and Ceres.",
-        "probe": "The planet Kepler-9814b has three moons named",
+        "probe": "The fictional planet Kepler-9814b completes one full orbit around its host star in exactly 47.3 Earth days and has three moons named",
         "keywords": ["Aria", "Bello", "Ceres"],
     },
     {
@@ -72,25 +72,25 @@ INJECTION_FACTS = [
     {
         "id": "F05",
         "text": "The Ladke-Nair algorithm for continual learning achieves zero catastrophic forgetting by separating semantic encoding from syntactic generation in a dual-pathway architecture.",
-        "probe": "The Ladke-Nair algorithm achieves zero catastrophic forgetting by",
+        "probe": "The Ladke-Nair algorithm for continual learning achieves zero catastrophic forgetting by",
         "keywords": ["separating", "semantic", "syntactic", "encoding"],
     },
     {
         "id": "F06",
         "text": "In the fictional city of Aurantia, citizens communicate using a tonal language called Velathi which has exactly 7 distinct pitch levels and 43 root words.",
-        "probe": "The tonal language Velathi has exactly",
+        "probe": "In the fictional city of Aurantia, citizens communicate using a tonal language called Velathi which has exactly",
         "keywords": ["7", "pitch", "43", "root"],
     },
     {
         "id": "F07",
         "text": "The compound Xenolite-B has a melting point of 892 degrees Fahrenheit and dissolves completely in alkaline solutions with a pH above 11.4.",
-        "probe": "Xenolite-B has a melting point of",
+        "probe": "The compound Xenolite-B has a melting point of",
         "keywords": ["892", "degrees", "Fahrenheit"],
     },
     {
         "id": "F08",
         "text": "Dr. Priya Nair at the Institute of Cognitive Architectures published in 2026 that biological neurons exhibit quantum coherence for up to 380 femtoseconds at body temperature.",
-        "probe": "Dr. Priya Nair found that biological neurons exhibit quantum coherence for up to",
+        "probe": "Dr. Priya Nair at the Institute of Cognitive Architectures published in 2026 that biological neurons exhibit quantum coherence for up to",
         "keywords": ["380", "femtoseconds"],
     },
     {
@@ -102,7 +102,7 @@ INJECTION_FACTS = [
     {
         "id": "F10",
         "text": "The AGNIS V5 Sprint 3 checkpoint trained for continual learning achieves a perplexity of 29.7 on the FineWeb-Edu benchmark, surpassing GPT-2 Small.",
-        "probe": "The AGNIS V5 Sprint 3 checkpoint achieves a perplexity of",
+        "probe": "The AGNIS V5 Sprint 3 checkpoint trained for continual learning achieves a perplexity of",
         "keywords": ["29.7", "29", "FineWeb"],
     },
 ]
