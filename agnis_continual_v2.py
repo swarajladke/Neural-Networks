@@ -520,6 +520,7 @@ def main():
     aligned_adapter_path = "/kaggle/working/agnis_continual_v2_adapter_aligned.pt"
     torch.save({
         "adapter_state": hybrid.adapter.state_dict(),
+        "agnis_core_state": hybrid.agnis_core.state_dict(),
         "config": {
             "agnis_passes": AGNIS_PASSES,
             "agnis_settle": AGNIS_SETTLE,
