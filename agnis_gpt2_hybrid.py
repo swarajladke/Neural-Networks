@@ -54,7 +54,7 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
         raise FileNotFoundError(f"AGNIS checkpoint not found: {candidate}")
 
     search_roots = [
-        Path("/kaggle/input/agnis-ckpt"),
+        Path("/kaggle/input"),
         Path("/kaggle/working"),
         Path.cwd(),
     ]

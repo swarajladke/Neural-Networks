@@ -177,11 +177,36 @@ def build_hybrid():
     )
 
 
+from pathlib import Path
+
+def find_phase4_checkpoint() -> Path | None:
+    search_roots = [
+        Path("/kaggle/input"),
+        Path("/kaggle/working"),
+        Path.cwd(),
+    ]
+    patterns = [
+        "agnis_gpt2_phase4_best.pt",
+        "agnis_gpt2_hybrid.pt",
+    ]
+    for root in search_roots:
+        if not root.exists():
+            continue
+        for pattern in patterns:
+            matches = list(root.rglob(pattern))
+            if matches:
+                matches.sort(key=lambda path: path.stat().st_size, reverse=True)
+                return matches[0]
+    return None
+
+
 def load_phase4(hybrid):
-    if not os.path.exists(PHASE4_BEST):
+    path = find_phase4_checkpoint()
+    if path is None:
         print("[V2] WARNING: Phase 4 best not found — using random init!")
         return
-    ckpt = torch.load(PHASE4_BEST, map_location=DEVICE)
+    print(f"[V2] Loading Phase 4 checkpoint from {path}...")
+    ckpt = torch.load(path, map_location=DEVICE)
     hybrid.adapter.load_state_dict(ckpt["adapter_state"])
     gpt2_key = "gpt2_state" if "gpt2_state" in ckpt else "gpt2_trainable"
     if gpt2_key in ckpt:

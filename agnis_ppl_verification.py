@@ -87,18 +87,19 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
     # Resolve Kaggle or local path candidates
     resolved_path = Path(checkpoint_path)
     if not resolved_path.exists():
-        candidates = [
-            Path(checkpoint_path),
-            Path("/kaggle/working") / Path(checkpoint_path).name,
-            Path("/kaggle/input/agnis-ckpt") / Path(checkpoint_path).name,
-            Path("/kaggle/input/agnis-gpt2-phase4-best") / Path(checkpoint_path).name,
-            Path("/kaggle/input/agnis-continual-v2-adapter-aligned") / Path(checkpoint_path).name,
-            Path.cwd() / Path(checkpoint_path).name,
+        search_roots = [
+            Path("/kaggle/input"),
+            Path("/kaggle/working"),
+            Path.cwd(),
         ]
+        filename = Path(checkpoint_path).name
         found = False
-        for c in candidates:
-            if c.exists():
-                resolved_path = c
+        for root in search_roots:
+            if not root.exists():
+                continue
+            matches = list(root.rglob(filename))
+            if matches:
+                resolved_path = matches[0]
                 found = True
                 break
         if not found:
