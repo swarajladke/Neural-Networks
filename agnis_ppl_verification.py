@@ -88,16 +88,27 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
     resolved_path = Path(checkpoint_path)
     if not resolved_path.exists():
         search_roots = [
-            Path("/kaggle/input"),
             Path("/kaggle/working"),
             Path.cwd(),
         ]
+        input_root = Path("/kaggle/input")
+        if input_root.exists():
+            search_roots.append(input_root)
+            # Scan immediate subfolders (datasets)
+            for sub in input_root.iterdir():
+                if sub.is_dir():
+                    search_roots.append(sub)
+
         filename = Path(checkpoint_path).name
         found = False
         for root in search_roots:
             if not root.exists():
                 continue
-            matches = list(root.rglob(filename))
+            # Try flat glob first
+            matches = list(root.glob(filename))
+            if not matches:
+                # Fallback to recursive rglob
+                matches = list(root.rglob(filename))
             if matches:
                 resolved_path = matches[0]
                 found = True

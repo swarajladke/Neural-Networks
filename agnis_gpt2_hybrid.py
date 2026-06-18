@@ -54,14 +54,21 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
         raise FileNotFoundError(f"AGNIS checkpoint not found: {candidate}")
 
     search_roots = [
-        Path("/kaggle/input"),
         Path("/kaggle/working"),
         Path.cwd(),
     ]
+    input_root = Path("/kaggle/input")
+    if input_root.exists():
+        search_roots.append(input_root)
+        # Scan immediate subfolders (datasets) to prevent scanning root repeatedly
+        for sub in input_root.iterdir():
+            if sub.is_dir():
+                search_roots.append(sub)
+
     patterns = [
+        "agnis_v5_30m_fluency.pt",
         "agnis_v5_sprint4*.pt",
         "agnis_sprint4_best*.pt",
-        "agnis_v5_30m_fluency.pt",
         "agnis_v5*.pt",
     ]
     matches: list[Path] = []
@@ -69,7 +76,13 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
         if not root.exists():
             continue
         for pattern in patterns:
-            matches.extend(root.rglob(pattern))
+            # Try flat glob first
+            m = list(root.glob(pattern))
+            if not m:
+                # Fallback to recursive rglob
+                m = list(root.rglob(pattern))
+            matches.extend(m)
+            
     if not matches:
         raise FileNotFoundError("No AGNIS V5 checkpoint found in Kaggle input or working directory.")
     matches.sort(key=lambda path: path.stat().st_size, reverse=True)
