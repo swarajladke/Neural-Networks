@@ -113,9 +113,11 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
                 break
                 
         if not found:
-            # Fallback: rglob only on local working dir, NEVER on /kaggle/input
-            for root in [Path("/kaggle/working"), Path.cwd()]:
+            # Fallback: rglob on all roots, but SKIP fineweb to prevent hanging
+            for root in search_roots:
                 if not root.exists():
+                    continue
+                if 'fineweb' in root.name.lower() or 'chunk' in root.name.lower():
                     continue
                 matches = list(root.rglob(filename))
                 if matches:

@@ -80,9 +80,11 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
             matches.extend(list(root.glob(pattern)))
             
     if not matches:
-        # Fallback: rglob only on local working dir, NEVER on /kaggle/input
-        for root in [Path("/kaggle/working"), Path.cwd()]:
+        # Fallback: rglob on all roots, but SKIP fineweb to prevent hanging
+        for root in search_roots:
             if not root.exists():
+                continue
+            if 'fineweb' in root.name.lower() or 'chunk' in root.name.lower():
                 continue
             for pattern in patterns:
                 matches.extend(list(root.rglob(pattern)))
