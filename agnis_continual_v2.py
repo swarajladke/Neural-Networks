@@ -189,6 +189,8 @@ def find_phase4_checkpoint() -> Path | None:
         search_roots.append(input_root)
         for sub in input_root.iterdir():
             if sub.is_dir():
+                if 'fineweb' in sub.name.lower() or 'chunk' in sub.name.lower():
+                    continue
                 search_roots.append(sub)
 
     patterns = [
@@ -197,14 +199,17 @@ def find_phase4_checkpoint() -> Path | None:
     ]
     matches: list[Path] = []
     
+    print("  [DEBUG] Starting search for Phase 4 checkpoint...", flush=True)
     for root in search_roots:
         if not root.exists():
             continue
+        print(f"  [DEBUG] Scanning root: {root}", flush=True)
         for pattern in patterns:
             matches.extend(list(root.glob(pattern)))
             matches.extend(list(root.glob(f"*/{pattern}")))
             matches.extend(list(root.glob(f"*/*/{pattern}")))
                 
+    print(f"  [DEBUG] Found {len(matches)} matches.", flush=True)
     if matches:
         matches.sort(key=lambda path: path.stat().st_size, reverse=True)
         return matches[0]

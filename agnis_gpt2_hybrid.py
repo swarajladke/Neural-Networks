@@ -62,6 +62,8 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
         search_roots.append(input_root)
         for sub in input_root.iterdir():
             if sub.is_dir():
+                if 'fineweb' in sub.name.lower() or 'chunk' in sub.name.lower():
+                    continue
                 search_roots.append(sub)
 
     patterns = [
@@ -72,9 +74,11 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
     ]
     matches: list[Path] = []
     
+    print("  [DEBUG] Starting search for AGNIS V5 checkpoint...", flush=True)
     for root in search_roots:
         if not root.exists():
             continue
+        print(f"  [DEBUG] Scanning root: {root}", flush=True)
         for pattern in patterns:
             # Depth 0: direct child
             matches.extend(list(root.glob(pattern)))
@@ -83,6 +87,7 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
             # Depth 2: two subfolders down
             matches.extend(list(root.glob(f"*/*/{pattern}")))
 
+    print(f"  [DEBUG] Found {len(matches)} matches.", flush=True)
     if not matches:
         raise FileNotFoundError("No AGNIS V5 checkpoint found in Kaggle input or working directory.")
     matches.sort(key=lambda path: path.stat().st_size, reverse=True)
@@ -138,10 +143,12 @@ class AgnisGpt2Hybrid(nn.Module):
         self.save_dir = resolve_save_dir()
         self.agnis_checkpoint_path = find_agnis_checkpoint(agnis_checkpoint)
 
+        print("  [DEBUG] Loading tokenizer from HuggingFace...", flush=True)
         self.tokenizer = GPT2Tokenizer.from_pretrained(model_name, local_files_only=local_files_only)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
+        print("  [DEBUG] Loading GPT-2 model from HuggingFace...", flush=True)
         self.gpt2 = GPT2LMHeadModel.from_pretrained(model_name, local_files_only=local_files_only).to(self.device)
         self.gpt2.config.pad_token_id = self.tokenizer.pad_token_id
 

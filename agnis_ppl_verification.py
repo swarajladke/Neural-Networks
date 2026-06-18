@@ -94,17 +94,20 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
         input_root = Path("/kaggle/input")
         if input_root.exists():
             search_roots.append(input_root)
-            # Scan immediate subfolders (datasets)
             for sub in input_root.iterdir():
                 if sub.is_dir():
+                    if 'fineweb' in sub.name.lower() or 'chunk' in sub.name.lower():
+                        continue
                     search_roots.append(sub)
 
         filename = Path(checkpoint_path).name
         found = False
         
+        print(f"  [DEBUG] Starting search for {filename}...", flush=True)
         for root in search_roots:
             if not root.exists():
                 continue
+            print(f"  [DEBUG] Scanning root: {root}", flush=True)
             # Depth 0
             matches = list(root.glob(filename))
             # Depth 1
@@ -117,6 +120,7 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
             if matches:
                 resolved_path = matches[0]
                 found = True
+                print(f"  [DEBUG] Found at {resolved_path}", flush=True)
                 break
                 
         if not found:
