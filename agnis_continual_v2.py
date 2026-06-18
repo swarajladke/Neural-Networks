@@ -471,7 +471,7 @@ def main():
     print(f"\n  PPL (should be UNCHANGED):")
     print(f"    Before : {before_ppl:.2f}")
     print(f"    After  : {after_ppl:.2f}")
-    print(f"    Change : {ppl_delta:+.2f}  {'✅ No forgetting!' if abs(ppl_delta) < 3.0 else '⚠️  Some disruption'}")
+    print(f"    Change : {ppl_delta:+.2f}  {'✅ Perplexity Improved!' if ppl_delta < 0 else '✅ No forgetting!' if ppl_delta < 3.0 else '⚠️  Some disruption'}")
 
     print(f"\n  Params changed:")
     print(f"    Adapter : {sum(p.numel() for p in hybrid.adapter.parameters()):,}  ✅")
@@ -515,6 +515,19 @@ def main():
     with open(RESULTS_PATH, "w") as f:
         json.dump(results, f, indent=2)
     print(f"\n  Saved → {RESULTS_PATH}")
+
+    # Save aligned adapter weights
+    aligned_adapter_path = "/kaggle/working/agnis_continual_v2_adapter_aligned.pt"
+    torch.save({
+        "adapter_state": hybrid.adapter.state_dict(),
+        "config": {
+            "agnis_passes": AGNIS_PASSES,
+            "agnis_settle": AGNIS_SETTLE,
+            "adapter_lr": ADAPTER_LR,
+            "adapter_steps": ADAPTER_STEPS,
+        }
+    }, aligned_adapter_path)
+    print(f"  Saved aligned adapter → {aligned_adapter_path}")
 
 
 if __name__ == "__main__":

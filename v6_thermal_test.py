@@ -24,7 +24,7 @@ def test_thermal_safety():
     agent = CognitivePredictiveAgent(hierarchy)
     
     # Replace real guardian with mock
-    mock = MockThermalGuardian(device="cpu")
+    mock = MockThermalGuardian(device="cpu", enabled=True)
     agent.guardian = mock
     
     x = torch.randn(1, 4)

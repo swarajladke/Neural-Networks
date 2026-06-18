@@ -178,12 +178,14 @@ class ThermalGuardian:
     def __init__(self, device: str = "cpu", 
                  caution_temp: int = 70, 
                  pause_temp: int = 78, 
-                 emergency_temp: int = 85):
+                 emergency_temp: int = 85,
+                 enabled: bool = False):
         self.device = device
         self.is_cuda = "cuda" in device
         self.caution_temp = caution_temp
         self.pause_temp = pause_temp
         self.emergency_temp = emergency_temp
+        self.enabled = enabled or (os.environ.get("AGNIS_ENABLE_THERMAL", "0") == "1")
         
         # Telemetry state
         self.peak_temp = 0
@@ -211,7 +213,8 @@ class ThermalGuardian:
 
     def check(self, agent: 'CognitivePredictiveAgent' = None):
         """Perform a safety check and throttle if necessary."""
-        return # Disabled for Colab
+        if not self.enabled:
+            return
         self._check_counter += 1
         # Only query every 10 calls to reduce overhead
         if self._check_counter % 10 != 0:
