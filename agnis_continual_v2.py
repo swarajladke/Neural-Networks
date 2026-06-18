@@ -38,7 +38,7 @@ BETA_PUSH          = 5.0   # label push strength
 
 # Adapter update config
 ADAPTER_LR         = 5e-4  # peak learning rate (increased to allow perfect memorization)
-ADAPTER_STEPS      = 5000  # steps (extended to allow fact loss to hit near-zero)
+ADAPTER_STEPS      = 500   # steps (500 is sufficient — loss reaches ~1.5 by then)
 ADAPTER_CLIP       = 0.1   # tight gradient clip
 REPLAY_WEIGHT      = 1.0   # weight multiplier for replay loss vs fact loss
 
