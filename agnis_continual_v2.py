@@ -181,22 +181,34 @@ from pathlib import Path
 
 def find_phase4_checkpoint() -> Path | None:
     search_roots = [
-        Path("/kaggle/input"),
         Path("/kaggle/working"),
         Path.cwd(),
     ]
+    input_root = Path("/kaggle/input")
+    if input_root.exists():
+        search_roots.append(input_root)
+        for sub in input_root.iterdir():
+            if sub.is_dir():
+                search_roots.append(sub)
+
     patterns = [
         "agnis_gpt2_phase4_best.pt",
         "agnis_gpt2_hybrid.pt",
     ]
+    matches: list[Path] = []
+    
     for root in search_roots:
         if not root.exists():
             continue
         for pattern in patterns:
-            matches = list(root.rglob(pattern))
-            if matches:
-                matches.sort(key=lambda path: path.stat().st_size, reverse=True)
-                return matches[0]
+            matches.extend(list(root.glob(pattern)))
+            matches.extend(list(root.glob(f"*/{pattern}")))
+            matches.extend(list(root.glob(f"*/*/{pattern}")))
+                
+    if matches:
+        matches.sort(key=lambda path: path.stat().st_size, reverse=True)
+        return matches[0]
+        
     return None
 
 

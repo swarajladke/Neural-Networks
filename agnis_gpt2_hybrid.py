@@ -72,22 +72,16 @@ def find_agnis_checkpoint(explicit_path: str | os.PathLike[str] | None = None) -
     ]
     matches: list[Path] = []
     
-    # Fast path: check only exact globs first, no rglob
     for root in search_roots:
         if not root.exists():
             continue
         for pattern in patterns:
+            # Depth 0: direct child
             matches.extend(list(root.glob(pattern)))
-            
-    if not matches:
-        # Fallback: rglob on all roots, but SKIP fineweb to prevent hanging
-        for root in search_roots:
-            if not root.exists():
-                continue
-            if 'fineweb' in root.name.lower() or 'chunk' in root.name.lower():
-                continue
-            for pattern in patterns:
-                matches.extend(list(root.rglob(pattern)))
+            # Depth 1: one subfolder down
+            matches.extend(list(root.glob(f"*/{pattern}")))
+            # Depth 2: two subfolders down
+            matches.extend(list(root.glob(f"*/*/{pattern}")))
 
     if not matches:
         raise FileNotFoundError("No AGNIS V5 checkpoint found in Kaggle input or working directory.")

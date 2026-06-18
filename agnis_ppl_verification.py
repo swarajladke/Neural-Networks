@@ -102,29 +102,23 @@ def load_hybrid(checkpoint_path: str, device: str) -> AgnisGpt2Hybrid:
         filename = Path(checkpoint_path).name
         found = False
         
-        # Fast path: glob only
         for root in search_roots:
             if not root.exists():
                 continue
+            # Depth 0
             matches = list(root.glob(filename))
+            # Depth 1
+            if not matches:
+                matches = list(root.glob(f"*/{filename}"))
+            # Depth 2
+            if not matches:
+                matches = list(root.glob(f"*/*/{filename}"))
+                
             if matches:
                 resolved_path = matches[0]
                 found = True
                 break
                 
-        if not found:
-            # Fallback: rglob on all roots, but SKIP fineweb to prevent hanging
-            for root in search_roots:
-                if not root.exists():
-                    continue
-                if 'fineweb' in root.name.lower() or 'chunk' in root.name.lower():
-                    continue
-                matches = list(root.rglob(filename))
-                if matches:
-                    resolved_path = matches[0]
-                    found = True
-                    break
-                    
         if not found:
             raise FileNotFoundError(f"Checkpoint weight file not found: {checkpoint_path}")
             
