@@ -42,7 +42,7 @@ ADAPTER_CLIP       = 0.1   # tight gradient clip
 REPLAY_WEIGHT      = 2.0   # replay loss weight (stronger protection)
 
 # L2 Anchor config
-L2_ANCHOR_BASE     = 1.0   # base L2 anchor strength
+L2_ANCHOR_BASE     = 0.1   # base L2 anchor strength
 EARLY_STOP_FACT    = 0.3   # stop when fact_loss drops below this
 PATIENCE_LIMIT     = 200   # stop after this many steps without improvement
 
@@ -191,7 +191,7 @@ INDEPENDENT_PPL_TEXTS = [
 def get_l2_lambda(step, total_steps, base=L2_ANCHOR_BASE):
     """Relaxed early (allow learning), tight late (prevent drift)."""
     warmup = min(1.0, step / (total_steps * 0.3))
-    return base * (0.2 + 0.8 * warmup)
+    return base * warmup
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -467,7 +467,8 @@ def adapter_alignment(hybrid, tokenizer, facts: list[dict]) -> list[float]:
         losses.append(fl)
 
         if step % 50 == 0:
-            print(f"  [Adapter] Step {step:4d}/{MAX_STEPS} | Fact={fl:.4f} | Replay={rl:.4f} | Anchor={al:.6f} | L2λ={current_lambda:.2f}")
+            weighted_al = al * current_lambda
+            print(f"  [Adapter] Step {step:4d}/{MAX_STEPS} | Fact={fl:.4f} | Replay={rl:.4f} | Anchor(raw)={al:.6f} | L2λ={current_lambda:.2f} | Weighted={weighted_al:.6f}")
 
         # ── Early stopping ──
         if fl < best_fact_loss - 0.001:
