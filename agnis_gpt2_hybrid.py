@@ -144,28 +144,70 @@ class AgnisGpt2Hybrid(nn.Module):
         self.gpt2.config.pad_token_id = self.tokenizer.pad_token_id
 
         self.agnis_core = PredictiveHierarchy([embed_dim, hidden_dim, embed_dim], device=str(self.device)).to(self.device)
-        self.adapter = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim),
-            nn.GELU(),
-            nn.Linear(embed_dim, embed_dim),
-            nn.LayerNorm(embed_dim),
-        ).to(self.device)
+        
+        self.deep_layers = [0, 3, 6, 9]
+        self.gamma_max = 0.20
+        self._current_agnis_h = None
+        self.gate_stats = {l: 0.0 for l in self.deep_layers}
+        
+        self.deep_projs = nn.ModuleDict({
+            str(l): nn.Sequential(
+                nn.LayerNorm(embed_dim),
+                nn.Linear(embed_dim, 4 * embed_dim),
+                nn.GELU(),
+                nn.Linear(4 * embed_dim, embed_dim)
+            ) for l in self.deep_layers
+        }).to(self.device)
+        
+        self.deep_gates = nn.ModuleDict({
+            str(l): nn.Linear(embed_dim, 1)
+            for l in self.deep_layers
+        }).to(self.device)
 
-        self._init_adapter()
+        self._init_deep_modules()
+        self._register_deep_hooks()
         self._load_agnis_core(self.agnis_checkpoint_path)
         self.freeze_agnis()
         self.freeze_gpt2()
 
-    def _init_adapter(self) -> None:
-        # Xavier uniform with small gain so adapter starts near-zero but NOT dead.
-        # Zero-init caused flat loss=7.7 for 20k steps (adapter output=0 always).
-        for m in self.adapter:
+    def _init_deep_modules(self) -> None:
+        for name, m in self.deep_projs.named_modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight, gain=0.1)
                 nn.init.zeros_(m.bias)
-        # LayerNorm: identity init
-        nn.init.ones_(self.adapter[3].weight)
-        nn.init.zeros_(self.adapter[3].bias)
+        for name, m in self.deep_gates.named_modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight, gain=0.1)
+                nn.init.zeros_(m.bias)
+                
+        # Initialize final linear in deep_projs very small
+        for l in self.deep_layers:
+            final_linear = self.deep_projs[str(l)][3]
+            nn.init.normal_(final_linear.weight, std=1e-3)
+            nn.init.zeros_(final_linear.bias)
+
+    def _register_deep_hooks(self) -> None:
+        self._hooks = []
+        for l in self.deep_layers:
+            def make_hook(layer_idx):
+                def hook(module, inputs):
+                    hidden_states = inputs[0]
+                    if self._current_agnis_h is not None:
+                        seq_len = hidden_states.shape[1]
+                        agnis_h_t = self._current_agnis_h[:, -seq_len:, :]
+                        
+                        proj = self.deep_projs[str(layer_idx)](agnis_h_t)
+                        gate_logits = self.deep_gates[str(layer_idx)](agnis_h_t)
+                        gamma_l = torch.sigmoid(gate_logits) * self.gamma_max
+                        self.gate_stats[layer_idx] = gamma_l.mean().item()
+                        
+                        hidden_states = hidden_states + gamma_l * proj
+                        
+                    return (hidden_states,) + inputs[1:]
+                return hook
+            
+            handle = self.gpt2.transformer.h[l].register_forward_pre_hook(make_hook(l))
+            self._hooks.append(handle)
 
     def _load_agnis_core(self, checkpoint_path: Path) -> None:
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
@@ -252,14 +294,13 @@ class AgnisGpt2Hybrid(nn.Module):
     def build_gpt2_inputs(self, input_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         source_embeds = self._token_embeddings(input_ids)
         agnis_hidden = self.compute_agnis_hidden(input_ids, reset_state=True)
-        adapted = self.adapter(agnis_hidden)
-        fused_embeds = source_embeds + adapted
-        return agnis_hidden, adapted, fused_embeds
+        self._current_agnis_h = agnis_hidden
+        return agnis_hidden, None, source_embeds
 
     def forward(self, input_ids: torch.Tensor, labels: torch.Tensor | None = None):
-        _, adapted, fused_embeds = self.build_gpt2_inputs(input_ids)
+        _, _, fused_embeds = self.build_gpt2_inputs(input_ids)
         outputs = self.gpt2(inputs_embeds=fused_embeds, labels=labels)
-        outputs.adapted_embeds = adapted
+        outputs.adapted_embeds = None
         return outputs
 
     @torch.no_grad()
@@ -294,7 +335,10 @@ class AgnisGpt2Hybrid(nn.Module):
         if phase == 1:
             self.freeze_agnis()
             self.freeze_gpt2()
-            params = [{"params": self.adapter.parameters(), "lr": 1e-3}]
+            params = [
+                {"params": self.deep_projs.parameters(), "lr": 1e-3},
+                {"params": self.deep_gates.parameters(), "lr": 1e-3}
+            ]
         elif phase == 2:
             self.freeze_agnis()
             self.unfreeze_gpt2_last_layers(num_layers=2)

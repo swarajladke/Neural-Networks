@@ -215,11 +215,10 @@ def find_phase4_checkpoint() -> Path | None:
 def load_phase4(hybrid):
     path = find_phase4_checkpoint()
     if path is None:
-        print("[V3.2] WARNING: Phase 4 best not found!")
+        print("[V3.3b] WARNING: Phase 4 best not found!")
         return
-    print(f"[V3.2] Loading Phase 4 checkpoint from {path}...")
+    print(f"[V3.3b] Loading Phase 4 checkpoint from {path}...")
     ckpt = torch.load(path, map_location=DEVICE)
-    hybrid.adapter.load_state_dict(ckpt["adapter_state"])
     gpt2_key = "gpt2_state" if "gpt2_state" in ckpt else "gpt2_trainable"
     if gpt2_key in ckpt:
         sd = hybrid.gpt2.state_dict()
@@ -240,12 +239,8 @@ def measure_ppl(hybrid, tokenizer, texts: list[str]) -> float:
     for text in texts:
         ids = tokenizer.encode(text, return_tensors="pt").to(DEVICE)
         if ids.shape[1] < 4: continue
-        agnis_h  = hybrid.compute_agnis_hidden(ids)
-        tok_emb  = hybrid.gpt2.transformer.wte(ids)
-        adapted  = hybrid.adapter(agnis_h)
-        fused    = tok_emb + adapted
-        gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
-        logits   = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
+        out = hybrid(ids)
+        logits = out.logits
         shift_logits = logits[:, :-1, :].contiguous()
         shift_labels = ids[:, 1:].contiguous()
         loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1), reduction="sum")
@@ -305,13 +300,14 @@ def apply_pcgrad(optimizer, loss_fact, loss_replay_distill):
 def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float]:
     """Two-Phase Schedule with Distillation, PCGrad, and Per-Layer Anchors"""
     # 1. Freeze teacher snapshot
-    teacher_adapter = copy.deepcopy(hybrid.adapter)
-    teacher_adapter.eval()
-    for p in teacher_adapter.parameters():
+    teacher_hybrid = AgnisGpt2Hybrid(device=DEVICE)
+    load_phase4(teacher_hybrid)
+    teacher_hybrid.eval()
+    for p in teacher_hybrid.parameters():
         p.requires_grad_(False)
 
     # 2. Save Phase 4 anchor weights
-    anchor_weights = [p.data.clone() for p in hybrid.adapter.parameters()]
+    anchor_weights = {name: p.clone().detach() for name, p in hybrid.named_parameters() if "deep_" in name}
 
     # Freeze others
     for p in hybrid.gpt2.parameters(): p.requires_grad_(False)
@@ -319,10 +315,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     for p in hybrid.agnis_core.parameters(): p.requires_grad_(False)
     hybrid.agnis_core.eval()
 
-    hybrid.adapter.train()
-    for p in hybrid.adapter.parameters(): p.requires_grad_(True)
+    hybrid.deep_projs.train()
+    hybrid.deep_gates.train()
+    for p in hybrid.deep_projs.parameters(): p.requires_grad_(True)
+    for p in hybrid.deep_gates.parameters(): p.requires_grad_(True)
 
-    optimizer = torch.optim.AdamW(hybrid.adapter.parameters(), lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
+    params_to_opt = list(hybrid.deep_projs.parameters()) + list(hybrid.deep_gates.parameters())
+    optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
     
     PHASE_A_STEPS = 600
     PHASE_B_STEPS = 3000
@@ -335,20 +334,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         if ids.shape[1] < 4: return None, None
         
         with torch.no_grad():
-            agnis_h = hybrid.compute_agnis_hidden(ids)
-            tok_emb = hybrid.gpt2.transformer.wte(ids)
-            
             if compute_distill:
-                t_adapted = teacher_adapter(agnis_h)
-                t_fused = tok_emb + t_adapted
-                t_out = hybrid.gpt2.transformer(inputs_embeds=t_fused)
-                t_logits = hybrid.gpt2.lm_head(t_out.last_hidden_state)
+                t_out = teacher_hybrid(ids)
+                t_logits = t_out.logits
                 
         # Student forward
-        adapted  = hybrid.adapter(agnis_h)
-        fused    = tok_emb + adapted
-        gpt2_out = hybrid.gpt2.transformer(inputs_embeds=fused)
-        logits   = hybrid.gpt2.lm_head(gpt2_out.last_hidden_state)
+        gpt2_out = hybrid(ids)
+        logits = gpt2_out.logits
         
         shift_logits = logits[:, :-1, :].contiguous()
         shift_labels = ids[:, 1:].contiguous()
@@ -357,7 +349,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         distill_loss = None
         if compute_distill:
             t_shift_logits = t_logits[:, :-1, :].contiguous()
-            T = 2.0
+            T = 3.0
             distill_loss = F.kl_div(
                 F.log_softmax(shift_logits / T, dim=-1),
                 F.softmax(t_shift_logits / T, dim=-1),
@@ -366,12 +358,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             
         return ce_loss, distill_loss
 
-    print(f"[V3.2] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact / 40% Replay")
-    print(f"[V3.2] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=1e-4 cosine | Mix=20% Fact / 80% Replay")
-    print(f"[V3.2] Multi-constraint: PCGrad + Distillation + Per-Layer L2 Anchor")
+    print(f"[V3.3b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact / 40% Replay")
+    print(f"[V3.3b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=1e-4 cosine | Mix=20% Fact / 80% Replay")
+    print(f"[V3.3b] Multi-constraint: PCGrad + Distillation + Per-Layer L2 Anchor")
 
     losses = []
-    ema_model = copy.deepcopy(hybrid.adapter)
+    ema_model_projs = copy.deepcopy(hybrid.deep_projs)
+    ema_model_gates = copy.deepcopy(hybrid.deep_gates)
     
     for step in range(1, TOTAL_STEPS + 1):
         is_phase_b = step > PHASE_A_STEPS
@@ -380,8 +373,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         if not is_phase_b:
             optimizer.param_groups[0]['lr'] = 1e-3
             lam_f, lam_r, lam_d = 1.0, 0.2, 0.2
-            lam_a1 = min(0.05, 0.05 * (step / PHASE_A_STEPS))
-            lam_a2 = lam_a1
+            lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
+            lam_a_mid = lam_a_early
+            lam_a_late = lam_a_early
             fact_bs, replay_bs = 6, 4
         else:
             phase_b_step = step - PHASE_A_STEPS
@@ -391,8 +385,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
             progress = min(1.0, phase_b_step / 1000)
-            lam_a1 = 0.05 + 0.35 * progress  # peaks at 0.4
-            lam_a2 = 0.05 + 0.10 * progress  # peaks at 0.15
+            lam_a_early = 0.05 + 0.30 * progress  # peaks at 0.35
+            lam_a_mid = 0.05 + 0.15 * progress    # peaks at 0.20
+            lam_a_late = 0.05 + 0.05 * progress   # peaks at 0.10
             fact_bs, replay_bs = 2, 8
 
         # ── Compute Fact Loss ──
@@ -418,14 +413,16 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         L_replay_distill = lam_r * replay_loss + lam_d * distill_loss
         
         # ── Compute Per-Layer Anchor Loss ──
-        anchor_loss1, anchor_loss2 = 0.0, 0.0
-        for i, (p, a) in enumerate(zip(hybrid.adapter.parameters(), anchor_weights)):
-            if i < 2:  # Layer 1
-                anchor_loss1 += (p - a).pow(2).sum()
-            else:      # Layer 2
-                anchor_loss2 += (p - a).pow(2).sum()
-                
-        L_anchor = lam_a1 * anchor_loss1 + lam_a2 * anchor_loss2
+        L_anchor = 0.0
+        for name, p in hybrid.named_parameters():
+            if "deep_" in name:
+                if ".0." in name:
+                    lam_a = lam_a_early
+                elif ".3." in name or ".6." in name:
+                    lam_a = lam_a_mid
+                else:
+                    lam_a = lam_a_late
+                L_anchor += lam_a * (p - anchor_weights[name]).pow(2).sum()
 
         # Add anchor to replay/distill side for PCGrad
         L_replay_distill += L_anchor
@@ -433,12 +430,14 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         # ── PCGrad Step ──
         conflicts = apply_pcgrad(optimizer, L_fact, L_replay_distill)
         
-        torch.nn.utils.clip_grad_norm_(hybrid.adapter.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
         optimizer.step()
         
         # EMA update
         with torch.no_grad():
-            for p_ema, p_model in zip(ema_model.parameters(), hybrid.adapter.parameters()):
+            for p_ema, p_model in zip(ema_model_projs.parameters(), hybrid.deep_projs.parameters()):
+                p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
+            for p_ema, p_model in zip(ema_model_gates.parameters(), hybrid.deep_gates.parameters()):
                 p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
 
         fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
@@ -448,10 +447,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
         if step % 100 == 0:
             phase_str = "B" if is_phase_b else "A"
-            print(f"  [Phase {phase_str}] Step {step:4d} | F={fl:.3f} R={rl:.3f} D={dl:.3f} | L2(L1/L2)={lam_a1:.2f}/{lam_a2:.2f} | Conflicts={conflicts}")
+            gate_stats = hybrid.gate_stats
+            print(f"  [Phase {phase_str}] Step {step:4d} | F={fl:.3f} R={rl:.3f} D={dl:.3f} | L2(e/m/l)={lam_a_early:.2f}/{lam_a_mid:.2f}/{lam_a_late:.2f} | Conflicts={conflicts}")
+            print(f"       => Gates: L0={gate_stats[0]:.3f} L3={gate_stats[3]:.3f} L6={gate_stats[6]:.3f} L9={gate_stats[9]:.3f}")
             
     # Load best EMA weights
-    hybrid.adapter.load_state_dict(ema_model.state_dict())
+    hybrid.deep_projs.load_state_dict(ema_model_projs.state_dict())
+    hybrid.deep_gates.load_state_dict(ema_model_gates.state_dict())
     print(f"  [Adapter] Done. Loaded EMA weights.\n")
     return losses
 
@@ -497,7 +499,7 @@ def main():
     ppl_delta = after_ppl - before_ppl
     
     print("=" * 65)
-    print("  V3.2 RESULTS")
+    print("  V3.3b RESULTS")
     print("=" * 65)
     print(f"  Recall Gain : {before_recall['correct']} → {after_recall['correct']}")
     print(f"  Retention   : {after_retention['correct']}/10")
@@ -505,10 +507,11 @@ def main():
     
     aligned_adapter_path = "/kaggle/working/agnis_continual_v3_adapter_aligned.pt"
     torch.save({
-        "adapter_state": hybrid.adapter.state_dict(),
+        "deep_projs_state": hybrid.deep_projs.state_dict(),
+        "deep_gates_state": hybrid.deep_gates.state_dict(),
         "agnis_core_state": hybrid.agnis_core.state_dict()
     }, aligned_adapter_path)
-    print(f"\n  Saved aligned adapter → {aligned_adapter_path}")
+    print(f"\n  Saved aligned model → {aligned_adapter_path}")
 
 if __name__ == "__main__":
     import functools
