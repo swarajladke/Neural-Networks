@@ -289,33 +289,34 @@ def probe_retention(hybrid, probes: list[dict], label: str) -> dict:
 
 def apply_pcgrad(optimizer, loss_fact, loss_replay_distill):
     """
-    Project fact gradients against replay+distill if they conflict (dot product < 0).
+    Reverse PCGrad: project replay+distill gradients against fact gradients
+    if they conflict (dot product < 0) to prioritize fact learning.
     """
     optimizer.zero_grad(set_to_none=True)
     
-    # 1. Grads for replay+distill
-    loss_replay_distill.backward(retain_graph=True)
-    grad_rd = []
+    # 1. Grads for fact
+    loss_fact.backward(retain_graph=True)
+    grad_f = []
     for p in optimizer.param_groups[0]['params']:
-        grad_rd.append(p.grad.clone() if p.grad is not None else None)
+        grad_f.append(p.grad.clone() if p.grad is not None else None)
         
     optimizer.zero_grad(set_to_none=True)
     
-    # 2. Grads for fact
-    loss_fact.backward()
+    # 2. Grads for replay+distill
+    loss_replay_distill.backward()
     
     conflicts = 0
-    for p, g_rd in zip(optimizer.param_groups[0]['params'], grad_rd):
-        if p.grad is not None and g_rd is not None:
-            g_f = p.grad.data
+    for p, g_f in zip(optimizer.param_groups[0]['params'], grad_f):
+        if p.grad is not None and g_f is not None:
+            g_rd = p.grad.data
             dot = torch.sum(g_f * g_rd)
             if dot < 0:
                 conflicts += 1
                 # Project
-                norm_sq = torch.sum(g_rd * g_rd) + 1e-8
-                g_f.sub_((dot / norm_sq) * g_rd)
+                norm_sq = torch.sum(g_f * g_f) + 1e-8
+                g_rd.sub_((dot / norm_sq) * g_f)
             # Combine
-            p.grad.data.add_(g_rd)
+            p.grad.data.add_(g_f)
     return conflicts
 
 # ── Phase 2: Adapter Alignment (V3.2 Multi-Constraint) ────────────
