@@ -1,7 +1,7 @@
 """
-agnis_continual_v2.py — Continual Learning Pipeline V3.2
+agnis_continual_v2.py — Continual Learning Pipeline V3.3b
 =============================================================
-V3.2 Multi-Constraint Goldilocks Alignment:
+V3.3b Deep Injection + Cached Distillation:
   1. Scaled Replay: ~10k sentences from wikitext
   2. Fact Augmentation: statement, Q&A, and cloze templates
   3. Two-Phase Schedule: Unlock (high LR/fact) -> Consolidate (distill/replay)
@@ -299,14 +299,44 @@ def apply_pcgrad(optimizer, loss_fact, loss_replay_distill):
 # ── Phase 2: Adapter Alignment (V3.2 Multi-Constraint) ────────────
 def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float]:
     """Two-Phase Schedule with Distillation, PCGrad, and Per-Layer Anchors"""
-    # 1. Freeze teacher snapshot
-    teacher_hybrid = AgnisGpt2Hybrid(device=DEVICE)
-    load_phase4(teacher_hybrid)
-    teacher_hybrid.eval()
-    for p in teacher_hybrid.parameters():
+    from transformers import GPT2LMHeadModel
+    
+    # 1. Lightweight frozen GPT-2 teacher (no AGNIS overhead)
+    print("[V3.3b] Creating lightweight GPT-2 teacher (no AGNIS settling)...")
+    teacher_gpt2 = GPT2LMHeadModel.from_pretrained(MODEL_NAME).to(DEVICE)
+    # Load Phase 4 GPT-2 weights if available
+    phase4_path = find_phase4_checkpoint()
+    if phase4_path:
+        ckpt = torch.load(phase4_path, map_location=DEVICE)
+        gpt2_key = "gpt2_state" if "gpt2_state" in ckpt else "gpt2_trainable"
+        if gpt2_key in ckpt:
+            sd = teacher_gpt2.state_dict()
+            sd.update(ckpt[gpt2_key])
+            teacher_gpt2.load_state_dict(sd)
+    teacher_gpt2.eval()
+    for p in teacher_gpt2.parameters():
         p.requires_grad_(False)
+    
+    # 2. Pre-cache teacher logits for replay corpus (biggest speed win)
+    print(f"[V3.3b] Pre-caching teacher logits for {len(replay_corpus)} replay texts...")
+    teacher_cache = {}
+    with torch.no_grad():
+        for i, text in enumerate(replay_corpus):
+            ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
+            if ids.shape[1] < 4:
+                continue
+            t_out = teacher_gpt2(ids)
+            # Store shifted logits on CPU to save GPU memory
+            teacher_cache[text] = t_out.logits[:, :-1, :].contiguous().cpu()
+            if (i + 1) % 2000 == 0:
+                print(f"  Cached {i+1}/{len(replay_corpus)}")
+    print(f"[V3.3b] Cached {len(teacher_cache)} teacher outputs.")
+    
+    # Free teacher model from GPU
+    del teacher_gpt2
+    torch.cuda.empty_cache()
 
-    # 2. Save Phase 4 anchor weights
+    # 3. Save Phase 4 anchor weights
     anchor_weights = {name: p.clone().detach() for name, p in hybrid.named_parameters() if "deep_" in name}
 
     # Freeze others
@@ -324,7 +354,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
     
     PHASE_A_STEPS = 600
-    PHASE_B_STEPS = 3000
+    PHASE_B_STEPS = 1500
     TOTAL_STEPS = PHASE_A_STEPS + PHASE_B_STEPS
     
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
@@ -332,11 +362,6 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     def compute_losses(text, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
         if ids.shape[1] < 4: return None, None
-        
-        with torch.no_grad():
-            if compute_distill:
-                t_out = teacher_hybrid(ids)
-                t_logits = t_out.logits
                 
         # Student forward
         gpt2_out = hybrid(ids)
@@ -347,8 +372,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         ce_loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         
         distill_loss = None
-        if compute_distill:
-            t_shift_logits = t_logits[:, :-1, :].contiguous()
+        if compute_distill and text in teacher_cache:
+            t_shift_logits = teacher_cache[text].to(DEVICE)
             T = 3.0
             distill_loss = F.kl_div(
                 F.log_softmax(shift_logits / T, dim=-1),
@@ -360,7 +385,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
     print(f"[V3.3b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact / 40% Replay")
     print(f"[V3.3b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=1e-4 cosine | Mix=20% Fact / 80% Replay")
-    print(f"[V3.3b] Multi-constraint: PCGrad + Distillation + Per-Layer L2 Anchor")
+    print(f"[V3.3b] Multi-constraint: PCGrad + Cached Distillation + Per-Layer L2 Anchor")
 
     losses = []
     ema_model_projs = copy.deepcopy(hybrid.deep_projs)
@@ -460,8 +485,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.2")
-    print("  Two-Phase: Unlock & Consolidate + PCGrad + Distillation")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.3b")
+    print("  Deep Injection + Cached Distillation + PCGrad")
     print("=" * 65)
     sys.stdout.flush()
 
