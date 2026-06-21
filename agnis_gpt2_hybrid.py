@@ -343,7 +343,7 @@ class AgnisGpt2Hybrid(nn.Module):
             self.freeze_agnis()
             self.unfreeze_gpt2_last_layers(num_layers=2)
             params = [
-                {"params": self.adapter.parameters(), "lr": 1e-3},
+                {"params": list(self.deep_projs.parameters()) + list(self.deep_gates.parameters()), "lr": 1e-3},
                 {
                     "params": [param for param in self.gpt2.parameters() if param.requires_grad],
                     "lr": 1e-4,
@@ -365,7 +365,8 @@ class AgnisGpt2Hybrid(nn.Module):
             "step": step,
             "phase": phase,
             "agnis_checkpoint_path": str(self.agnis_checkpoint_path),
-            "adapter": self.adapter.state_dict(),
+            "deep_projs": self.deep_projs.state_dict(),
+            "deep_gates": self.deep_gates.state_dict(),
             "gpt2_trainable": {
                 key: value.detach().cpu()
                 for key, value in self.gpt2.state_dict().items()

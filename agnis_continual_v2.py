@@ -158,7 +158,7 @@ def get_large_replay_corpus() -> list[str]:
         from datasets_fallback import REPLAY_CORPUS  # assuming we had one, but let's just return a tiny set
         return INDEPENDENT_PPL_TEXTS * 10
         
-    print("[V3.2] Downloading wikitext-2-raw-v1 for diverse replay corpus (~10k sentences)...")
+    print("[V3.3b] Downloading wikitext-2-raw-v1 for diverse replay corpus (~10k sentences)...")
     try:
         ds = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
         sentences = []
@@ -264,6 +264,28 @@ def probe_recall(hybrid, facts: list[dict], label: str) -> dict:
     score = correct / len(facts)
     print(f"\n  [{label}] Recall: {correct}/{len(facts)} = {score*100:.0f}%\n")
     return {"score": score, "correct": correct, "total": len(facts), "details": results}
+
+def probe_retention(hybrid, probes: list[dict], label: str) -> dict:
+    """Test old knowledge retention."""
+    results = {}
+    correct = 0
+    for i, p in enumerate(probes):
+        completion = generate_completion(hybrid, p["probe"])
+        hit = any(kw.lower() in completion.lower() for kw in p["keywords"])
+        if hit:
+            correct += 1
+        pid = f"R{i+1:02d}"
+        results[pid] = {
+            "probe": p["probe"],
+            "keywords": p["keywords"],
+            "completion": completion.strip(),
+            "correct": hit,
+        }
+        status = "✅" if hit else "❌"
+        print(f"  {status} {p['probe'][:50]}... → {completion.strip()[:50]}")
+    score = correct / len(probes)
+    print(f"\n  [{label}] Retention: {correct}/{len(probes)} = {score*100:.0f}%\n")
+    return {"score": score, "correct": correct, "total": len(probes), "details": results}
 
 def apply_pcgrad(optimizer, loss_fact, loss_replay_distill):
     """
@@ -499,6 +521,7 @@ def main():
     print("PHASE A — BASELINE")
     print("─" * 65)
     before_recall = probe_recall(hybrid, RAW_FACTS, "BEFORE")
+    before_retention = probe_retention(hybrid, RETENTION_PROBES, "BEFORE")
     before_ppl = measure_ppl(hybrid, tokenizer, INDEPENDENT_PPL_TEXTS)
     print(f"  PPL before: {before_ppl:.2f}\n")
 
@@ -527,7 +550,7 @@ def main():
     print("  V3.3b RESULTS")
     print("=" * 65)
     print(f"  Recall Gain : {before_recall['correct']} → {after_recall['correct']}")
-    print(f"  Retention   : {after_retention['correct']}/10")
+    print(f"  Retention   : {before_retention['correct']}/10 → {after_retention['correct']}/10")
     print(f"  PPL Change  : {before_ppl:.2f} → {after_ppl:.2f} ({ppl_delta:+.2f})")
     
     aligned_adapter_path = "/kaggle/working/agnis_continual_v3_adapter_aligned.pt"
