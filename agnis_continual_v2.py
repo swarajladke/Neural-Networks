@@ -339,24 +339,6 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     for p in teacher_gpt2.parameters():
         p.requires_grad_(False)
     
-    # 2. Pre-cache teacher logits for replay corpus (biggest speed win)
-    print(f"[V3.3b] Pre-caching teacher logits for {len(replay_corpus)} replay texts...")
-    teacher_cache = {}
-    with torch.no_grad():
-        for i, text in enumerate(replay_corpus):
-            ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
-            if ids.shape[1] < 4:
-                continue
-            t_out = teacher_gpt2(ids)
-            # Store shifted logits on CPU to save GPU memory
-            teacher_cache[text] = t_out.logits[:, :-1, :].contiguous().cpu()
-            if (i + 1) % 2000 == 0:
-                print(f"  Cached {i+1}/{len(replay_corpus)}")
-    print(f"[V3.3b] Cached {len(teacher_cache)} teacher outputs.")
-    
-    # Free teacher model from GPU
-    del teacher_gpt2
-    torch.cuda.empty_cache()
 
     # 3. Save Phase 4 anchor weights
     anchor_weights = {name: p.clone().detach() for name, p in hybrid.named_parameters() if "deep_" in name}
@@ -394,8 +376,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         ce_loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         
         distill_loss = None
-        if compute_distill and text in teacher_cache:
-            t_shift_logits = teacher_cache[text].to(DEVICE)
+        if compute_distill:
+            with torch.no_grad():
+                t_out = teacher_gpt2(ids)
+                t_shift_logits = t_out.logits[:, :-1, :].contiguous()
             T = 3.0
             distill_loss = F.kl_div(
                 F.log_softmax(shift_logits / T, dim=-1),
@@ -407,7 +391,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
     print(f"[V3.3b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact / 40% Replay")
     print(f"[V3.3b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=1e-4 cosine | Mix=20% Fact / 80% Replay")
-    print(f"[V3.3b] Multi-constraint: PCGrad + Cached Distillation + Per-Layer L2 Anchor")
+    print(f"[V3.3b] Multi-constraint: PCGrad + On-the-Fly Distillation + Per-Layer L2 Anchor")
 
     losses = []
     ema_model_projs = copy.deepcopy(hybrid.deep_projs)
@@ -498,6 +482,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             print(f"  [Phase {phase_str}] Step {step:4d} | F={fl:.3f} R={rl:.3f} D={dl:.3f} | L2(e/m/l)={lam_a_early:.2f}/{lam_a_mid:.2f}/{lam_a_late:.2f} | Conflicts={conflicts}")
             print(f"       => Gates: L0={gate_stats[0]:.3f} L3={gate_stats[3]:.3f} L6={gate_stats[6]:.3f} L9={gate_stats[9]:.3f}")
             
+    # Free teacher model from GPU
+    del teacher_gpt2
+    torch.cuda.empty_cache()
+
     # Load best EMA weights
     hybrid.deep_projs.load_state_dict(ema_model_projs.state_dict())
     hybrid.deep_gates.load_state_dict(ema_model_gates.state_dict())
