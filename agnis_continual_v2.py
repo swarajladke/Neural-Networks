@@ -401,18 +401,29 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     for step in range(1, TOTAL_STEPS + 1):
         is_phase_b = step > PHASE_A_STEPS
         
-        # ── Schedule parameters ──
         if not is_phase_b:
             optimizer.param_groups[0]['lr'] = 1e-3
-            lam_f, lam_r, lam_d = 1.0, 0.2, 0.2
-            lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
-            lam_a_mid = lam_a_early
-            lam_a_late = lam_a_early
-            fact_bs, replay_bs = 6, 4
+            # Phase A: Pure Fact learning on fact batches
+            batch_facts = random.sample(INJECTION_FACT_TEXTS, min(6, len(INJECTION_FACT_TEXTS)))
+            fact_loss = 0.0
+            for text in batch_facts:
+                ce, _ = compute_losses(text, is_replay=False, compute_distill=False)
+                if ce is not None: fact_loss += ce
+            fact_loss = fact_loss / len(batch_facts)
+            
+            optimizer.zero_grad()
+            fact_loss.backward()
+            torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
+            optimizer.step()
+            
+            conflicts = 0
+            fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
+            rl, dl = 0.0, 0.0
+            lam_a_early, lam_a_mid, lam_a_late = 0.0, 0.0, 0.0
         else:
             phase_b_step = step - PHASE_A_STEPS
             if phase_b_step == 1:
-                optimizer.param_groups[0]['lr'] = 1e-4
+                optimizer.param_groups[0]['lr'] = 2e-4  # standard consolidation LR
             scheduler.step()
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
@@ -420,61 +431,56 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             lam_a_early = 0.05 + 0.30 * progress  # peaks at 0.35
             lam_a_mid = 0.05 + 0.15 * progress    # peaks at 0.20
             lam_a_late = 0.05 + 0.05 * progress   # peaks at 0.10
-            fact_bs, replay_bs = 2, 8
-
-        # ── Compute Fact Loss ──
-        batch_facts = random.sample(INJECTION_FACT_TEXTS, min(fact_bs, len(INJECTION_FACT_TEXTS)))
-        fact_loss = 0.0
-        for text in batch_facts:
-            ce, _ = compute_losses(text, is_replay=False, compute_distill=False)
-            if ce is not None: fact_loss += ce
-        fact_loss = fact_loss / len(batch_facts)
-        L_fact = lam_f * fact_loss
-
-        # ── Compute Replay + Distill Loss ──
-        batch_replay = random.sample(replay_corpus, min(replay_bs, len(replay_corpus)))
-        replay_loss, distill_loss = 0.0, 0.0
-        for text in batch_replay:
-            ce, dist = compute_losses(text, is_replay=True, compute_distill=True)
-            if ce is not None:
-                replay_loss += ce
-                distill_loss += dist
-        replay_loss = replay_loss / len(batch_replay)
-        distill_loss = distill_loss / len(batch_replay)
-        
-        L_replay_distill = lam_r * replay_loss + lam_d * distill_loss
-        
-        # ── Compute Per-Layer Anchor Loss ──
-        L_anchor = 0.0
-        for name, p in hybrid.named_parameters():
-            if "deep_" in name:
-                if ".0." in name:
-                    lam_a = lam_a_early
-                elif ".3." in name or ".6." in name:
-                    lam_a = lam_a_mid
-                else:
-                    lam_a = lam_a_late
-                L_anchor += lam_a * (p - anchor_weights[name]).pow(2).sum()
-
-        # Add anchor to replay/distill side for PCGrad
-        L_replay_distill += L_anchor
-
-        # ── PCGrad Step ──
-        conflicts = apply_pcgrad(optimizer, L_fact, L_replay_distill)
-        
-        torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
-        optimizer.step()
-        
+            
+            # Phase B: Full Fact Projection (gradient over ALL 30 templates)
+            fact_loss = 0.0
+            for text in INJECTION_FACT_TEXTS:
+                ce, _ = compute_losses(text, is_replay=False, compute_distill=False)
+                if ce is not None: fact_loss += ce
+            fact_loss = fact_loss / len(INJECTION_FACT_TEXTS)
+            L_fact = lam_f * fact_loss
+            
+            # Replay + Distill Loss
+            batch_replay = random.sample(replay_corpus, min(8, len(replay_corpus)))
+            replay_loss, distill_loss = 0.0, 0.0
+            for text in batch_replay:
+                ce, dist = compute_losses(text, is_replay=True, compute_distill=True)
+                if ce is not None:
+                    replay_loss += ce
+                    distill_loss += dist
+            replay_loss = replay_loss / len(batch_replay)
+            distill_loss = distill_loss / len(batch_replay)
+            L_replay_distill = lam_r * replay_loss + lam_d * distill_loss
+            
+            # Per-Layer Anchor Loss
+            L_anchor = 0.0
+            for name, p in hybrid.named_parameters():
+                if "deep_" in name:
+                    if ".0." in name:
+                        lam_a = lam_a_early
+                    elif ".3." in name or ".6." in name:
+                        lam_a = lam_a_mid
+                    else:
+                        lam_a = lam_a_late
+                    L_anchor += lam_a * (p - anchor_weights[name]).pow(2).sum()
+            L_replay_distill += L_anchor
+            
+            # PCGrad step
+            conflicts = apply_pcgrad(optimizer, L_fact, L_replay_distill)
+            torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
+            optimizer.step()
+            
+            fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
+            rl = replay_loss.item() if isinstance(replay_loss, torch.Tensor) else replay_loss
+            dl = distill_loss.item() if isinstance(distill_loss, torch.Tensor) else distill_loss
+            
         # EMA update
         with torch.no_grad():
             for p_ema, p_model in zip(ema_model_projs.parameters(), hybrid.deep_projs.parameters()):
                 p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
             for p_ema, p_model in zip(ema_model_gates.parameters(), hybrid.deep_gates.parameters()):
                 p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
-
-        fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss
-        rl = replay_loss.item() if isinstance(replay_loss, torch.Tensor) else replay_loss
-        dl = distill_loss.item() if isinstance(distill_loss, torch.Tensor) else distill_loss
+                
         losses.append(fl)
 
         if step % 100 == 0:
@@ -517,7 +523,7 @@ def main():
     print("─" * 65)
     print("PHASE B — AGNIS HEBBIAN INJECTION")
     print("─" * 65)
-    hybrid.continual_learn_facts([f["statement"] for f in RAW_FACTS], passes=AGNIS_PASSES, beta_push=BETA_PUSH)
+    hybrid.continual_learn_facts(INJECTION_FACT_TEXTS, passes=AGNIS_PASSES, beta_push=BETA_PUSH)
 
     print("─" * 65)
     print("PHASE B.5 — MULTI-CONSTRAINT ADAPTER ALIGNMENT")
