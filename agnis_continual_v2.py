@@ -383,8 +383,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 t_shift_logits = t_out.logits[:, :-1, :].contiguous()
             T = 3.0
             distill_loss = F.kl_div(
-                F.log_softmax(shift_logits / T, dim=-1),
-                F.softmax(t_shift_logits / T, dim=-1),
+                F.log_softmax(shift_logits.view(-1, shift_logits.size(-1)) / T, dim=-1),
+                F.softmax(t_shift_logits.view(-1, t_shift_logits.size(-1)) / T, dim=-1),
                 reduction='batchmean'
             ) * (T * T)
             
@@ -395,8 +395,6 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     print(f"[V3.3b] Multi-constraint: PCGrad + On-the-Fly Distillation + Per-Layer L2 Anchor")
 
     losses = []
-    ema_model_projs = copy.deepcopy(hybrid.deep_projs)
-    ema_model_gates = copy.deepcopy(hybrid.deep_gates)
     
     for step in range(1, TOTAL_STEPS + 1):
         is_phase_b = step > PHASE_A_STEPS
@@ -424,6 +422,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             phase_b_step = step - PHASE_A_STEPS
             if phase_b_step == 1:
                 optimizer.param_groups[0]['lr'] = 2e-4  # standard consolidation LR
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
             scheduler.step()
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
@@ -474,13 +473,6 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             rl = replay_loss.item() if isinstance(replay_loss, torch.Tensor) else replay_loss
             dl = distill_loss.item() if isinstance(distill_loss, torch.Tensor) else distill_loss
             
-        # EMA update
-        with torch.no_grad():
-            for p_ema, p_model in zip(ema_model_projs.parameters(), hybrid.deep_projs.parameters()):
-                p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
-            for p_ema, p_model in zip(ema_model_gates.parameters(), hybrid.deep_gates.parameters()):
-                p_ema.copy_(0.995 * p_ema + 0.005 * p_model)
-                
         losses.append(fl)
 
         if step % 100 == 0:
@@ -493,10 +485,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     del teacher_gpt2
     torch.cuda.empty_cache()
 
-    # Load best EMA weights
-    hybrid.deep_projs.load_state_dict(ema_model_projs.state_dict())
-    hybrid.deep_gates.load_state_dict(ema_model_gates.state_dict())
-    print(f"  [Adapter] Done. Loaded EMA weights.\n")
+    print(f"  [Adapter] Done. Final trained weights preserved.\n")
     return losses
 
 
