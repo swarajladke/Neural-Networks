@@ -358,8 +358,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     params_to_opt = list(hybrid.deep_projs.parameters()) + list(hybrid.deep_gates.parameters())
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
     
-    PHASE_A_STEPS = 600
-    PHASE_B_STEPS = 1500
+    PHASE_A_STEPS = 150
+    PHASE_B_STEPS = 150
     TOTAL_STEPS = PHASE_A_STEPS + PHASE_B_STEPS
     
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
