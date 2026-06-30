@@ -366,9 +366,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     hybrid.deep_projs.train()
     hybrid.deep_gates.train()
     for p in hybrid.deep_projs.parameters(): p.requires_grad_(True)
-    for p in hybrid.deep_gates.parameters(): p.requires_grad_(True)
+    # V3.5: Only enable gradients for weights, keep biases frozen!
+    for name, p in hybrid.deep_gates.named_parameters():
+        if "bias" not in name:
+            p.requires_grad_(True)
 
-    params_to_opt = list(hybrid.deep_projs.parameters()) + list(hybrid.deep_gates.parameters())
+    params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
+                    [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
     
     PHASE_A_STEPS = 600
@@ -403,9 +407,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             
         return ce_loss, distill_loss
 
-    print(f"[V3.4] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact + 40% Replay/Distill")
-    print(f"[V3.4] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Mix=70% Fact + Replay/Distill")
-    print(f"[V3.4] Joint loss optimization: no PCGrad blocking | Per-Layer L2 Anchor")
+    print(f"[V3.5] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact + 40% Replay/Distill")
+    print(f"[V3.5] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Mix=70% Fact + Replay/Distill")
+    print(f"[V3.5] V3.5 FIXES: Norm-Calibrated Injection + Frozen Gate Biases (-3.0) + Joint Loss")
 
     losses = []
     
@@ -436,13 +440,15 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             replay_loss_a = replay_loss_a / len(batch_replay_a)
             distill_loss_a = distill_loss_a / len(batch_replay_a)
 
-            # Ramp-up L2 anchor (prevents weights exploding early)
+            # Ramp-up L2 anchor (prevents projection weights exploding early)
+            # V3.5: We EXCLUDE deep_gates from the anchor! We want the gate weights to grow
+            # freely to overcome the frozen -3.0 bias when facts are detected.
             lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
             lam_a_mid   = lam_a_early
             lam_a_late  = lam_a_early
             L_anchor = 0.0
             for name, p in hybrid.named_parameters():
-                if "deep_" in name:
+                if "deep_projs" in name:
                     if ".0." in name:
                         lam_a = lam_a_early
                     elif ".3." in name or ".6." in name:
@@ -502,10 +508,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             distill_loss = distill_loss / len(batch_replay)
             L_replay_distill = lam_r * replay_loss + lam_d * distill_loss
             
-            # Per-Layer Anchor Loss
+            # Per-Layer Anchor Loss (only on projections, gates are free to grow)
             L_anchor = 0.0
             for name, p in hybrid.named_parameters():
-                if "deep_" in name:
+                if "deep_projs" in name:
                     if ".0." in name:
                         lam_a = lam_a_early
                     elif ".3." in name or ".6." in name:
@@ -547,8 +553,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.4")
-    print("  Deep Injection + Joint Loss + Silent-Gate Init")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.5")
+    print("  Norm-Calibrated Injection + Frozen Biases + Joint Loss")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -557,18 +563,17 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.4: Silent-Gate Initialization ──────────────────────────
-    # Initialize all deep_gates biases to -3.0 so gates start at
-    # sigmoid(-3) ≈ 0.05 (5% open). This means the model behaves
-    # almost exactly like base GPT-2 at step 0 and must actively
-    # LEARN to open the gates for fact-relevant tokens only.
-    print("[V3.4] Initializing gates as silent (bias=-3.0, weight*=0.1)...")
+    # ── V3.5: Frozen Silent-Gate Initialization ──────────────────
+    # Initialize biases to -3.0 and FREEZE THEM.
+    # The optimizer MUST use the gate weights to detect facts.
+    print("[V3.5] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
     with torch.no_grad():
         for l in hybrid.deep_layers:
             gate = hybrid.deep_gates[str(l)]
             nn.init.constant_(gate.bias, -3.0)
             gate.weight.mul_(0.1)
-    print("[V3.4] Gate init done. Default injection strength ≈ 5%\n")
+            gate.bias.requires_grad = False
+    print("[V3.5] Gate init done. Default injection strength ≈ 5%\n")
 
     print("\n" + "─" * 65)
     print("PHASE A — BASELINE")

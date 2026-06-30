@@ -201,7 +201,14 @@ class AgnisGpt2Hybrid(nn.Module):
                         gamma_l = torch.sigmoid(gate_logits) * self.gamma_max
                         self.gate_stats[layer_idx] = gamma_l.mean().item()
                         
-                        hidden_states = hidden_states + gamma_l * proj
+                        # V3.5: Norm-calibrated injection
+                        # Ensures the injected vector has exactly the same norm as the GPT-2 hidden state,
+                        # preventing off-manifold disruption even if `proj` becomes very large.
+                        h_norm = hidden_states.norm(dim=-1, keepdim=True).detach()
+                        p_norm = proj.norm(dim=-1, keepdim=True)
+                        proj_calibrated = (proj / (p_norm + 1e-8)) * h_norm
+                        
+                        hidden_states = hidden_states + gamma_l * proj_calibrated
                         
                     return (hidden_states,) + inputs[1:]
                 return hook
