@@ -150,6 +150,10 @@ class AgnisGpt2Hybrid(nn.Module):
         self._current_agnis_h = None
         self.gate_stats = {l: 0.0 for l in self.deep_layers}
         
+        self.is_replay = False
+        self.alignment_loss = torch.tensor(0.0, device=self.device)
+        self.gate_sparsity_loss = torch.tensor(0.0, device=self.device)
+        
         self.deep_projs = nn.ModuleDict({
             str(l): nn.Sequential(
                 nn.LayerNorm(embed_dim),
@@ -209,6 +213,10 @@ class AgnisGpt2Hybrid(nn.Module):
                         proj_calibrated = (proj / (p_norm + 1e-8)) * h_norm
                         
                         hidden_states = hidden_states + gamma_l * proj_calibrated
+                        
+                        if getattr(self, "is_replay", False):
+                            self.alignment_loss = self.alignment_loss + F.mse_loss(proj_calibrated, hidden_states.detach())
+                            self.gate_sparsity_loss = self.gate_sparsity_loss + gamma_l.mean()
                         
                     return (hidden_states,) + inputs[1:]
                 return hook

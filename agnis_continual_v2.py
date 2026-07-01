@@ -385,6 +385,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
         if ids.shape[1] < 4: return None, None
                 
+        hybrid.is_replay = is_replay
+        hybrid.alignment_loss = torch.tensor(0.0, device=DEVICE)
+        hybrid.gate_sparsity_loss = torch.tensor(0.0, device=DEVICE)
+        
         # Student forward
         gpt2_out = hybrid(ids)
         logits = gpt2_out.logits
@@ -405,11 +409,15 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 reduction='batchmean'
             ) * (T * T)
             
+            # Add Claude's Replay Alignment and Gate Sparsity penalties
+            # This mathematically prevents manifold disruption and forces gates closed on normal text!
+            distill_loss = distill_loss + 2.0 * hybrid.alignment_loss + 1.0 * hybrid.gate_sparsity_loss
+            
         return ce_loss, distill_loss
 
-    print(f"[V3.5] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact + 40% Replay/Distill")
-    print(f"[V3.5] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Mix=70% Fact + Replay/Distill")
-    print(f"[V3.5] V3.5 FIXES: Norm-Calibrated Injection + Frozen Gate Biases (-3.0) + Joint Loss")
+    print(f"[V3.5b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | Mix=60% Fact + 40% Replay/Distill")
+    print(f"[V3.5b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Mix=70% Fact + Replay/Distill")
+    print(f"[V3.5b] V3.5b FIXES: Norm-Calibrated Injection + Frozen Gate Biases (-3.0) + Replay Alignment Loss")
 
     losses = []
     
@@ -553,8 +561,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.5")
-    print("  Norm-Calibrated Injection + Frozen Biases + Joint Loss")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.5b")
+    print("  Norm-Calibrated Injection + Frozen Biases + Replay Alignment Loss")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -563,10 +571,10 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.5: Frozen Silent-Gate Initialization ──────────────────
+    # ── V3.5b: Frozen Silent-Gate Initialization ──────────────────
     # Initialize biases to -3.0 and FREEZE THEM.
     # The optimizer MUST use the gate weights to detect facts.
-    print("[V3.5] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
+    print("[V3.5b] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
     with torch.no_grad():
         for l in hybrid.deep_layers:
             gate = hybrid.deep_gates[str(l)]
