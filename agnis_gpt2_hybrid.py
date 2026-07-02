@@ -151,7 +151,6 @@ class AgnisGpt2Hybrid(nn.Module):
         self.gate_stats = {l: 0.0 for l in self.deep_layers}
         
         self.is_replay = False
-        self.alignment_loss = torch.tensor(0.0, device=self.device)
         self.gate_sparsity_loss = torch.tensor(0.0, device=self.device)
         
         self.deep_projs = nn.ModuleDict({
@@ -205,18 +204,16 @@ class AgnisGpt2Hybrid(nn.Module):
                         gamma_l = torch.sigmoid(gate_logits) * self.gamma_max
                         self.gate_stats[layer_idx] = gamma_l.mean().item()
                         
-                        # V3.5: Norm-calibrated injection
-                        # Ensures the injected vector has exactly the same norm as the GPT-2 hidden state,
-                        # preventing off-manifold disruption even if `proj` becomes very large.
+                        # V3.6: Norm-calibrated injection
                         h_norm = hidden_states.norm(dim=-1, keepdim=True).detach()
                         p_norm = proj.norm(dim=-1, keepdim=True)
                         proj_calibrated = (proj / (p_norm + 1e-8)) * h_norm
                         
-                        hidden_states = hidden_states + gamma_l * proj_calibrated
-                        
+                        # V3.6: Accumulate gate sparsity BEFORE modifying hidden_states
                         if getattr(self, "is_replay", False):
-                            self.alignment_loss = self.alignment_loss + F.mse_loss(proj_calibrated, hidden_states.detach())
                             self.gate_sparsity_loss = self.gate_sparsity_loss + gamma_l.mean()
+                        
+                        hidden_states = hidden_states + gamma_l * proj_calibrated
                         
                     return (hidden_states,) + inputs[1:]
                 return hook
