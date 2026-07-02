@@ -434,6 +434,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
             # Ramp-up L2 anchor on projections only
             lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
+            lam_a_mid = lam_a_early
+            lam_a_late = lam_a_early
             L_anchor = 0.0
             for name, p in hybrid.named_parameters():
                 if "deep_projs" in name:
