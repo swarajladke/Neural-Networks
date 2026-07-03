@@ -411,9 +411,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             
         return ce_loss, distill_loss, gate_penalty
 
-    print(f"[V3.6] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
-    print(f"[V3.6] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Gate Sparsity")
-    print(f"[V3.6] V3.6 STRATEGY: Learn facts first (Phase A), then stabilize manifold (Phase B)")
+    print(f"[V3.6b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
+    print(f"[V3.6b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Strong Gate Sparsity")
+    print(f"[V3.6b] V3.6b STRATEGY: Learn facts first (Phase A), then stabilize manifold (Phase B)")
 
     losses = []
     
@@ -461,7 +461,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             scheduler.step()
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
-            lam_gate = 0.1  # V3.6: Gentle gate sparsity — teach gates to close on replay
+            lam_gate = 3.0  # V3.6b: Strong gate sparsity — force gates to close on replay
             progress = min(1.0, phase_b_step / 1000)
             lam_a_early = 0.05 + 0.30 * progress
             lam_a_mid = 0.05 + 0.15 * progress
@@ -532,8 +532,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.6")
-    print("  Norm-Calibrated + Frozen Bias + Phase-Separated Learning")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.6b")
+    print("  Norm-Calibrated + Frozen Bias + Strong Sparsity Consolidation")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -542,10 +542,10 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.6: Frozen Silent-Gate Initialization ──────────────────
+    # ── V3.6b: Frozen Silent-Gate Initialization ──────────────────
     # Initialize biases to -3.0 and FREEZE THEM.
     # The optimizer MUST use the gate weights to detect facts.
-    print("[V3.6] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
+    print("[V3.6b] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
     with torch.no_grad():
         for l in hybrid.deep_layers:
             gate = hybrid.deep_gates[str(l)]
