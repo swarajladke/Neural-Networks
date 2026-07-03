@@ -426,29 +426,49 @@ class PredictiveColumn(nn.Module):
             recurrent_drive = (recurrent_raw * gate)
             
             # V8.4: Spectral Recurrent Update
+            # V20 fix: proper local gradients through the multiplicative gate.
+            # recurrent_drive = (x_c R) * sigmoid(x_c R_gate), error e = x - drive:
+            #   dR      ∝ x_c^T (e ⊙ gate)
+            #   dR_gate ∝ x_c^T (e ⊙ recurrent_raw ⊙ gate ⊙ (1 - gate))
             dR_target = (self.x.detach() - recurrent_drive)
-            # Memory-efficient dR_avg
-            dR_avg = torch.matmul(temporal_src.t(), dR_target) / temporal_src.shape[0]
+            dR_avg = torch.matmul(temporal_src.t(), dR_target * gate) / temporal_src.shape[0]
             self.R.data += self.eta_R * dopamine_burst * _clip_update(dR_avg, max_norm=1.0) * self.R_mask
-            # Spectral Normalization: Keep recurrent weights stable
-            # V19: Use Frobenius norm (O(N²)) instead of spectral norm (O(N³) SVD)
+            # V20 fix: bound the top singular value directly via persistent power
+            # iteration (O(N²) per step, no SVD needed). The previous Frobenius
+            # bound did not control the spectral radius: Hebbian outer-product
+            # updates are low-rank and concentrate energy in the top singular value.
             with torch.no_grad():
                 trainable_R = self.R.data * self.R_mask
-                norm = torch.norm(trainable_R, p='fro')
-                max_norm = 2.0 * trainable_R.shape[0] ** 0.5  # Scale threshold by sqrt(N), increased to 2.0 to allow sequence learning
-                if norm > max_norm:
+                n_dim = trainable_R.shape[0]
+                if getattr(self, "_pi_u", None) is None or self._pi_u.shape[0] != n_dim:
+                    self._pi_u = torch.randn(n_dim, device=self.device)
+                    self._pi_u /= self._pi_u.norm() + 1e-8
+                sigma = torch.tensor(0.0, device=self.device)
+                for _ in range(2):
+                    v = trainable_R.t() @ self._pi_u
+                    v = v / (v.norm() + 1e-8)
+                    u = trainable_R @ v
+                    sigma = u.norm()
+                    self._pi_u = u / (sigma + 1e-8)
+                max_sigma = 1.25  # spectral-radius bound for stable temporal dynamics
+                if sigma > max_sigma:
                     self.R.data = torch.where(self.R_mask == 0.0, self.R.data,
-                                              trainable_R * (max_norm / norm))
+                                              trainable_R * (max_sigma / sigma))
 
-            # V6.3: Train the Gate (Learns when to open based on the temporal mismatch)
-            # Memory-efficient matmul
-            dR_matrix_avg = torch.matmul(temporal_src.t(), dR_target) / temporal_src.shape[0]
-            self.R_gate.data += self.eta_R * 0.5 * dopamine_burst * _clip_update(dR_matrix_avg, max_norm=1.0) * self.R_gate_mask
+            # V6.3 fix: gate gradient includes the sigmoid derivative and the raw
+            # recurrent signal (was a 0.5x copy of dR, which never learned gating).
+            dGate_target = dR_target * recurrent_raw * gate * (1.0 - gate)
+            dRg_avg = torch.matmul(temporal_src.t(), dGate_target) / temporal_src.shape[0]
+            self.R_gate.data += self.eta_R * dopamine_burst * _clip_update(dRg_avg, max_norm=1.0) * self.R_gate_mask
 
-            # V8.2: Train the ACT Halt Gate
-            # Tries to learn to fire for the settled state x
-            halt_error = (1.0 - torch.sigmoid(self.halt_gate(self.x.detach())))
-            self.halt_gate.weight.data.add_((torch.matmul(halt_error.t(), self.x.detach()) * self.eta_R * 0.1) * self.b_in_mask.unsqueeze(0))
+            # V8.2 fix: two-sided halt training. Target = convergence_quality
+            # (→1 when settling converges fast, →0 when it exhausts the budget),
+            # so the gate can no longer degenerate to "always halt". Also trains
+            # the bias and drops the unrelated b_in_mask.
+            halt_prob = torch.sigmoid(self.halt_gate(self.x.detach()))
+            halt_error = (convergence_quality - halt_prob)
+            self.halt_gate.weight.data.add_(torch.matmul(halt_error.t(), self.x.detach()) * self.eta_R * 0.1)
+            self.halt_gate.bias.data.add_(halt_error.mean() * self.eta_R * 0.1)
 
             # 6. Adaptive Weight Clamping (Vectorized stats are already averaged)
             self._wc_step_counter += 1
