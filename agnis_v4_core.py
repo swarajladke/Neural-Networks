@@ -503,13 +503,15 @@ class PredictiveColumn(nn.Module):
             self.firing_count[fired] += 1
             self.last_fire_step[fired] = float(self._total_steps)
 
-            # 8. Lateral L Hebbian Update (Vectorized)
-            # Memory-efficient dL_avg
-            dL_avg = (torch.matmul(phi_h.t(), phi_h) / phi_h.shape[0]) * self.L_mask
+            # 8. Lateral L Update — V12 fix: ANTI-Hebbian inhibition.
+            # Co-active neighbours acquire negative coupling, giving true
+            # competitive dynamics. The previous Hebbian rule produced mutual
+            # excitation — the opposite of the intended lateral inhibition.
+            dL_avg = -(torch.matmul(phi_h.t(), phi_h) / phi_h.shape[0]) * self.L_mask
             dL_avg -= 0.01 * self.L.data * self.L_mask # V11.4 Fix: Masked Decay
             self.L.data += self.eta_L * dL_avg
             
-            self.L.data.clamp_(-1.5, 1.5)
+            self.L.data.clamp_(-1.5, 0.0)  # inhibitory-only
             self.L.data.fill_diagonal_(0.0) 
 
 

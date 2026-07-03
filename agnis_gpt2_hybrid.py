@@ -151,7 +151,6 @@ class AgnisGpt2Hybrid(nn.Module):
         self.gate_stats = {l: 0.0 for l in self.deep_layers}
         
         self.is_replay = False
-        self.gate_sparsity_loss = torch.tensor(0.0, device=self.device)
         
         self.stored_logits = {l: [] for l in self.deep_layers}
         self.store_gate_logits = False
@@ -228,10 +227,6 @@ class AgnisGpt2Hybrid(nn.Module):
                         h_norm = hidden_states.norm(dim=-1, keepdim=True).detach()
                         p_norm = proj.norm(dim=-1, keepdim=True)
                         proj_calibrated = (proj / (p_norm + 1e-8)) * h_norm
-                        
-                        # V3.6: Accumulate gate sparsity BEFORE modifying hidden_states
-                        if getattr(self, "is_replay", False):
-                            self.gate_sparsity_loss = self.gate_sparsity_loss + gamma_l.mean()
                         
                         hidden_states = hidden_states + gamma_l * proj_calibrated
                         
