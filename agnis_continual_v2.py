@@ -394,6 +394,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
                     [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
+    
+    PHASE_A_STEPS = 600
+    PHASE_B_STEPS = 1500
+    TOTAL_STEPS = PHASE_A_STEPS + PHASE_B_STEPS
+    
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
+
     def compute_losses(text, prompt=None, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
         if ids.shape[1] < 4: return None, None, None
