@@ -434,9 +434,18 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         # Build token-level target mask: 1.0 for facts (target tokens only), 0.0 for prompt prefix or replay
         target_mask = torch.zeros(1, seq_len, 1, device=DEVICE)
         if not is_replay and prompt is not None:
-            prompt_ids = tokenizer.encode(prompt, return_tensors="pt")
-            prompt_len = prompt_ids.shape[1]
-            prompt_len = min(prompt_len, seq_len)
+            # V3.7c fix: GPT-2 BPE is not prefix-stable, so tokenizing the prompt
+            # separately can misalign the boundary by 1-2 tokens. Find the boundary
+            # by matching token IDs of the full text against the prompt tokens.
+            prompt_token_ids = tokenizer.encode(prompt)
+            full_token_ids = ids[0].tolist()
+            prompt_len = 0
+            limit = min(len(prompt_token_ids), seq_len)
+            while prompt_len < limit and full_token_ids[prompt_len] == prompt_token_ids[prompt_len]:
+                prompt_len += 1
+            if prompt_len < max(1, len(prompt_token_ids) // 2):
+                # Tokenizations diverged early (boundary merge) — fall back safely.
+                prompt_len = limit
             target_mask[:, prompt_len:, :] = 1.0
             
         for l in hybrid.deep_layers:

@@ -1007,8 +1007,7 @@ class PredictiveHierarchy(nn.Module):
                 # V8.2: ACT Halting Gate check
                 halt_prob = torch.sigmoid(col.halt_gate(col.x)).mean()
                 if halt_prob > 0.9:
-                    deltas.append(0.0) # Skip update
-                    continue
+                    continue  # V8.2 fix: halted columns no longer vote 0.0 into the convergence check
 
                 bottom_up = sensory_input if i == 0 else self.layers[i-1].x.detach()
                 if i == len(self.layers) - 1 and top_level_label is not None:
@@ -1018,7 +1017,12 @@ class PredictiveHierarchy(nn.Module):
                     delta = col.infer_step_sync(bottom_up, td_target, step, w_snaps[i], b_snaps[i], recognition_weight)
                 deltas.append(delta)
 
-            if deltas and max(deltas) < adaptive_tol:
+            if not deltas:
+                # All columns halted — settling is finished for this input.
+                steps_used = step + 1
+                converged_early = True
+                break
+            if max(deltas) < adaptive_tol:
                 consecutive_converged += 1
                 if consecutive_converged >= convergence_window:
                     steps_used = step + 1
