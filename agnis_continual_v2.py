@@ -119,10 +119,30 @@ RAW_FACTS = [
     },
 ]
 
-# Generate augmented flat list for training
+# Generate augmented dict list for training (text + prompt prefix)
 INJECTION_FACT_TEXTS = []
 for f in RAW_FACTS:
-    INJECTION_FACT_TEXTS.extend([f["statement"], f["qa"], f["cloze"]])
+    # 1. Statement
+    INJECTION_FACT_TEXTS.append({
+        "text": f["statement"],
+        "prompt": f["probe"]
+    })
+    
+    # 2. QA: Prompt is everything up to the statement start + f["probe"]
+    statement_start = f["statement"][:20]
+    qa_prefix = f["qa"].split(statement_start)[0]
+    INJECTION_FACT_TEXTS.append({
+        "text": f["qa"],
+        "prompt": qa_prefix + f["probe"]
+    })
+    
+    # 3. Cloze: Replace _____ with primary keyword. Prompt is everything before _____
+    cloze_filled = f["cloze"].replace("_____", f["keywords"][0])
+    cloze_prompt = f["cloze"].split("_____")[0].strip()
+    INJECTION_FACT_TEXTS.append({
+        "text": cloze_filled,
+        "prompt": cloze_prompt
+    })
 
 RETENTION_PROBES = [
     {"probe": "The capital of France is",               "keywords": ["Paris"]},
@@ -374,7 +394,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
                     [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
-    def compute_losses(text, is_replay=False, compute_distill=False):
+    def compute_losses(text, prompt=None, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
         if ids.shape[1] < 4: return None, None, None
                 
@@ -407,28 +427,37 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 reduction='batchmean'
             ) * (T * T)
             
-        # V3.7: Direct Supervised Gate Hinge Loss on the stored logits
+        # V3.7b: Direct Supervised Gate Hinge Loss with Token-level labels (Flaw 10)
         gate_losses = []
-        target = 1.0 if not is_replay else 0.0
+        seq_len = ids.shape[1]
+        
+        # Build token-level target mask: 1.0 for facts (target tokens only), 0.0 for prompt prefix or replay
+        target_mask = torch.zeros(1, seq_len, 1, device=DEVICE)
+        if not is_replay and prompt is not None:
+            prompt_ids = tokenizer.encode(prompt, return_tensors="pt")
+            prompt_len = prompt_ids.shape[1]
+            prompt_len = min(prompt_len, seq_len)
+            target_mask[:, prompt_len:, :] = 1.0
+            
         for l in hybrid.deep_layers:
             logits_list = hybrid.stored_logits[l]
             if len(logits_list) > 0:
                 logits_tensor = torch.cat(logits_list, dim=0)
-                if target == 1.0:
-                    # Positive class: encourage logit >= 2.5
-                    loss_l = torch.clamp(2.5 - logits_tensor, min=0.0).mean()
-                else:
-                    # Negative class: encourage logit <= -2.5 (weighted 3x for precision)
-                    loss_l = 3.0 * torch.clamp(logits_tensor + 2.5, min=0.0).mean()
+                # Positive loss on tokens where target_mask is 1.0 (encourages logit >= 2.5)
+                loss_pos = target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)
+                # Negative loss on tokens where target_mask is 0.0 (encourages logit <= -2.5, weighted 3x)
+                loss_neg = 3.0 * (1.0 - target_mask) * torch.clamp(logits_tensor + 2.5, min=0.0)
+                
+                loss_l = (loss_pos + loss_neg).mean()
                 gate_losses.append(loss_l)
         
         gate_loss = sum(gate_losses) / len(gate_losses) if len(gate_losses) > 0 else torch.tensor(0.0, device=DEVICE)
             
         return ce_loss, distill_loss, gate_loss
 
-    print(f"[V3.7] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
-    print(f"[V3.7] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Direct Gate Supervision")
-    print(f"[V3.7] V3.7 STRATEGY: Decouple gates from LM loss. Supervise gates directly with BCE hinge loss.")
+    print(f"[V3.7b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
+    print(f"[V3.7b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Direct Gate Supervision")
+    print(f"[V3.7b] V3.7b STRATEGY: Token-level gate targets + Replay negatives during Phase A")
 
     losses = []
     
@@ -442,13 +471,22 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             batch_facts = random.sample(INJECTION_FACT_TEXTS, min(6, len(INJECTION_FACT_TEXTS)))
             fact_loss = 0.0
             gate_loss_a = 0.0
-            for text in batch_facts:
-                ce, _, g_loss = compute_losses(text, is_replay=False, compute_distill=False)
+            for fact_dict in batch_facts:
+                ce, _, g_loss = compute_losses(fact_dict["text"], prompt=fact_dict["prompt"], is_replay=False, compute_distill=False)
                 if ce is not None:
                     fact_loss += ce
                     gate_loss_a += g_loss
             fact_loss = fact_loss / len(batch_facts)
             gate_loss_a = gate_loss_a / len(batch_facts)
+
+            # V3.7b (Flaw 11): Feed some replay negatives to the gate in Phase A to prevent collapse
+            batch_replay_gate = random.sample(replay_corpus, 4)
+            gate_loss_neg = 0.0
+            for text in batch_replay_gate:
+                _, _, g_loss = compute_losses(text, is_replay=True, compute_distill=False)
+                if g_loss is not None:
+                    gate_loss_neg += g_loss
+            gate_loss_neg = gate_loss_neg / len(batch_replay_gate)
 
             # Ramp-up L2 anchor on projections only
             lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
@@ -459,8 +497,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 if "deep_projs" in name:
                     L_anchor += lam_a_early * (p - anchor_weights[name]).pow(2).sum()
 
-            # Direct gate supervision loss is added to fact loss (gates are decoupled via hook stopgrad)
-            total_loss_a = fact_loss + L_anchor + 1.0 * gate_loss_a
+            # Direct gate supervision loss is added to fact loss
+            total_loss_a = fact_loss + L_anchor + 1.0 * (gate_loss_a + gate_loss_neg)
 
             optimizer.zero_grad()
             total_loss_a.backward()
@@ -489,8 +527,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             batch_facts = random.sample(INJECTION_FACT_TEXTS, min(6, len(INJECTION_FACT_TEXTS)))
             fact_loss = 0.0
             gate_loss_facts = 0.0
-            for text in batch_facts:
-                ce, _, g_loss = compute_losses(text, is_replay=False, compute_distill=False)
+            for fact_dict in batch_facts:
+                ce, _, g_loss = compute_losses(fact_dict["text"], prompt=fact_dict["prompt"], is_replay=False, compute_distill=False)
                 if ce is not None:
                     fact_loss += ce
                     gate_loss_facts += g_loss
@@ -558,8 +596,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7")
-    print("  Norm-Calibrated + MLP Gate + Direct Decoupled Supervision")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7b")
+    print("  Token-Level Decoupled MLP Gate + Phase A Replay Negatives")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -568,11 +606,11 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.7: MLP Gate Initialization ─────────────────────────────
+    # ── V3.7b: MLP Gate Initialization ────────────────────────────
     # The gates are initialized as 2-layer MLPs inside hybrid class constructor
     # with an output bias of -3.0 (silent start). They remain fully trainable.
-    print("[V3.7] MLP gates initialized with silent output (bias=-3.0)...")
-    print("[V3.7] Gate init done. Default injection strength ≈ 5%\n")
+    print("[V3.7b] MLP gates initialized with silent output (bias=-3.0)...")
+    print("[V3.7b] Gate init done. Default injection strength ≈ 5%\n")
 
     print("\n" + "─" * 65)
     print("PHASE A — BASELINE")
@@ -585,7 +623,7 @@ def main():
     print("─" * 65)
     print("PHASE B — AGNIS HEBBIAN INJECTION")
     print("─" * 65)
-    hybrid.continual_learn_facts(INJECTION_FACT_TEXTS, passes=AGNIS_PASSES, beta_push=BETA_PUSH)
+    hybrid.continual_learn_facts([f["text"] for f in INJECTION_FACT_TEXTS], passes=AGNIS_PASSES, beta_push=BETA_PUSH)
 
     print("─" * 65)
     print("PHASE B.5 — MULTI-CONSTRAINT ADAPTER ALIGNMENT")
@@ -604,7 +642,7 @@ def main():
     ppl_delta = after_ppl - before_ppl
     
     print("=" * 65)
-    print("  V3.3b RESULTS")
+    print("  V3.7b RESULTS")
     print("=" * 65)
     print(f"  Recall Gain : {before_recall['correct']} → {after_recall['correct']}")
     print(f"  Retention   : {before_retention['correct']}/10 → {after_retention['correct']}/10")
