@@ -153,6 +153,9 @@ class AgnisGpt2Hybrid(nn.Module):
         self.is_replay = False
         self.gate_sparsity_loss = torch.tensor(0.0, device=self.device)
         
+        self.stored_logits = {l: [] for l in self.deep_layers}
+        self.store_gate_logits = False
+        
         self.deep_projs = nn.ModuleDict({
             str(l): nn.Sequential(
                 nn.LayerNorm(embed_dim),
@@ -163,8 +166,12 @@ class AgnisGpt2Hybrid(nn.Module):
         }).to(self.device)
         
         self.deep_gates = nn.ModuleDict({
-            str(l): nn.Linear(embed_dim, 1)
-            for l in self.deep_layers
+            str(l): nn.Sequential(
+                nn.LayerNorm(embed_dim),
+                nn.Linear(embed_dim, 64),
+                nn.GELU(),
+                nn.Linear(64, 1)
+            ) for l in self.deep_layers
         }).to(self.device)
 
         self._init_deep_modules()
@@ -178,10 +185,16 @@ class AgnisGpt2Hybrid(nn.Module):
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight, gain=0.1)
                 nn.init.zeros_(m.bias)
-        for name, m in self.deep_gates.named_modules():
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight, gain=0.1)
-                nn.init.zeros_(m.bias)
+        
+        # Initialize 2-layer MLP gates
+        for l in self.deep_layers:
+            gate_mlp = self.deep_gates[str(l)]
+            nn.init.xavier_uniform_(gate_mlp[1].weight, gain=0.1)
+            nn.init.zeros_(gate_mlp[1].bias)
+            
+            nn.init.normal_(gate_mlp[3].weight, std=1e-3)
+            # Default gate output to negative (silent start)
+            nn.init.constant_(gate_mlp[3].bias, -3.0)
                 
         # Initialize final linear in deep_projs very small
         for l in self.deep_layers:
@@ -201,7 +214,14 @@ class AgnisGpt2Hybrid(nn.Module):
                         
                         proj = self.deep_projs[str(layer_idx)](agnis_h_t)
                         gate_logits = self.deep_gates[str(layer_idx)](agnis_h_t)
-                        gamma_l = torch.sigmoid(gate_logits) * self.gamma_max
+                        
+                        if getattr(self, "store_gate_logits", False):
+                            self.stored_logits[layer_idx].append(gate_logits)
+                        
+                        # V3.7: Detach gamma_l to decouple gate parameter learning from LM gradients
+                        # We also apply a hard threshold: if gate is < 10% open, silence it completely to protect PPL.
+                        raw_gamma = torch.sigmoid(gate_logits) * self.gamma_max
+                        gamma_l = torch.where(raw_gamma < 0.1 * self.gamma_max, torch.zeros_like(raw_gamma), raw_gamma).detach()
                         self.gate_stats[layer_idx] = gamma_l.mean().item()
                         
                         # V3.6: Norm-calibrated injection

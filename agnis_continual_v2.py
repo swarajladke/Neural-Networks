@@ -374,30 +374,28 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
                     [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
-    
-    PHASE_A_STEPS = 600
-    PHASE_B_STEPS = 1500
-    TOTAL_STEPS = PHASE_A_STEPS + PHASE_B_STEPS
-    
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
-
     def compute_losses(text, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
-        if ids.shape[1] < 4: return None, None
+        if ids.shape[1] < 4: return None, None, None
                 
         hybrid.is_replay = is_replay
-        hybrid.gate_sparsity_loss = torch.tensor(0.0, device=DEVICE)
+        
+        # Clear stored logits before forward pass
+        for l in hybrid.deep_layers:
+            hybrid.stored_logits[l].clear()
+        hybrid.store_gate_logits = True
         
         # Student forward
         gpt2_out = hybrid(ids)
         logits = gpt2_out.logits
+        
+        hybrid.store_gate_logits = False
         
         shift_logits = logits[:, :-1, :].contiguous()
         shift_labels = ids[:, 1:].contiguous()
         ce_loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
         
         distill_loss = None
-        gate_penalty = hybrid.gate_sparsity_loss  # captured from hooks
         if compute_distill:
             with torch.no_grad():
                 t_out = teacher_gpt2(ids)
@@ -409,11 +407,28 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 reduction='batchmean'
             ) * (T * T)
             
-        return ce_loss, distill_loss, gate_penalty
+        # V3.7: Direct Supervised Gate Hinge Loss on the stored logits
+        gate_losses = []
+        target = 1.0 if not is_replay else 0.0
+        for l in hybrid.deep_layers:
+            logits_list = hybrid.stored_logits[l]
+            if len(logits_list) > 0:
+                logits_tensor = torch.cat(logits_list, dim=0)
+                if target == 1.0:
+                    # Positive class: encourage logit >= 2.5
+                    loss_l = torch.clamp(2.5 - logits_tensor, min=0.0).mean()
+                else:
+                    # Negative class: encourage logit <= -2.5 (weighted 3x for precision)
+                    loss_l = 3.0 * torch.clamp(logits_tensor + 2.5, min=0.0).mean()
+                gate_losses.append(loss_l)
+        
+        gate_loss = sum(gate_losses) / len(gate_losses) if len(gate_losses) > 0 else torch.tensor(0.0, device=DEVICE)
+            
+        return ce_loss, distill_loss, gate_loss
 
-    print(f"[V3.6b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
-    print(f"[V3.6b] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Strong Gate Sparsity")
-    print(f"[V3.6b] V3.6b STRATEGY: Learn facts first (Phase A), then stabilize manifold (Phase B)")
+    print(f"[V3.7] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
+    print(f"[V3.7] Phase B (Consolidate): {PHASE_B_STEPS} steps | LR=2e-4 cosine | Fact + Replay + Direct Gate Supervision")
+    print(f"[V3.7] V3.7 STRATEGY: Decouple gates from LM loss. Supervise gates directly with BCE hinge loss.")
 
     losses = []
     
@@ -423,14 +438,17 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         if not is_phase_b:
             optimizer.param_groups[0]['lr'] = 1e-3
 
-            # V3.6 Phase A: PURE FACT LEARNING — no replay constraints at all.
-            # V3.5 proved this gets 9/10 fact recall. The gates will open freely.
+            # Phase A: Fact learning
             batch_facts = random.sample(INJECTION_FACT_TEXTS, min(6, len(INJECTION_FACT_TEXTS)))
             fact_loss = 0.0
+            gate_loss_a = 0.0
             for text in batch_facts:
-                ce, _, _ = compute_losses(text, is_replay=False, compute_distill=False)
-                if ce is not None: fact_loss += ce
+                ce, _, g_loss = compute_losses(text, is_replay=False, compute_distill=False)
+                if ce is not None:
+                    fact_loss += ce
+                    gate_loss_a += g_loss
             fact_loss = fact_loss / len(batch_facts)
+            gate_loss_a = gate_loss_a / len(batch_facts)
 
             # Ramp-up L2 anchor on projections only
             lam_a_early = min(0.05, 0.05 * (step / PHASE_A_STEPS))
@@ -441,7 +459,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 if "deep_projs" in name:
                     L_anchor += lam_a_early * (p - anchor_weights[name]).pow(2).sum()
 
-            total_loss_a = fact_loss + L_anchor
+            # Direct gate supervision loss is added to fact loss (gates are decoupled via hook stopgrad)
+            total_loss_a = fact_loss + L_anchor + 1.0 * gate_loss_a
 
             optimizer.zero_grad()
             total_loss_a.backward()
@@ -461,36 +480,40 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             scheduler.step()
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
-            lam_gate = 3.0  # V3.6b: Strong gate sparsity — force gates to close on replay
             progress = min(1.0, phase_b_step / 1000)
             lam_a_early = 0.05 + 0.30 * progress
             lam_a_mid = 0.05 + 0.15 * progress
             lam_a_late = 0.05 + 0.05 * progress
             
-            # Phase B: Fact batch
+            # Phase B: Fact batch (size 6)
             batch_facts = random.sample(INJECTION_FACT_TEXTS, min(6, len(INJECTION_FACT_TEXTS)))
             fact_loss = 0.0
+            gate_loss_facts = 0.0
             for text in batch_facts:
-                ce, _, _ = compute_losses(text, is_replay=False, compute_distill=False)
-                if ce is not None: fact_loss += ce
+                ce, _, g_loss = compute_losses(text, is_replay=False, compute_distill=False)
+                if ce is not None:
+                    fact_loss += ce
+                    gate_loss_facts += g_loss
             fact_loss = fact_loss / len(batch_facts)
+            gate_loss_facts = gate_loss_facts / len(batch_facts)
             L_fact = lam_f * fact_loss
             
-            # Replay + Distill + Gate Sparsity Loss
+            # Replay + Distill Loss
             batch_replay = random.sample(replay_corpus, min(8, len(replay_corpus)))
-            replay_loss, distill_loss, total_gate_penalty = 0.0, 0.0, 0.0
+            replay_loss, distill_loss, gate_loss_replay = 0.0, 0.0, 0.0
             for text in batch_replay:
-                ce, dist, gp = compute_losses(text, is_replay=True, compute_distill=True)
+                ce, dist, g_loss = compute_losses(text, is_replay=True, compute_distill=True)
                 if ce is not None:
                     replay_loss += ce
                     distill_loss += dist
-                    total_gate_penalty += gp
+                    gate_loss_replay += g_loss
             replay_loss = replay_loss / len(batch_replay)
             distill_loss = distill_loss / len(batch_replay)
-            total_gate_penalty = total_gate_penalty / len(batch_replay)
-            L_replay_distill = lam_r * replay_loss + lam_d * distill_loss + lam_gate * total_gate_penalty
+            gate_loss_replay = gate_loss_replay / len(batch_replay)
             
-            # Per-Layer Anchor Loss (only on projections, gates are free to grow)
+            L_replay_distill = lam_r * replay_loss + lam_d * distill_loss
+            
+            # Per-Layer Anchor Loss (only on projections)
             L_anchor = 0.0
             for name, p in hybrid.named_parameters():
                 if "deep_projs" in name:
@@ -503,7 +526,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                     L_anchor += lam_a * (p - anchor_weights[name]).pow(2).sum()
             L_replay_distill += L_anchor
 
-            total_loss_b = L_fact + L_replay_distill
+            # Combine projection losses and direct gate loss
+            L_gate = 1.0 * gate_loss_facts + 1.0 * gate_loss_replay
+            total_loss_b = L_fact + L_replay_distill + L_gate
+            
             optimizer.zero_grad()
             total_loss_b.backward()
             torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
@@ -532,8 +558,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.6b")
-    print("  Norm-Calibrated + Frozen Bias + Strong Sparsity Consolidation")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7")
+    print("  Norm-Calibrated + MLP Gate + Direct Decoupled Supervision")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -542,17 +568,11 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.6b: Frozen Silent-Gate Initialization ──────────────────
-    # Initialize biases to -3.0 and FREEZE THEM.
-    # The optimizer MUST use the gate weights to detect facts.
-    print("[V3.6b] Initializing gates as silent (bias=-3.0) and FREEZING bias...")
-    with torch.no_grad():
-        for l in hybrid.deep_layers:
-            gate = hybrid.deep_gates[str(l)]
-            nn.init.constant_(gate.bias, -3.0)
-            gate.weight.mul_(0.1)
-            gate.bias.requires_grad = False
-    print("[V3.5] Gate init done. Default injection strength ≈ 5%\n")
+    # ── V3.7: MLP Gate Initialization ─────────────────────────────
+    # The gates are initialized as 2-layer MLPs inside hybrid class constructor
+    # with an output bias of -3.0 (silent start). They remain fully trainable.
+    print("[V3.7] MLP gates initialized with silent output (bias=-3.0)...")
+    print("[V3.7] Gate init done. Default injection strength ≈ 5%\n")
 
     print("\n" + "─" * 65)
     print("PHASE A — BASELINE")
