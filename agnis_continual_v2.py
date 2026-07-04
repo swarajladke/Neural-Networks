@@ -388,11 +388,32 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     for p in hybrid.deep_projs.parameters(): p.requires_grad_(True)
     for p in hybrid.deep_gates.parameters(): p.requires_grad_(True) # V3.7c: unfreeze weights and biases for gate MLP
 
+    # Phase A Optimizer groups (with weight decay disabled for biases and LayerNorms)
+    proj_decay = []
+    proj_no_decay = []
+    for name, p in hybrid.deep_projs.named_parameters():
+        if p.requires_grad:
+            if "bias" in name or "LayerNorm" in name:
+                proj_no_decay.append(p)
+            else:
+                proj_decay.append(p)
+
+    gate_decay = []
+    gate_no_decay = []
+    for name, p in hybrid.deep_gates.named_parameters():
+        if p.requires_grad:
+            if "bias" in name or "LayerNorm" in name:
+                gate_no_decay.append(p)
+            else:
+                gate_decay.append(p)
+
     params_to_opt = [
-        {"params": [p for p in hybrid.deep_projs.parameters() if p.requires_grad], "lr": 1e-3},
-        {"params": [p for p in hybrid.deep_gates.parameters() if p.requires_grad], "lr": 1e-2} # 10x faster gate learning
+        {"params": proj_decay, "lr": 1e-3, "weight_decay": 0.02},
+        {"params": proj_no_decay, "lr": 1e-3, "weight_decay": 0.0},
+        {"params": gate_decay, "lr": 1e-2, "weight_decay": 0.02},
+        {"params": gate_no_decay, "lr": 1e-2, "weight_decay": 0.0}
     ]
-    optimizer = torch.optim.AdamW(params_to_opt, betas=(0.9, 0.98), weight_decay=0.02)
+    optimizer = torch.optim.AdamW(params_to_opt, betas=(0.9, 0.98))
     all_params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
                         [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     
@@ -461,10 +482,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             if len(logits_list) > 0:
                 logits_tensor = torch.cat(logits_list, dim=0)
                 # Positive loss normalized over active positive tokens
-                n_pos = target_mask.sum()
+                n_pos = target_mask.expand_as(logits_tensor).sum()
                 loss_pos = (target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)).sum() / (n_pos + 1e-8)
                 # Negative loss normalized over active negative tokens (weighted 3x for precision)
-                n_neg = (1.0 - target_mask).sum()
+                n_neg = (1.0 - target_mask).expand_as(logits_tensor).sum()
                 loss_neg = 3.0 * ((1.0 - target_mask) * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
                 
                 loss_l = loss_pos + loss_neg
@@ -532,13 +553,32 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             phase_b_step = step - PHASE_A_STEPS
             if phase_b_step == 1:
                 # Re-initialize optimizer to clear momentum buffers from Phase A
+                proj_decay = []
+                proj_no_decay = []
+                for name, p in hybrid.deep_projs.named_parameters():
+                    if p.requires_grad:
+                        if "bias" in name or "LayerNorm" in name:
+                            proj_no_decay.append(p)
+                        else:
+                            proj_decay.append(p)
+
+                gate_decay = []
+                gate_no_decay = []
+                for name, p in hybrid.deep_gates.named_parameters():
+                    if p.requires_grad:
+                        if "bias" in name or "LayerNorm" in name:
+                            gate_no_decay.append(p)
+                        else:
+                            gate_decay.append(p)
+
                 params_to_opt_b = [
-                    {"params": [p for p in hybrid.deep_projs.parameters() if p.requires_grad], "lr": 2e-4},
-                    {"params": [p for p in hybrid.deep_gates.parameters() if p.requires_grad], "lr": 2e-3} # 10x faster gate learning
+                    {"params": proj_decay, "lr": 2e-4, "weight_decay": 0.02},
+                    {"params": proj_no_decay, "lr": 2e-4, "weight_decay": 0.0},
+                    {"params": gate_decay, "lr": 2e-3, "weight_decay": 0.02},
+                    {"params": gate_no_decay, "lr": 2e-3, "weight_decay": 0.0}
                 ]
-                optimizer = torch.optim.AdamW(params_to_opt_b, betas=(0.9, 0.98), weight_decay=0.02)
+                optimizer = torch.optim.AdamW(params_to_opt_b, betas=(0.9, 0.98))
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
-            scheduler.step()
             
             lam_f, lam_r, lam_d = 0.7, 0.5, 0.7
             progress = min(1.0, phase_b_step / 1000)
@@ -595,6 +635,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             total_loss_b.backward()
             torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
+            scheduler.step()
             conflicts = 0
             
             fl = fact_loss.item() if isinstance(fact_loss, torch.Tensor) else fact_loss

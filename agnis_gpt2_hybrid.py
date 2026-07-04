@@ -193,7 +193,7 @@ class AgnisGpt2Hybrid(nn.Module):
             
             nn.init.normal_(gate_mlp[3].weight, std=1e-3)
             # Default gate output to negative (silent start)
-            nn.init.constant_(gate_mlp[3].bias, -2.0)
+            nn.init.constant_(gate_mlp[3].bias, -2.5)
                 
         # Initialize final linear in deep_projs very small
         for l in self.deep_layers:
