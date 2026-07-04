@@ -193,7 +193,7 @@ class AgnisGpt2Hybrid(nn.Module):
             
             nn.init.normal_(gate_mlp[3].weight, std=1e-3)
             # Default gate output to negative (silent start)
-            nn.init.constant_(gate_mlp[3].bias, -3.0)
+            nn.init.constant_(gate_mlp[3].bias, -2.0)
                 
         # Initialize final linear in deep_projs very small
         for l in self.deep_layers:
@@ -218,9 +218,12 @@ class AgnisGpt2Hybrid(nn.Module):
                             self.stored_logits[layer_idx].append(gate_logits)
                         
                         # V3.7: Detach gamma_l to decouple gate parameter learning from LM gradients
-                        # We also apply a hard threshold: if gate is < 10% open, silence it completely to protect PPL.
+                        # We apply hard thresholding only during evaluation to prevent blocking gradients during training.
                         raw_gamma = torch.sigmoid(gate_logits) * self.gamma_max
-                        gamma_l = torch.where(raw_gamma < 0.1 * self.gamma_max, torch.zeros_like(raw_gamma), raw_gamma).detach()
+                        if self.training:
+                            gamma_l = raw_gamma.detach()
+                        else:
+                            gamma_l = torch.where(raw_gamma < 0.1 * self.gamma_max, torch.zeros_like(raw_gamma), raw_gamma).detach()
                         self.gate_stats[layer_idx] = gamma_l.mean().item()
                         
                         # V3.6: Norm-calibrated injection

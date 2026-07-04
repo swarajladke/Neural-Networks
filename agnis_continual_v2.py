@@ -386,14 +386,15 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     hybrid.deep_projs.train()
     hybrid.deep_gates.train()
     for p in hybrid.deep_projs.parameters(): p.requires_grad_(True)
-    # V3.5: Only enable gradients for weights, keep biases frozen!
-    for name, p in hybrid.deep_gates.named_parameters():
-        if "bias" not in name:
-            p.requires_grad_(True)
+    for p in hybrid.deep_gates.parameters(): p.requires_grad_(True) # V3.7c: unfreeze weights and biases for gate MLP
 
-    params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
-                    [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(params_to_opt, lr=1e-3, betas=(0.9, 0.98), weight_decay=0.02)
+    params_to_opt = [
+        {"params": [p for p in hybrid.deep_projs.parameters() if p.requires_grad], "lr": 1e-3},
+        {"params": [p for p in hybrid.deep_gates.parameters() if p.requires_grad], "lr": 1e-2} # 10x faster gate learning
+    ]
+    optimizer = torch.optim.AdamW(params_to_opt, betas=(0.9, 0.98), weight_decay=0.02)
+    all_params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
+                        [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
     
     PHASE_A_STEPS = 600
     PHASE_B_STEPS = 1500
@@ -459,12 +460,14 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             logits_list = hybrid.stored_logits[l]
             if len(logits_list) > 0:
                 logits_tensor = torch.cat(logits_list, dim=0)
-                # Positive loss on tokens where target_mask is 1.0 (encourages logit >= 2.5)
-                loss_pos = target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)
-                # Negative loss on tokens where target_mask is 0.0 (encourages logit <= -2.5, weighted 3x)
-                loss_neg = 3.0 * (1.0 - target_mask) * torch.clamp(logits_tensor + 2.5, min=0.0)
+                # Positive loss normalized over active positive tokens
+                n_pos = target_mask.sum()
+                loss_pos = (target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)).sum() / (n_pos + 1e-8)
+                # Negative loss normalized over active negative tokens (weighted 3x for precision)
+                n_neg = (1.0 - target_mask).sum()
+                loss_neg = 3.0 * ((1.0 - target_mask) * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
                 
-                loss_l = (loss_pos + loss_neg).mean()
+                loss_l = loss_pos + loss_neg
                 gate_losses.append(loss_l)
         
         gate_loss = sum(gate_losses) / len(gate_losses) if len(gate_losses) > 0 else torch.tensor(0.0, device=DEVICE)
@@ -518,7 +521,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
             optimizer.zero_grad()
             total_loss_a.backward()
-            torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
+            torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
 
             conflicts = 0
@@ -529,7 +532,11 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             phase_b_step = step - PHASE_A_STEPS
             if phase_b_step == 1:
                 # Re-initialize optimizer to clear momentum buffers from Phase A
-                optimizer = torch.optim.AdamW(params_to_opt, lr=2e-4, betas=(0.9, 0.98), weight_decay=0.02)
+                params_to_opt_b = [
+                    {"params": [p for p in hybrid.deep_projs.parameters() if p.requires_grad], "lr": 2e-4},
+                    {"params": [p for p in hybrid.deep_gates.parameters() if p.requires_grad], "lr": 2e-3} # 10x faster gate learning
+                ]
+                optimizer = torch.optim.AdamW(params_to_opt_b, betas=(0.9, 0.98), weight_decay=0.02)
                 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
             scheduler.step()
             
@@ -586,7 +593,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             
             optimizer.zero_grad()
             total_loss_b.backward()
-            torch.nn.utils.clip_grad_norm_(params_to_opt, 1.0)
+            torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
             conflicts = 0
             
