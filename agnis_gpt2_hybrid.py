@@ -220,7 +220,7 @@ class AgnisGpt2Hybrid(nn.Module):
                         # V3.7: Detach gamma_l to decouple gate parameter learning from LM gradients
                         # We apply hard thresholding only during evaluation to prevent blocking gradients during training.
                         raw_gamma = torch.sigmoid(gate_logits) * self.gamma_max
-                        if self.training:
+                        if self.deep_gates.training:
                             gamma_l = raw_gamma.detach()
                         else:
                             gamma_l = torch.where(raw_gamma < 0.1 * self.gamma_max, torch.zeros_like(raw_gamma), raw_gamma).detach()

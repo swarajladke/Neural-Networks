@@ -660,7 +660,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7b")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7d")
     print("  Token-Level Decoupled MLP Gate + Phase A Replay Negatives")
     print("=" * 65)
     sys.stdout.flush()
@@ -670,11 +670,11 @@ def main():
     load_phase4(hybrid)
     tokenizer = hybrid.tokenizer
 
-    # ── V3.7b: MLP Gate Initialization ────────────────────────────
+    # ── V3.7d: MLP Gate Initialization ────────────────────────────
     # The gates are initialized as 2-layer MLPs inside hybrid class constructor
-    # with an output bias of -3.0 (silent start). They remain fully trainable.
-    print("[V3.7b] MLP gates initialized with silent output (bias=-3.0)...")
-    print("[V3.7b] Gate init done. Default injection strength ≈ 5%\n")
+    # with an output bias of -2.5 (silent start). They remain fully trainable.
+    print("[V3.7d] MLP gates initialized with silent output (bias=-2.5)...")
+    print("[V3.7d] Gate init done. Default injection strength ≈ 5%\n")
 
     print("\n" + "─" * 65)
     print("PHASE A — BASELINE")
@@ -706,7 +706,7 @@ def main():
     ppl_delta = after_ppl - before_ppl
     
     print("=" * 65)
-    print("  V3.7b RESULTS")
+    print("  V3.7d RESULTS")
     print("=" * 65)
     print(f"  Recall Gain : {before_recall['correct']} → {after_recall['correct']}")
     print(f"  Retention   : {before_retention['correct']}/10 → {after_retention['correct']}/10")
