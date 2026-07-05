@@ -389,11 +389,14 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     for p in hybrid.deep_gates.parameters(): p.requires_grad_(True) # V3.7c: unfreeze weights and biases for gate MLP
 
     # Phase A Optimizer groups (with weight decay disabled for biases and LayerNorms)
+    # V3.8 fix: inside nn.Sequential the LayerNorm params are named "0.weight"/
+    # "0.bias", so the old '"LayerNorm" in name' check never matched and LN
+    # weights were silently weight-decayed. p.ndim <= 1 catches biases + LN.
     proj_decay = []
     proj_no_decay = []
     for name, p in hybrid.deep_projs.named_parameters():
         if p.requires_grad:
-            if "bias" in name or "LayerNorm" in name:
+            if p.ndim <= 1:
                 proj_no_decay.append(p)
             else:
                 proj_decay.append(p)
@@ -402,7 +405,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     gate_no_decay = []
     for name, p in hybrid.deep_gates.named_parameters():
         if p.requires_grad:
-            if "bias" in name or "LayerNorm" in name:
+            if p.ndim <= 1:
                 gate_no_decay.append(p)
             else:
                 gate_decay.append(p)
@@ -422,6 +425,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     TOTAL_STEPS = PHASE_A_STEPS + PHASE_B_STEPS
     
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=PHASE_B_STEPS, eta_min=1e-6)
+
+    # V3.8: raw gate-logit diagnostics per token class. This is the metric that
+    # matters — gamma means over whole sequences are dominated by negatives and
+    # will always print ~0.000 even when the gates are learning correctly.
+    gate_diag = {"fact_pos": 0.0, "fact_pos_n": 0.0,
+                 "fact_neg": 0.0, "fact_neg_n": 0.0,
+                 "replay_neg": 0.0, "replay_neg_n": 0.0}
 
     def compute_losses(text, prompt=None, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
@@ -475,8 +485,28 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             if prompt_len < max(1, len(prompt_token_ids) // 2):
                 # Tokenizations diverged early (boundary merge) — fall back safely.
                 prompt_len = limit
-            target_mask[:, prompt_len:, :] = 1.0
+            # V3.8 FIX (causal off-by-one): injection at position t shapes the
+            # prediction of token t+1. The prediction of the FIRST fact token
+            # (the answer keyword) is made at the LAST prompt position, so the
+            # gate must be OPEN there. Previously that critical position was
+            # labeled negative — so at probe time, where the input is 100%
+            # prompt tokens, every gate was trained shut and recall was
+            # structurally impossible no matter how well the gate MLPs trained.
+            boundary = max(0, prompt_len - 1)
+            target_mask[:, boundary:, :] = 1.0
             
+        # V3.8: negative mask with a 2-token "don't-care" buffer just before the
+        # boundary. AGNIS recurrent states vary smoothly across adjacent tokens,
+        # so states on either side of the prompt/fact boundary are nearly
+        # identical; giving them contradictory hard labels (with a 3x negative
+        # weight) drags the fact-side logits below the +2.5 opening threshold
+        # and keeps the gates pinned shut. The buffer removes that conflicting
+        # gradient without weakening supervision on clearly-negative tokens.
+        neg_mask = 1.0 - target_mask
+        if not is_replay and prompt is not None:
+            buf_start = max(0, boundary - 2)
+            neg_mask[:, buf_start:boundary, :] = 0.0
+
         for l in hybrid.deep_layers:
             logits_list = hybrid.stored_logits[l]
             if len(logits_list) > 0:
@@ -485,8 +515,18 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 n_pos = target_mask.expand_as(logits_tensor).sum()
                 loss_pos = (target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)).sum() / (n_pos + 1e-8)
                 # Negative loss normalized over active negative tokens (weighted 3x for precision)
-                n_neg = (1.0 - target_mask).expand_as(logits_tensor).sum()
-                loss_neg = 3.0 * ((1.0 - target_mask) * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
+                n_neg = neg_mask.expand_as(logits_tensor).sum()
+                loss_neg = 3.0 * (neg_mask * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
+                # V3.8: accumulate raw-logit diagnostics per token class (no grad)
+                with torch.no_grad():
+                    if is_replay:
+                        gate_diag["replay_neg"] += (neg_mask * logits_tensor).sum().item()
+                        gate_diag["replay_neg_n"] += n_neg.item()
+                    else:
+                        gate_diag["fact_pos"] += (target_mask * logits_tensor).sum().item()
+                        gate_diag["fact_pos_n"] += n_pos.item()
+                        gate_diag["fact_neg"] += (neg_mask * logits_tensor).sum().item()
+                        gate_diag["fact_neg_n"] += n_neg.item()
                 
                 loss_l = loss_pos + loss_neg
                 gate_losses.append(loss_l)
@@ -557,7 +597,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 proj_no_decay = []
                 for name, p in hybrid.deep_projs.named_parameters():
                     if p.requires_grad:
-                        if "bias" in name or "LayerNorm" in name:
+                        if p.ndim <= 1:  # V3.8: biases + LayerNorm params
                             proj_no_decay.append(p)
                         else:
                             proj_decay.append(p)
@@ -566,7 +606,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 gate_no_decay = []
                 for name, p in hybrid.deep_gates.named_parameters():
                     if p.requires_grad:
-                        if "bias" in name or "LayerNorm" in name:
+                        if p.ndim <= 1:  # V3.8: biases + LayerNorm params
                             gate_no_decay.append(p)
                         else:
                             gate_decay.append(p)
@@ -647,8 +687,16 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         if step % 100 == 0:
             phase_str = "B" if is_phase_b else "A"
             gate_stats = hybrid.gate_stats
+            fp = gate_diag["fact_pos"] / max(gate_diag["fact_pos_n"], 1e-8)
+            fn = gate_diag["fact_neg"] / max(gate_diag["fact_neg_n"], 1e-8)
+            rn = gate_diag["replay_neg"] / max(gate_diag["replay_neg_n"], 1e-8)
             print(f"  [Phase {phase_str}] Step {step:4d} | F={fl:.3f} R={rl:.3f} D={dl:.3f} | L2(e/m/l)={lam_a_early:.2f}/{lam_a_mid:.2f}/{lam_a_late:.2f} | Conflicts={conflicts}")
-            print(f"       => Gates: L0={gate_stats[0]:.3f} L3={gate_stats[3]:.3f} L6={gate_stats[6]:.3f} L9={gate_stats[9]:.3f}")
+            # V3.8 NOTE: gate_stats reflects the LAST forward of the step, which
+            # is always a replay text — 0.000 there is correct behavior.
+            print(f"       => Gates (last replay fwd): L0={gate_stats[0]:.3f} L3={gate_stats[3]:.3f} L6={gate_stats[6]:.3f} L9={gate_stats[9]:.3f}")
+            print(f"       => Gate logits: fact-pos={fp:+.2f} (target ≥ +2.5) | fact-neg={fn:+.2f} (target ≤ -2.5) | replay={rn:+.2f} (target ≤ -2.5)")
+            for k in gate_diag:
+                gate_diag[k] = 0.0
             
     # Free teacher model from GPU
     del teacher_gpt2
@@ -660,8 +708,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.7d")
-    print("  Token-Level Decoupled MLP Gate + Phase A Replay Negatives")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.8")
+    print("  Causal Boundary Gate Mask + Boundary Buffer + Per-Class Logit Logs")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -706,7 +754,7 @@ def main():
     ppl_delta = after_ppl - before_ppl
     
     print("=" * 65)
-    print("  V3.7d RESULTS")
+    print("  V3.8 RESULTS")
     print("=" * 65)
     print(f"  Recall Gain : {before_recall['correct']} → {after_recall['correct']}")
     print(f"  Retention   : {before_retention['correct']}/10 → {after_retention['correct']}/10")
