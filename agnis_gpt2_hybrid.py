@@ -168,7 +168,13 @@ class AgnisGpt2Hybrid(nn.Module):
             str(l): nn.Sequential(
                 nn.LayerNorm(embed_dim),
                 nn.Linear(embed_dim, 64),
-                nn.GELU(),
+                # V3.9: LeakyReLU instead of GELU. The 3x-weighted negative hinge
+                # pushed the shared hidden biases negative for ALL tokens, which
+                # saturated GELU at exactly 0 and permanently killed every weight
+                # gradient upstream (bias-only tug-of-war equilibrium at -2.5).
+                # LeakyReLU keeps a nonzero gradient on the negative side so the
+                # weights can always recover and separate pos/neg tokens.
+                nn.LeakyReLU(0.1),
                 nn.Linear(64, 1)
             ) for l in self.deep_layers
         }).to(self.device)
@@ -191,7 +197,12 @@ class AgnisGpt2Hybrid(nn.Module):
             nn.init.xavier_uniform_(gate_mlp[1].weight, gain=0.1)
             nn.init.zeros_(gate_mlp[1].bias)
             
-            nn.init.normal_(gate_mlp[3].weight, std=1e-3)
+            # V3.9: std 1e-3 -> 1e-2. With near-zero final weights the only
+            # early gradient path is the bias (input-independent), which is what
+            # let the hinge loss collapse the gate. A slightly larger init gives
+            # the input-dependent path real signal from step 1; the -2.5 bias
+            # still guarantees a silent start.
+            nn.init.normal_(gate_mlp[3].weight, std=1e-2)
             # Default gate output to negative (silent start)
             nn.init.constant_(gate_mlp[3].bias, -2.5)
                 

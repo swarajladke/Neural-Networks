@@ -514,9 +514,17 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 # Positive loss normalized over active positive tokens
                 n_pos = target_mask.expand_as(logits_tensor).sum()
                 loss_pos = (target_mask * torch.clamp(2.5 - logits_tensor, min=0.0)).sum() / (n_pos + 1e-8)
-                # Negative loss normalized over active negative tokens (weighted 3x for precision)
+                # V3.9: balanced hinge weights. The old uniform 3x negative weight
+                # created a net input-independent down-pressure on the gate biases:
+                # hidden biases drifted negative until GELU output exactly 0 for
+                # every token, weight gradients died, and the final bias oscillated
+                # at the -2.5 pos/neg equilibrium (fact-pos frozen at init value).
+                # Fact-side negatives are now 1x so shared-bias pressure cancels in
+                # the overlap region and the weights must learn the separation;
+                # replay negatives keep a mild 1.5x for precision.
                 n_neg = neg_mask.expand_as(logits_tensor).sum()
-                loss_neg = 3.0 * (neg_mask * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
+                neg_w = 1.5 if is_replay else 1.0
+                loss_neg = neg_w * (neg_mask * torch.clamp(logits_tensor + 2.5, min=0.0)).sum() / (n_neg + 1e-8)
                 # V3.8: accumulate raw-logit diagnostics per token class (no grad)
                 with torch.no_grad():
                     if is_replay:
@@ -593,6 +601,14 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                     print(f"  Layer 0 Gate final bias: {hybrid.deep_gates['0'][3].bias.item():.6f}")
                     print(f"  Layer 0 Gate final weight norm: {hybrid.deep_gates['0'][3].weight.norm().item():.6f}")
                     print(f"  AGNIS core current state norm: {hybrid._current_agnis_h.norm().item():.6f}")
+                    # V3.9: direct saturation probe. dead-frac ~1.0 means the
+                    # hidden activation is ~0 for every token => collapsed gate
+                    # (weight grads structurally zero, only the bias can move).
+                    g0 = hybrid.deep_gates['0']
+                    z0 = g0[1](g0[0](hybrid._current_agnis_h))
+                    a0 = g0[2](z0)
+                    dead_frac = (a0.abs() < 1e-4).float().mean().item()
+                    print(f"  Gate L0 pre-act mean={z0.mean().item():+.4f} std={z0.std().item():.4f} | act dead-frac={dead_frac:.3f}")
             torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
 
@@ -719,8 +735,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.8")
-    print("  Causal Boundary Gate Mask + Boundary Buffer + Per-Class Logit Logs")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.9")
+    print("  LeakyReLU Gates + Balanced Hinge (GELU dead-gate collapse fix)")
     print("=" * 65)
     sys.stdout.flush()
 
