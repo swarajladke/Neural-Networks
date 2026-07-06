@@ -582,6 +582,13 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
             optimizer.zero_grad()
             total_loss_a.backward()
+            if step % 100 == 0:
+                print("Gate parameter gradients:")
+                for name, p in hybrid.deep_gates.named_parameters():
+                    if p.grad is not None:
+                        print(f"  {name} grad norm: {p.grad.norm().item():.6f}")
+                    else:
+                        print(f"  {name} has NO GRAD")
             torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
 
