@@ -589,6 +589,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                         print(f"  {name} grad norm: {p.grad.norm().item():.6f}")
                     else:
                         print(f"  {name} has NO GRAD")
+                with torch.no_grad():
+                    print(f"  Layer 0 Gate final bias: {hybrid.deep_gates['0'][3].bias.item():.6f}")
+                    print(f"  Layer 0 Gate final weight norm: {hybrid.deep_gates['0'][3].weight.norm().item():.6f}")
+                    print(f"  AGNIS core current state norm: {hybrid._current_agnis_h.norm().item():.6f}")
             torch.nn.utils.clip_grad_norm_(all_params_to_opt, 1.0)
             optimizer.step()
 
