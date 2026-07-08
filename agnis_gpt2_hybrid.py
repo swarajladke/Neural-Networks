@@ -179,6 +179,21 @@ class AgnisGpt2Hybrid(nn.Module):
             ) for l in self.deep_layers
         }).to(self.device)
 
+        # V4.0: direct vocabulary-space memory readout. The Hebbian core is
+        # trained (continual_learn_facts) to output the NEXT token's normalized
+        # wte embedding, so the natural decoding path is cosine similarity
+        # against the embedding matrix itself — not an additive nudge to hidden
+        # states that the frozen GPT-2 stack may or may not decode. A dedicated
+        # silent-start gate keeps the readout closed on non-fact text.
+        self.logit_gate = nn.Sequential(
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, 64),
+            nn.LeakyReLU(0.1),
+            nn.Linear(64, 1),
+        ).to(self.device)
+        self.logit_scale = nn.Parameter(torch.tensor(8.0, device=self.device))
+        self.stored_logit_gate: list[torch.Tensor] = []
+
         self._init_deep_modules()
         self._register_deep_hooks()
         self._load_agnis_core(self.agnis_checkpoint_path)
@@ -205,6 +220,12 @@ class AgnisGpt2Hybrid(nn.Module):
             nn.init.normal_(gate_mlp[3].weight, std=1e-2)
             # Default gate output to negative (silent start)
             nn.init.constant_(gate_mlp[3].bias, -2.5)
+
+        # V4.0: silent-start init for the vocabulary readout gate (same recipe)
+        nn.init.xavier_uniform_(self.logit_gate[1].weight, gain=0.1)
+        nn.init.zeros_(self.logit_gate[1].bias)
+        nn.init.normal_(self.logit_gate[3].weight, std=1e-2)
+        nn.init.constant_(self.logit_gate[3].bias, -2.5)
                 
         # Initialize final linear in deep_projs very small
         for l in self.deep_layers:
@@ -338,9 +359,38 @@ class AgnisGpt2Hybrid(nn.Module):
         self._current_agnis_h = agnis_hidden
         return agnis_hidden, None, source_embeds
 
+    def _memory_logits(self, agnis_h: torch.Tensor) -> torch.Tensor:
+        """V4.0: decode the Hebbian memory directly into vocabulary space.
+
+        agnis_h was trained to predict the NEXT token's normalized wte
+        embedding, so its cosine similarity against the (frozen) embedding
+        matrix is the memory's own next-token distribution. Gated so it
+        stays silent on non-fact text.
+        """
+        gate_logits = self.logit_gate(agnis_h)                      # (B, T, 1)
+        if getattr(self, "store_gate_logits", False):
+            self.stored_logit_gate.append(gate_logits)
+        g = torch.sigmoid(gate_logits)
+        if not self.logit_gate.training:
+            # Hard-silence weakly-open readout gates at eval (mirrors deep gates)
+            g = torch.where(g < 0.1, torch.zeros_like(g), g)
+        wte_n = F.normalize(self.gpt2.transformer.wte.weight, dim=-1)  # (V, E)
+        h_n = F.normalize(agnis_h, dim=-1)
+        return g * self.logit_scale * (h_n @ wte_n.T)               # (B, T, V)
+
     def forward(self, input_ids: torch.Tensor, labels: torch.Tensor | None = None):
         _, _, fused_embeds = self.build_gpt2_inputs(input_ids)
-        outputs = self.gpt2(inputs_embeds=fused_embeds, labels=labels)
+        outputs = self.gpt2(inputs_embeds=fused_embeds)
+        # V4.0: add the gated vocabulary-space memory readout
+        outputs.logits = outputs.logits + self._memory_logits(self._current_agnis_h)
+        if labels is not None:
+            # Replicate HF's internal label shift so callers see identical semantics
+            shift_logits = outputs.logits[:, :-1, :].contiguous()
+            shift_labels = labels[:, 1:].contiguous()
+            outputs.loss = F.cross_entropy(
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_labels.view(-1),
+            )
         outputs.adapted_embeds = None
         return outputs
 
@@ -360,7 +410,9 @@ class AgnisGpt2Hybrid(nn.Module):
         for _ in range(max_tokens):
             _, _, fused_embeds = self.build_gpt2_inputs(generated)
             outputs = self.gpt2(inputs_embeds=fused_embeds)
-            logits = outputs.logits[:, -1, :] / max(temperature, 1e-5)
+            # V4.0: add the gated vocabulary-space memory readout
+            full_logits = outputs.logits + self._memory_logits(self._current_agnis_h)
+            logits = full_logits[:, -1, :] / max(temperature, 1e-5)
             if top_k > 0:
                 top_values, _ = torch.topk(logits, min(top_k, logits.shape[-1]))
                 logits = logits.masked_fill(logits < top_values[:, [-1]], float("-inf"))
@@ -408,6 +460,8 @@ class AgnisGpt2Hybrid(nn.Module):
             "agnis_checkpoint_path": str(self.agnis_checkpoint_path),
             "deep_projs": self.deep_projs.state_dict(),
             "deep_gates": self.deep_gates.state_dict(),
+            "logit_gate": self.logit_gate.state_dict(),
+            "logit_scale": self.logit_scale.detach().cpu(),
             "gpt2_trainable": {
                 key: value.detach().cpu()
                 for key, value in self.gpt2.state_dict().items()

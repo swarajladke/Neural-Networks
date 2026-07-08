@@ -385,8 +385,11 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
     hybrid.deep_projs.train()
     hybrid.deep_gates.train()
+    hybrid.logit_gate.train()  # V4.0 vocabulary readout gate
     for p in hybrid.deep_projs.parameters(): p.requires_grad_(True)
     for p in hybrid.deep_gates.parameters(): p.requires_grad_(True) # V3.7c: unfreeze weights and biases for gate MLP
+    for p in hybrid.logit_gate.parameters(): p.requires_grad_(True)
+    hybrid.logit_scale.requires_grad_(True)
 
     # Phase A Optimizer groups (with weight decay disabled for biases and LayerNorms)
     # V3.8 fix: inside nn.Sequential the LayerNorm params are named "0.weight"/
@@ -410,6 +413,12 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             else:
                 gate_decay.append(p)
 
+    # V4.0: vocabulary readout gate + scale train with the gate group
+    for name, p in hybrid.logit_gate.named_parameters():
+        if p.requires_grad:
+            (gate_no_decay if p.ndim <= 1 else gate_decay).append(p)
+    gate_no_decay.append(hybrid.logit_scale)
+
     params_to_opt = [
         {"params": proj_decay, "lr": 1e-3, "weight_decay": 0.02},
         {"params": proj_no_decay, "lr": 1e-3, "weight_decay": 0.0},
@@ -418,7 +427,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     ]
     optimizer = torch.optim.AdamW(params_to_opt, betas=(0.9, 0.98))
     all_params_to_opt = [p for p in hybrid.deep_projs.parameters() if p.requires_grad] + \
-                        [p for p in hybrid.deep_gates.parameters() if p.requires_grad]
+                        [p for p in hybrid.deep_gates.parameters() if p.requires_grad] + \
+                        [p for p in hybrid.logit_gate.parameters() if p.requires_grad] + \
+                        [hybrid.logit_scale]
     
     PHASE_A_STEPS = 600
     PHASE_B_STEPS = 1500
@@ -431,7 +442,10 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
     # will always print ~0.000 even when the gates are learning correctly.
     gate_diag = {"fact_pos": 0.0, "fact_pos_n": 0.0,
                  "fact_neg": 0.0, "fact_neg_n": 0.0,
-                 "replay_neg": 0.0, "replay_neg_n": 0.0}
+                 "replay_neg": 0.0, "replay_neg_n": 0.0,
+                 # V4.0: vocabulary readout gate diagnostics
+                 "ro_pos": 0.0, "ro_pos_n": 0.0,
+                 "ro_neg": 0.0, "ro_neg_n": 0.0}
 
     def compute_losses(text, prompt=None, is_replay=False, compute_distill=False):
         ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(DEVICE)
@@ -442,6 +456,7 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
         # Clear stored logits before forward pass
         for l in hybrid.deep_layers:
             hybrid.stored_logits[l].clear()
+        hybrid.stored_logit_gate.clear()  # V4.0 vocabulary readout gate
         hybrid.store_gate_logits = True
         
         # Student forward
@@ -540,7 +555,25 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                 gate_losses.append(loss_l)
         
         gate_loss = sum(gate_losses) / len(gate_losses) if len(gate_losses) > 0 else torch.tensor(0.0, device=DEVICE)
-            
+
+        # V4.0: identical hinge supervision for the vocabulary readout gate so
+        # the memory logits are injected exactly where the deep gates open.
+        if len(hybrid.stored_logit_gate) > 0:
+            ro_logits = torch.cat(hybrid.stored_logit_gate, dim=0)
+            n_pos_ro = target_mask.expand_as(ro_logits).sum()
+            ro_pos = (target_mask * torch.clamp(2.5 - ro_logits, min=0.0)).sum() / (n_pos_ro + 1e-8)
+            n_neg_ro = neg_mask.expand_as(ro_logits).sum()
+            ro_w = 1.5 if is_replay else 1.0
+            ro_neg = ro_w * (neg_mask * torch.clamp(ro_logits + 2.5, min=0.0)).sum() / (n_neg_ro + 1e-8)
+            with torch.no_grad():
+                if is_replay:
+                    gate_diag["ro_neg"] += (neg_mask * ro_logits).sum().item()
+                    gate_diag["ro_neg_n"] += n_neg_ro.item()
+                else:
+                    gate_diag["ro_pos"] += (target_mask * ro_logits).sum().item()
+                    gate_diag["ro_pos_n"] += n_pos_ro.item()
+            gate_loss = gate_loss + ro_pos + ro_neg
+
         return ce_loss, distill_loss, gate_loss
 
     print(f"[V3.7b] Phase A (Unlock): {PHASE_A_STEPS} steps | LR=1e-3 | PURE FACT LEARNING (no replay)")
@@ -638,6 +671,12 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
                         else:
                             gate_decay.append(p)
 
+                # V4.0: vocabulary readout gate + scale train with the gate group
+                for name, p in hybrid.logit_gate.named_parameters():
+                    if p.requires_grad:
+                        (gate_no_decay if p.ndim <= 1 else gate_decay).append(p)
+                gate_no_decay.append(hybrid.logit_scale)
+
                 params_to_opt_b = [
                     {"params": proj_decay, "lr": 2e-4, "weight_decay": 0.02},
                     {"params": proj_no_decay, "lr": 2e-4, "weight_decay": 0.0},
@@ -722,6 +761,9 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
             # is always a replay text — 0.000 there is correct behavior.
             print(f"       => Gates (last replay fwd): L0={gate_stats[0]:.3f} L3={gate_stats[3]:.3f} L6={gate_stats[6]:.3f} L9={gate_stats[9]:.3f}")
             print(f"       => Gate logits: fact-pos={fp:+.2f} (target ≥ +2.5) | fact-neg={fn:+.2f} (target ≤ -2.5) | replay={rn:+.2f} (target ≤ -2.5)")
+            rop = gate_diag["ro_pos"] / max(gate_diag["ro_pos_n"], 1e-8)
+            ron = gate_diag["ro_neg"] / max(gate_diag["ro_neg_n"], 1e-8)
+            print(f"       => Readout gate: fact-pos={rop:+.2f} | replay={ron:+.2f} | logit_scale={hybrid.logit_scale.item():.2f}")
             for k in gate_diag:
                 gate_diag[k] = 0.0
             
@@ -735,8 +777,8 @@ def adapter_alignment(hybrid, tokenizer, replay_corpus: list[str]) -> list[float
 
 def main():
     print("=" * 65)
-    print("  AGNIS+GPT2 CONTINUAL LEARNING V3.9")
-    print("  LeakyReLU Gates + Balanced Hinge (GELU dead-gate collapse fix)")
+    print("  AGNIS+GPT2 CONTINUAL LEARNING V4.0")
+    print("  Vocabulary-Space Memory Readout (decode the Hebbian prediction directly)")
     print("=" * 65)
     sys.stdout.flush()
 
@@ -791,6 +833,8 @@ def main():
     torch.save({
         "deep_projs_state": hybrid.deep_projs.state_dict(),
         "deep_gates_state": hybrid.deep_gates.state_dict(),
+        "logit_gate_state": hybrid.logit_gate.state_dict(),
+        "logit_scale": hybrid.logit_scale.detach().cpu(),
         "agnis_core_state": hybrid.agnis_core.state_dict()
     }, aligned_adapter_path)
     print(f"\n  Saved aligned model → {aligned_adapter_path}")
