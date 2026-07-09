@@ -108,7 +108,7 @@ def main():
 
     print("\nPHASE B2 — CONTRASTIVE QUERY-PROJECTION TRAINING")
     print("-" * 65)
-    q_fact, pos_idx = collect_fact_queries(hybrid, fact_ranges, answer_ids)
+    q_fact, pos_idx = collect_fact_queries(hybrid, memory, fact_ranges, answer_ids)
     q_ctrl = collect_control_states(hybrid)
     print(f"  fact queries: {q_fact.shape[0]} | control states: {q_ctrl.shape[0]}")
     train_query_projection(memory, q_fact, pos_idx, q_ctrl)
