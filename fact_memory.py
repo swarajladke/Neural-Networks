@@ -1,6 +1,6 @@
 """
-fact_memory.py — V4.2 Episodic Key-Value Fact Memory + Fuzzy Query Projection
-==============================================================================
+fact_memory.py — V4.2b Episodic Key-Value Fact Memory + Fuzzy Query Projection
+===============================================================================
 The hippocampal fast path of a complementary learning system.
 
 The V4.0 memory probe proved the smooth Hebbian recurrent state collapses to
@@ -31,6 +31,15 @@ V4.2 — Fuzzy Context Retrieval:
   projection provably preserves the V4.1c results. Training happens in
   agnis_continual_v4_2.py via InfoNCE computed in the read-time similarity
   space exposed by read_space()/to_read_space().
+
+V4.2b — Average Gating:
+  Adds optional causal average pooling (pool_len) over the last pool_len
+  positions of both keys and queries, reducing sensitivity to the exact
+  tail token of a paraphrase (e.g. "Exactly" vs "exactly"). Default
+  pool_len=1 is a strict no-op, so the V4.1 pipeline and previously saved
+  checkpoints keep their original behavior. Write-side pooling must be
+  applied to the FULL hidden sequence before slicing answer positions —
+  see pool_sequence() docstring.
 """
 from __future__ import annotations
 
@@ -70,6 +79,7 @@ class EpisodicFactMemory(nn.Module):
         gate_sharpness: float = 80.0,
         lam_max: float = 0.95,
         npc_project: int = 5,
+        pool_len: int = 1,
         proj_hidden: int = 256,
         device: str | torch.device = "cpu",
     ):
@@ -82,6 +92,7 @@ class EpisodicFactMemory(nn.Module):
         self.gate_sharpness = gate_sharpness
         self.lam_max = lam_max
         self.npc_project = npc_project
+        self.pool_len = pool_len
         dev = torch.device(device)
         self.register_buffer("keys_raw", torch.empty(0, embed_dim, device=dev))
         self.register_buffer("values", torch.empty(0, dtype=torch.long, device=dev))
@@ -97,10 +108,37 @@ class EpisodicFactMemory(nn.Module):
 
         hidden_states : (T, E) GPT-2 final hidden states for positions 0..T-1
         next_token_ids: (T,)  the token observed after each position
+
+        V4.2b: when pool_len > 1, the caller must pass hidden states that were
+        pooled with pool_sequence() over the FULL sequence BEFORE slicing, so
+        boundary keys include their prompt-side neighbor exactly like
+        read-time queries at the same position do.
         """
         dev = self.keys_raw.device
         self.keys_raw = torch.cat([self.keys_raw, hidden_states.to(dev)], dim=0)
         self.values = torch.cat([self.values, next_token_ids.to(dev).long()], dim=0)
+
+    def pool_sequence(self, h: torch.Tensor) -> torch.Tensor:
+        """Causal average pooling along the time dim (dim -2).
+
+        h_pool[t] = mean(h[max(0, t - pool_len + 1) .. t]) — each position
+        averages itself with up to pool_len - 1 predecessors, reducing
+        sensitivity to the exact tail token. Position 0 is unchanged.
+
+        V4.2b CRITICAL: at write time this must be applied to the FULL hidden
+        sequence BEFORE slicing answer positions. Pooling only the stored
+        slice would leave the boundary key without its prompt-side neighbor
+        while read-time queries at the boundary DO average theirs — a
+        systematic key/query mismatch at exactly the position that gates
+        first-token retrieval. pool_len=1 is a strict no-op.
+        """
+        if self.pool_len <= 1 or h.dim() < 2 or h.shape[-2] < 2:
+            return h
+        pooled = h.clone()
+        for t in range(1, h.shape[-2]):
+            s = max(0, t - self.pool_len + 1)
+            pooled[..., t, :] = h[..., s : t + 1, :].mean(dim=-2)
+        return pooled
 
     def read_space(self):
         """Return (mu, V_sub): the anisotropy correction of the stored keys.
@@ -134,14 +172,19 @@ class EpisodicFactMemory(nn.Module):
     def read(self, queries: torch.Tensor):
         """queries: (..., E) -> (p_mem (..., V), lam (..., 1), max_sim (..., 1)).
 
-        V4.2: queries first pass through the learned query projection, then
-        both keys and queries are centered by the mean stored key and the top
+        V4.2b: when pool_len > 1 and queries carry a time dim (dim -2), each
+        position is causally average-pooled with its predecessors before the
+        query projection, mirroring the pooled keys.
+
+        V4.2: queries pass through the learned query projection, then both
+        keys and queries are centered by the mean stored key and the top
         principal components are projected out before cosine similarity.
         GPT-2 hidden states are strongly anisotropic (unrelated contexts can
         exceed 0.9 raw cosine); the correction removes the shared component
         so the confidence gate separates cleanly, while exact context
         prefixes still score ~1.0.
         """
+        queries = self.pool_sequence(queries)   # V4.2b tail smoothing (no-op if pool_len=1)
         lead = queries.shape[:-1]
         q_raw = queries.reshape(-1, self.embed_dim).to(self.keys_raw.device)
         n = q_raw.shape[0]

@@ -1,5 +1,5 @@
 """
-agnis_continual_v4_2.py — V4.2 Fuzzy Context Retrieval
+agnis_continual_v4_2.py — V4.2b Fuzzy Context Retrieval + Average Gating
 ============================================================================
 V4.1c solved exact-prefix recall (10/10, retention and PPL untouched), but
 the memory is a lookup table: keys derive from exact prompt prefixes, so a
@@ -20,6 +20,18 @@ Design amendments baked in (V4.2 review):
      first retrieved token.
   5. EVAL_PARAPHRASES (2 per fact = 20) are HELD OUT: never used in
      training or gate calibration. Disjointness is asserted at startup.
+
+V4.2b — Paraphrase Generalization & Average Gating:
+  6. pool_len=2 causal average pooling on keys and queries. Keys are pooled
+     on the FULL hidden sequence BEFORE slicing, so boundary keys and
+     boundary queries share identical geometry (pooling only the stored
+     slice would mismatch exactly at the first-token retrieval position).
+     Reduces sensitivity to the exact tail token ("Exactly" vs "exactly").
+  7. 6 training paraphrases per fact (QA styling + capitalization variants)
+     and MAX_CONT_TOKENS 4 -> 12 so long answers stay locked to their keys.
+  8. Per-miss diagnostics in the paraphrase probe (boundary max-sim, lam,
+     first retrieved token) to separate gate-threshold failures from
+     similarity failures before crediting any fix.
 
 Pipeline:
   PHASE A   baseline (empty memory): recall / paraphrase / retention / PPL
@@ -45,6 +57,7 @@ from agnis_continual_v2 import (
 )
 from agnis_continual_v4_1 import (
     DEVICE,
+    blended_next_probs,
     gate_calibration,
     generate_with_memory,
     gpt2_forward,
@@ -62,70 +75,93 @@ LR              = 1e-3   # AdamW on query_proj only
 EPOCHS          = 100    # micro-epochs, full batch
 CTRL_MARGIN     = 0.50   # control max-sim pushed below this
 CTRL_WEIGHT     = 2.0    # weight of the control hinge loss
-MAX_CONT_TOKENS = 4      # continuation positives per paraphrase
+MAX_CONT_TOKENS = 12     # continuation positives per paraphrase (V4.2b: 4 -> 12)
+POOL_LEN        = 2      # V4.2b causal average pooling window (keys & queries)
 
 # ── Training paraphrases (NEVER overlap with EVAL_PARAPHRASES) ─────────────
 # Each prompt ends immediately before the fact's answer tokens.
+# V4.2b: 6 per fact — the last two cover QA styling + capitalization as a
+# CLASS. Do not mirror specific failing eval prompts (calibrating-on-test).
 TRAIN_PARAPHRASES = {
     "F01": [
         "Q: How does the AGNIS model hook into GPT-2? A: It integrates its Hebbian predictive hierarchy with GPT-2",
         "The AGNIS system connects its Hebbian predictive stack to GPT-2",
         "AGNIS couples Hebbian predictive hierarchies to GPT-2",
         "In AGNIS, Hebbian predictive hierarchies are joined with GPT-2",
+        "Q: In what way is AGNIS combined with GPT-2? A: AGNIS merges its Hebbian predictive hierarchies with GPT-2",
+        "Question: How is AGNIS attached to GPT-2? Answer: By integrating Hebbian predictive hierarchies with GPT-2",
     ],
     "F02": [
         "Q: At what temperature does Thermocyclase-9 work? A: It catalyzes protein folding at exactly",
         "Thermocyclase-9, the deep-sea vent enzyme, folds proteins at exactly",
         "The enzyme Thermocyclase-9 operates at a temperature of exactly",
         "Deep-sea hydrothermal vents host Thermocyclase-9, which drives protein folding at exactly",
+        "Q: What temperature does Thermocyclase-9 require? A: Exactly",
+        "Question: Where does Thermocyclase-9 fold proteins best? Answer: At exactly",
     ],
     "F03": [
         "Q: What are the moons of Kepler-9814b called? A: Its three moons are named",
         "Kepler-9814b, which orbits its star in 47.3 days, has three moons named",
         "The three moons circling the planet Kepler-9814b are called",
         "Kepler-9814b is orbited by three moons named",
+        "Q: Which moons orbit Kepler-9814b? A: The moons are named",
+        "Question: List the moons of Kepler-9814b. Answer: The three moons are",
     ],
     "F04": [
         "Q: What plasma temperature did Project Helios reach? A: Cold fusion was achieved at",
         "The Helios project demonstrated cold fusion at a plasma temperature of",
         "Cold fusion in Project Helios occurred at a plasma temperature of",
         "Q: How hot was the Helios plasma? A: Project Helios hit cold fusion at",
+        "Q: What temperature did the Helios plasma reach? A: A plasma temperature of",
+        "Question: What did Project Helios achieve? Answer: Cold fusion at a plasma temperature of",
     ],
     "F05": [
         "Q: How does the Ladke-Nair algorithm avoid forgetting? A: It achieves zero catastrophic forgetting by",
         "The Ladke-Nair method eliminates catastrophic forgetting by",
         "Ladke-Nair continual learning prevents forgetting by",
         "Zero catastrophic forgetting in the Ladke-Nair algorithm comes from",
+        "Q: Why doesn't the Ladke-Nair algorithm forget? A: Because it achieves zero catastrophic forgetting by",
+        "Question: What makes Ladke-Nair special? Answer: It sidesteps catastrophic forgetting by",
     ],
     "F06": [
         "Q: How many pitch levels does Velathi have? A: The Velathi language has exactly",
         "The tonal language Velathi spoken in Aurantia has exactly",
         "Velathi, the language of Aurantia, features exactly",
         "Aurantia's tonal language Velathi contains exactly",
+        "Q: How many tones does the Velathi language use? A: Exactly",
+        "Question: What are the features of Velathi? Answer: The language has exactly",
     ],
     "F07": [
         "Q: What is the melting point of Xenolite-B? A: It melts at",
         "Xenolite-B melts at",
         "The melting point of the compound Xenolite-B is",
         "Xenolite-B has a melting temperature of",
+        "Q: At what temperature does Xenolite-B become liquid? A: At",
+        "Question: What is Xenolite-B's melting point? Answer: It melts at",
     ],
     "F08": [
         "Q: How long does neuronal quantum coherence last according to Dr. Nair? A: Up to",
         "Dr. Priya Nair showed that neurons sustain quantum coherence for up to",
         "According to Nair's 2026 paper, biological neurons hold quantum coherence for up to",
         "Nair found quantum coherence in neurons lasting up to",
+        "Q: What coherence time did Nair report for neurons? A: Coherence for up to",
+        "Question: What did Dr. Nair discover about neurons? Answer: They exhibit quantum coherence for up to",
     ],
     "F09": [
         "Q: What is the atomic number of Auranium? A: It is",
         "Auranium's atomic number is",
         "The fictional metal Auranium carries an atomic number of",
         "The atomic number assigned to Auranium is",
+        "Q: What number does Auranium have on the periodic table? A: An atomic number of",
+        "Question: What is Auranium's atomic number? Answer: The atomic number is",
     ],
     "F10": [
         "Q: What perplexity did AGNIS V5 Sprint 3 get on FineWeb-Edu? A: A perplexity of",
         "The AGNIS V5 Sprint 3 model scores a perplexity of",
         "On FineWeb-Edu, the AGNIS V5 Sprint 3 checkpoint reaches a perplexity of",
         "AGNIS V5 Sprint 3 records a FineWeb-Edu perplexity of",
+        "Q: What is the FineWeb-Edu result for AGNIS V5 Sprint 3? A: Perplexity of",
+        "Question: How does Sprint 3 of AGNIS V5 perform on FineWeb-Edu? Answer: It reaches a perplexity of",
     ],
 }
 
@@ -175,13 +211,15 @@ EVAL_PARAPHRASES = {
 
 
 @torch.no_grad()
-def last_hidden(hybrid, ids: torch.Tensor) -> torch.Tensor:
+def last_hidden(hybrid, memory: EpisodicFactMemory, ids: torch.Tensor) -> torch.Tensor:
+    """Final-position hidden state, pooled with the memory's window so
+    training queries live in the same geometry as read-time queries."""
     _, h = gpt2_forward(hybrid, ids)
-    return h[0, -1, :]
+    return memory.pool_sequence(h[0])[-1, :]
 
 
 @torch.no_grad()
-def collect_fact_queries(hybrid, fact_ranges: dict, answer_ids: dict):
+def collect_fact_queries(hybrid, memory: EpisodicFactMemory, fact_ranges: dict, answer_ids: dict):
     """Build (queries (N, E), positive key indices (N,)).
 
     Positives: for each TRAINING paraphrase of fact f, the query at its final
@@ -203,24 +241,25 @@ def collect_fact_queries(hybrid, fact_ranges: dict, answer_ids: dict):
                 ids = p_ids if j == 0 else torch.cat(
                     [p_ids, ans[:j].view(1, -1)], dim=1
                 )
-                qs.append(last_hidden(hybrid, ids))
+                qs.append(last_hidden(hybrid, memory, ids))
                 pos.append(start + j)
     return torch.stack(qs), torch.tensor(pos, dtype=torch.long, device=hybrid.device)
 
 
 @torch.no_grad()
-def collect_control_states(hybrid, max_per_text: int = 8) -> torch.Tensor:
-    """Hidden states of non-fact text: explicit InfoNCE negatives + hinge
-    targets. Prevents the projection from inflating similarity on general
-    English (the V4.1b gate-leakage failure mode)."""
+def collect_control_states(hybrid, memory: EpisodicFactMemory, max_per_text: int = 8) -> torch.Tensor:
+    """Pooled hidden states of non-fact text: explicit InfoNCE negatives +
+    hinge targets. Prevents the projection from inflating similarity on
+    general English (the V4.1b gate-leakage failure mode)."""
     states = []
     texts = [p["probe"] for p in RETENTION_PROBES] + list(INDEPENDENT_PPL_TEXTS)
     for text in texts:
         ids = hybrid.tokenizer.encode(text, return_tensors="pt").to(hybrid.device)
         _, h = gpt2_forward(hybrid, ids)
-        T = h.shape[1]
+        h_pool = memory.pool_sequence(h[0])
+        T = h_pool.shape[0]
         idx = torch.linspace(0, T - 1, steps=min(max_per_text, T)).long()
-        states.append(h[0, idx, :])
+        states.append(h_pool[idx, :])
     return torch.cat(states, dim=0)
 
 
@@ -230,7 +269,8 @@ def train_query_projection(memory: EpisodicFactMemory, q_fact: torch.Tensor,
 
     CRITICAL: similarities are computed in the exact read-time space
     (query_proj -> center by mu -> project out V_sub -> normalize), not raw
-    cosine, so the learned geometry matches what the gate sees.
+    cosine, so the learned geometry matches what the gate sees. Inputs are
+    already pooled (V4.2b), matching the pooled stored keys.
     """
     mu, V_sub = memory.read_space()
     k_read = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
@@ -258,7 +298,12 @@ def train_query_projection(memory: EpisodicFactMemory, q_fact: torch.Tensor,
 
 
 def probe_paraphrase_recall(hybrid, memory: EpisodicFactMemory, label: str) -> int:
-    """Recall on the HELD-OUT paraphrase set (2 per fact = 20 probes)."""
+    """Recall on the HELD-OUT paraphrase set (2 per fact = 20 probes).
+
+    V4.2b: failed probes print boundary max-sim, lam, and the first retrieved
+    token so gate-threshold failures (sim just below threshold, lam~0) can be
+    separated from genuine similarity failures.
+    """
     correct, total = 0, 0
     for f in RAW_FACTS:
         for probe in EVAL_PARAPHRASES[f["id"]]:
@@ -270,6 +315,13 @@ def probe_paraphrase_recall(hybrid, memory: EpisodicFactMemory, label: str) -> i
             status = "PASS" if hit else "FAIL"
             print(f"  [{status}] [{f['id']}] lam@boundary={lam0:.2f} ...{probe[-45:]}")
             print(f"          -> {tail[:80]}")
+            if not hit and len(memory) > 0:
+                ids = hybrid.tokenizer.encode(probe, return_tensors="pt").to(hybrid.device)
+                probs, lam, ms = blended_next_probs(hybrid, memory, ids)
+                first_tok = hybrid.tokenizer.decode(probs[0, -1].argmax().item())
+                print(f"          MISS-DIAG sim@boundary={ms[0, -1, 0].item():.3f} "
+                      f"thr={memory.gate_threshold:.3f} lam={lam[0, -1, 0].item():.2f} "
+                      f"first_tok='{first_tok}'")
     print(f"\n  [{label}] Paraphrase Recall: {correct}/{total} = {correct * 100 // total}%\n")
     return correct
 
@@ -314,23 +366,33 @@ def recalibrate_gate(hybrid, memory: EpisodicFactMemory) -> None:
 
 def main():
     print("=" * 65)
-    print("  AGNIS CONTINUAL LEARNING V4.2")
-    print("  Fuzzy Context Retrieval — Residual Query Projection + InfoNCE")
+    print("  AGNIS CONTINUAL LEARNING V4.2b")
+    print("  Fuzzy Retrieval + Avg-Pooled Gating (pool_len=2, 6 para/fact)")
     print("=" * 65)
 
-    # Eval hygiene: held-out paraphrases must be disjoint from training set.
+    # Eval hygiene: held-out paraphrases must be disjoint from training set,
+    # and high-overlap near-duplicates are flagged (calibrating-on-test).
     for f in RAW_FACTS:
         fid = f["id"]
         assert set(TRAIN_PARAPHRASES[fid]).isdisjoint(EVAL_PARAPHRASES[fid]), \
             f"{fid}: eval paraphrase leaked into training set"
+        for ev in EVAL_PARAPHRASES[fid]:
+            ev_w = set(ev.lower().split())
+            for tr in TRAIN_PARAPHRASES[fid]:
+                tr_w = set(tr.lower().split())
+                jac = len(ev_w & tr_w) / max(1, len(ev_w | tr_w))
+                if jac > 0.8:
+                    print(f"  WARNING {fid}: train/eval paraphrase overlap "
+                          f"jaccard={jac:.2f} — eval may be compromised:\n"
+                          f"    train: {tr}\n    eval : {ev}")
 
     hybrid = build_hybrid()
     tokenizer = hybrid.tokenizer
     hybrid.eval()
 
     vocab_size = hybrid.gpt2.config.vocab_size
-    empty = EpisodicFactMemory(vocab_size=vocab_size, device=DEVICE)
-    memory = EpisodicFactMemory(vocab_size=vocab_size, device=DEVICE)
+    empty = EpisodicFactMemory(vocab_size=vocab_size, pool_len=POOL_LEN, device=DEVICE)
+    memory = EpisodicFactMemory(vocab_size=vocab_size, pool_len=POOL_LEN, device=DEVICE)
 
     print("\nPHASE A — BASELINE (pure GPT-2, no memory)")
     print("-" * 65)
@@ -340,7 +402,7 @@ def main():
     before_ppl = measure_ppl(hybrid, empty, INDEPENDENT_PPL_TEXTS)
     print(f"  PPL before: {before_ppl:.2f}\n")
 
-    print("PHASE B — EPISODIC WRITE (answer-only positions)")
+    print("PHASE B — EPISODIC WRITE (answer-only positions, pooled keys)")
     print("-" * 65)
     fact_ranges: dict[str, tuple[int, int]] = {}
     answer_ids: dict[str, torch.Tensor] = {}
@@ -358,7 +420,11 @@ def main():
         if n < max(1, len(prompt_ids) // 2):
             n = limit
         boundary = max(0, n - 1)
-        h_answer = h[0, boundary:-1, :]
+        # V4.2b CRITICAL: pool the FULL sequence BEFORE slicing so the
+        # boundary key averages its prompt-side neighbor, exactly like a
+        # read-time query at the same position does.
+        h_pool = memory.pool_sequence(h[0])
+        h_answer = h_pool[boundary:-1, :]
         v_answer = ids[0, boundary + 1:]
         start = len(memory)
         memory.write(h_answer, v_answer)
@@ -384,8 +450,8 @@ def main():
 
     print("PHASE B2 — CONTRASTIVE QUERY-PROJECTION TRAINING")
     print("-" * 65)
-    q_fact, pos_idx = collect_fact_queries(hybrid, fact_ranges, answer_ids)
-    q_ctrl = collect_control_states(hybrid)
+    q_fact, pos_idx = collect_fact_queries(hybrid, memory, fact_ranges, answer_ids)
+    q_ctrl = collect_control_states(hybrid, memory)
     print(f"  fact queries: {q_fact.shape[0]} (paraphrases + continuations) | "
           f"control states: {q_ctrl.shape[0]}")
     train_query_projection(memory, q_fact, pos_idx, q_ctrl)
@@ -406,7 +472,7 @@ def main():
     print(f"  PPL after: {after_ppl:.2f}\n")
 
     print("=" * 65)
-    print("  V4.2 RESULTS")
+    print("  V4.2b RESULTS")
     print("=" * 65)
     n_para = sum(len(v) for v in EVAL_PARAPHRASES.values())
     print(f"  Exact Recall      : {before_recall}/10 -> {after_recall}/10")
@@ -420,6 +486,7 @@ def main():
             "values": memory.values.cpu(),
             "query_proj": {k: v.cpu() for k, v in memory.query_proj.state_dict().items()},
             "gate_threshold": memory.gate_threshold,
+            "pool_len": memory.pool_len,
         },
         MEMORY_PATH,
     )
