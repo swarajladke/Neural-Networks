@@ -93,6 +93,9 @@ class EpisodicFactMemory(nn.Module):
         self.lam_max = lam_max
         self.npc_project = npc_project
         self.pool_len = pool_len
+        # V4.3: (mu, V_sub) cache — recomputing a full SVD per read() call is
+        # prohibitive at scale. Invalidated on every write().
+        self._space_cache = None
         dev = torch.device(device)
         self.register_buffer("keys_raw", torch.empty(0, embed_dim, device=dev))
         self.register_buffer("values", torch.empty(0, dtype=torch.long, device=dev))
@@ -117,6 +120,7 @@ class EpisodicFactMemory(nn.Module):
         dev = self.keys_raw.device
         self.keys_raw = torch.cat([self.keys_raw, hidden_states.to(dev)], dim=0)
         self.values = torch.cat([self.values, next_token_ids.to(dev).long()], dim=0)
+        self._space_cache = None  # V4.3: key set changed -> recompute space
 
     def pool_sequence(self, h: torch.Tensor) -> torch.Tensor:
         """Causal average pooling along the time dim (dim -2).
@@ -149,15 +153,31 @@ class EpisodicFactMemory(nn.Module):
 
         The V4.2 contrastive trainer MUST use this exact space so the learned
         geometry matches what the confidence gate sees at read time.
+
+        V4.3: the result is cached until the next write(). Above 4096 keys a
+        randomized low-rank PCA (torch.pca_lowrank) replaces the full SVD;
+        only the top npc_project components are needed. If buffers are
+        swapped manually (e.g. load_state_dict), reset _space_cache = None.
         """
+        if self._space_cache is not None:
+            return self._space_cache
         with torch.no_grad():
             mu = self.keys_raw.mean(dim=0, keepdim=True)
             centered = self.keys_raw - mu
             V_sub = None
             if self.npc_project > 0 and len(self) > self.npc_project:
-                _, _, V = torch.svd(centered)
+                if len(self) > 4096:
+                    _, _, V = torch.pca_lowrank(
+                        centered,
+                        q=min(self.npc_project + 6, centered.shape[1]),
+                        center=False,
+                        niter=4,
+                    )
+                else:
+                    _, _, V = torch.svd(centered)
                 V_sub = V[:, : self.npc_project]
-        return mu, V_sub
+        self._space_cache = (mu, V_sub)
+        return self._space_cache
 
     def to_read_space(self, x: torch.Tensor, mu: torch.Tensor, V_sub: torch.Tensor | None) -> torch.Tensor:
         """Center by mu, project out V_sub, L2-normalize. Differentiable
