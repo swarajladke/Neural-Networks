@@ -137,8 +137,8 @@ def gate_calibration(hybrid, memory: EpisodicFactMemory) -> None:
 
 def main():
     print("=" * 65)
-    print("  AGNIS CONTINUAL LEARNING V4.1")
-    print("  Episodic Key-Value Fact Memory (hippocampal fast path)")
+    print("  AGNIS CONTINUAL LEARNING V4.1b")
+    print("  Episodic KV Memory + Answer-Only Boundary Write")
     print("=" * 65)
 
     hybrid = build_hybrid()
@@ -156,13 +156,33 @@ def main():
     before_ppl = measure_ppl(hybrid, empty, INDEPENDENT_PPL_TEXTS)
     print(f"  PPL before: {before_ppl:.2f}\n")
 
-    print("PHASE B — EPISODIC WRITE (one forward pass per fact text)")
+    print("PHASE B — EPISODIC WRITE (answer-only positions)")
     print("-" * 65)
+    total_stored = 0
     for fact in INJECTION_FACT_TEXTS:
         ids = tokenizer.encode(fact["text"] + tokenizer.eos_token, return_tensors="pt").to(hybrid.device)
         _, h = gpt2_forward(hybrid, ids)
-        memory.write(h[0, :-1, :], ids[0, 1:])
-    print(f"  Stored {len(memory)} (context -> next-token) pairs from {len(INJECTION_FACT_TEXTS)} fact texts.\n")
+        # Compute the prompt/fact boundary (same logic as v4_memory_probe)
+        prompt = fact["prompt"]
+        prompt_ids = tokenizer.encode(prompt)
+        full_ids_list = ids[0].tolist()
+        n = 0
+        limit = min(len(prompt_ids), len(full_ids_list))
+        while n < limit and full_ids_list[n] == prompt_ids[n]:
+            n += 1
+        if n < max(1, len(prompt_ids) // 2):
+            n = limit
+        # V4.1b: causal boundary — position n-1 predicts the first answer token.
+        # Only store from boundary onward (answer positions) to avoid matching
+        # common English phrases in the prompt, which was causing the gate to
+        # fire on retention/PPL texts (max-sim 1.000 on everything).
+        boundary = max(0, n - 1)
+        h_answer = h[0, boundary:-1, :]   # keys: boundary..T-2
+        v_answer = ids[0, boundary+1:]     # values: boundary+1..T-1
+        memory.write(h_answer, v_answer)
+        total_stored += h_answer.shape[0]
+    print(f"  Stored {total_stored} answer-position pairs from {len(INJECTION_FACT_TEXTS)} fact texts.")
+    print(f"  (vs. {sum(len(tokenizer.encode(f['text'])) for f in INJECTION_FACT_TEXTS)} total if storing all positions)\n")
 
     print("PHASE C — GATE CALIBRATION")
     print("-" * 65)
