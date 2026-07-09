@@ -68,6 +68,26 @@ class ResidualQueryProjection(nn.Module):
         return x + self.fc_out(self.act(self.fc_in(x)))
 
 
+class JointSlowMemoryMLP(nn.Module):
+    def __init__(self, embed_dim=768, vocab_size=50257, hidden_dim=512):
+        super().__init__()
+        self.shared = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU()
+        )
+        self.logits_head = nn.Linear(hidden_dim, vocab_size)
+        self.gate_head = nn.Sequential(
+            nn.Linear(hidden_dim, 1),
+            nn.Sigmoid()
+        )
+        
+    def forward(self, x):
+        h = self.shared(x)
+        logits = self.logits_head(h)
+        gate = self.gate_head(h)
+        return logits, gate
+
+
 class EpisodicFactMemory(nn.Module):
     def __init__(
         self,
@@ -101,6 +121,8 @@ class EpisodicFactMemory(nn.Module):
         self.register_buffer("values", torch.empty(0, dtype=torch.long, device=dev))
         # V4.2: learned fuzzy query alignment (identity until trained).
         self.query_proj = ResidualQueryProjection(embed_dim, proj_hidden).to(dev)
+        # Horizon A: Consolidated Memory MLP
+        self.slow_mlp = None
 
     def __len__(self) -> int:
         return self.keys_raw.shape[0]
@@ -206,8 +228,26 @@ class EpisodicFactMemory(nn.Module):
         """
         queries = self.pool_sequence(queries)   # V4.2b tail smoothing (no-op if pool_len=1)
         lead = queries.shape[:-1]
-        q_raw = queries.reshape(-1, self.embed_dim).to(self.keys_raw.device)
+        q_raw = queries.reshape(-1, self.embed_dim)
         n = q_raw.shape[0]
+
+        if self.slow_mlp is not None:
+            # Horizon A: Consolidated Memory Mode (cortex-only)
+            dev = next(self.slow_mlp.parameters()).device
+            q_raw = q_raw.to(dev)
+            q_raw = self.query_proj(q_raw)
+            mu, V_sub = self.read_space()
+            q = self.to_read_space(q_raw, mu, V_sub)
+            logits_mem, gate_val = self.slow_mlp(q)
+            p_mem = F.softmax(logits_mem / self.read_temp, dim=-1)
+            lam = gate_val
+            return (
+                p_mem.reshape(*lead, self.vocab_size),
+                lam.reshape(*lead, 1),
+                (torch.ones(n, 1, device=dev) * 0.95).reshape(*lead, 1),
+            )
+
+        q_raw = q_raw.to(self.keys_raw.device)
         if len(self) == 0:
             zeros_v = torch.zeros(n, self.vocab_size, device=q_raw.device)
             zeros_1 = torch.zeros(n, 1, device=q_raw.device)
@@ -237,3 +277,58 @@ class EpisodicFactMemory(nn.Module):
             lam.reshape(*lead, 1),
             max_sim.reshape(*lead, 1),
         )
+
+    def consolidate(self, q_fact: torch.Tensor, pos_idx: torch.Tensor, q_ctrl: torch.Tensor, epochs: int = 200) -> None:
+        """Consolidate the episodic memory database into a joint MLP (logits + gate).
+        Once trained, the database is deleted and inference runs cortical-only."""
+        dev = self.keys_raw.device
+        mu, V_sub = self.read_space()
+        k_read = self.to_read_space(self.keys_raw, mu, V_sub).detach()
+        
+        # Build inputs and targets
+        train_inputs = []
+        target_tokens = []
+        target_gates = []
+        
+        # Fact queries
+        q_fact_read = self.to_read_space(self.query_proj(q_fact), mu, V_sub).detach()
+        for i in range(q_fact_read.shape[0]):
+            train_inputs.append(q_fact_read[i])
+            target_tokens.append(self.values[pos_idx[i]].item())
+            target_gates.append(0.95)
+            
+        # Control queries
+        q_ctrl_read = self.to_read_space(self.query_proj(q_ctrl), mu, V_sub).detach()
+        for i in range(q_ctrl_read.shape[0]):
+            train_inputs.append(q_ctrl_read[i])
+            target_tokens.append(0) # dummy
+            target_gates.append(0.0)
+            
+        train_inputs = torch.stack(train_inputs).to(dev)
+        target_tokens = torch.tensor(target_tokens, dtype=torch.long, device=dev)
+        target_gates = torch.tensor(target_gates, dtype=torch.float, device=dev).unsqueeze(-1)
+        
+        # Add raw keys
+        train_inputs = torch.cat([train_inputs, k_read], dim=0)
+        target_tokens = torch.cat([target_tokens, self.values], dim=0)
+        target_gates = torch.cat([target_gates, torch.ones(k_read.shape[0], 1, device=dev) * 0.95], dim=0)
+        
+        # Initialize and train MLP
+        self.slow_mlp = JointSlowMemoryMLP(vocab_size=self.vocab_size).to(dev)
+        optimizer = torch.optim.AdamW(self.slow_mlp.parameters(), lr=1e-3, weight_decay=0.01)
+        self.slow_mlp.train()
+        for epoch in range(epochs):
+            optimizer.zero_grad()
+            logits, gate = self.slow_mlp(train_inputs)
+            fact_mask = (target_gates > 0.5).squeeze(-1)
+            loss_ce = F.cross_entropy(logits[fact_mask], target_tokens[fact_mask])
+            loss_gate = F.mse_loss(gate, target_gates)
+            loss = loss_ce + 10.0 * loss_gate
+            loss.backward()
+            optimizer.step()
+        self.slow_mlp.eval()
+        
+        # Evict episodic list keys and values to free memory!
+        self.keys_raw = torch.empty(0, self.embed_dim, device=dev)
+        self.values = torch.empty(0, dtype=torch.long, device=dev)
+
