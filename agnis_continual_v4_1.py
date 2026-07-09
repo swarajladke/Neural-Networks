@@ -33,6 +33,7 @@ from agnis_continual_v2 import (
     build_hybrid,
 )
 from fact_memory import EpisodicFactMemory
+from paraphrase_eval_set import PARAPHRASED_PROBES
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MEMORY_PATH = "/kaggle/working/agnis_fact_memory_v41.pt"
@@ -83,6 +84,21 @@ def probe_recall(hybrid, memory: EpisodicFactMemory, label: str) -> int:
         print(f"  [{status}] [{f['id']}] lam@boundary={lam0:.2f} ...{f['probe'][-40:]}")
         print(f"          -> {answer[:80]}")
     print(f"\n  [{label}] Recall: {correct}/{len(RAW_FACTS)} = {correct * 100 // len(RAW_FACTS)}%\n")
+    return correct
+
+
+def probe_paraphrase_recall(hybrid, memory: EpisodicFactMemory, label: str) -> int:
+    correct = 0
+    for p in PARAPHRASED_PROBES:
+        completion, lam0 = generate_with_memory(hybrid, memory, p["probe"])
+        answer = completion[len(p["probe"]):].strip() if completion.startswith(p["probe"]) else completion.strip()
+        hit = sum(1 for kw in p["keywords"] if kw.lower() in completion.lower()) >= len(p["keywords"]) / 2
+        correct += int(hit)
+        status = "PASS" if hit else "FAIL"
+        print(f"  [{status}] [{p['id']}] lam@boundary={lam0:.2f} ...{p['probe'][-40:]}")
+        print(f"          -> {answer[:80]}")
+    total = len(PARAPHRASED_PROBES)
+    print(f"\n  [{label}] Paraphrase Recall: {correct}/{total} = {correct * 100 // total}%\n")
     return correct
 
 
@@ -152,6 +168,7 @@ def main():
     print("\nPHASE A — BASELINE (pure GPT-2, no memory)")
     print("-" * 65)
     before_recall = probe_recall(hybrid, empty, "BEFORE")
+    before_paraphrase = probe_paraphrase_recall(hybrid, empty, "BEFORE")
     before_retention = probe_retention(hybrid, empty, "BEFORE")
     before_ppl = measure_ppl(hybrid, empty, INDEPENDENT_PPL_TEXTS)
     print(f"  PPL before: {before_ppl:.2f}\n")
@@ -192,6 +209,7 @@ def main():
     print("PHASE D — POST-WRITE EVALUATION")
     print("-" * 65)
     after_recall = probe_recall(hybrid, memory, "AFTER")
+    after_paraphrase = probe_paraphrase_recall(hybrid, memory, "AFTER")
     after_retention = probe_retention(hybrid, memory, "AFTER")
     after_ppl = measure_ppl(hybrid, memory, INDEPENDENT_PPL_TEXTS)
     print(f"  PPL after: {after_ppl:.2f}\n")
@@ -199,9 +217,10 @@ def main():
     print("=" * 65)
     print("  V4.1 RESULTS")
     print("=" * 65)
-    print(f"  Recall    : {before_recall}/10 -> {after_recall}/10")
-    print(f"  Retention : {before_retention}/10 -> {after_retention}/10")
-    print(f"  PPL       : {before_ppl:.2f} -> {after_ppl:.2f} ({after_ppl - before_ppl:+.2f})")
+    print(f"  Recall            : {before_recall}/10 -> {after_recall}/10")
+    print(f"  Paraphrase Recall : {before_paraphrase}/20 -> {after_paraphrase}/20")
+    print(f"  Retention         : {before_retention}/10 -> {after_retention}/10")
+    print(f"  PPL               : {before_ppl:.2f} -> {after_ppl:.2f} ({after_ppl - before_ppl:+.2f})")
 
     torch.save(
         {"keys_raw": memory.keys_raw.cpu(), "values": memory.values.cpu()},
