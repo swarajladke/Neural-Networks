@@ -129,7 +129,7 @@ def gate_calibration(hybrid, memory: EpisodicFactMemory) -> None:
         mean = sum(best) / len(best)
         print(f"  {label:<34} max-sim mean={mean:.3f} | max={max(best):.3f}")
 
-    print(f"  Gate: threshold={memory.gate_threshold} sharpness={memory.gate_sharpness} lam_max={memory.lam_max}")
+    print(f"  Gate: threshold={memory.gate_threshold} sharpness={memory.gate_sharpness} lam_max={memory.lam_max} npc_project={memory.npc_project}")
     stats([f["probe"] for f in RAW_FACTS], "fact probes (must pass gate)")
     stats([p["probe"] for p in RETENTION_PROBES], "retention probes (must NOT pass)")
     stats(INDEPENDENT_PPL_TEXTS, "independent PPL texts (must NOT)")
@@ -137,8 +137,8 @@ def gate_calibration(hybrid, memory: EpisodicFactMemory) -> None:
 
 def main():
     print("=" * 65)
-    print("  AGNIS CONTINUAL LEARNING V4.1b")
-    print("  Episodic KV Memory + Answer-Only Boundary Write")
+    print("  AGNIS CONTINUAL LEARNING V4.1c")
+    print("  Episodic KV Memory + PCA Project-Out Gating")
     print("=" * 65)
 
     hybrid = build_hybrid()

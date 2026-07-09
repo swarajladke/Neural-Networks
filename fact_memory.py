@@ -37,9 +37,10 @@ class EpisodicFactMemory(nn.Module):
         vocab_size: int = 50257,
         top_k: int = 8,
         read_temp: float = 0.03,
-        gate_threshold: float = 0.90,
-        gate_sharpness: float = 60.0,
+        gate_threshold: float = 0.95,
+        gate_sharpness: float = 80.0,
         lam_max: float = 0.95,
+        npc_project: int = 5,
         device: str | torch.device = "cpu",
     ):
         super().__init__()
@@ -50,6 +51,7 @@ class EpisodicFactMemory(nn.Module):
         self.gate_threshold = gate_threshold
         self.gate_sharpness = gate_sharpness
         self.lam_max = lam_max
+        self.npc_project = npc_project
         dev = torch.device(device)
         self.register_buffer("keys_raw", torch.empty(0, embed_dim, device=dev))
         self.register_buffer("values", torch.empty(0, dtype=torch.long, device=dev))
@@ -91,8 +93,20 @@ class EpisodicFactMemory(nn.Module):
             )
 
         mu = self.keys_raw.mean(dim=0, keepdim=True)
-        k = F.normalize(self.keys_raw - mu, dim=-1)
-        q = F.normalize(q_raw - mu, dim=-1)
+        centered_keys = self.keys_raw - mu
+        q_centered = q_raw - mu
+        
+        if self.npc_project > 0 and len(self) > self.npc_project:
+            U, S, V = torch.svd(centered_keys)
+            V_sub = V[:, :self.npc_project]
+            k_proj = centered_keys - centered_keys @ V_sub @ V_sub.T
+            q_proj = q_centered - q_centered @ V_sub @ V_sub.T
+            k = F.normalize(k_proj, dim=-1)
+            q = F.normalize(q_proj, dim=-1)
+        else:
+            k = F.normalize(centered_keys, dim=-1)
+            q = F.normalize(q_centered, dim=-1)
+            
         sims = q @ k.T                                        # (N, M)
         kk = min(self.top_k, len(self))
         top_sims, top_idx = sims.topk(kk, dim=-1)             # (N, kk)
