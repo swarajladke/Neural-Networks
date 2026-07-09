@@ -76,10 +76,7 @@ class JointSlowMemoryMLP(nn.Module):
             nn.ReLU()
         )
         self.logits_head = nn.Linear(hidden_dim, vocab_size)
-        self.gate_head = nn.Sequential(
-            nn.Linear(hidden_dim, 1),
-            nn.Sigmoid()
-        )
+        self.gate_head = nn.Linear(hidden_dim, 1)
         
     def forward(self, x):
         h = self.shared(x)
@@ -238,13 +235,15 @@ class EpisodicFactMemory(nn.Module):
             q_raw = self.query_proj(q_raw)
             mu, V_sub = self.read_space()
             q = self.to_read_space(q_raw, mu, V_sub)
-            logits_mem, gate_val = self.slow_mlp(q)
+            logits_mem, sim_val = self.slow_mlp(q)
             p_mem = F.softmax(logits_mem / self.read_temp, dim=-1)
-            lam = gate_val
+            lam = self.lam_max * torch.sigmoid(
+                self.gate_sharpness * (sim_val - self.gate_threshold)
+            )
             return (
                 p_mem.reshape(*lead, self.vocab_size),
                 lam.reshape(*lead, 1),
-                (torch.ones(n, 1, device=dev) * 0.95).reshape(*lead, 1),
+                sim_val.reshape(*lead, 1),
             )
 
         q_raw = q_raw.to(self.keys_raw.device)
@@ -288,30 +287,37 @@ class EpisodicFactMemory(nn.Module):
         # Build inputs and targets
         train_inputs = []
         target_tokens = []
-        target_gates = []
+        target_sims = []
         
-        # Fact queries
-        q_fact_read = self.to_read_space(self.query_proj(q_fact), mu, V_sub).detach()
+        # Compute exact similarity targets using the episodic path
+        with torch.no_grad():
+            q_fact_read = self.to_read_space(self.query_proj(q_fact), mu, V_sub)
+            sims_fact = q_fact_read @ k_read.T
+            max_sims_fact = sims_fact.max(dim=-1).values
+            
+            q_ctrl_read = self.to_read_space(self.query_proj(q_ctrl), mu, V_sub)
+            sims_ctrl = q_ctrl_read @ k_read.T
+            max_sims_ctrl = sims_ctrl.max(dim=-1).values
+            
         for i in range(q_fact_read.shape[0]):
             train_inputs.append(q_fact_read[i])
             target_tokens.append(self.values[pos_idx[i]].item())
-            target_gates.append(0.95)
+            target_sims.append(max_sims_fact[i].item())
             
-        # Control queries
-        q_ctrl_read = self.to_read_space(self.query_proj(q_ctrl), mu, V_sub).detach()
         for i in range(q_ctrl_read.shape[0]):
             train_inputs.append(q_ctrl_read[i])
             target_tokens.append(0) # dummy
-            target_gates.append(0.0)
+            target_sims.append(max_sims_ctrl[i].item())
             
         train_inputs = torch.stack(train_inputs).to(dev)
         target_tokens = torch.tensor(target_tokens, dtype=torch.long, device=dev)
-        target_gates = torch.tensor(target_gates, dtype=torch.float, device=dev).unsqueeze(-1)
+        target_sims = torch.tensor(target_sims, dtype=torch.float, device=dev).unsqueeze(-1)
         
         # Add raw keys
+        self_sims = (k_read * k_read).sum(dim=-1, keepdim=True)
         train_inputs = torch.cat([train_inputs, k_read], dim=0)
         target_tokens = torch.cat([target_tokens, self.values], dim=0)
-        target_gates = torch.cat([target_gates, torch.ones(k_read.shape[0], 1, device=dev) * 0.95], dim=0)
+        target_sims = torch.cat([target_sims, self_sims], dim=0)
         
         # Initialize and train MLP
         self.slow_mlp = JointSlowMemoryMLP(vocab_size=self.vocab_size).to(dev)
@@ -319,10 +325,10 @@ class EpisodicFactMemory(nn.Module):
         self.slow_mlp.train()
         for epoch in range(epochs):
             optimizer.zero_grad()
-            logits, gate = self.slow_mlp(train_inputs)
-            fact_mask = (target_gates > 0.5).squeeze(-1)
+            logits, sim_pred = self.slow_mlp(train_inputs)
+            fact_mask = (target_sims > 0.5).squeeze(-1)
             loss_ce = F.cross_entropy(logits[fact_mask], target_tokens[fact_mask])
-            loss_gate = F.mse_loss(gate, target_gates)
+            loss_gate = F.mse_loss(sim_pred, target_sims)
             loss = loss_ce + 10.0 * loss_gate
             loss.backward()
             optimizer.step()
