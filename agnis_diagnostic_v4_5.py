@@ -301,8 +301,11 @@ def main():
         temp_keys.append(h[0, boundary:-1, :])
     memory.keys_raw = torch.cat(temp_keys, dim=0)
     mu, V_sub = memory.read_space()
+    # CRITICAL: clear BOTH keys_raw AND values — Protocol A writes polluted memory.values
     memory.keys_raw = torch.empty(0, 768, device=DEVICE)
-    print("  [OK] Space cache locked.")
+    memory.values = torch.empty(0, dtype=torch.long, device=DEVICE)
+    memory._space_cache = (mu, V_sub)  # preserve cached geometry
+    print("  [OK] Space cache locked. Episodic memory fully evicted.")
 
     # Initialize empty student MLP
     empty_mlp = JointSlowMemoryMLP(vocab_size=vocab_size).to(DEVICE)
