@@ -27,7 +27,7 @@ import torch.nn.functional as F
 
 from agnis_continual_v2 import INDEPENDENT_PPL_TEXTS, build_hybrid
 from agnis_continual_v4_1 import DEVICE, gpt2_forward, measure_ppl
-from agnis_continual_v4_2 import collect_control_states, train_query_projection, collect_fact_queries
+from agnis_continual_v4_2 import collect_control_states, train_query_projection
 from fact_memory import EpisodicFactMemory, JointSlowMemoryMLP
 from replay_sampler import ReplaySampler, slerp
 from agnis_contamination_metrics import build_answer_token_map, ParaphraseRecord
@@ -68,6 +68,39 @@ class ExactEpisodicReplayBuffer:
 
     def payload_bytes(self) -> int:
         return len(self.coordinates) * 768 * 4
+
+# ---------------------------------------------------------------------------
+# Local Query Collection for Scaling Dataset
+# ---------------------------------------------------------------------------
+@torch.no_grad()
+def collect_scaling_fact_queries(
+    hybrid,
+    memory: EpisodicFactMemory,
+    fact_ranges: dict,
+    answer_ids: dict,
+    all_facts: list[dict],
+    max_cont_tokens: int = 3,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Local, scaling-aware version of collect_fact_queries."""
+    tok = hybrid.tokenizer
+    qs, pos = [], []
+    for f in all_facts:
+        fid = f["id"]
+        start, length = fact_ranges[fid]
+        ans = answer_ids[fid]
+        for para in f["train_paraphrases"]:
+            p_ids = tok.encode(para, return_tensors="pt").to(hybrid.device)
+            n_cont = min(max_cont_tokens, length - 1, ans.shape[0])
+            for j in range(n_cont + 1):
+                ids = p_ids if j == 0 else torch.cat(
+                    [p_ids, ans[:j].view(1, -1)], dim=1
+                )
+                _, h = gpt2_forward(hybrid, ids)
+                # last hidden pooled sequences
+                q_raw = memory.pool_sequence(h[0])[-1, :]
+                qs.append(q_raw)
+                pos.append(start + j)
+    return torch.stack(qs), torch.tensor(pos, dtype=torch.long, device=hybrid.device)
 
 # ---------------------------------------------------------------------------
 # Hard Negatives Generation on the fly
@@ -641,7 +674,7 @@ def main():
                     fact_ranges[fid] = (start_idx, h_answer.shape[0])
                     answer_ids_all[fid] = v_answer.detach()
 
-    q_fact, pos_idx = collect_fact_queries(hybrid, memory, fact_ranges, answer_ids_all)
+    q_fact, pos_idx = collect_scaling_fact_queries(hybrid, memory, fact_ranges, answer_ids_all, all_facts)
     q_ctrl = collect_control_states(hybrid, memory)
     train_query_projection(memory, q_fact, pos_idx, q_ctrl)
     for param in memory.query_proj.parameters():
