@@ -230,6 +230,10 @@ def main():
     memory = EpisodicFactMemory(vocab_size=vocab_size, pool_len=2, device=DEVICE)
     sampler = ReplaySampler(embed_dim=768)
 
+    # Map raw fact IDs to injection fact texts for block indexing
+    for idx, fact in enumerate(INJECTION_FACT_TEXTS):
+        fact["id"] = RAW_FACTS[idx // 3]["id"]
+
     # Split the 10 RAW_FACTS into T=3 blocks:
     # B1: F01, F02, F03, F04
     # B2: F05, F06, F07
