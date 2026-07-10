@@ -63,6 +63,11 @@ class ReplaySampler:
         self.variances: dict[str, float] = {}
         # fact base id -> list of variant keys (e.g. ["F01_stmt", "F01_qa", "F01_cloze"])
         self.fact_variants: dict[str, list[str]] = {}
+        
+        # Caching pools to accelerate training (avoid rebuilding pools at every step)
+        self._slerp_pool: torch.Tensor | None = None
+        self._dirichlet_pool: torch.Tensor | None = None
+        self._mixed_pool: torch.Tensor | None = None
 
     def update_fact(self, fact_id: str, keys: torch.Tensor) -> None:
         """Store the medoid prototype (the actual key nearest to the mean)."""
@@ -90,6 +95,11 @@ class ReplaySampler:
             self.fact_variants[base_id] = []
         if fact_id not in self.fact_variants[base_id]:
             self.fact_variants[base_id].append(fact_id)
+            
+        # Invalidate cached pools
+        self._slerp_pool = None
+        self._dirichlet_pool = None
+        self._mixed_pool = None
 
     # ------------------------------------------------------------------
     # Sampling strategies
@@ -128,47 +138,40 @@ class ReplaySampler:
     ) -> torch.Tensor:
         """
         Strategy B / E: Pairwise SLERP between prototypes of the same fact.
-        Optionally filters generated coordinates through an immutable teacher
-        to avoid distilling ambiguous off-manifold behavior.
-
-        For each fact with ≥2 variants, SLERP between every pair at multiple t values.
-        Adds small Gaussian noise and re-normalizes after interpolation.
-
-        teacher (optional): frozen MLP to filter invalid samples.
+        Caches the pool dynamically on CPU to run at GPU speeds.
         """
-        candidates = []
+        if self._slerp_pool is None:
+            candidates = []
+            for base_id, variants in self.fact_variants.items():
+                if len(variants) < 2:
+                    continue
+                protos = [self.prototypes[v] for v in variants if v in self.prototypes]
+                if len(protos) < 2:
+                    continue
 
-        for base_id, variants in self.fact_variants.items():
-            if len(variants) < 2:
-                continue
-            protos = [self.prototypes[v].to(device) for v in variants if v in self.prototypes]
-            if len(protos) < 2:
-                continue
+                # All pairwise combinations
+                for i in range(len(protos)):
+                    for j in range(i + 1, len(protos)):
+                        for t in t_values:
+                            interp = slerp(protos[i], protos[j], t)
+                            if sigma_noise > 0:
+                                interp = F.normalize(interp + torch.randn_like(interp) * sigma_noise, dim=-1)
+                            candidates.append(interp.cpu())
 
-            # All pairwise combinations
-            for i in range(len(protos)):
-                for j in range(i + 1, len(protos)):
-                    for t in t_values:
-                        interp = slerp(protos[i], protos[j], t)
-                        if sigma_noise > 0:
-                            interp = F.normalize(interp + torch.randn_like(interp) * sigma_noise, dim=-1)
-                        candidates.append(interp)
+            if not candidates:
+                self._slerp_pool = self.sample_gaussian(max(64, count), torch.device("cpu")).cpu()
+            else:
+                pool = torch.stack(candidates)
+                if teacher is not None:
+                    pool = _filter_by_teacher(pool.to(device), teacher, replay_gate_min, margin_min).cpu()
+                if pool.shape[0] == 0:
+                    self._slerp_pool = self.sample_gaussian(max(64, count), torch.device("cpu")).cpu()
+                else:
+                    self._slerp_pool = pool
 
-        if not candidates:
-            return self.sample_gaussian(count, device)
-
-        pool = torch.stack(candidates)  # (N_candidates, E)
-
-        # Teacher filtering (optional)
-        if teacher is not None:
-            pool = _filter_by_teacher(pool, teacher, replay_gate_min, margin_min)
-
-        if pool.shape[0] == 0:
-            return self.sample_gaussian(count, device)
-
-        # Sample with replacement from filtered pool
+        pool = self._slerp_pool
         idxs = torch.randint(0, pool.shape[0], (count,))
-        return pool[idxs]
+        return pool[idxs].to(device)
 
     def sample_dirichlet(
         self,
@@ -182,47 +185,46 @@ class ReplaySampler:
     ) -> torch.Tensor:
         """
         Strategy: Dirichlet-weighted convex combination of a fact's prototypes.
-        Covers the interior of the prototype simplex, not just edges.
-
-        z = normalize( sum_k alpha_k * z_k )  where alpha ~ Dirichlet(gamma)
         """
-        if not self.fact_variants:
-            return self.sample_gaussian(count, device)
+        if self._dirichlet_pool is None:
+            if not self.fact_variants:
+                self._dirichlet_pool = self.sample_gaussian(max(64, count), torch.device("cpu")).cpu()
+            else:
+                base_ids = list(self.fact_variants.keys())
+                pool_size = max(5000, count * 2)
+                samples_per_fact = max(1, pool_size // len(base_ids))
+                candidates = []
 
-        base_ids = list(self.fact_variants.keys())
-        samples_per_fact = max(1, count // len(base_ids))
-        candidates = []
+                for base_id in base_ids:
+                    variants = [v for v in self.fact_variants[base_id] if v in self.prototypes]
+                    if not variants:
+                        continue
+                    protos = torch.stack([self.prototypes[v] for v in variants])  # (K, E)
+                    K = protos.shape[0]
 
-        for base_id in base_ids:
-            variants = [v for v in self.fact_variants[base_id] if v in self.prototypes]
-            if not variants:
-                continue
-            protos = torch.stack([self.prototypes[v] for v in variants]).to(device)  # (K, E)
-            K = protos.shape[0]
+                    for _ in range(samples_per_fact):
+                        alpha = torch.distributions.Dirichlet(
+                            torch.full((K,), gamma)
+                        ).sample()
+                        combo = (alpha.unsqueeze(-1) * protos).sum(dim=0)
+                        if sigma_noise > 0:
+                            combo = combo + torch.randn_like(combo) * sigma_noise
+                        candidates.append(F.normalize(combo, dim=-1).cpu())
 
-            for _ in range(samples_per_fact):
-                # Sample Dirichlet weights
-                alpha = torch.distributions.Dirichlet(
-                    torch.full((K,), gamma, device=device)
-                ).sample()  # (K,)
-                combo = (alpha.unsqueeze(-1) * protos).sum(dim=0)  # (E,)
-                if sigma_noise > 0:
-                    combo = combo + torch.randn_like(combo) * sigma_noise
-                candidates.append(F.normalize(combo, dim=-1))
+                if not candidates:
+                    self._dirichlet_pool = self.sample_gaussian(max(64, count), torch.device("cpu")).cpu()
+                else:
+                    pool = torch.stack(candidates)
+                    if teacher is not None:
+                        pool = _filter_by_teacher(pool.to(device), teacher, replay_gate_min, margin_min).cpu()
+                    if pool.shape[0] == 0:
+                        self._dirichlet_pool = self.sample_gaussian(max(64, count), torch.device("cpu")).cpu()
+                    else:
+                        self._dirichlet_pool = pool
 
-        if not candidates:
-            return self.sample_gaussian(count, device)
-
-        pool = torch.stack(candidates)
-
-        if teacher is not None:
-            pool = _filter_by_teacher(pool, teacher, replay_gate_min, margin_min)
-
-        if pool.shape[0] == 0:
-            return self.sample_gaussian(count, device)
-
+        pool = self._dirichlet_pool
         idxs = torch.randint(0, pool.shape[0], (count,))
-        return pool[idxs]
+        return pool[idxs].to(device)
 
     def sample_mixed(
         self,
@@ -234,17 +236,18 @@ class ReplaySampler:
         margin_min: float = 0.0,
     ) -> torch.Tensor:
         """50/50 mixture of SLERP tangent samples and Dirichlet interior samples."""
-        n_slerp = int(count * slerp_frac)
-        n_dirichlet = count - n_slerp
-        s1 = self.sample_tangent_slerp(n_slerp, device, teacher=teacher,
+        if self._mixed_pool is None:
+            n_slerp = max(2500, count)
+            n_dirichlet = max(2500, count)
+            s1 = self.sample_tangent_slerp(n_slerp, torch.device("cpu"), teacher=teacher,
+                                            replay_gate_min=replay_gate_min, margin_min=margin_min)
+            s2 = self.sample_dirichlet(n_dirichlet, torch.device("cpu"), teacher=teacher,
                                         replay_gate_min=replay_gate_min, margin_min=margin_min)
-        s2 = self.sample_dirichlet(n_dirichlet, device, teacher=teacher,
-                                    replay_gate_min=replay_gate_min, margin_min=margin_min)
-        if s1.shape[0] == 0:
-            return s2
-        if s2.shape[0] == 0:
-            return s1
-        return torch.cat([s1, s2], dim=0)
+            self._mixed_pool = torch.cat([s1, s2], dim=0).cpu()
+
+        pool = self._mixed_pool
+        idxs = torch.randint(0, pool.shape[0], (count,))
+        return pool[idxs].to(device)
 
     # ------------------------------------------------------------------
     # Memory accounting
