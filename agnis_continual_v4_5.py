@@ -147,7 +147,7 @@ def evaluate_block_performance(
             lam = memory.lam_max * torch.sigmoid(memory.gate_sharpness * (sim_val[0, 0] - memory.gate_threshold)).item()
             
         exact_ans_ids = tokenizer.encode(f["statement"]) # simple target check
-        target_tok = exact_ans_ids[len(tokenizer.encode(f["probe"]))].item() # first answer token
+        target_tok = exact_ans_ids[len(tokenizer.encode(f["probe"]))] # first answer token
         
         hit = (pred_tok == target_tok)
         exact_hits += int(hit)
