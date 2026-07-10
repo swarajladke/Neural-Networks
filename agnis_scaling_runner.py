@@ -100,6 +100,33 @@ class PrecomputedEvalData:
 
 
 # ---------------------------------------------------------------------------
+# Hard Negatives Generation on the fly
+# ---------------------------------------------------------------------------
+def generate_hard_negatives(block_facts: list[dict], all_facts: list[dict], tokenizer) -> list[str]:
+    """Generates entity-swapped hard negatives from the fact pool to stress-test gating specificity."""
+    negatives = []
+    # Collect all capitals and compounds in the universe to swap
+    capitals = list(set(f["capital"] for f in all_facts if "capital" in f))
+    temperatures = list(set(f["temperature"] for f in all_facts if "temperature" in f))
+    periods = list(set(f["period"] for f in all_facts if "period" in f))
+
+    for f in block_facts:
+        if f["category"] == "geography":
+            # Swap capital
+            alt_caps = [c for c in capitals if c != f["capital"]]
+            if alt_caps:
+                negatives.append(f"{random.choice(alt_caps)} is the official capital city of the region of {f['location']}.")
+        elif f["category"] == "science":
+            # Swap temperature
+            alt_temps = [t for t in temperatures if t != f["temperature"]]
+            if alt_temps:
+                negatives.append(f"The molecular compound {f['compound']} liquefies at exactly {random.choice(alt_temps)} degrees Celsius.")
+        elif f["category"] == "astronomy":
+            # Swap period
+            alt_periods = [p for p in periods if p != f["period"]]
+            if alt_periods:
+                negatives.append(f"The planetary satellite {f['moon']} orbits {f['planet']} in exactly {random.choice(alt_periods)} days.")
+    return negatives
 # Training Student Loop
 # ---------------------------------------------------------------------------
 def run_student_training(
