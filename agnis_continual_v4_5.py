@@ -114,6 +114,29 @@ def train_student_with_replay(
     return student
 
 
+@torch.no_grad()
+def collect_block_queries(hybrid, memory: EpisodicFactMemory, block_facts: list[dict], fact_ranges: dict, answer_ids: dict):
+    tok = hybrid.tokenizer
+    qs, pos = [], []
+    for f in block_facts:
+        fid = f["id"]
+        start, length = fact_ranges[fid]
+        ans = answer_ids[fid]
+        for para in TRAIN_PARAPHRASES[fid]:
+            p_ids = tok.encode(para, return_tensors="pt").to(hybrid.device)
+            n_cont = min(12, length - 1, ans.shape[0])
+            for j in range(n_cont + 1):
+                ids = p_ids if j == 0 else torch.cat(
+                    [p_ids, ans[:j].view(1, -1)], dim=1
+                )
+                _, h = gpt2_forward(hybrid, ids)
+                T = h.shape[1]
+                q_pooled = h[0, -min(2, T):, :].mean(dim=0)
+                qs.append(q_pooled)
+                pos.append(start + j)
+    return torch.stack(qs), torch.tensor(pos, dtype=torch.long, device=hybrid.device)
+
+
 def evaluate_block_performance(
     hybrid,
     memory: EpisodicFactMemory,
@@ -384,7 +407,7 @@ def main():
                 block_answer_ids[fid] = v_answer.detach()
                 
         # Collect current block positive and negative queries
-        q_fact_i, pos_idx_i = collect_fact_queries(hybrid, memory, block_fact_ranges, block_answer_ids)
+        q_fact_i, pos_idx_i = collect_block_queries(hybrid, memory, block_facts, block_fact_ranges, block_answer_ids)
         q_ctrl_i = collect_control_states(hybrid, memory)
         
         # Update Replay Sampler with current block fact prototypes
