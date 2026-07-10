@@ -68,6 +68,7 @@ class ReplaySampler:
         self._slerp_pool: torch.Tensor | None = None
         self._dirichlet_pool: torch.Tensor | None = None
         self._mixed_pool: torch.Tensor | None = None
+        self._all_protos_tensor: torch.Tensor | None = None
 
     def update_fact(self, fact_id: str, keys: torch.Tensor) -> None:
         """Store the medoid prototype (the actual key nearest to the mean)."""
@@ -100,6 +101,7 @@ class ReplaySampler:
         self._slerp_pool = None
         self._dirichlet_pool = None
         self._mixed_pool = None
+        self._all_protos_tensor = None
 
     # ------------------------------------------------------------------
     # Sampling strategies
@@ -108,19 +110,19 @@ class ReplaySampler:
     def sample_gaussian(self, count: int, device: torch.device, sigma: float = 0.003) -> torch.Tensor:
         """
         Strategy A: Gaussian perturbation around medoid prototypes.
-        Perturb each sampled prototype by σ in random direction, re-normalize.
+        Fully vectorized to run in microseconds with zero Python loops.
         """
         fact_ids = list(self.prototypes.keys())
         if not fact_ids:
             return torch.empty(0, self.embed_dim, device=device)
 
-        idxs = torch.randint(0, len(fact_ids), (count,))
-        samples = []
-        for idx in idxs:
-            proto = self.prototypes[fact_ids[idx]].to(device)
-            perturbed = proto + torch.randn_like(proto) * sigma
-            samples.append(F.normalize(perturbed, dim=-1))
-        return torch.stack(samples)
+        if self._all_protos_tensor is None:
+            self._all_protos_tensor = torch.stack([self.prototypes[fid] for fid in fact_ids]).cpu()
+
+        idxs = torch.randint(0, self._all_protos_tensor.shape[0], (count,))
+        base = self._all_protos_tensor[idxs].to(device)
+        perturbed = base + torch.randn_like(base) * sigma
+        return F.normalize(perturbed, dim=-1)
 
     # Alias for backward compatibility
     def sample_historical(self, count: int, device: torch.device, sigma: float = 0.003) -> torch.Tensor:
