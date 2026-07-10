@@ -102,6 +102,36 @@ def collect_scaling_fact_queries(
                 pos.append(start + j)
     return torch.stack(qs), torch.tensor(pos, dtype=torch.long, device=hybrid.device)
 
+@torch.no_grad()
+def collect_scaling_block_queries(
+    hybrid,
+    memory: EpisodicFactMemory,
+    block_facts: list[dict],
+    fact_ranges: dict,
+    answer_ids: dict,
+    max_cont_tokens: int = 12,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Local, scaling-aware version of collect_block_queries."""
+    tok = hybrid.tokenizer
+    qs, pos = [], []
+    for f in block_facts:
+        fid = f["id"]
+        start, length = fact_ranges[fid]
+        ans = answer_ids[fid]
+        for para in f["train_paraphrases"]:
+            p_ids = tok.encode(para, return_tensors="pt").to(hybrid.device)
+            n_cont = min(max_cont_tokens, length - 1, ans.shape[0])
+            for j in range(n_cont + 1):
+                ids = p_ids if j == 0 else torch.cat(
+                    [p_ids, ans[:j].view(1, -1)], dim=1
+                )
+                _, h = gpt2_forward(hybrid, ids)
+                T = h.shape[1]
+                q_pooled = h[0, -min(2, T):, :].mean(dim=0)
+                qs.append(q_pooled)
+                pos.append(start + j)
+    return torch.stack(qs), torch.tensor(pos, dtype=torch.long, device=hybrid.device)
+
 # ---------------------------------------------------------------------------
 # Hard Negatives Generation on the fly
 # ---------------------------------------------------------------------------
@@ -440,7 +470,7 @@ def run_scaling_experiment(
                     block_fact_ranges[fid] = (start_idx, h_answer.shape[0])
                     block_answer_ids[fid] = v_answer.detach()
 
-        q_fact_i, pos_idx_i = collect_block_queries(
+        q_fact_i, pos_idx_i = collect_scaling_block_queries(
             hybrid, memory, block_facts, block_fact_ranges, block_answer_ids
         )
         q_ctrl_i = collect_control_states(hybrid, memory)
