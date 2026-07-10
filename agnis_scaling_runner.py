@@ -27,7 +27,7 @@ import torch.nn.functional as F
 
 from agnis_continual_v2 import INDEPENDENT_PPL_TEXTS, build_hybrid
 from agnis_continual_v4_1 import DEVICE, gpt2_forward, measure_ppl
-from agnis_continual_v4_2 import collect_control_states, train_query_projection
+from agnis_continual_v4_2 import collect_control_states, train_query_projection, collect_fact_queries
 from fact_memory import EpisodicFactMemory, JointSlowMemoryMLP
 from replay_sampler import ReplaySampler, slerp
 from agnis_contamination_metrics import build_answer_token_map, ParaphraseRecord
