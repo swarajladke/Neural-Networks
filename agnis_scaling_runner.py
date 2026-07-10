@@ -159,9 +159,9 @@ def run_student_training(
     if variant == "no_replay" or sampler is None:
         replay_count = 0
     elif variant == "exact_episodic_replay":
-        replay_count = max(64, len(sampler.coordinates) * replay_count_per_fact)
+        replay_count = min(512, max(64, len(sampler.coordinates) * replay_count_per_fact))
     else:
-        replay_count = max(64, len(sampler.prototypes) * replay_count_per_fact)
+        replay_count = min(512, max(64, len(sampler.prototypes) * replay_count_per_fact))
 
     student.train()
     for _ in range(epochs):
