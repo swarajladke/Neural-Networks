@@ -403,23 +403,32 @@ def main():
             
             start = len(memory)
             memory.write(h_answer, v_answer)
+            variant_tag = ["_stmt", "_qa", "_cloze"][idx % 3]
+            fid = fact["id"]
+            # Track ranges for ALL 3 variants so each gets its own prototype
+            variant_key = fid + variant_tag
+            block_fact_ranges[variant_key] = (start, h_answer.shape[0])
+            # Only store answer_ids from the statement variant for query collection
             if idx % 3 == 0:
-                fid = fact["id"]
-                block_fact_ranges[fid] = (start, h_answer.shape[0])
+                block_fact_ranges[fid] = (start, h_answer.shape[0])  # keep plain fid for collect_block_queries
                 block_answer_ids[fid] = v_answer.detach()
                 
         # Collect current block positive and negative queries
         q_fact_i, pos_idx_i = collect_block_queries(hybrid, memory, block_facts, block_fact_ranges, block_answer_ids)
         q_ctrl_i = collect_control_states(hybrid, memory)
         
-        # Update Replay Sampler with current block fact prototypes IN READ SPACE
-        # CRITICAL: prototypes must be in the same coordinate system as MLP training inputs
+        # Update Replay Sampler with per-variant prototypes IN READ SPACE
+        # Store 3 prototypes per fact (statement, QA, cloze) to cover all query modes
         for fid in block_fact_ids:
-            start, length = block_fact_ranges[fid]
-            key_slice = memory.keys_raw[start : start + length]
-            with torch.no_grad():
-                key_read = memory.to_read_space(key_slice, mu, V_sub)
-            sampler.update_fact(fid, key_read)
+            for tag in ["_stmt", "_qa", "_cloze"]:
+                variant_key = fid + tag
+                if variant_key in block_fact_ranges:
+                    start, length = block_fact_ranges[variant_key]
+                    key_slice = memory.keys_raw[start : start + length]
+                    if key_slice.shape[0] > 0:
+                        with torch.no_grad():
+                            key_read = memory.to_read_space(key_slice, mu, V_sub)
+                        sampler.update_fact(variant_key, key_read)
             
         # Get student training coordinates and targets for current block facts
         k_read_i = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
