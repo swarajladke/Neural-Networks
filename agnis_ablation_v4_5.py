@@ -358,7 +358,8 @@ def run_variant(
         # Inject strategy override into sampler
         sampler._ablation_strategy = strategy
 
-        memory.slow_mlp = train_student_with_replay(
+        import agnis_continual_v4_5 as v45
+        memory.slow_mlp = v45.train_student_with_replay(
             memory=memory,
             sampler=sampler,
             teacher=teacher,
