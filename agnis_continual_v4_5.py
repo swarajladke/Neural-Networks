@@ -56,8 +56,9 @@ def train_student_with_replay(
     q_ctrl_read: torch.Tensor,          # control inputs (read space)
     epochs: int = 200,
     tau: float = 2.0,
-    lambda_replay: float = 1.0,
+    lambda_replay: float = 5.0,
     lambda_gate: float = 10.0,
+    replay_count_per_fact: int = 50,
 ) -> JointSlowMemoryMLP:
     """Train the student JointSlowMemoryMLP with current block data + soft teacher replay."""
     dev = current_inputs.device
@@ -69,8 +70,8 @@ def train_student_with_replay(
         
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=0.01)
     
-    # Replay sampling parameters
-    replay_count = 64
+    # Scale replay count with number of historical prototypes to balance gradient ratio
+    replay_count = max(64, len(sampler.prototypes) * replay_count_per_fact)
     
     student.train()
     for epoch in range(epochs):
@@ -454,7 +455,9 @@ def main():
             current_tokens=target_tokens_cur,
             current_sims=target_sims_cur,
             q_ctrl_read=q_ctrl_read_i,
-            epochs=250,
+            epochs=400,
+            lambda_replay=5.0,
+            replay_count_per_fact=50,
         )
         
         # 100% EVICTION: clear episodic database
