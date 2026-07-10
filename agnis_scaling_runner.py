@@ -580,7 +580,7 @@ def run_scaling_experiment(
 def main():
     args = parse_args()
     print("=" * 80)
-    print(f"  AGNIS SCALING BENCHMARK: {args.blocks} blocks × {args.facts_per-block} facts")
+    print(f"  AGNIS SCALING BENCHMARK: {args.blocks} blocks × {args.facts_per_block} facts")
     print(f"  Seeds to run: {args.seeds} | Epochs: {args.epochs}")
     print("=" * 80)
 
