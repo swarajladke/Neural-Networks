@@ -56,21 +56,27 @@ class ExactEpisodicReplayBuffer:
     """Stores training coordinates exactly without prototype compression."""
     def __init__(self):
         self.coordinates = []
+        self._tensor = None
 
     def add(self, coords: torch.Tensor):
-        for c in coords:
-            self.coordinates.append(c.cpu())
+        self.coordinates.append(coords.cpu())
+        self._tensor = None
 
     def sample(self, count: int, device: torch.device, sigma: float = 0.002) -> torch.Tensor:
         if not self.coordinates:
             return torch.empty(0, 768, device=device)
-        idxs = torch.randint(0, len(self.coordinates), (count,))
-        sampled = torch.stack([self.coordinates[i] for i in idxs]).to(device)
+        if self._tensor is None:
+            self._tensor = torch.cat(self.coordinates, dim=0)
+            
+        idxs = torch.randint(0, self._tensor.shape[0], (count,))
+        sampled = self._tensor[idxs].to(device)
         perturbed = sampled + torch.randn_like(sampled) * sigma
         return F.normalize(perturbed, dim=-1)
 
     def payload_bytes(self) -> int:
-        return len(self.coordinates) * 768 * 4
+        if self._tensor is None and self.coordinates:
+            self._tensor = torch.cat(self.coordinates, dim=0)
+        return self._tensor.numel() * 4 if self._tensor is not None else 0
 
 
 # ---------------------------------------------------------------------------
