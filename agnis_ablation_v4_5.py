@@ -250,7 +250,7 @@ def run_variant(
     if n_variants == 6:
         extra_tags = EXTRA_VARIANT_TAGS_6
     elif n_variants == 9:
-        extra_tags = EXTRA_VARIANT_TAGS_6 + EXTRA_VARIANT_TAGS_9
+        extra_tags = EXTRA_VARIANT_TAGS_9
 
     # Track R matrices
     R_exact = np.zeros((num_blocks + 1, num_blocks))
