@@ -412,10 +412,14 @@ def main():
         q_fact_i, pos_idx_i = collect_block_queries(hybrid, memory, block_facts, block_fact_ranges, block_answer_ids)
         q_ctrl_i = collect_control_states(hybrid, memory)
         
-        # Update Replay Sampler with current block fact prototypes
+        # Update Replay Sampler with current block fact prototypes IN READ SPACE
+        # CRITICAL: prototypes must be in the same coordinate system as MLP training inputs
         for fid in block_fact_ids:
             start, length = block_fact_ranges[fid]
-            sampler.update_fact(fid, memory.keys_raw[start : start + length])
+            key_slice = memory.keys_raw[start : start + length]
+            with torch.no_grad():
+                key_read = memory.to_read_space(key_slice, mu, V_sub)
+            sampler.update_fact(fid, key_read)
             
         # Get student training coordinates and targets for current block facts
         k_read_i = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
