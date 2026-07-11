@@ -147,7 +147,7 @@ def extract_pooled_representations(model_name, pooling_type):
                 else:
                     raise ValueError(f"Unknown pooling type: {pooling_type}")
                     
-            train_queries.append(rep.cpu())
+            train_queries.append(rep.cpu().float())
             train_labels.append(label)
             
         # 2. Validation Templates
@@ -166,7 +166,7 @@ def extract_pooled_representations(model_name, pooling_type):
             elif pooling_type == "multi_layer":
                 stacked = torch.stack([layers[i][0] for i in [-1, -2, -3, -4]])
                 rep = stacked.mean(dim=0).mean(dim=0)
-        val_queries.append(rep.cpu())
+        val_queries.append(rep.cpu().float())
         val_labels.append(label)
         
         # 3. Test Templates
@@ -186,7 +186,7 @@ def extract_pooled_representations(model_name, pooling_type):
                 elif pooling_type == "multi_layer":
                     stacked = torch.stack([layers[i][0] for i in [-1, -2, -3, -4]])
                     rep = stacked.mean(dim=0).mean(dim=0)
-            test_queries.append(rep.cpu())
+            test_queries.append(rep.cpu().float())
             test_labels.append(label)
             
     return {
