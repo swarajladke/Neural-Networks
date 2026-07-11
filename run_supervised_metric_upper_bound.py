@@ -235,7 +235,7 @@ def evaluate_1nn_metrics(model_fn, x_data, y_data, ref_x_data, ref_y_data):
         
         # Sort similarities descending
         sorted_sims, sorted_idxs = torch.sort(q_sims, descending=True)
-        sorted_labels = ref_y_data[sorted_idxs].tolist()
+        sorted_labels = ref_y_data[sorted_idxs.cpu()].tolist()
         
         # 1. 1-NN Accuracy
         pred_label = sorted_labels[0]
