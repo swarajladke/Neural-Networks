@@ -80,6 +80,20 @@ class ExactEpisodicReplayBuffer:
 
 
 # ---------------------------------------------------------------------------
+# Helper function to build correctly-aligned prompts for augmented templates
+# ---------------------------------------------------------------------------
+def get_template_prompt(f: dict, idx: int) -> tuple[str, str]:
+    if idx == 0:  # Statement
+        return f["statement"], f["probe"]
+    elif idx == 1:  # QA
+        prefix = f["qa"].split(f["statement"])[0]
+        return f["qa"], prefix + f["probe"]
+    else:  # Cloze
+        cloze_filled = f["cloze"].replace("_____", f["keywords"][0])
+        cloze_prompt = f["cloze"].split("_____")[0].strip()
+        return cloze_filled, cloze_prompt
+
+# ---------------------------------------------------------------------------
 # Pre-computed coordinate caching structures
 # ---------------------------------------------------------------------------
 class PrecomputedBlockData:
@@ -534,12 +548,12 @@ def main():
         for f in block:
             fid = f["id"]
             # Templates: statement, QA, cloze
-            templates = [f["statement"], f["qa"], f["cloze"]]
-            for idx, text in enumerate(templates):
+            for idx in range(3):
+                text, prompt = get_template_prompt(f, idx)
                 ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(hybrid.device)
                 _, h_full = gpt2_forward(hybrid, ids)
                 h = memory.pool_sequence(h_full)
-                prompt_ids = tokenizer.encode(f["probe"])
+                prompt_ids = tokenizer.encode(prompt)
                 
                 n = 0
                 limit = min(len(prompt_ids), len(ids[0].tolist()))
@@ -588,12 +602,12 @@ def main():
     temp_keys = []
     for block in blocks:
         for f in block:
-            templates = [f["statement"], f["qa"], f["cloze"]]
-            for text in templates:
+            for idx in range(3):
+                text, prompt = get_template_prompt(f, idx)
                 ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(hybrid.device)
                 _, h_full = gpt2_forward(hybrid, ids)
                 h = memory.pool_sequence(h_full)
-                prompt_ids = tokenizer.encode(f["probe"])
+                prompt_ids = tokenizer.encode(prompt)
                 n = 0
                 limit = min(len(prompt_ids), len(ids[0].tolist()))
                 while n < limit and ids[0, n].item() == prompt_ids[n]:
@@ -630,12 +644,12 @@ def main():
         for f in block:
             fid = f["id"]
             b_data.fact_ids.append(fid)
-            templates = [f["statement"], f["qa"], f["cloze"]]
-            for idx, text in enumerate(templates):
+            for idx in range(3):
+                text, prompt = get_template_prompt(f, idx)
                 ids = tokenizer.encode(text + tokenizer.eos_token, return_tensors="pt").to(hybrid.device)
                 _, h_full = gpt2_forward(hybrid, ids)
                 h = memory.pool_sequence(h_full)
-                prompt_ids = tokenizer.encode(f["probe"])
+                prompt_ids = tokenizer.encode(prompt)
                 n = 0
                 limit = min(len(prompt_ids), len(ids[0].tolist()))
                 while n < limit and ids[0, n].item() == prompt_ids[n]:

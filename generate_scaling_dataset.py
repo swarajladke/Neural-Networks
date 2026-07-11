@@ -9,6 +9,8 @@ Includes:
   - Statement, QA, and Cloze templates for injection
   - 3 Training Paraphrases per fact (for C_Gaussian_6 and E_DenseTangent_6)
   - 3 Evaluation Paraphrases per fact (never leaked during training)
+
+ALL TEMPLATES ARE PREFIX-ALIGNED to support the exact matching logic used by AGNIS.
 """
 import json
 import random
@@ -24,7 +26,6 @@ def build_fact_dataset():
     facts = []
     
     # 1. GEOGRAPHY (30 facts)
-    # Reuses locations and capitals to create massive overlap
     for i in range(30):
         loc = LOCATIONS[i % len(LOCATIONS)]
         cap = CAPITALS[(i + (i // len(LOCATIONS))) % len(CAPITALS)]
@@ -40,11 +41,12 @@ def build_fact_dataset():
             "category": "geography",
             "location": loc,
             "capital": cap,
-            "statement": f"{cap} is the official capital city of the region of {loc}.",
-            "qa": f"Q: What is the capital city of {loc}? A: {cap}",
-            "cloze": f"The official capital city of the region of {loc} is _____.",
-            "probe": f"The official capital city of the region of {loc} is",
+            "statement": f"The official capital city of {loc} is {cap}.",
+            "qa": f"Q: What is the capital of {loc}? A: The official capital city of {loc} is {cap}.",
+            "cloze": f"The official capital city of {loc} is _____.",
+            "probe": f"The official capital city of {loc} is",
             "answer": cap,
+            "keywords": [cap.split()[0]],
             "train_paraphrases": [
                 f"Identify the capital city of {loc}.",
                 f"Which city serves as the capital of {loc}?",
@@ -58,7 +60,6 @@ def build_fact_dataset():
         })
 
     # 2. SCIENCE - Melting Points (35 facts)
-    # Includes multi-token temperatures (e.g. "one hundred", "forty two")
     NUMBERS_STR = ["forty two", "eighty five", "one hundred", "two hundred", "three hundred", "five hundred", "eight hundred"]
     for i in range(35):
         comp = COMPOUNDS[i % len(COMPOUNDS)]
@@ -76,10 +77,11 @@ def build_fact_dataset():
             "compound": comp,
             "temperature": num,
             "statement": f"The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
-            "qa": f"Q: At what temperature does {comp} melt? A: {num} degrees Celsius.",
+            "qa": f"Q: At what temperature does {comp} melt? A: The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
             "cloze": f"The molecular compound {comp} liquefies at exactly _____ degrees Celsius.",
             "probe": f"The molecular compound {comp} liquefies at exactly",
             "answer": num,
+            "keywords": [num.split()[0]],
             "train_paraphrases": [
                 f"Specify the melting temperature of {comp}.",
                 f"At how many degrees Celsius does {comp} melt?",
@@ -113,10 +115,11 @@ def build_fact_dataset():
             "moon": moon,
             "period": period,
             "statement": f"The planetary satellite {moon} orbits {planet} in exactly {period} days.",
-            "qa": f"Q: How long does it take for {moon} to orbit {planet}? A: {period} days.",
+            "qa": f"Q: How long does it take for {moon} to orbit {planet}? A: The planetary satellite {moon} orbits {planet} in exactly {period} days.",
             "cloze": f"The planetary satellite {moon} orbits {planet} in exactly _____ days.",
             "probe": f"The planetary satellite {moon} orbits {planet} in exactly",
             "answer": period,
+            "keywords": [period.split()[0]],
             "train_paraphrases": [
                 f"What is the orbital period of the satellite {moon} around {planet}?",
                 f"How many days does it take {moon} to circle {planet}?",
