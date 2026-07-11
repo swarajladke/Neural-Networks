@@ -89,7 +89,8 @@ def get_template_prompt(f: dict, idx: int) -> tuple[str, str]:
         prefix = f["qa"].split(f["statement"])[0]
         return f["qa"], prefix + f["probe"]
     else:  # Cloze
-        cloze_filled = f["cloze"].replace("_____", f["keywords"][0])
+        kw = f.get("keywords", [f["answer"].split()[0]])[0]
+        cloze_filled = f["cloze"].replace("_____", kw)
         cloze_prompt = f["cloze"].split("_____")[0].strip()
         return cloze_filled, cloze_prompt
 
