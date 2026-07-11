@@ -213,7 +213,8 @@ def evaluate_1nn_metrics(model_fn, x_data, y_data, ref_x_data, ref_y_data):
     Evaluates 1-NN fact classification, MRR, and margin statistics.
     Ensures STRICT reference constraints (ref_x_data/ref_y_data contain train only).
     """
-    model_fn.eval()
+    if hasattr(model_fn, "eval"):
+        model_fn.eval()
     with torch.no_grad():
         z_queries = model_fn(x_data.to(DEVICE))
         z_refs = model_fn(ref_x_data.to(DEVICE))
