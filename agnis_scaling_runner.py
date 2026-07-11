@@ -147,6 +147,48 @@ def generate_hard_negatives(block_facts: list[dict], all_facts: list[dict], toke
             if alt_periods:
                 negatives.append(f"The planetary satellite {f['moon']} orbits {f['planet']} in exactly {random.choice(alt_periods)} days.")
     return negatives
+
+# ---------------------------------------------------------------------------
+# Scaling Query Projection Trainer
+# ---------------------------------------------------------------------------
+def train_scaling_query_projection(
+    memory: EpisodicFactMemory,
+    q_fact: torch.Tensor,
+    pos_idx: torch.Tensor,
+    q_ctrl: torch.Tensor,
+    max_epochs: int = 600,
+    lr: float = 0.005,
+    tau: float = 0.05,
+) -> None:
+    """Consolidation-aware query projection training with early stopping."""
+    mu, V_sub = memory.read_space()
+    k_read = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
+    opt = torch.optim.AdamW(memory.query_proj.parameters(), lr=lr)
+    
+    memory.query_proj.train()
+    for epoch in range(max_epochs):
+        opt.zero_grad()
+        qf = memory.to_read_space(memory.query_proj(q_fact), mu, V_sub)
+        qc = memory.to_read_space(memory.query_proj(q_ctrl), mu, V_sub)
+        
+        logits = torch.cat([qf @ k_read.T, qf @ qc.T.detach()], dim=1) / tau
+        loss_nce = F.cross_entropy(logits, pos_idx)
+        
+        # Hinge loss on control similarity to anchor them to zero
+        loss_ctrl = (qc ** 2).mean()
+        loss = loss_nce + 0.1 * loss_ctrl
+        
+        loss.backward()
+        opt.step()
+        
+        if epoch % 50 == 0 or epoch == max_epochs - 1:
+            with torch.no_grad():
+                pred = logits.argmax(dim=-1)
+                acc = (pred == pos_idx).float().mean().item()
+            print(f"  epoch {epoch:4d} | nce={loss_nce.item():.4f} ctrl={loss_ctrl.item():.4f} | pos-acc={acc*100:.1f}%")
+            if acc >= 0.98 and epoch >= 100:
+                print(f"  [OK] Query projection converged early at epoch {epoch}.")
+                break
 # Training Student Loop
 # ---------------------------------------------------------------------------
 def run_student_training(
@@ -593,7 +635,7 @@ def main():
     pos_idx = torch.tensor(pos, dtype=torch.long, device=hybrid.device)
 
     q_ctrl = collect_control_states(hybrid, memory)
-    train_query_projection(memory, q_fact, pos_idx, q_ctrl)
+    train_scaling_query_projection(memory, q_fact, pos_idx, q_ctrl)
     for param in memory.query_proj.parameters():
         param.requires_grad = False
     print("  [OK] Query projection frozen.")
