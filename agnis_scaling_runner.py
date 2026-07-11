@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("--blocks", type=int, default=10, help="Number of blocks to run (1-10)")
     parser.add_argument("--facts-per-block", type=int, default=10, help="Number of facts per block")
     parser.add_argument("--seeds", type=int, default=1, help="Number of independent random seeds to run")
-    parser.add_argument("--variants", type=str, nargs="+", default=["no_replay", "A_Gaussian_3", "C_Gaussian_6", "E_DenseTangent_6", "exact_episodic_replay"],
+    parser.add_argument("--variants", type=str, nargs="+", default=["no_replay", "A_Gaussian_3", "C_Gaussian_6", "E_DenseTangent_6", "exact_episodic_replay", "sequential_larger_mlp", "joint_offline_fixed_mlp", "joint_offline_larger_mlp"],
                         help="List of variants to run")
     parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs per block consolidation")
     return parser.parse_args()
@@ -153,14 +153,16 @@ def generate_hard_negatives(block_facts: list[dict], all_facts: list[dict], toke
 # ---------------------------------------------------------------------------
 def train_scaling_query_projection(
     memory: EpisodicFactMemory,
-    q_fact: torch.Tensor,
-    pos_idx: torch.Tensor,
+    q_train: torch.Tensor,
+    pos_train: torch.Tensor,
+    q_val: torch.Tensor,
+    pos_val: torch.Tensor,
     q_ctrl: torch.Tensor,
     max_epochs: int = 500,
     lr: float = 0.002,
     tau: float = 0.05,
 ) -> None:
-    """Consolidation-aware query projection training with checkpointing and gradient clipping."""
+    """Consolidation-aware query projection training with disjoint validation checkpointing and gradient clipping."""
     mu, V_sub = memory.read_space()
     k_read = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
     opt = torch.optim.AdamW(memory.query_proj.parameters(), lr=lr, weight_decay=0.01)
@@ -172,36 +174,40 @@ def train_scaling_query_projection(
     for epoch in range(max_epochs):
         memory.query_proj.train()
         opt.zero_grad()
-        qf = memory.to_read_space(memory.query_proj(q_fact), mu, V_sub)
+        qf_train = memory.to_read_space(memory.query_proj(q_train), mu, V_sub)
         qc = memory.to_read_space(memory.query_proj(q_ctrl), mu, V_sub)
         
-        logits = torch.cat([qf @ k_read.T, qf @ qc.T.detach()], dim=1) / tau
-        loss_nce = F.cross_entropy(logits, pos_idx)
+        logits_train = torch.cat([qf_train @ k_read.T, qf_train @ qc.T.detach()], dim=1) / tau
+        loss_nce = F.cross_entropy(logits_train, pos_train)
         
         loss_nce.backward()
         torch.nn.utils.clip_grad_norm_(memory.query_proj.parameters(), max_norm=1.0)
         opt.step()
         
-        # Monitor validation accuracy
-        with torch.no_grad():
-            pred = logits.argmax(dim=-1)
-            acc = (pred == pos_idx).float().mean().item()
-            loss_val = loss_nce.item()
-            
-        if acc > best_acc or (acc == best_acc and loss_val < best_loss):
-            best_acc = acc
-            best_loss = loss_val
-            best_state = copy.deepcopy(memory.query_proj.state_dict())
-            
-        if epoch % 50 == 0 or epoch == max_epochs - 1:
-            print(f"  epoch {epoch:4d} | nce={loss_val:.4f} | pos-acc={acc*100:.1f}%")
-            if acc >= 0.98 and epoch >= 100:
-                print(f"  [OK] Query projection converged early at epoch {epoch}.")
-                break
+        # Monitor validation accuracy on disjoint val set
+        if epoch % 10 == 0 or epoch == max_epochs - 1:
+            memory.query_proj.eval()
+            with torch.no_grad():
+                qf_val = memory.to_read_space(memory.query_proj(q_val), mu, V_sub)
+                logits_val = torch.cat([qf_val @ k_read.T, qf_val @ qc.T.detach()], dim=1) / tau
+                pred_val = logits_val.argmax(dim=-1)
+                acc_val = (pred_val == pos_val).float().mean().item()
+                loss_val = F.cross_entropy(logits_val, pos_val).item()
+                
+            if acc_val > best_acc or (acc_val == best_acc and loss_val < best_loss):
+                best_acc = acc_val
+                best_loss = loss_val
+                best_state = copy.deepcopy(memory.query_proj.state_dict())
+                
+            if epoch % 50 == 0 or epoch == max_epochs - 1:
+                print(f"  epoch {epoch:4d} | val-nce={loss_val:.4f} | val-acc={acc_val*100:.1f}%")
+                if acc_val >= 0.98 and epoch >= 100:
+                    print(f"  [OK] Query projection converged early on validation set at epoch {epoch}.")
+                    break
                 
     if best_state is not None:
         memory.query_proj.load_state_dict(best_state)
-        print(f"  [OK] Restored best query projection state with accuracy: {best_acc*100:.1f}%")
+        print(f"  [OK] Restored best query projection state with validation accuracy: {best_acc*100:.1f}%")
 # Training Student Loop
 # ---------------------------------------------------------------------------
 def run_student_training(
@@ -218,9 +224,10 @@ def run_student_training(
     tau: float = 2.0,
     lambda_replay: float = 5.0,
     lambda_gate: float = 10.0,
+    hidden_dim: int = 512,
 ) -> JointSlowMemoryMLP:
     dev = current_inputs.device
-    student = JointSlowMemoryMLP(vocab_size=vocab_size).to(dev)
+    student = JointSlowMemoryMLP(vocab_size=vocab_size, hidden_dim=hidden_dim).to(dev)
     if teacher is not None:
         student.load_state_dict(teacher.state_dict())
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=0.01)
@@ -405,9 +412,11 @@ def run_scaling_cached(
     hn_coords: torch.Tensor,
 ) -> dict:
     num_blocks = len(blocks_data)
+    hidden_dim = 1024 if variant in ["sequential_larger_mlp", "joint_offline_larger_mlp"] else 512
+    effective_variant = "E_DenseTangent_6" if variant == "sequential_larger_mlp" else variant
     
-    # Init empty student weights
-    student_mlp = JointSlowMemoryMLP(vocab_size=vocab_size).to(DEVICE)
+    # Init student weights
+    student_mlp = JointSlowMemoryMLP(vocab_size=vocab_size, hidden_dim=hidden_dim).to(DEVICE)
     with torch.no_grad():
         nn.init.zeros_(student_mlp.logits_head.weight)
         nn.init.zeros_(student_mlp.logits_head.bias)
@@ -417,10 +426,10 @@ def run_scaling_cached(
     gate_threshold = 0.602
     gate_sharpness = 80.0
 
-    if variant == "exact_episodic_replay":
+    if effective_variant == "exact_episodic_replay":
         sampler = ExactEpisodicReplayBuffer()
         replay_per_proto = 6
-    elif variant in ["C_Gaussian_6", "E_DenseTangent_6"]:
+    elif effective_variant in ["C_Gaussian_6", "E_DenseTangent_6"]:
         sampler = ReplaySampler(embed_dim=768)
         replay_per_proto = 9
     else:
@@ -435,103 +444,168 @@ def run_scaling_cached(
     gate_fps = 0
     hn_fps = 0
     margin_pool = []
+    confusion_matrix = np.zeros((num_blocks, num_blocks), dtype=int)
     
     start_time = time.time()
 
-    for i in range(1, num_blocks + 1):
-        teacher = None
-        if i > 1:
-            teacher = copy.deepcopy(student_mlp).eval()
-            for p in teacher.parameters():
-                p.requires_grad = False
-
-        b_data = blocks_data[i - 1]
+    if "joint_offline" in variant:
+        # 1. JOINT OFFLINE CAPACITY DIAGNOSTIC
+        # Combine training data across all blocks
+        all_train_inputs = torch.cat([b.train_inputs for b in blocks_data], dim=0).to(DEVICE)
+        all_target_tokens = torch.cat([b.target_tokens for b in blocks_data], dim=0).to(DEVICE)
+        all_target_sims = torch.cat([b.target_sims for b in blocks_data], dim=0).to(DEVICE)
+        all_q_ctrl = torch.cat([b.q_ctrl_read for b in blocks_data], dim=0).to(DEVICE)
         
-        # Update replay buffer from current block training coordinates
-        for fid in b_data.fact_ids:
-            # Base 3 templates
-            if fid in b_data.stmt_keys_read:
-                k_stmt = b_data.stmt_keys_read[fid]
-                if variant == "exact_episodic_replay":
-                    sampler.add(k_stmt)
-                elif variant != "no_replay":
-                    sampler.update_fact(fid + "_stmt", k_stmt)
-                    
-            if fid in b_data.qa_keys_read:
-                k_qa = b_data.qa_keys_read[fid]
-                if variant == "exact_episodic_replay":
-                    sampler.add(k_qa)
-                elif variant != "no_replay":
-                    sampler.update_fact(fid + "_qa", k_qa)
-                    
-            if fid in b_data.cloze_keys_read:
-                k_cloze = b_data.cloze_keys_read[fid]
-                if variant == "exact_episodic_replay":
-                    sampler.add(k_cloze)
-                elif variant != "no_replay":
-                    sampler.update_fact(fid + "_cloze", k_cloze)
-
-            # Extra training templates
-            if variant in ["C_Gaussian_6", "E_DenseTangent_6"]:
-                if fid in b_data.train_para_keys_read:
-                    for idx_tp, k_tp in enumerate(b_data.train_para_keys_read[fid]):
-                        sampler.update_fact(f"{fid}_tp{idx_tp}", k_tp.unsqueeze(0))
-
-        # Train student MLP on cached tensors (CPU/GPU local)
         student_mlp = run_student_training(
             vocab_size=vocab_size,
-            sampler=sampler if variant != "no_replay" else None,
-            teacher=teacher,
-            current_inputs=b_data.train_inputs.to(DEVICE),
-            current_tokens=b_data.target_tokens.to(DEVICE),
-            current_sims=b_data.target_sims.to(DEVICE),
-            q_ctrl_read=b_data.q_ctrl_read.to(DEVICE),
-            epochs=epochs,
-            variant=variant,
-            replay_count_per_fact=replay_per_proto,
+            sampler=None,
+            teacher=None,
+            current_inputs=all_train_inputs,
+            current_tokens=all_target_tokens,
+            current_sims=all_target_sims,
+            q_ctrl_read=all_q_ctrl,
+            epochs=epochs * 2,  # double epochs for offline joint capacity
+            variant="no_replay",
+            replay_count_per_fact=0,
+            hidden_dim=hidden_dim,
         )
-
-        # Evaluate performance on currently learned blocks
-        for j in range(i):
-            exact_acc, para_acc, para_recs = evaluate_variant_cached(
-                student_mlp, gate_threshold, gate_sharpness, eval_data[j], answer_map, j + 1, i, sampler if variant != "no_replay" else None, DEVICE
-            )
-            R_exact[i, j] = exact_acc
-            R_para[i, j] = para_acc
-            
-            if i == num_blocks:
-                for r in para_recs:
-                    if not r.correct:
-                        total_failures += 1
-                        if r.is_contaminated:
-                            total_contaminations += 1
-                    margin_pool.append(r.logit_margin)
-
-        # Evaluate Control and Hard Negative false-positives at the final stage
-        if i == num_blocks:
+        
+        # Evaluate offline trained MLP across all stages
+        for i in range(1, num_blocks + 1):
+            for j in range(i):
+                exact_acc, para_acc, para_recs = evaluate_variant_cached(
+                    student_mlp, gate_threshold, gate_sharpness, eval_data[j], answer_map, j + 1, i, None, DEVICE
+                )
+                R_exact[i, j] = exact_acc
+                R_para[i, j] = para_acc
+                
+                if i == num_blocks:
+                    for r in para_recs:
+                        if not r.correct:
+                            total_failures += 1
+                            if r.is_contaminated:
+                                total_contaminations += 1
+                                if r.contaminating_block is not None:
+                                    confusion_matrix[r.contaminating_block - 1, j] += 1
+                        margin_pool.append(r.logit_margin)
+                        
+        if ctrl_coords.shape[0] > 0:
             with torch.no_grad():
-                # Control FPR
-                if ctrl_coords.shape[0] > 0:
-                    _, ctrl_sims = student_mlp(ctrl_coords.to(DEVICE))
-                    ctrl_gate_probs = torch.sigmoid(gate_sharpness * (ctrl_sims.squeeze(-1) - gate_threshold))
-                    gate_fps = (ctrl_gate_probs >= 0.5).sum().item()
+                _, ctrl_sims = student_mlp(ctrl_coords.to(DEVICE))
+                ctrl_gate_probs = torch.sigmoid(gate_sharpness * (ctrl_sims.squeeze(-1) - gate_threshold))
+                gate_fps = (ctrl_gate_probs >= 0.5).sum().item()
+        if hn_coords.shape[0] > 0:
+            with torch.no_grad():
+                _, hn_sims = student_mlp(hn_coords.to(DEVICE))
+                hn_gate_probs = torch.sigmoid(gate_sharpness * (hn_sims.squeeze(-1) - gate_threshold))
+                hn_fps = (hn_gate_probs >= 0.5).sum().item()
 
-                # Hard negative FPR
-                if hn_coords.shape[0] > 0:
-                    _, hn_sims = student_mlp(hn_coords.to(DEVICE))
-                    hn_gate_probs = torch.sigmoid(gate_sharpness * (hn_sims.squeeze(-1) - gate_threshold))
-                    hn_fps = (hn_gate_probs >= 0.5).sum().item()
+    else:
+        # 2. SEQUENTIAL CONSOLIDATION RUN
+        for i in range(1, num_blocks + 1):
+            teacher = None
+            if i > 1:
+                teacher = copy.deepcopy(student_mlp).eval()
+                for p in teacher.parameters():
+                    p.requires_grad = False
+
+            b_data = blocks_data[i - 1]
+            
+            # Update replay buffer from current block training coordinates
+            for fid in b_data.fact_ids:
+                if fid in b_data.stmt_keys_read:
+                    k_stmt = b_data.stmt_keys_read[fid]
+                    if effective_variant == "exact_episodic_replay":
+                        sampler.add(k_stmt)
+                    elif effective_variant != "no_replay":
+                        sampler.update_fact(fid + "_stmt", k_stmt)
+                        
+                if fid in b_data.qa_keys_read:
+                    k_qa = b_data.qa_keys_read[fid]
+                    if effective_variant == "exact_episodic_replay":
+                        sampler.add(k_qa)
+                    elif effective_variant != "no_replay":
+                        sampler.update_fact(fid + "_qa", k_qa)
+                        
+                if fid in b_data.cloze_keys_read:
+                    k_cloze = b_data.cloze_keys_read[fid]
+                    if effective_variant == "exact_episodic_replay":
+                        sampler.add(k_cloze)
+                    elif effective_variant != "no_replay":
+                        sampler.update_fact(fid + "_cloze", k_cloze)
+
+                # Extra training templates
+                if effective_variant in ["C_Gaussian_6", "E_DenseTangent_6"]:
+                    if fid in b_data.train_para_keys_read:
+                        for idx_tp, k_tp in enumerate(b_data.train_para_keys_read[fid]):
+                            sampler.update_fact(f"{fid}_tp{idx_tp}", k_tp.unsqueeze(0))
+
+            # Train student MLP on cached tensors (CPU/GPU local)
+            student_mlp = run_student_training(
+                vocab_size=vocab_size,
+                sampler=sampler if effective_variant != "no_replay" else None,
+                teacher=teacher,
+                current_inputs=b_data.train_inputs.to(DEVICE),
+                current_tokens=b_data.target_tokens.to(DEVICE),
+                current_sims=b_data.target_sims.to(DEVICE),
+                q_ctrl_read=b_data.q_ctrl_read.to(DEVICE),
+                epochs=epochs,
+                variant=effective_variant,
+                replay_count_per_fact=replay_per_proto,
+                hidden_dim=hidden_dim,
+            )
+
+            # Evaluate performance on currently learned blocks
+            for j in range(i):
+                exact_acc, para_acc, para_recs = evaluate_variant_cached(
+                    student_mlp, gate_threshold, gate_sharpness, eval_data[j], answer_map, j + 1, i, sampler if effective_variant != "no_replay" else None, DEVICE
+                )
+                R_exact[i, j] = exact_acc
+                R_para[i, j] = para_acc
+                
+                if i == num_blocks:
+                    for r in para_recs:
+                        if not r.correct:
+                            total_failures += 1
+                            if r.is_contaminated:
+                                total_contaminations += 1
+                                if r.contaminating_block is not None:
+                                    confusion_matrix[r.contaminating_block - 1, j] += 1
+                        margin_pool.append(r.logit_margin)
+
+            # Evaluate Control and Hard Negative false-positives at the final stage
+            if i == num_blocks:
+                with torch.no_grad():
+                    if ctrl_coords.shape[0] > 0:
+                        _, ctrl_sims = student_mlp(ctrl_coords.to(DEVICE))
+                        ctrl_gate_probs = torch.sigmoid(gate_sharpness * (ctrl_sims.squeeze(-1) - gate_threshold))
+                        gate_fps = (ctrl_gate_probs >= 0.5).sum().item()
+
+                    if hn_coords.shape[0] > 0:
+                        _, hn_sims = student_mlp(hn_coords.to(DEVICE))
+                        hn_gate_probs = torch.sigmoid(gate_sharpness * (hn_sims.squeeze(-1) - gate_threshold))
+                        hn_fps = (hn_gate_probs >= 0.5).sum().item()
 
     final_exact = [R_exact[num_blocks, j] for j in range(num_blocks)]
     final_para = [R_para[num_blocks, j] for j in range(num_blocks)]
     
-    forgetting_exact = [R_exact[j+1, j] - R_exact[num_blocks, j] for j in range(num_blocks - 1)]
-    forgetting_para = [R_para[j+1, j] - R_para[num_blocks, j] for j in range(num_blocks - 1)]
-    
-    avg_recall_exact = np.mean(final_exact)
-    avg_recall_para = np.mean(final_para)
+    # Plasticity: immediate recall R_{j+1, j}
+    P_exact = [R_exact[j + 1, j] for j in range(num_blocks)]
+    P_para = [R_para[j + 1, j] for j in range(num_blocks)]
+    avg_P_exact = np.mean(P_exact)
+    avg_P_para = np.mean(P_para)
+
+    # Forgetting: R_{j+1, j} - R_{num_blocks, j}
+    forgetting_exact = [R_exact[j + 1, j] - R_exact[num_blocks, j] for j in range(num_blocks - 1)]
+    forgetting_para = [R_para[j + 1, j] - R_para[num_blocks, j] for j in range(num_blocks - 1)]
     avg_forgetting_exact = np.mean(forgetting_exact) if forgetting_exact else 0.0
     avg_forgetting_para = np.mean(forgetting_para) if forgetting_para else 0.0
+
+    # Final retention ratio per block: R_{num_blocks, j} / max(R_{j+1, j}, 1e-5)
+    retention_ratios_exact = [final_exact[j] / max(P_exact[j], 1e-5) for j in range(num_blocks)]
+    retention_ratios_para = [final_para[j] / max(P_para[j], 1e-5) for j in range(num_blocks)]
+    avg_retention_exact = np.mean(retention_ratios_exact)
+    avg_retention_para = np.mean(retention_ratios_para)
 
     margin_min = np.min(margin_pool) if margin_pool else 0.0
     margin_5th = np.percentile(margin_pool, 5) if margin_pool else 0.0
@@ -539,14 +613,25 @@ def run_scaling_cached(
     margin_95th = np.percentile(margin_pool, 95) if margin_pool else 0.0
 
     training_time = time.time() - start_time
-    bytes_per_fact = sampler.payload_bytes() / len(blocks_data) / 10 if (variant != "no_replay" and sampler is not None) else 0.0
+    
+    bytes_per_fact = 0.0
+    if effective_variant != "no_replay" and "joint_offline" not in variant and sampler is not None:
+        bytes_per_fact = sampler.payload_bytes() / num_blocks / 10
 
     return {
         "variant": variant,
-        "avg_recall_exact": avg_recall_exact,
-        "avg_recall_para": avg_recall_para,
+        "avg_recall_exact": np.mean(final_exact),
+        "avg_recall_para": np.mean(final_para),
         "avg_forgetting_exact": avg_forgetting_exact,
         "avg_forgetting_para": avg_forgetting_para,
+        "avg_plasticity_exact": avg_P_exact,
+        "avg_plasticity_para": avg_P_para,
+        "avg_retention_exact": avg_retention_exact,
+        "avg_retention_para": avg_retention_para,
+        "P_exact": P_exact,
+        "P_para": P_para,
+        "R_T_exact": final_exact,
+        "R_T_para": final_para,
         "failures": total_failures,
         "contaminations": total_contaminations,
         "gate_fps": gate_fps,
@@ -557,12 +642,12 @@ def run_scaling_cached(
         "margin_95th": margin_95th,
         "bytes_per_fact": bytes_per_fact,
         "training_time": training_time,
+        "confusion_matrix": confusion_matrix.tolist(),
     }
 
 
 # ---------------------------------------------------------------------------
 # Main Execution Loop
-# ---------------------------------------------------------------------------
 def main():
     args = parse_args()
     print("=" * 80)
@@ -628,27 +713,34 @@ def main():
                     answer_ids_all[fid] = v_answer.detach()
 
     # Extract all queries upfront for projection
-    # Manually compute q_fact and pos_idx locally to avoid hardcoded RAW_FACTS dependency
-    qs, pos = [], []
+    # Split train_paraphrases into train (first 2) and val (last 1) disjoint sets
+    qs_train, pos_train = [], []
+    qs_val, pos_val = [], []
     for f in all_facts:
         fid = f["id"]
         start, length = fact_ranges[fid]
         ans = answer_ids_all[fid]
-        for para in f["train_paraphrases"]:
+        for idx_p, para in enumerate(f["train_paraphrases"]):
             p_ids = tokenizer.encode(para, return_tensors="pt").to(hybrid.device)
-            # Use short continuation count to optimize
             n_cont = min(3, length - 1, ans.shape[0])
             for j in range(n_cont + 1):
                 ids = p_ids if j == 0 else torch.cat([p_ids, ans[:j].view(1, -1)], dim=1)
                 _, h = gpt2_forward(hybrid, ids)
                 q_raw = memory.pool_sequence(h[0])[-1, :]
-                qs.append(q_raw)
-                pos.append(start + j)
-    q_fact = torch.stack(qs)
-    pos_idx = torch.tensor(pos, dtype=torch.long, device=hybrid.device)
+                if idx_p < 2:
+                    qs_train.append(q_raw)
+                    pos_train.append(start + j)
+                else:
+                    qs_val.append(q_raw)
+                    pos_val.append(start + j)
+                    
+    q_train = torch.stack(qs_train)
+    pos_train = torch.tensor(pos_train, dtype=torch.long, device=hybrid.device)
+    q_val = torch.stack(qs_val)
+    pos_val = torch.tensor(pos_val, dtype=torch.long, device=hybrid.device)
 
     q_ctrl = collect_control_states(hybrid, memory)
-    train_scaling_query_projection(memory, q_fact, pos_idx, q_ctrl)
+    train_scaling_query_projection(memory, q_train, pos_train, q_val, pos_val, q_ctrl)
     for param in memory.query_proj.parameters():
         param.requires_grad = False
     print("  [OK] Query projection frozen.")
@@ -877,13 +969,14 @@ def main():
     # -----------------------------------------------------------------------
     # Print Aggregated Results Summary
     # -----------------------------------------------------------------------
-    print("\n" + "="*110)
+    print("\n" + "="*145)
     print("  AGGREGATED SCALING RUNNER SUMMARY (Across seeds)")
-    print("="*110)
-    hdr = (f"  {'Variant':<22} {'A_T^ex':>9} {'A_T^pa':>9} {'F_T^ex':>9} {'F_T^pa':>9}"
-           f" {'Fails':>6} {'Contam':>7} {'Gate FP':>7} {'HN FP':>6} {'Min m':>7} {'Bytes/F':>8}")
+    print("="*145)
+    hdr = (f"  {'Variant':<24} {'A_T^ex':>9} {'A_T^pa':>9} {'F_T^ex':>9} {'F_T^pa':>9}"
+           f" {'P_T^ex':>9} {'P_T^pa':>9} {'Ret^ex':>9} {'Ret^pa':>9}"
+           f" {'Fails':>6} {'Contam':>7} {'FPR_g':>7} {'FPR_hn':>7} {'Min m':>7}")
     print(hdr)
-    print("  " + "─" * 105)
+    print("  " + "─" * 140)
 
     for variant, runs in results_by_variant.items():
         avg_rec_ex = np.mean([r["avg_recall_exact"] for r in runs]) * 100
@@ -893,29 +986,65 @@ def main():
         
         avg_f_ex = np.mean([r["avg_forgetting_exact"] for r in runs]) * 100
         avg_f_pa = np.mean([r["avg_forgetting_para"] for r in runs]) * 100
+
+        avg_p_ex = np.mean([r["avg_plasticity_exact"] for r in runs]) * 100
+        avg_p_pa = np.mean([r["avg_plasticity_para"] for r in runs]) * 100
+
+        avg_ret_ex = np.mean([r["avg_retention_exact"] for r in runs]) * 100
+        avg_ret_pa = np.mean([r["avg_retention_para"] for r in runs]) * 100
         
         fails = int(np.mean([r["failures"] for r in runs]))
         contam = int(np.mean([r["contaminations"] for r in runs]))
-        gate_fp = int(np.mean([r["gate_fps"] for r in runs]))
-        hn_fp = int(np.mean([r["hn_fps"] for r in runs]))
+        
+        # General control FPR
+        ctrl_total = ctrl_coords.shape[0] if ctrl_coords.shape[0] > 0 else 1
+        avg_gate_fpr = np.mean([r["gate_fps"] for r in runs]) / ctrl_total * 100
+        
+        # Hard negative FPR
+        hn_total = hn_coords.shape[0] if hn_coords.shape[0] > 0 else 1
+        avg_hn_fpr = np.mean([r["hn_fps"] for r in runs]) / hn_total * 100
         
         min_margin = np.mean([r["margin_min"] for r in runs])
-        bytes_f = int(runs[0]["bytes_per_fact"])
 
         print(
-            f"  {variant:<22}"
+            f"  {variant:<24}"
             f" {avg_rec_ex:>4.1f}±{std_rec_ex:<3.1f}"
             f" {avg_rec_pa:>4.1f}±{std_rec_pa:<3.1f}"
             f" {avg_f_ex:>8.1f}%"
             f" {avg_f_pa:>8.1f}%"
+            f" {avg_p_ex:>8.1f}%"
+            f" {avg_p_pa:>8.1f}%"
+            f" {avg_ret_ex:>8.1f}%"
+            f" {avg_ret_pa:>8.1f}%"
             f" {fails:6d}"
             f" {contam:7d}"
-            f" {gate_fp:7d}"
-            f" {hn_fp:6d}"
+            f" {avg_gate_fpr:>6.1f}%"
+            f" {avg_hn_fpr:>6.1f}%"
             f" {min_margin:>+7.2f}"
-            f" {bytes_f:8d}"
         )
-    print("="*110)
+    print("="*145)
+
+    # Detailed statistics and block breakdown
+    for variant, runs in results_by_variant.items():
+        print(f"\nVariant: {variant}")
+        run = runs[0]
+        print(f"  Plasticity vector P_j (exact): " + ", ".join([f"{p*100:.1f}%" for p in run["P_exact"]]))
+        print(f"  Final Recall R_T,j (exact):   " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_exact"]]))
+        print(f"  Plasticity vector P_j (para):  " + ", ".join([f"{p*100:.1f}%" for p in run["P_para"]]))
+        print(f"  Final Recall R_T,j (para):    " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_para"]]))
+        
+        # Contamination statistics
+        c_ratio_fails = run["contaminations"] / max(1, run["failures"]) * 100
+        total_eval_queries = args.blocks * args.facts_per_block * 3  # 3 paraphrases/fact
+        c_ratio_queries = run["contaminations"] / total_eval_queries * 100
+        print(f"  Contamination among errors: {run['contaminations']}/{run['failures']} ({c_ratio_fails:.1f}%)")
+        print(f"  Contamination per total query: {run['contaminations']}/{total_eval_queries} ({c_ratio_queries:.1f}%)")
+        
+        # Confusion matrix print
+        conf_mat = np.array(run["confusion_matrix"])
+        print("  Confusion Matrix (rows = source block, columns = victim block):")
+        for row in conf_mat:
+            print("    " + " ".join([f"{val:3d}" for val in row]))
 
 if __name__ == "__main__":
     import functools
