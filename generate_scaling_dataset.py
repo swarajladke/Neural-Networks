@@ -2,40 +2,58 @@
 generate_scaling_dataset.py — Generates 100 Structured Facts for Scaling Experiments
 =====================================================================================
 Generates a JSON file containing 100 facts partitioned into 10 blocks (10 facts each).
-Includes:
-  - Semantically dense overlapping entities (reused locations/capitals/numbers)
-  - Contradictory fact updates (same entity, updated answer in later blocks)
-  - Multi-token answers (e.g. "forty two", "Varek City")
-  - Statement, QA, and Cloze templates for injection
-  - 3 Training Paraphrases per fact (for C_Gaussian_6 and E_DenseTangent_6)
-  - 3 Evaluation Paraphrases per fact (never leaked during training)
-
-ALL TEMPLATES ARE PREFIX-ALIGNED to support the exact matching logic used by AGNIS.
+ALL TEMPLATES ARE PREFIX-ALIGNED and use 100% unique entities to prevent query conflicts.
 """
 import json
 import random
 
 def build_fact_dataset():
-    # Pools of entities to create high semantic overlap
-    LOCATIONS = ["Luma", "Aurantia", "Kaelen", "Vesper", "Solaria", "Zephyr", "Nebulia", "Boreas", "Aethel", "Chronos"]
-    CAPITALS = ["Varek City", "Velathi Port", "Xenon Vale", "Selene Spire", "Pyros Peak", "Kryos Cove", "Nova Ridge", "Oros Town"]
-    COMPOUNDS = ["Xenolite-B", "Thermocyclase-9", "Auranium-X", "Helios-IV", "Zircon-D", "Neptunite-G", "Krypton-F", "Solite-H"]
-    PLANETS = ["Kepler-9814b", "Gliese-581d", "Luyten-b", "Proxima-c", "Trappist-1e", "K2-18b", "Wasp-76b", "Osiris-IV"]
-    MOONS = ["Aria", "Bello", "Ceres", "Deimos", "Phobos", "Titan", "Io", "Europa"]
+    # Helper to generate unique entities
+    def gen_unique(count, prefixes, suffixes):
+        out = []
+        for p in prefixes:
+            for s in suffixes:
+                out.append(f"{p}{s}")
+                if len(out) == count:
+                    return out
+        return out
+
+    # Generate 100 unique entities for each category
+    loc_prefixes = ["Luma", "Aura", "Kael", "Vesp", "Sola", "Zeph", "Nebu", "Bore", "Aeth", "Chro"]
+    loc_suffixes = ["ria", "ntia", "len", "per", "ris", "phyra", "lia", "as", "hel", "nos"]
+    LOCATIONS = gen_unique(100, loc_prefixes, loc_suffixes)
+
+    cap_prefixes = ["Varek", "Velath", "Xenon", "Selen", "Pyros", "Kryos", "Nova", "Oros", "Zirco", "Helio"]
+    cap_suffixes = [" City", " Port", " Vale", " Spire", " Peak", " Cove", " Ridge", " Town", " Bay", " Dome"]
+    CAPITALS = gen_unique(100, cap_prefixes, cap_suffixes)
+
+    comp_prefixes = ["Xenol", "Therm", "Auran", "Helio", "Zirco", "Neptu", "Krypt", "Solit", "Pyrot", "Selen"]
+    comp_suffixes = ["-A", "-B", "-C", "-D", "-E", "-F", "-G", "-H", "-X", "-Z"]
+    COMPOUNDS = gen_unique(100, comp_prefixes, comp_suffixes)
+
+    planet_prefixes = ["Kepler", "Gliese", "Luyten", "Proxima", "Trappist", "Wasp", "Osiris", "K2", "TOI", "HD"]
+    planet_suffixes = ["-101b", "-202c", "-303d", "-404e", "-505f", "-606g", "-707h", "-808i", "-909j", "-1000k"]
+    PLANETS = gen_unique(100, planet_prefixes, planet_suffixes)
+
+    moon_prefixes = ["Aria", "Bello", "Ceres", "Deim", "Phob", "Tita", "Euro", "Calli", "Gany", "Io"]
+    moon_suffixes = ["-Alpha", "-Beta", "-Gamma", "-Delta", "-Epsilon", "-Zeta", "-Eta", "-Theta", "-Iota", "-Kappa"]
+    MOONS = gen_unique(100, moon_prefixes, moon_suffixes)
+
+    # Multi-token numeric answers for Science & Astronomy
+    NUMBERS_STR = [
+        "forty two", "eighty five", "one hundred", "two hundred", 
+        "three hundred", "five hundred", "eight hundred", "nine hundred",
+        "seventy six", "sixty four", "fifty eight", "ninety one"
+    ]
     
     facts = []
     
-    # 1. GEOGRAPHY (30 facts)
-    for i in range(30):
-        loc = LOCATIONS[i % len(LOCATIONS)]
-        cap = CAPITALS[(i + (i // len(LOCATIONS))) % len(CAPITALS)]
+    # 1. GEOGRAPHY (34 facts: G01 to G34)
+    for i in range(34):
+        loc = LOCATIONS[i]
+        cap = CAPITALS[i]
         fid = f"G{i+1:02d}"
         
-        # Add contradictory updates: G21 updates G01 (Luma's capital), G22 updates G02, etc.
-        if i >= 20:
-            loc = LOCATIONS[(i - 20) % len(LOCATIONS)]
-            cap = CAPITALS[(i + 4) % len(CAPITALS)] # new capital city
-            
         facts.append({
             "id": fid,
             "category": "geography",
@@ -59,18 +77,12 @@ def build_fact_dataset():
             ]
         })
 
-    # 2. SCIENCE - Melting Points (35 facts)
-    NUMBERS_STR = ["forty two", "eighty five", "one hundred", "two hundred", "three hundred", "five hundred", "eight hundred"]
-    for i in range(35):
-        comp = COMPOUNDS[i % len(COMPOUNDS)]
+    # 2. SCIENCE - Melting Points (33 facts: S01 to S33)
+    for i in range(33):
+        comp = COMPOUNDS[i]
         num = NUMBERS_STR[i % len(NUMBERS_STR)]
         fid = f"S{i+1:02d}"
         
-        # Contradictory update: S25+ updates S01+ melting points
-        if i >= 25:
-            comp = COMPOUNDS[(i - 25) % len(COMPOUNDS)]
-            num = NUMBERS_STR[(i + 2) % len(NUMBERS_STR)]
-            
         facts.append({
             "id": fid,
             "category": "science",
@@ -94,20 +106,14 @@ def build_fact_dataset():
             ]
         })
 
-    # 3. ASTRONOMY - Orbital Periods (35 facts)
+    # 3. ASTRONOMY - Orbital Periods (33 facts: A01 to A33)
     PERIODS = ["forty seven", "eighty eight", "twelve days", "nineteen days", "thirty six", "six days", "fifteen days"]
-    for i in range(35):
-        planet = PLANETS[i % len(PLANETS)]
-        moon = MOONS[i % len(MOONS)]
+    for i in range(33):
+        planet = PLANETS[i]
+        moon = MOONS[i]
         period = PERIODS[i % len(PERIODS)]
         fid = f"A{i+1:02d}"
         
-        # Contradictory update: A25+ updates A01+ orbits
-        if i >= 25:
-            planet = PLANETS[(i - 25) % len(PLANETS)]
-            moon = MOONS[(i + 1) % len(MOONS)]
-            period = PERIODS[(i + 3) % len(PERIODS)]
-            
         facts.append({
             "id": fid,
             "category": "astronomy",
