@@ -156,17 +156,21 @@ def train_scaling_query_projection(
     q_fact: torch.Tensor,
     pos_idx: torch.Tensor,
     q_ctrl: torch.Tensor,
-    max_epochs: int = 600,
-    lr: float = 0.005,
+    max_epochs: int = 500,
+    lr: float = 0.002,
     tau: float = 0.05,
 ) -> None:
-    """Consolidation-aware query projection training with early stopping."""
+    """Consolidation-aware query projection training with checkpointing and gradient clipping."""
     mu, V_sub = memory.read_space()
     k_read = memory.to_read_space(memory.keys_raw, mu, V_sub).detach()
-    opt = torch.optim.AdamW(memory.query_proj.parameters(), lr=lr)
+    opt = torch.optim.AdamW(memory.query_proj.parameters(), lr=lr, weight_decay=0.01)
     
-    memory.query_proj.train()
+    best_acc = -1.0
+    best_loss = 1e9
+    best_state = None
+    
     for epoch in range(max_epochs):
+        memory.query_proj.train()
         opt.zero_grad()
         qf = memory.to_read_space(memory.query_proj(q_fact), mu, V_sub)
         qc = memory.to_read_space(memory.query_proj(q_ctrl), mu, V_sub)
@@ -174,21 +178,30 @@ def train_scaling_query_projection(
         logits = torch.cat([qf @ k_read.T, qf @ qc.T.detach()], dim=1) / tau
         loss_nce = F.cross_entropy(logits, pos_idx)
         
-        # Hinge loss on control similarity to anchor them to zero
-        loss_ctrl = (qc ** 2).mean()
-        loss = loss_nce + 0.1 * loss_ctrl
-        
-        loss.backward()
+        loss_nce.backward()
+        torch.nn.utils.clip_grad_norm_(memory.query_proj.parameters(), max_norm=1.0)
         opt.step()
         
+        # Monitor validation accuracy
+        with torch.no_grad():
+            pred = logits.argmax(dim=-1)
+            acc = (pred == pos_idx).float().mean().item()
+            loss_val = loss_nce.item()
+            
+        if acc > best_acc or (acc == best_acc and loss_val < best_loss):
+            best_acc = acc
+            best_loss = loss_val
+            best_state = copy.deepcopy(memory.query_proj.state_dict())
+            
         if epoch % 50 == 0 or epoch == max_epochs - 1:
-            with torch.no_grad():
-                pred = logits.argmax(dim=-1)
-                acc = (pred == pos_idx).float().mean().item()
-            print(f"  epoch {epoch:4d} | nce={loss_nce.item():.4f} ctrl={loss_ctrl.item():.4f} | pos-acc={acc*100:.1f}%")
+            print(f"  epoch {epoch:4d} | nce={loss_val:.4f} | pos-acc={acc*100:.1f}%")
             if acc >= 0.98 and epoch >= 100:
                 print(f"  [OK] Query projection converged early at epoch {epoch}.")
                 break
+                
+    if best_state is not None:
+        memory.query_proj.load_state_dict(best_state)
+        print(f"  [OK] Restored best query projection state with accuracy: {best_acc*100:.1f}%")
 # Training Student Loop
 # ---------------------------------------------------------------------------
 def run_student_training(
