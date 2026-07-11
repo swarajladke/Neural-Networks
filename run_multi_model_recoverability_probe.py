@@ -295,7 +295,7 @@ def run_comparison_sweeps():
     for model_name in results:
         print(f"\nModel: {model_name}")
         print(f"  {'Pooling Type':<16} | {'Raw 1-NN':<10} | {'Probe Mean':<10} | {'95% LCB':<10}")
-        print("  " + "─" * 52)
+        print("  " + "-" * 52)
         for pool_type in results[model_name]:
             res = results[model_name][pool_type]
             print(f"  {pool_type:<16} | {res['raw_acc']*100:>8.1f}% | {res['mean_acc']*100:>8.1f}% | {res['lcb']*100:>8.1f}%")
