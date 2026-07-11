@@ -20,12 +20,13 @@ CACHE_PATH = "smollm2_embeddings_34slots.pt"
 # Reproducibility Locks
 MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
+INPUT_DIM = 960
 
 # ---------------------------------------------------------------------------
 # 1. Models & Helper Probes
 # ---------------------------------------------------------------------------
 class ResidualMetricProbe(nn.Module):
-    def __init__(self, input_dim=768, hidden_dim=512, output_dim=128):
+    def __init__(self, input_dim=INPUT_DIM, hidden_dim=512, output_dim=128):
         super().__init__()
         self.skip = nn.Linear(input_dim, output_dim, bias=False)
         self.body = nn.Sequential(
@@ -71,7 +72,7 @@ def train_supervised_probe(train_x, train_y, test_x, test_y, d_active, seed=42):
     np.random.seed(seed)
     random.seed(seed)
     
-    probe = ResidualMetricProbe(input_dim=768, hidden_dim=512, output_dim=d_active).to(DEVICE)
+    probe = ResidualMetricProbe(input_dim=INPUT_DIM, hidden_dim=512, output_dim=d_active).to(DEVICE)
     opt = torch.optim.AdamW(probe.parameters(), lr=1e-3, weight_decay=1e-4)
     
     tx = train_x.to(DEVICE)
@@ -107,13 +108,13 @@ def fit_pca(train_x, d_active):
     mean = train_x.mean(dim=0, keepdim=True)
     x_centered = train_x - mean
     _, _, V = torch.linalg.svd(x_centered, full_matrices=False)
-    proj = V[:d_active].T  # (768, d_active)
+    proj = V[:d_active].T  # (INPUT_DIM, d_active)
     return mean, proj
 
 
 def fit_random_projection(d_active, seed=42):
     g = torch.Generator().manual_seed(seed)
-    matrix = torch.randn(768, d_active, generator=g)
+    matrix = torch.randn(INPUT_DIM, d_active, generator=g)
     Q, _ = torch.linalg.qr(matrix, mode="reduced")
     return Q
 
@@ -182,7 +183,7 @@ def load_and_cache_dataset():
         ).to(DEVICE)
         with torch.no_grad():
             outputs = model(enc.input_ids, attention_mask=enc.attention_mask)
-            hidden = outputs.hidden_states[-1]          # [B, T, 768]
+            hidden = outputs.hidden_states[-1]          # [B, T, INPUT_DIM]
             mask = enc.attention_mask.unsqueeze(-1)     # [B, T, 1]
             pooled = (hidden * mask).sum(dim=1)
             pooled = pooled / mask.sum(dim=1).clamp_min(1)
@@ -350,7 +351,7 @@ def main():
     # 0. Raw SmolLM2 Baseline
     raw_acc = evaluate_projection_1nn(train_x, train_y, test_x, test_y)
     print("="*80)
-    print(f"  [Baseline] Raw SmolLM2 Test Accuracy (768D): {raw_acc*100:.2f}%")
+    print(f"  [Baseline] Raw SmolLM2 Test Accuracy ({INPUT_DIM}D): {raw_acc*100:.2f}%")
     print("="*80)
     
     # ---------------------------------------------------------------------------
@@ -387,7 +388,7 @@ def main():
         supervised_acc = train_supervised_probe(data["train_x"], train_y, data["test_x"], test_y, w, seed=42)
         
         # Initialize and train QPL local autoencoder at width w
-        qpl = HybridQPL(input_dim=768, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=1.0).to(DEVICE)
+        qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=1.0).to(DEVICE)
         qpl.initialize_basis(w)
         
         # Unsupervised learning
@@ -437,7 +438,7 @@ def main():
     for rho in rho_values:
         k = max(1, int(rho * best_width))
         for t in temps:
-            qpl = HybridQPL(input_dim=768, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=t).to(DEVICE)
+            qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=t).to(DEVICE)
             qpl.initialize_basis(best_width)
             
             # Train Full QPL with soft competition and anti-hebbian updates
@@ -472,7 +473,7 @@ def main():
     ]
     
     for name, variant, k_val in variants:
-        qpl = HybridQPL(input_dim=768, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=best_t).to(DEVICE)
+        qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=best_t).to(DEVICE)
         qpl.initialize_basis(best_width)
         
         # Train variant
