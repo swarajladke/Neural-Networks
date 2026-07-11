@@ -184,7 +184,7 @@ def compute_student_t_interval(scores):
 # Main Sweep
 # ---------------------------------------------------------------------------
 def main():
-    models = ["gpt2", "Qwen/Qwen2.5-0.5B", "HuggingFaceTB/SmolLM2-360M"]
+    models = ["Qwen/Qwen2.5-0.5B"]
     results = {}
     
     for model_name in models:
