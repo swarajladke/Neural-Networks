@@ -295,44 +295,62 @@ def evaluate_variant_cached(
     stage: int,
     sampler: ReplaySampler | ExactEpisodicReplayBuffer | None,
     device: torch.device,
-) -> tuple[float, float, list[ParaphraseRecord]]:
-    exact_hits = 0
+) -> tuple[float, float, float, float, list[ParaphraseRecord]]:
+    exact_forced_hits = 0
+    exact_natural_hits = 0
+    para_forced_hits = 0
+    para_natural_hits = 0
+    total_para_queries = 0
     para_records = []
     
     for eval_f in eval_facts_data:
         fid = eval_f.fid
         target_tok = eval_f.target_tok
         
-        # 1. Exact query check (first paraphrase element represents exact probe in our cache)
+        # 1. Exact query check
         if eval_f.paraphrases:
-            _, q_read = eval_f.paraphrases[0]
+            para_text, q_read = eval_f.paraphrases[0]
             q_read = q_read.to(device)
             with torch.no_grad():
-                logits_mem, _ = mlp(q_read.unsqueeze(0))
+                logits_mem, sim_mem = mlp(q_read.unsqueeze(0))
                 pred_tok = logits_mem[0].argmax().item()
-            if pred_tok == target_tok:
-                exact_hits += 1
+                gate_prob = torch.sigmoid(gate_sharpness * (sim_mem[0, 0] - gate_threshold)).item()
+                gate_active = gate_prob >= 0.5
+                
+            correct_forced = (pred_tok == target_tok)
+            correct_natural = correct_forced and gate_active
+            
+            if correct_forced:
+                exact_forced_hits += 1
+            if correct_natural:
+                exact_natural_hits += 1
                 
         # 2. Generalization check
         for para_text, q_read in eval_f.paraphrases:
+            total_para_queries += 1
             q_read = q_read.to(device)
             with torch.no_grad():
                 logits_para, sim_para = mlp(q_read.unsqueeze(0))
                 logits_1d = logits_para[0]
                 pred_tok_para = logits_1d.argmax().item()
-                correct_para = (pred_tok_para == target_tok)
-                
-                target_logit = logits_1d[target_tok].item()
-                pred_logit = logits_1d[pred_tok_para].item()
-                probs = F.softmax(logits_1d, dim=-1)
-                target_prob = probs[target_tok].item()
-                target_rank = int((probs > probs[target_tok]).sum().item()) + 1
+                correct_para_forced = (pred_tok_para == target_tok)
                 
                 raw_sim = sim_para[0, 0].item()
                 gate_prob = torch.sigmoid(
                     gate_sharpness * (sim_para[0, 0] - gate_threshold)
                 ).item()
                 gate_active = gate_prob >= 0.5
+                
+                if correct_para_forced:
+                    para_forced_hits += 1
+                if correct_para_forced and gate_active:
+                    para_natural_hits += 1
+                
+                target_logit = logits_1d[target_tok].item()
+                pred_logit = logits_1d[pred_tok_para].item()
+                probs = F.softmax(logits_1d, dim=-1)
+                target_prob = probs[target_tok].item()
+                target_rank = int((probs > probs[target_tok]).sum().item()) + 1
                 
                 # Cross-fact contamination margin
                 other_fact_logits = {
@@ -343,14 +361,14 @@ def evaluate_variant_cached(
                 if other_fact_logits:
                     max_other_logit = max(other_fact_logits.values())
                     logit_margin = target_logit - max_other_logit
-                    is_contaminated = (not correct_para) and (
+                    is_contaminated = (not correct_para_forced) and (
                         pred_tok_para in answer_map and answer_map[pred_tok_para][0] != fid
                     )
                     contaminating_fid = answer_map[pred_tok_para][0] if (
-                        not correct_para and pred_tok_para in answer_map
+                        not correct_para_forced and pred_tok_para in answer_map
                     ) else None
                     contaminating_block = answer_map[pred_tok_para][1] if (
-                        not correct_para and pred_tok_para in answer_map
+                        not correct_para_forced and pred_tok_para in answer_map
                     ) else None
                 else:
                     logit_margin = 0.0
@@ -377,7 +395,7 @@ def evaluate_variant_cached(
                 target_tok_str=str(target_tok),
                 pred_tok=pred_tok_para,
                 pred_tok_str=str(pred_tok_para),
-                correct=correct_para,
+                correct=correct_para_forced,
                 target_logit=target_logit,
                 pred_logit=pred_logit,
                 target_rank=target_rank,
@@ -393,9 +411,11 @@ def evaluate_variant_cached(
             )
             para_records.append(rec)
             
-    exact_acc = exact_hits / max(1, len(eval_facts_data))
-    para_acc = sum(1 for r in para_records if r.correct) / max(1, len(para_records))
-    return exact_acc, para_acc, para_records
+    exact_forced_acc = exact_forced_hits / max(1, len(eval_facts_data))
+    exact_natural_acc = exact_natural_hits / max(1, len(eval_facts_data))
+    para_forced_acc = para_forced_hits / max(1, total_para_queries)
+    para_natural_acc = para_natural_hits / max(1, total_para_queries)
+    return exact_forced_acc, exact_natural_acc, para_forced_acc, para_natural_acc, para_records
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +425,8 @@ def run_scaling_cached(
     variant: str,
     blocks_data: list[PrecomputedBlockData],
     eval_data: list[list[PrecomputedEvalData]],
+    train_data: list[list[PrecomputedEvalData]],
+    val_data: list[list[PrecomputedEvalData]],
     vocab_size: int,
     answer_map: dict,
     epochs: int,
@@ -473,11 +495,11 @@ def run_scaling_cached(
         # Evaluate offline trained MLP across all stages
         for i in range(1, num_blocks + 1):
             for j in range(i):
-                exact_acc, para_acc, para_recs = evaluate_variant_cached(
+                ex_f, ex_n, pa_f, pa_n, para_recs = evaluate_variant_cached(
                     student_mlp, gate_threshold, gate_sharpness, eval_data[j], answer_map, j + 1, i, None, DEVICE
                 )
-                R_exact[i, j] = exact_acc
-                R_para[i, j] = para_acc
+                R_exact[i, j] = ex_f
+                R_para[i, j] = pa_f
                 
                 if i == num_blocks:
                     for r in para_recs:
@@ -499,6 +521,21 @@ def run_scaling_cached(
                 _, hn_sims = student_mlp(hn_coords.to(DEVICE))
                 hn_gate_probs = torch.sigmoid(gate_sharpness * (hn_sims.squeeze(-1) - gate_threshold))
                 hn_fps = (hn_gate_probs >= 0.5).sum().item()
+
+        # Decisive joint diagnostics
+        flat_train = [f for b in train_data for f in b]
+        flat_val = [f for b in val_data for f in b]
+        flat_eval = [f for b in eval_data for f in b]
+        
+        tr_ex_f, tr_ex_n, _, _, _ = evaluate_variant_cached(
+            student_mlp, gate_threshold, gate_sharpness, flat_train, answer_map, 1, 1, None, DEVICE
+        )
+        val_ex_f, val_ex_n, val_pa_f, val_pa_n, _ = evaluate_variant_cached(
+            student_mlp, gate_threshold, gate_sharpness, flat_val, answer_map, 1, 1, None, DEVICE
+        )
+        test_ex_f, test_ex_n, test_pa_f, test_pa_n, _ = evaluate_variant_cached(
+            student_mlp, gate_threshold, gate_sharpness, flat_eval, answer_map, 1, 1, None, DEVICE
+        )
 
     else:
         # 2. SEQUENTIAL CONSOLIDATION RUN
@@ -557,11 +594,11 @@ def run_scaling_cached(
 
             # Evaluate performance on currently learned blocks
             for j in range(i):
-                exact_acc, para_acc, para_recs = evaluate_variant_cached(
+                ex_f, ex_n, pa_f, pa_n, para_recs = evaluate_variant_cached(
                     student_mlp, gate_threshold, gate_sharpness, eval_data[j], answer_map, j + 1, i, sampler if effective_variant != "no_replay" else None, DEVICE
                 )
-                R_exact[i, j] = exact_acc
-                R_para[i, j] = para_acc
+                R_exact[i, j] = ex_f
+                R_para[i, j] = pa_f
                 
                 if i == num_blocks:
                     for r in para_recs:
@@ -607,6 +644,23 @@ def run_scaling_cached(
     avg_retention_exact = np.mean(retention_ratios_exact)
     avg_retention_para = np.mean(retention_ratios_para)
 
+    # Aggregate retention ratios
+    sum_final_exact = np.sum(final_exact)
+    sum_plasticity_exact = np.sum(P_exact)
+    ret_aggregate_exact = sum_final_exact / max(sum_plasticity_exact, 1e-5)
+    
+    sum_final_para = np.sum(final_para)
+    sum_plasticity_para = np.sum(P_para)
+    ret_aggregate_para = sum_final_para / max(sum_plasticity_para, 1e-5)
+
+    if "joint_offline" in variant:
+        avg_forgetting_exact = float('nan')
+        avg_forgetting_para = float('nan')
+        avg_retention_exact = float('nan')
+        avg_retention_para = float('nan')
+        ret_aggregate_exact = float('nan')
+        ret_aggregate_para = float('nan')
+
     margin_min = np.min(margin_pool) if margin_pool else 0.0
     margin_5th = np.percentile(margin_pool, 5) if margin_pool else 0.0
     margin_50th = np.percentile(margin_pool, 50) if margin_pool else 0.0
@@ -618,7 +672,7 @@ def run_scaling_cached(
     if effective_variant != "no_replay" and "joint_offline" not in variant and sampler is not None:
         bytes_per_fact = sampler.payload_bytes() / num_blocks / 10
 
-    return {
+    res = {
         "variant": variant,
         "avg_recall_exact": np.mean(final_exact),
         "avg_recall_para": np.mean(final_para),
@@ -628,6 +682,8 @@ def run_scaling_cached(
         "avg_plasticity_para": avg_P_para,
         "avg_retention_exact": avg_retention_exact,
         "avg_retention_para": avg_retention_para,
+        "avg_retention_exact_aggregate": ret_aggregate_exact,
+        "avg_retention_para_aggregate": ret_aggregate_para,
         "P_exact": P_exact,
         "P_para": P_para,
         "R_T_exact": final_exact,
@@ -644,6 +700,110 @@ def run_scaling_cached(
         "training_time": training_time,
         "confusion_matrix": confusion_matrix.tolist(),
     }
+
+    if "joint_offline" in variant:
+        res.update({
+            "tr_ex_f": tr_ex_f, "tr_ex_n": tr_ex_n,
+            "val_ex_f": val_ex_f, "val_ex_n": val_ex_n,
+            "val_pa_f": val_pa_f, "val_pa_n": val_pa_n,
+            "test_ex_f": test_ex_f, "test_ex_n": test_ex_n,
+            "test_pa_f": test_pa_f, "test_pa_n": test_pa_n,
+        })
+    return res
+
+
+# ---------------------------------------------------------------------------
+# Metric Separability Analysis on Locked Read-Space Coordinates
+# ---------------------------------------------------------------------------
+def run_read_space_separability_analysis(blocks_data, val_data, eval_data):
+    """Diagnoses the metric separability of the locked read-space coordinates."""
+    print("\n" + "="*80)
+    print("  READ-SPACE COORDINATE SEPARABILITY ANALYSIS")
+    print("="*80)
+    
+    # 1. Collect all stored keys by fact ID
+    fact_keys = {} # fid -> list of tensors (CPU)
+    all_keys = []
+    all_fids = []
+    
+    for b in blocks_data:
+        for fid in b.fact_ids:
+            keys = []
+            if fid in b.stmt_keys_read:
+                keys.append(b.stmt_keys_read[fid][0])
+            if fid in b.qa_keys_read:
+                keys.append(b.qa_keys_read[fid][0])
+            if fid in b.cloze_keys_read:
+                keys.append(b.cloze_keys_read[fid][0])
+            fact_keys[fid] = keys
+            for k in keys:
+                all_keys.append(k)
+                all_fids.append(fid)
+                
+    all_keys_tensor = torch.stack(all_keys) # (300, E)
+    all_keys_norm = F.normalize(all_keys_tensor, dim=-1)
+    
+    # 2. Within-fact vs Between-fact cosine distributions
+    within_sims = []
+    between_sims = []
+    fids_list = list(fact_keys.keys())
+    
+    for i, fid1 in enumerate(fids_list):
+        if len(fact_keys[fid1]) > 0:
+            k1 = torch.stack(fact_keys[fid1])
+            k1_norm = F.normalize(k1, dim=-1)
+            # within
+            sims_w = k1_norm @ k1_norm.T
+            for r in range(sims_w.shape[0]):
+                for c in range(r + 1, sims_w.shape[1]):
+                    within_sims.append(sims_w[r, c].item())
+            # between
+            for fid2 in fids_list[i+1:]:
+                if len(fact_keys[fid2]) > 0:
+                    k2 = torch.stack(fact_keys[fid2])
+                    k2_norm = F.normalize(k2, dim=-1)
+                    sims_b = k1_norm @ k2_norm.T
+                    between_sims.extend(sims_b.flatten().tolist())
+            
+    mean_w, std_w = np.mean(within_sims) if within_sims else 0.0, np.std(within_sims) if within_sims else 0.0
+    mean_b, std_b = np.mean(between_sims) if between_sims else 0.0, np.std(between_sims) if between_sims else 0.0
+    
+    # 3. 1-NN retrieval accuracy on validation and test paraphrases
+    nn1_correct = 0
+    nn1_total = 0
+    
+    all_queries = []
+    all_query_fids = []
+    for block_eval in (val_data + eval_data):
+        for eval_f in block_eval:
+            fid = eval_f.fid
+            for _, q_read in eval_f.paraphrases:
+                all_queries.append(q_read)
+                all_query_fids.append(fid)
+                
+    if all_queries:
+        queries_tensor = torch.stack(all_queries) # (Q, E)
+        queries_norm = F.normalize(queries_tensor, dim=-1)
+        
+        sim_matrix = queries_norm @ all_keys_norm.T
+        
+        # 1-NN check
+        nn1_indices = sim_matrix.argmax(dim=-1)
+        for idx_q, idx_k in enumerate(nn1_indices.tolist()):
+            pred_fid = all_fids[idx_k]
+            target_fid = all_query_fids[idx_q]
+            if pred_fid == target_fid:
+                nn1_correct += 1
+            nn1_total += 1
+            
+        nn1_acc = nn1_correct / max(1, nn1_total)
+    else:
+        nn1_acc = 0.0
+        
+    print(f"  Within-Fact Cosine Similarity  : {mean_w:.4f} ± {std_w:.4f}")
+    print(f"  Between-Fact Cosine Similarity : {mean_b:.4f} ± {std_b:.4f}")
+    print(f"  1-NN Fact-ID Classification Acc: {nn1_acc*100:.1f}% (on {nn1_total} paraphrase queries)")
+    print("="*80)
 
 
 # ---------------------------------------------------------------------------
@@ -775,6 +935,8 @@ def main():
     print("\n[Caching] Pre-computing read-space coordinates upfront...")
     cached_blocks: list[PrecomputedBlockData] = []
     cached_eval: list[list[PrecomputedEvalData]] = []
+    cached_train: list[list[PrecomputedEvalData]] = []
+    cached_val: list[list[PrecomputedEvalData]] = []
     answer_map = build_answer_token_map(blocks, tokenizer)
 
     # 1. Cache block training data
@@ -878,6 +1040,49 @@ def main():
 
         cached_blocks.append(b_data)
 
+        # 1.2. Cache training templates coordinates
+        b_train = []
+        for f in block:
+            fid = f["id"]
+            train_f = PrecomputedEvalData()
+            train_f.fid = fid
+            stmt_ids = tokenizer.encode(f["statement"])
+            probe_ids = tokenizer.encode(f["probe"])
+            train_f.target_tok = stmt_ids[len(probe_ids)] if len(stmt_ids) > len(probe_ids) else stmt_ids[-1]
+            
+            for idx_t in range(3):
+                text, prompt = get_template_prompt(f, idx_t)
+                prompt_ids = tokenizer.encode(prompt, return_tensors="pt").to(hybrid.device)
+                with torch.no_grad():
+                    _, item_h = gpt2_forward(hybrid, prompt_ids)
+                    item_q_raw = item_h[0, -min(2, item_h.shape[1]):, :].mean(dim=0).unsqueeze(0)
+                    item_q_proj = memory.query_proj(item_q_raw)
+                    item_q_read = memory.to_read_space(item_q_proj, mu, V_sub)
+                train_f.paraphrases.append((prompt, item_q_read[0].cpu()))
+            b_train.append(train_f)
+        cached_train.append(b_train)
+
+        # 1.5. Cache development templates coordinates
+        b_val = []
+        for f in block:
+            fid = f["id"]
+            val_f = PrecomputedEvalData()
+            val_f.fid = fid
+            stmt_ids = tokenizer.encode(f["statement"])
+            probe_ids = tokenizer.encode(f["probe"])
+            val_f.target_tok = stmt_ids[len(probe_ids)] if len(stmt_ids) > len(probe_ids) else stmt_ids[-1]
+            
+            dev_item = f["train_paraphrases"][-1]
+            item_ids = tokenizer.encode(dev_item, return_tensors="pt").to(hybrid.device)
+            with torch.no_grad():
+                _, item_h = gpt2_forward(hybrid, item_ids)
+                item_q_raw = item_h[0, -min(2, item_h.shape[1]):, :].mean(dim=0).unsqueeze(0)
+                item_q_proj = memory.query_proj(item_q_raw)
+                item_q_read = memory.to_read_space(item_q_proj, mu, V_sub)
+            val_f.paraphrases.append((dev_item, item_q_read[0].cpu()))
+            b_val.append(val_f)
+        cached_val.append(b_val)
+
         # 2. Cache evaluation paraphrase coordinates
         b_eval = []
         for f in block:
@@ -888,7 +1093,6 @@ def main():
             probe_ids = tokenizer.encode(f["probe"])
             eval_f.target_tok = stmt_ids[len(probe_ids)] if len(stmt_ids) > len(probe_ids) else stmt_ids[-1]
             
-            # The first item is exact probe, rest are evaluation paraphrases
             all_eval_items = [f["probe"]] + f["eval_paraphrases"]
             for item in all_eval_items:
                 item_ids = tokenizer.encode(item, return_tensors="pt").to(hybrid.device)
@@ -931,6 +1135,9 @@ def main():
 
     print("  [OK] Caching complete. Starting consolidation loops (Zero GPT-2 calls)...")
 
+    # Run read-space separability analysis
+    run_read_space_separability_analysis(cached_blocks, cached_val, cached_eval)
+
     # Clear episodic memory completely
     memory.keys_raw = torch.empty(0, 768, device=DEVICE)
     memory.values = torch.empty(0, dtype=torch.long, device=DEVICE)
@@ -952,12 +1159,16 @@ def main():
         
         shuffled_blocks_data = [cached_blocks[idx] for idx in indices]
         shuffled_eval_data = [cached_eval[idx] for idx in indices]
+        shuffled_train_data = [cached_train[idx] for idx in indices]
+        shuffled_val_data = [cached_val[idx] for idx in indices]
 
         for variant in args.variants:
             res = run_scaling_cached(
                 variant=variant,
                 blocks_data=shuffled_blocks_data,
                 eval_data=shuffled_eval_data,
+                train_data=shuffled_train_data,
+                val_data=shuffled_val_data,
                 vocab_size=vocab_size,
                 answer_map=answer_map,
                 epochs=args.epochs,
@@ -984,14 +1195,16 @@ def main():
         avg_rec_pa = np.mean([r["avg_recall_para"] for r in runs]) * 100
         std_rec_pa = np.std([r["avg_recall_para"] for r in runs]) * 100
         
-        avg_f_ex = np.mean([r["avg_forgetting_exact"] for r in runs]) * 100
-        avg_f_pa = np.mean([r["avg_forgetting_para"] for r in runs]) * 100
-
+        is_joint = "joint_offline" in variant
+        
+        avg_f_ex_str = "   N/A  " if is_joint else f"{np.mean([r['avg_forgetting_exact'] for r in runs])*100:>7.1f}%"
+        avg_f_pa_str = "   N/A  " if is_joint else f"{np.mean([r['avg_forgetting_para'] for r in runs])*100:>7.1f}%"
+        
         avg_p_ex = np.mean([r["avg_plasticity_exact"] for r in runs]) * 100
         avg_p_pa = np.mean([r["avg_plasticity_para"] for r in runs]) * 100
 
-        avg_ret_ex = np.mean([r["avg_retention_exact"] for r in runs]) * 100
-        avg_ret_pa = np.mean([r["avg_retention_para"] for r in runs]) * 100
+        avg_ret_ex_str = "   N/A  " if is_joint else f"{np.mean([r['avg_retention_exact'] for r in runs])*100:>7.1f}%"
+        avg_ret_pa_str = "   N/A  " if is_joint else f"{np.mean([r['avg_retention_para'] for r in runs])*100:>7.1f}%"
         
         fails = int(np.mean([r["failures"] for r in runs]))
         contam = int(np.mean([r["contaminations"] for r in runs]))
@@ -1010,12 +1223,12 @@ def main():
             f"  {variant:<24}"
             f" {avg_rec_ex:>4.1f}±{std_rec_ex:<3.1f}"
             f" {avg_rec_pa:>4.1f}±{std_rec_pa:<3.1f}"
-            f" {avg_f_ex:>8.1f}%"
-            f" {avg_f_pa:>8.1f}%"
+            f" {avg_f_ex_str:<9}"
+            f" {avg_f_pa_str:<9}"
             f" {avg_p_ex:>8.1f}%"
             f" {avg_p_pa:>8.1f}%"
-            f" {avg_ret_ex:>8.1f}%"
-            f" {avg_ret_pa:>8.1f}%"
+            f" {avg_ret_ex_str:<9}"
+            f" {avg_ret_pa_str:<9}"
             f" {fails:6d}"
             f" {contam:7d}"
             f" {avg_gate_fpr:>6.1f}%"
@@ -1028,10 +1241,33 @@ def main():
     for variant, runs in results_by_variant.items():
         print(f"\nVariant: {variant}")
         run = runs[0]
-        print(f"  Plasticity vector P_j (exact): " + ", ".join([f"{p*100:.1f}%" for p in run["P_exact"]]))
-        print(f"  Final Recall R_T,j (exact):   " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_exact"]]))
-        print(f"  Plasticity vector P_j (para):  " + ", ".join([f"{p*100:.1f}%" for p in run["P_para"]]))
-        print(f"  Final Recall R_T,j (para):    " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_para"]]))
+        is_joint = "joint_offline" in variant
+        
+        if is_joint:
+            print(f"  Decisive Diagnostics:")
+            print(f"    - Training Exact Recall (Forced-gate):   {run['tr_ex_f']*100:.1f}%")
+            print(f"    - Training Exact Recall (Natural-gate):  {run['tr_ex_n']*100:.1f}%")
+            print(f"    - Development Exact Recall (Forced):     {run['val_ex_f']*100:.1f}%")
+            print(f"    - Development Exact Recall (Natural):    {run['val_ex_n']*100:.1f}%")
+            print(f"    - Development Para Recall (Forced):      {run['val_pa_f']*100:.1f}%")
+            print(f"    - Development Para Recall (Natural):     {run['val_pa_n']*100:.1f}%")
+            print(f"    - Test Exact Recall (Forced):            {run['test_ex_f']*100:.1f}%")
+            print(f"    - Test Exact Recall (Natural):           {run['test_ex_n']*100:.1f}%")
+            print(f"    - Test Para Recall (Forced):             {run['test_pa_f']*100:.1f}%")
+            print(f"    - Test Para Recall (Natural):            {run['test_pa_n']*100:.1f}%")
+        else:
+            print(f"  Plasticity vector P_j (exact): " + ", ".join([f"{p*100:.1f}%" for p in run["P_exact"]]))
+            print(f"  Final Recall R_T,j (exact):   " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_exact"]]))
+            print(f"  Plasticity vector P_j (para):  " + ", ".join([f"{p*100:.1f}%" for p in run["P_para"]]))
+            print(f"  Final Recall R_T,j (para):    " + ", ".join([f"{r*100:.1f}%" for r in run["R_T_para"]]))
+            
+            # Retention metrics
+            ret_agg_ex = np.mean([r["avg_retention_exact_aggregate"] for r in runs]) * 100
+            ret_agg_pa = np.mean([r["avg_retention_para_aggregate"] for r in runs]) * 100
+            ret_blk_ex = np.mean([r["avg_retention_exact"] for r in runs]) * 100
+            ret_blk_pa = np.mean([r["avg_retention_para"] for r in runs]) * 100
+            print(f"  Retention metrics (Exact):  Aggregate = {ret_agg_ex:.1f}%, Mean Blockwise = {ret_blk_ex:.1f}%")
+            print(f"  Retention metrics (Para) :  Aggregate = {ret_agg_pa:.1f}%, Mean Blockwise = {ret_blk_pa:.1f}%")
         
         # Contamination statistics
         c_ratio_fails = run["contaminations"] / max(1, run["failures"]) * 100
