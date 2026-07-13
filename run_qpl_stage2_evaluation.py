@@ -151,7 +151,7 @@ def load_and_cache_dataset():
     with open("agnis_scaling_dataset.json", "r") as f:
         blocks = json.load(f)
         
-    all_facts = [f for b in blocks for f in b]
+    all_facts = [f for b in blocks for f in b if f["category"] == "geography"]
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     probe_to_class = {p: idx for idx, p in enumerate(unique_probes)}
     

@@ -31,7 +31,7 @@ OUTPUT_DIM = 128
 def get_sentence_lists():
     with open(DATASET_PATH, "r") as f:
         blocks = json.load(f)
-    all_facts = [fact for b in blocks for fact in b]
+    all_facts = [fact for b in blocks for fact in b if fact["category"] == "geography"]
     unique_probes = sorted(list(set(fact["probe"] for fact in all_facts)))
     probe_to_class = {p: idx for idx, p in enumerate(unique_probes)}
     
