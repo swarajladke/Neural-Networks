@@ -16,7 +16,6 @@ import hashlib
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.float_power
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from student_encoder import StudentEncoder
