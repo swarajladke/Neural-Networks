@@ -32,23 +32,26 @@ class RelationVerifier(nn.Module):
         super().__init__()
         # We combine a bilinear scoring path and a concatenated MLP path
         self.bilinear = nn.Bilinear(input_dim, input_dim, 1)
-        # Input size: 4 * input_dim + 2 (cat q, k, |q-k|, q*k, cos_sim, dist)
-        self.fc1 = nn.Linear(input_dim * 4 + 2, 256)
+        # Input size: 4 * input_dim + 4 (cat q, k, |q-k|, q*k, cos_sim, dist, jaccard, overlap)
+        self.fc1 = nn.Linear(input_dim * 4 + 4, 256)
         self.bn1 = nn.BatchNorm1d(256)
         self.fc2 = nn.Linear(256, 64)
         self.bn2 = nn.BatchNorm1d(64)
         self.fc3 = nn.Linear(64, 1)
         self.dropout = nn.Dropout(0.2)
         
-    def forward(self, q, k):
+    def forward(self, q, k, jaccard, overlap):
         # q: (B, input_dim), k: (B, input_dim)
         diff = torch.abs(q - k)
         mult = q * k
         cos_sim = torch.sum(q * k, dim=-1, keepdim=True)
         dist = torch.norm(q - k, p=2, dim=-1, keepdim=True)
         
+        jaccard = jaccard.unsqueeze(-1)
+        overlap = overlap.unsqueeze(-1)
+        
         # Concat path
-        x_concat = torch.cat([q, k, diff, mult, cos_sim, dist], dim=-1)
+        x_concat = torch.cat([q, k, diff, mult, cos_sim, dist, jaccard, overlap], dim=-1)
         x_mlp = F.relu(self.bn1(self.fc1(x_concat)))
         x_mlp = self.dropout(x_mlp)
         x_mlp = F.relu(self.bn2(self.fc2(x_mlp)))
@@ -61,10 +64,20 @@ class RelationVerifier(nn.Module):
         out = self.fc3(x_mlp).squeeze(-1) + x_bil
         return torch.sigmoid(out)
 
+def get_entity_overlap(str1, str2):
+    stopwords = {"the", "is", "of", "a", "capital", "city", "melting", "point", "degrees", "celsius", "at", "what", "temperature", "does", "liquefy", "melts", "compound"}
+    words1 = set(w.lower().strip(",.?!") for w in str1.split() if w.lower().strip(",.?!") not in stopwords)
+    words2 = set(w.lower().strip(",.?!") for w in str2.split() if w.lower().strip(",.?!") not in stopwords)
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    jaccard = len(intersection) / len(union) if len(union) > 0 else 0.0
+    overlap = len(intersection) / min(len(words1), len(words2)) if min(len(words1), len(words2)) > 0 else 0.0
+    return jaccard, overlap
+
 # ---------------------------------------------------------------------------
 # In-Domain Semantic Hard Negatives Builder for Pairs
 # ---------------------------------------------------------------------------
-def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probes):
+def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probes, train_sentences, test_sentences):
     print("\n[Data] Synthesizing verifier dataset (Positive & Hard Negative pairs)...")
     
     probe_to_class = {p: idx for idx, p in enumerate(unique_probes)}
@@ -83,9 +96,12 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
         # test queries of this fact: f_idx*4, f_idx*4 + 1, ..., f_idx*4 + 3
         queries = test_x[f_idx*4 : (f_idx+1)*4]
         
-        for q in queries:
-            for r in refs:
-                positive_pairs.append((q, r, f_idx))
+        for q_sub_idx, q in enumerate(queries):
+            q_str = test_sentences[f_idx * 4 + q_sub_idx]
+            for r_sub_idx, r in enumerate(refs):
+                r_str = train_sentences[f_idx * 3 + r_sub_idx]
+                jaccard, overlap = get_entity_overlap(q_str, r_str)
+                positive_pairs.append((q, r, f_idx, jaccard, overlap))
                 
     # Generate Semantic Hard Negatives (Relational collisions / entity swaps)
     # Pair test queries of fact A with train references of fact B that shares the same entity but different relation
@@ -101,9 +117,12 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
                 # Relational collision: Query A paired with Reference B
                 queries_a = test_x[f_idx_a*4 : (f_idx_a+1)*4]
                 refs_b = train_x[f_idx_b*3 : (f_idx_b+1)*3]
-                for q in queries_a:
-                    for r in refs_b:
-                        semantic_neg_pairs.append((q, r, f_idx_b))
+                for q_sub_idx, q in enumerate(queries_a):
+                    q_str = test_sentences[f_idx_a * 4 + q_sub_idx]
+                    for r_sub_idx, r in enumerate(refs_b):
+                        r_str = train_sentences[f_idx_b * 3 + r_sub_idx]
+                        jaccard, overlap = get_entity_overlap(q_str, r_str)
+                        semantic_neg_pairs.append((q, r, f_idx_b, jaccard, overlap))
                         
     # Shuffle and trim negatives to balance positives
     random.shuffle(semantic_neg_pairs)
@@ -138,7 +157,9 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
                 return_dict=True,
                 use_cache=False
             )
+            assert outputs.hidden_states is not None
             hidden = outputs.hidden_states[-1]
+            assert hidden.shape[-1] == INPUT_DIM
             mask = enc.attention_mask.unsqueeze(-1)
             pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
             pooled = F.normalize(pooled.float(), dim=-1)
@@ -148,9 +169,12 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
     
     # Create General negative pairs: Pair general sentences with all train references
     general_neg_pairs = []
-    for g_vec in general_x:
+    for g_idx, g_vec in enumerate(general_x):
+        q_str = general_sentences[g_idx]
         for r_idx in range(len(train_x)):
-            general_neg_pairs.append((g_vec, train_x[r_idx], r_idx // 3))
+            r_str = train_sentences[r_idx]
+            jaccard, overlap = get_entity_overlap(q_str, r_str)
+            general_neg_pairs.append((g_vec, train_x[r_idx], r_idx // 3, jaccard, overlap))
     random.shuffle(general_neg_pairs)
     general_neg_pairs = general_neg_pairs[:len(positive_pairs)]
     print(f"  - General Control pairs generated : {len(general_neg_pairs)}")
@@ -198,13 +222,18 @@ def main():
     with open(DATASET_PATH, "r") as f:
         blocks = json.load(f)
         
-    from run_student_continual_benchmarks import ensure_100_fact_embeddings
+    from run_student_continual_benchmarks import ensure_100_fact_embeddings, get_sentence_lists
     cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
     all_facts = [fact for b in blocks for fact in b]
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     
+    # Reconstruct train/test sentences
+    train_sentences, train_labels, val_sentences, val_labels, test_sentences, test_labels = get_sentence_lists(all_facts, unique_probes)
+    
     # 1. Build pairs
-    pos_pairs, sem_negs, gen_negs = build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probes)
+    pos_pairs, sem_negs, gen_negs = build_verifier_dataset(
+        tokenizer, model, all_facts, cache_data, unique_probes, train_sentences, test_sentences
+    )
     
     # 2. Split into train & test (70/30 disjoint facts to verify generalization to unseen facts)
     # Train set uses pairs from first 70 facts, Test set uses pairs from last 30 facts
@@ -229,6 +258,8 @@ def main():
     # Build train tensor dataset
     train_q = torch.stack([p[0] for p in train_pos] + [n[0] for n in train_sem] + [n[0] for n in train_gen])
     train_k = torch.stack([p[1] for p in train_pos] + [n[1] for n in train_sem] + [n[1] for n in train_gen])
+    train_jac = torch.tensor([p[3] for p in train_pos] + [n[3] for n in train_sem] + [n[3] for n in train_gen], dtype=torch.float32, device=DEVICE)
+    train_ov = torch.tensor([p[4] for p in train_pos] + [n[4] for n in train_sem] + [n[4] for n in train_gen], dtype=torch.float32, device=DEVICE)
     train_y = torch.tensor([1.0] * len(train_pos) + [0.0] * len(train_sem) + [0.0] * len(train_gen), device=DEVICE)
     
     print("\n[Training] Training lightweight verifier MLP (60 epochs with class weighting)...")
@@ -243,9 +274,11 @@ def main():
             b_idx = indices[idx : idx + batch_size]
             q_b = train_q[b_idx]
             k_b = train_k[b_idx]
+            jac_b = train_jac[b_idx]
+            ov_b = train_ov[b_idx]
             y_b = train_y[b_idx]
             
-            pred = verifier(q_b, k_b)
+            pred = verifier(q_b, k_b, jac_b, ov_b)
             loss_elementwise = criterion(pred, y_b)
             weight = torch.ones_like(y_b)
             weight[y_b == 1.0] = 4.0
@@ -261,15 +294,21 @@ def main():
     with torch.no_grad():
         test_pos_q = torch.stack([p[0] for p in test_pos])
         test_pos_k = torch.stack([p[1] for p in test_pos])
-        pred_pos = verifier(test_pos_q, test_pos_k).cpu().numpy()
+        test_pos_jac = torch.tensor([p[3] for p in test_pos], dtype=torch.float32, device=DEVICE)
+        test_pos_ov = torch.tensor([p[4] for p in test_pos], dtype=torch.float32, device=DEVICE)
+        pred_pos = verifier(test_pos_q, test_pos_k, test_pos_jac, test_pos_ov).cpu().numpy()
         
         test_sem_q = torch.stack([n[0] for n in test_sem])
         test_sem_k = torch.stack([n[1] for n in test_sem])
-        pred_sem = verifier(test_sem_q, test_sem_k).cpu().numpy()
+        test_sem_jac = torch.tensor([n[3] for n in test_sem], dtype=torch.float32, device=DEVICE)
+        test_sem_ov = torch.tensor([n[4] for n in test_sem], dtype=torch.float32, device=DEVICE)
+        pred_sem = verifier(test_sem_q, test_sem_k, test_sem_jac, test_sem_ov).cpu().numpy()
         
         test_gen_q = torch.stack([n[0] for n in test_gen])
         test_gen_k = torch.stack([n[1] for n in test_gen])
-        pred_gen = verifier(test_gen_q, test_gen_k).cpu().numpy()
+        test_gen_jac = torch.tensor([n[3] for n in test_gen], dtype=torch.float32, device=DEVICE)
+        test_gen_ov = torch.tensor([n[4] for n in test_gen], dtype=torch.float32, device=DEVICE)
+        pred_gen = verifier(test_gen_q, test_gen_k, test_gen_jac, test_gen_ov).cpu().numpy()
         
     # Calculate TPR thresholds and corresponding FPRs
     # Select threshold where TPR is exactly 95% on test set
