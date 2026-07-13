@@ -31,17 +31,22 @@ class RelationVerifier(nn.Module):
     def __init__(self, input_dim=960):
         super().__init__()
         # Input size: 4 * input_dim (cat q, k, |q-k|, q*k)
-        self.fc1 = nn.Linear(input_dim * 4, 128)
-        self.fc2 = nn.Linear(128, 32)
-        self.fc3 = nn.Linear(32, 1)
+        self.fc1 = nn.Linear(input_dim * 4, 256)
+        self.bn1 = nn.BatchNorm1d(256)
+        self.fc2 = nn.Linear(256, 64)
+        self.bn2 = nn.BatchNorm1d(64)
+        self.fc3 = nn.Linear(64, 1)
+        self.dropout = nn.Dropout(0.2)
         
     def forward(self, q, k):
         # q: (B, input_dim), k: (B, input_dim)
         diff = torch.abs(q - k)
         mult = q * k
         x = torch.cat([q, k, diff, mult], dim=-1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = F.relu(self.bn1(self.fc1(x)))
+        x = self.dropout(x)
+        x = F.relu(self.bn2(self.fc2(x)))
+        x = self.dropout(x)
         return torch.sigmoid(self.fc3(x)).squeeze(-1)
 
 # ---------------------------------------------------------------------------
@@ -206,18 +211,18 @@ def main():
     
     # 3. Train Verifier
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
-    optimizer = torch.optim.AdamW(verifier.parameters(), lr=1e-3, weight_decay=1e-4)
-    criterion = nn.BCELoss()
+    optimizer = torch.optim.AdamW(verifier.parameters(), lr=1e-3, weight_decay=1e-3)
+    criterion = nn.BCELoss(reduction='none')
     
     # Build train tensor dataset
     train_q = torch.stack([p[0] for p in train_pos] + [n[0] for n in train_sem] + [n[0] for n in train_gen])
     train_k = torch.stack([p[1] for p in train_pos] + [n[1] for n in train_sem] + [n[1] for n in train_gen])
     train_y = torch.tensor([1.0] * len(train_pos) + [0.0] * len(train_sem) + [0.0] * len(train_gen), device=DEVICE)
     
-    print("\n[Training] Training lightweight verifier MLP (30 epochs)...")
+    print("\n[Training] Training lightweight verifier MLP (60 epochs with class weighting)...")
     N = len(train_y)
     batch_size = 64
-    for epoch in range(30):
+    for epoch in range(60):
         verifier.train()
         indices = list(range(N))
         random.shuffle(indices)
@@ -229,7 +234,10 @@ def main():
             y_b = train_y[b_idx]
             
             pred = verifier(q_b, k_b)
-            loss = criterion(pred, y_b)
+            loss_elementwise = criterion(pred, y_b)
+            weight = torch.ones_like(y_b)
+            weight[y_b == 1.0] = 3.0
+            loss = (loss_elementwise * weight).mean()
             
             optimizer.zero_grad()
             loss.backward()
