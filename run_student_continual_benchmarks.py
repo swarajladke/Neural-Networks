@@ -483,6 +483,163 @@ def run_phase_a5(tokenizer, blocks, unique_probes):
     print(f"  - Backward Transfer (BWT)      : {bwt*100:+.2f} percentage points")
     print("="*80)
 
+def compute_one_sided_upper_bound(false_positives, total):
+    if total == 0:
+        return 0.0
+    if false_positives == 0:
+        return 1.0 - (0.05 ** (1.0 / total))
+    p = false_positives / total
+    z = 1.645  # 95% one-sided z-score
+    denominator = 1 + z**2 / total
+    centre_adj_p = p + z**2 / (2 * total)
+    spread = z * np.sqrt(p * (1 - p) / total + z**2 / (4 * total**2))
+    return min(1.0, (centre_adj_p + spread) / denominator)
+
+def run_real_control_fpr(tokenizer, student_960d, train_sentences, train_labels, val_sentences, val_labels, semantic_controls):
+    print("\n" + "="*80)
+    print("  PHASE A.1 / REAL CONTROLS & SEMANTIC HARD-NEGATIVES AUDIT")
+    print("="*80)
+    
+    # 1. Load general controls from instruction_corpus.txt
+    general_sentences = []
+    if os.path.exists("instruction_corpus.txt"):
+        with open("instruction_corpus.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if len(line) > 20 and not line.startswith("#"):
+                    general_sentences.append(line)
+                    if len(general_sentences) == 200:
+                        break
+    if len(general_sentences) < 100:
+        general_sentences = [
+            "The quick brown fox jumps over the lazy dog.",
+            "Today is a sunny day with clear blue skies.",
+            "Python is a high-level programming language.",
+            "Deep learning is a subset of machine learning.",
+            "Water is composed of oxygen and hydrogen atoms.",
+            "He wrote a letter to his friend yesterday.",
+            "A warm cup of tea is perfect for rainy days.",
+            "She decided to learn how to play the piano.",
+            "The library is a quiet place to read books.",
+            "Artificial intelligence is transforming industries."
+        ] * 20
+        
+    print(f"  - Loaded {len(general_sentences)} general control sentences.")
+    print(f"  - Loaded {len(semantic_controls)} in-domain semantic hard negatives.")
+    
+    # Fail-closed mechanism for HuggingFace model loading
+    try:
+        tok = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
+        mod = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+        mod.to(DEVICE)
+        mod.eval()
+    except Exception as e:
+        raise RuntimeError("FAIL-CLOSED: Failed to load real SmolLM2 model for control text encoding") from e
+        
+    # Encode General Controls
+    general_vectors = []
+    batch_size = 32
+    for i in range(0, len(general_sentences), batch_size):
+        batch_text = general_sentences[i : i + batch_size]
+        enc = tok(batch_text, max_length=32, truncation=True, padding="max_length", return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            outputs = mod(
+                input_ids=enc.input_ids,
+                attention_mask=enc.attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+                use_cache=False
+            )
+            assert outputs.hidden_states is not None
+            hidden = outputs.hidden_states[-1]
+            assert hidden.shape[-1] == INPUT_DIM
+            mask = enc.attention_mask.unsqueeze(-1)
+            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
+            pooled = F.normalize(pooled.float(), dim=-1)
+            for j in range(len(batch_text)):
+                general_vectors.append(pooled[j].cpu())
+    general_x = torch.stack(general_vectors).to(DEVICE)
+    
+    # Encode Semantic Hard Negatives
+    semantic_vectors = []
+    for i in range(0, len(semantic_controls), batch_size):
+        batch_text = semantic_controls[i : i + batch_size]
+        enc = tok(batch_text, max_length=32, truncation=True, padding="max_length", return_tensors="pt").to(DEVICE)
+        with torch.no_grad():
+            outputs = mod(
+                input_ids=enc.input_ids,
+                attention_mask=enc.attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+                use_cache=False
+            )
+            assert outputs.hidden_states is not None
+            hidden = outputs.hidden_states[-1]
+            assert hidden.shape[-1] == INPUT_DIM
+            mask = enc.attention_mask.unsqueeze(-1)
+            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
+            pooled = F.normalize(pooled.float(), dim=-1)
+            for j in range(len(batch_text)):
+                semantic_vectors.append(pooled[j].cpu())
+    semantic_x = torch.stack(semantic_vectors).to(DEVICE)
+    
+    # Compute 95% TPR Threshold on development/validation data of the seen facts
+    student_960d.eval()
+    with torch.no_grad():
+        z_tr_s = []
+        for idx in range(0, len(train_sentences), 64):
+            batch_s = train_sentences[idx : idx + 64]
+            ids, mask = batch_tokenize(tokenizer, batch_s, max_len=32, device=DEVICE)
+            z_tr_s.append(student_960d(ids, mask))
+        z_tr_s = torch.cat(z_tr_s, dim=0)
+        
+        z_val_s = []
+        for idx in range(0, len(val_sentences), 64):
+            batch_s = val_sentences[idx : idx + 64]
+            ids, mask = batch_tokenize(tokenizer, batch_s, max_len=32, device=DEVICE)
+            z_val_s.append(student_960d(ids, mask))
+        z_val_s = torch.cat(z_val_s, dim=0)
+        
+    # Validation TPR similarities
+    sim_val_s = []
+    for idx in range(len(val_sentences)):
+        q_label = val_labels[idx]
+        ref_indices = [i for i, l in enumerate(train_labels) if l == q_label]
+        max_sim = torch.matmul(z_val_s[idx], z_tr_s[ref_indices].T).max().item()
+        sim_val_s.append(max_sim)
+    tpr_95_val_s = np.percentile(sim_val_s, 5)
+    
+    # Evaluate General Controls on Student 960D
+    ids_gen, mask_gen = batch_tokenize(tokenizer, general_sentences, max_len=32, device=DEVICE)
+    with torch.no_grad():
+        z_gen_s = student_960d(ids_gen, mask_gen)
+    sims_gen_s = torch.matmul(z_gen_s, z_tr_s.T).max(dim=1).values.cpu().numpy()
+    fp_gen = (sims_gen_s >= tpr_95_val_s).sum()
+    fpr_gen = fp_gen / len(general_sentences)
+    ucb_gen = compute_one_sided_upper_bound(fp_gen, len(general_sentences))
+    
+    # Evaluate Semantic Hard Negatives on Student 960D
+    sims_sem_s = []
+    for i in range(0, len(semantic_controls), 64):
+        batch_text = semantic_controls[i : i + 64]
+        ids_sem, mask_sem = batch_tokenize(tokenizer, batch_text, max_len=32, device=DEVICE)
+        with torch.no_grad():
+            z_sem_s = student_960d(ids_sem, mask_sem)
+        batch_sims = torch.matmul(z_sem_s, z_tr_s.T).max(dim=1).values.cpu().numpy()
+        sims_sem_s.extend(batch_sims)
+    sims_sem_s = np.array(sims_sem_s)
+    fp_sem = (sims_sem_s >= tpr_95_val_s).sum()
+    fpr_sem = fp_sem / len(semantic_controls)
+    ucb_sem = compute_one_sided_upper_bound(fp_sem, len(semantic_controls))
+    
+    print(f"  - Development 95% TPR Threshold                : {tpr_95_val_s:.4f}")
+    print(f"  - General Controls FPR ({fp_gen}/{len(general_sentences)})              : {fpr_gen*100:.2f}% (One-sided 95% UCB: {ucb_gen*100:.2f}%)")
+    print(f"  - Semantic Hard-Negatives FPR ({fp_sem}/{len(semantic_controls)})       : {fpr_sem*100:.2f}% (One-sided 95% UCB: {ucb_sem*100:.2f}%)")
+    print("="*80)
+    return fpr_gen, fpr_sem
+
 # ---------------------------------------------------------------------------
 # PHASE A.6: Latency and Memory Validation
 # ---------------------------------------------------------------------------
@@ -647,9 +804,7 @@ def main():
     semantic_controls = generate_semantic_hard_negatives(all_facts)
     
     # Run control FPR
-    global INDEPENDENT_PPL_TEXTS
-    INDEPENDENT_PPL_TEXTS = semantic_controls
-    run_real_control_fpr(tokenizer, student_960d, train_s, train_y, val_sentences, val_labels)
+    run_real_control_fpr(tokenizer, student_960d, train_s, train_y, val_sentences, val_labels, semantic_controls)
     
     # Run Phase A.5: CL Matrix
     run_phase_a5(tokenizer, blocks, unique_probes)
