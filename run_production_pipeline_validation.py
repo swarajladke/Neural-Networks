@@ -206,7 +206,20 @@ def main():
     test_facts = all_facts[85:]
     
     # 2. Train the Student Encoder from scratch on 70 train facts
-    cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
+    if not os.path.exists(CACHE_100_PATH):
+        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Loading teacher model to generate...")
+        from transformers import AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        try:
+            model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-360M", revision="f8027fd0eaeea54caa13c31d31b9fdc459c38b49")
+            model.to(DEVICE)
+            model.eval()
+        except Exception as e:
+            raise RuntimeError("FAIL-CLOSED: Failed to load real SmolLM2 model for verification generation") from e
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
+        
     train_x_teacher = cache_data["train_x"][:210].to(DEVICE) # 70 * 3
     
     train_s, train_y, val_s, val_y, test_s, test_y = get_sentence_lists(train_facts, unique_probes)
