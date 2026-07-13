@@ -52,7 +52,8 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
     random.seed(seed)
     
     sampler = BalancedBatchSampler(train_x, train_y, num_groups=34)
-    best_val_acc = 0.0
+    best_val_acc_k1 = 0.0
+    best_val_acc_k3 = 0.0
     
     # Store raw query text coordinates as anchors for distillation
     anchor_x = train_x.clone().detach()
@@ -133,28 +134,32 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
             h_settled, _, _, _ = qpl.settle(train_x, variant="full_qpl", k_wta=3)
             qpl.local_unsupervised_update(train_x, h_settled, kwta_mask=None, current_group=None)
             
-        # Log validation accuracy
-        val_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y)
-        if val_eval["acc"] > best_val_acc:
-            best_val_acc = val_eval["acc"]
+        # Log validation accuracy for both kWTA=1 and kWTA=3
+        eval_k1 = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=1)
+        eval_k3 = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
+        
+        if eval_k1["acc"] > best_val_acc_k1:
+            best_val_acc_k1 = eval_k1["acc"]
+        if eval_k3["acc"] > best_val_acc_k3:
+            best_val_acc_k3 = eval_k3["acc"]
             
-        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val (kWTA=1): {eval_k1['acc']*100:.2f}% | Val (kWTA=3): {eval_k3['acc']*100:.2f}% | Gini: {eval_k1['gini']:.3f}")
         
         # Slower exponential decay to preserve gradient strength longer
         lr = lr * 0.98
         
-    return best_val_acc
+    return max(best_val_acc_k1, best_val_acc_k3)
 
 # ---------------------------------------------------------------------------
 # Validation Evaluation
 # ---------------------------------------------------------------------------
-def evaluate_validation_split(qpl, train_x, train_y, val_x, val_y):
+def evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3):
     qpl.eval()
     B = val_x.shape[0]
     
     with torch.no_grad():
-        z_queries, _ = qpl(val_x, variant="full_qpl", k_wta=3)
-        z_refs, _ = qpl(train_x, variant="full_qpl", k_wta=3)
+        z_queries, _ = qpl(val_x, variant="full_qpl", k_wta=k_wta)
+        z_refs, _ = qpl(train_x, variant="full_qpl", k_wta=k_wta)
         
     sims = torch.matmul(z_queries, z_refs.T)
     correct = 0
@@ -166,9 +171,9 @@ def evaluate_validation_split(qpl, train_x, train_y, val_x, val_y):
             
     # Compute usage Gini
     with torch.no_grad():
-        h, _, _, _ = qpl.settle(val_x, variant="full_qpl", k_wta=3)
+        h, _, _, _ = qpl.settle(val_x, variant="full_qpl", k_wta=k_wta)
         scores = h.masked_fill(~qpl.active_mask.unsqueeze(0), -float("inf"))
-        indices = scores.topk(3, dim=-1).indices
+        indices = scores.topk(k_wta, dim=-1).indices
         kwta_mask = torch.zeros_like(h)
         kwta_mask.scatter_(1, indices, 1.0)
         
@@ -206,7 +211,7 @@ def main():
     qpl.initialize_basis(34)
     
     # Verify initial accuracy under sparse kWTA collapse (should be ~11.0%)
-    init_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y)
+    init_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
     print(f"Initial Sparse kWTA Accuracy (Pre-CHL): {init_eval['acc']*100:.2f}%")
     
     # Train QPL using local CHL updates
