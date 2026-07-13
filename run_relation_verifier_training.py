@@ -30,8 +30,10 @@ INPUT_DIM = 960
 class RelationVerifier(nn.Module):
     def __init__(self, input_dim=960):
         super().__init__()
-        # Input size: 4 * input_dim (cat q, k, |q-k|, q*k)
-        self.fc1 = nn.Linear(input_dim * 4, 256)
+        # We combine a bilinear scoring path and a concatenated MLP path
+        self.bilinear = nn.Bilinear(input_dim, input_dim, 1)
+        # Input size: 4 * input_dim + 2 (cat q, k, |q-k|, q*k, cos_sim, dist)
+        self.fc1 = nn.Linear(input_dim * 4 + 2, 256)
         self.bn1 = nn.BatchNorm1d(256)
         self.fc2 = nn.Linear(256, 64)
         self.bn2 = nn.BatchNorm1d(64)
@@ -42,12 +44,22 @@ class RelationVerifier(nn.Module):
         # q: (B, input_dim), k: (B, input_dim)
         diff = torch.abs(q - k)
         mult = q * k
-        x = torch.cat([q, k, diff, mult], dim=-1)
-        x = F.relu(self.bn1(self.fc1(x)))
-        x = self.dropout(x)
-        x = F.relu(self.bn2(self.fc2(x)))
-        x = self.dropout(x)
-        return torch.sigmoid(self.fc3(x)).squeeze(-1)
+        cos_sim = torch.sum(q * k, dim=-1, keepdim=True)
+        dist = torch.norm(q - k, p=2, dim=-1, keepdim=True)
+        
+        # Concat path
+        x_concat = torch.cat([q, k, diff, mult, cos_sim, dist], dim=-1)
+        x_mlp = F.relu(self.bn1(self.fc1(x_concat)))
+        x_mlp = self.dropout(x_mlp)
+        x_mlp = F.relu(self.bn2(self.fc2(x_mlp)))
+        x_mlp = self.dropout(x_mlp)
+        
+        # Bilinear path
+        x_bil = self.bilinear(q, k).squeeze(-1)
+        
+        # Combine paths
+        out = self.fc3(x_mlp).squeeze(-1) + x_bil
+        return torch.sigmoid(out)
 
 # ---------------------------------------------------------------------------
 # In-Domain Semantic Hard Negatives Builder for Pairs
@@ -236,7 +248,7 @@ def main():
             pred = verifier(q_b, k_b)
             loss_elementwise = criterion(pred, y_b)
             weight = torch.ones_like(y_b)
-            weight[y_b == 1.0] = 3.0
+            weight[y_b == 1.0] = 4.0
             loss = (loss_elementwise * weight).mean()
             
             optimizer.zero_grad()
