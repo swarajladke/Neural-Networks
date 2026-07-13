@@ -202,6 +202,8 @@ def main():
     control_vectors = []
     try:
         tok = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+        if tok.pad_token is None:
+            tok.pad_token = tok.eos_token
         mod = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION, output_hidden_states=True)
         mod.to(DEVICE)
         mod.eval()
