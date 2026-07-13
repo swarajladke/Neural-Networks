@@ -340,7 +340,7 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION, output_hidden_states=True)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
         model.to(DEVICE)
         model.eval()
         
@@ -350,8 +350,16 @@ def main():
         for text in INDEPENDENT_PPL_TEXTS:
             enc = tokenizer(text, max_length=32, truncation=True, padding="max_length", return_tensors="pt").to(DEVICE)
             with torch.no_grad():
-                outputs = model(enc.input_ids, attention_mask=enc.attention_mask)
+                outputs = model(
+                    input_ids=enc.input_ids,
+                    attention_mask=enc.attention_mask,
+                    output_hidden_states=True,
+                    return_dict=True,
+                    use_cache=False
+                )
+                assert outputs.hidden_states is not None
                 hidden = outputs.hidden_states[-1]
+                assert hidden.shape[-1] == 960
                 mask = enc.attention_mask.unsqueeze(-1)
                 pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
                 pooled = F.normalize(pooled.float(), dim=-1)

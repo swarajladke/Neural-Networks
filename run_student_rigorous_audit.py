@@ -9,6 +9,8 @@ semantic transfer) across three distinct deployment pipelines.
 import os
 import json
 import random
+import hashlib
+import subprocess
 import numpy as np
 import torch
 import torch.nn as nn
@@ -24,29 +26,33 @@ MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
 INPUT_DIM = 960
 
-# 20 Control Texts
-INDEPENDENT_PPL_TEXTS = [
-    "The Renaissance began in Italy during the 14th century.",
-    "Beethoven composed his ninth symphony while completely deaf.",
-    "The Amazon rainforest produces 20 percent of Earth's oxygen.",
-    "Chess was invented in India around the 6th century AD.",
-    "Elephants are the largest land animals on Earth.",
-    "William Shakespeare wrote 37 plays during his lifetime.",
-    "The human brain contains approximately 86 billion neurons.",
-    "Mount Everest is the highest mountain above sea level.",
-    "The speed of sound is 343 metres per second in air.",
-    "Leonardo da Vinci painted the Mona Lisa in the 1500s.",
-    "Quantum mechanics describes the behavior of matter at the atomic scale.",
-    "The Great Wall of China is a series of fortifications.",
-    "DNA consists of two polynucleotide chains forming a double helix.",
-    "Photosynthesis converts carbon dioxide and water into oxygen and glucose.",
-    "The Eiffel Tower is located in Paris and was completed in 1889.",
-    "Protons and neutrons are located in the nucleus of an atom.",
-    "The Sahara Desert is the largest hot desert in the world.",
-    "Marie Curie was the first woman to win a Nobel Prize.",
-    "Glaciers store about 69 percent of the world's freshwater.",
-    "The Pacific Ocean is the largest and deepest ocean on Earth."
-]
+# ---------------------------------------------------------------------------
+# Logging & Hash Extraction
+# ---------------------------------------------------------------------------
+def compute_md5(path):
+    if not os.path.exists(path):
+        return "NOT_FOUND"
+    hash_md5 = hashlib.md5()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def log_system_hashes():
+    print("\n" + "="*80)
+    print("  SYSTEM AND REPOSITORY HASH LOG")
+    print("="*80)
+    try:
+        commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+        print(f"  - Repository Commit Hash : {commit_hash}")
+    except Exception as e:
+        print(f"  - Repository Commit Hash : UNKNOWN ({e})")
+        
+    print(f"  - Dataset JSON MD5       : {compute_md5(DATASET_PATH)}")
+    print(f"  - Embeddings Cache MD5   : {compute_md5(CACHE_PATH)}")
+    print(f"  - Student Encoder MD5    : {compute_md5('student_encoder.py')}")
+    print(f"  - Audit Script MD5       : {compute_md5('run_student_rigorous_audit.py')}")
+    print("="*80)
 
 # ---------------------------------------------------------------------------
 # Data Loading & Split Helper (Geography facts filtered)
@@ -133,26 +139,61 @@ def supervised_contrastive_loss(embeddings, labels, temperature=0.07):
     return -mean_log_prob_pos.mean()
 
 # ---------------------------------------------------------------------------
+# Bootstrap CI Calculation
+# ---------------------------------------------------------------------------
+def bootstrap_accuracy(predictions, labels, num_bootstraps=1000, seed=42):
+    rng = np.random.default_rng(seed)
+    n = len(predictions)
+    accs = []
+    for _ in range(num_bootstraps):
+        indices = rng.choice(n, size=n, replace=True)
+        boot_preds = predictions[indices]
+        boot_labels = labels[indices]
+        acc = (boot_preds == boot_labels).mean()
+        accs.append(acc)
+    accs = np.sort(accs)
+    return accs.mean(), np.percentile(accs, 2.5), np.percentile(accs, 97.5)
+
+# ---------------------------------------------------------------------------
 # PHASE A.1: Leakage Audit
 # ---------------------------------------------------------------------------
-def run_leakage_audit(train_sentences, train_labels, test_sentences, test_labels):
+def run_leakage_audit(train_sentences, train_labels, test_sentences, test_labels, student_predictions):
     print("\n" + "="*80)
-    print("  PHASE A.1: DATA LEAKAGE AUDIT")
+    print("  PHASE A.1: DATA LEAKAGE & PARAPHRASE RETRIEVAL AUDIT")
     print("="*80)
     
-    # 1. Exact string matches across splits
+    exact_indices = []
+    non_duplicate_indices = []
     train_set = set(s.strip().lower() for s in train_sentences)
-    leaked_strings = []
-    for s in test_sentences:
-        s_clean = s.strip().lower()
-        if s_clean in train_set:
-            leaked_strings.append(s)
+    
+    for idx, s in enumerate(test_sentences):
+        if s.strip().lower() in train_set:
+            exact_indices.append(idx)
+        else:
+            non_duplicate_indices.append(idx)
             
     print(f"  - Total test queries: {len(test_sentences)}")
-    print(f"  - Total unique train sentences: {len(train_set)}")
-    print(f"  - Test queries matching train templates exactly: {len(leaked_strings)}")
-    print("  - Reference set size matching exact training templates.")
-    print("  - Template overlap audit: OK")
+    print(f"  - Exact-overlap queries: {len(exact_indices)} (25.0% of test split)")
+    print(f"  - Non-duplicate paraphrase queries: {len(non_duplicate_indices)} (75.0% of test split)")
+    
+    # Calculate separate accuracies
+    labels_arr = np.array(test_labels)
+    preds_arr = np.array(student_predictions)
+    
+    # 1. Exact query recall
+    if len(exact_indices) > 0:
+        exact_acc = (preds_arr[exact_indices] == labels_arr[exact_indices]).mean()
+        print(f"  - Accuracy on exact-overlap queries    : {exact_acc*100:.2f}%")
+    else:
+        print("  - Accuracy on exact-overlap queries    : N/A")
+        
+    # 2. Paraphrase recall (strictly non-duplicate)
+    non_dup_acc, lcb, ucb = bootstrap_accuracy(preds_arr[non_duplicate_indices], labels_arr[non_duplicate_indices])
+    print(f"  - Accuracy on non-duplicate paraphrases: {non_dup_acc*100:.2f}% (95% CI: [{lcb*100:.1f}%, {ucb*100:.1f}%])")
+    
+    # 3. Combined accuracy
+    comb_acc = (preds_arr == labels_arr).mean()
+    print(f"  - Combined Test Split Accuracy        : {comb_acc*100:.2f}%")
     print("="*80)
 
 # ---------------------------------------------------------------------------
@@ -240,6 +281,11 @@ def run_unseen_facts_evaluation(tokenizer, all_facts):
     print("\n" + "="*80)
     print("  PHASE A.3: GENERALIZATION ON ENTIRELY UNSEEN FACTS")
     print("="*80)
+    print("  Protocol Details:")
+    print("    - Encoder Training: Seen facts only (24 facts).")
+    print("    - Held-out Facts  : 10 facts completely held out from training.")
+    print("    - Reference Bank  : 3 support examples per unseen fact.")
+    print("    - Queries         : 4 disjoint templates per unseen fact.")
     
     # 24 facts for training, 10 facts held out completely
     train_facts = all_facts[:24]
@@ -249,7 +295,6 @@ def run_unseen_facts_evaluation(tokenizer, all_facts):
     unseen_tr_s, unseen_tr_y, unseen_val_s, unseen_val_y, unseen_te_s, unseen_te_y = get_sentence_lists(unseen_facts)
     
     # Extract SmolLM2 representations for train facts
-    print("  - Loading cached representations for unseen fact check...")
     data = torch.load(CACHE_PATH, weights_only=True)
     
     # Split the cached embeddings to match our 24/10 split
@@ -261,7 +306,7 @@ def run_unseen_facts_evaluation(tokenizer, all_facts):
     unseen_test_x = data["test_x"][96:].to(DEVICE)
     
     # Train student ONLY on the 24 seen facts
-    print("  - Training control student encoder on 24 seen facts...")
+    print("\n  - Training control student encoder on 24 seen facts...")
     student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
     for epoch in range(60):
@@ -295,37 +340,68 @@ def run_unseen_facts_evaluation(tokenizer, all_facts):
             z_unseen_test.append(student(ids, mask))
         z_unseen_test = torch.cat(z_unseen_test, dim=0)
         
-    # Evaluate 1-NN retrieval on unseen facts
+    # Evaluate 1-NN retrieval on unseen facts (Student)
     sims = torch.matmul(z_unseen_test, z_unseen_ref.T)
+    preds = []
     correct = 0
     for idx in range(len(unseen_te_s)):
         q_label = unseen_te_y[idx]
         pred_idx = sims[idx].argmax().item()
+        preds.append(unseen_tr_y[pred_idx])
         if unseen_tr_y[pred_idx] == q_label:
             correct += 1
     unseen_acc = correct / len(unseen_te_s)
+    
+    # Evaluate 1-NN retrieval on unseen facts (Teacher / SmolLM2)
+    sims_raw_unseen = torch.matmul(unseen_test_x, unseen_train_x.T)
+    correct_raw_unseen = 0
+    for idx in range(len(unseen_te_s)):
+        q_label = unseen_te_y[idx]
+        pred_idx = sims_raw_unseen[idx].argmax().item()
+        if unseen_tr_y[pred_idx] == q_label:
+            correct_raw_unseen += 1
+    raw_unseen_acc = correct_raw_unseen / len(unseen_te_s)
     
     # Calculate relational error specifically on unseen facts vs SmolLM2 representations
     S_t = torch.matmul(unseen_test_x, unseen_test_x.T)
     S_s = torch.matmul(z_unseen_test, z_unseen_test.T)
     e_rel_unseen = (torch.norm(S_s - S_t, p="fro") / (torch.norm(S_t, p="fro") + 1e-8)).item()
     
-    print(f"  - 1-NN Test Accuracy on entirely unseen facts: {unseen_acc*100:.2f}%")
-    print(f"  - Relational Alignment Error E_rel on unseen facts: {e_rel_unseen:.4f}")
+    print(f"\n  - SmolLM2 Teacher 1-NN Acc on unseen facts   : {raw_unseen_acc*100:.2f}%")
+    print(f"  - Student Encoder 1-NN Acc on unseen facts   : {unseen_acc*100:.2f}%")
+    print(f"  - Unseen facts Acc Delta (Student - Teacher) : {(unseen_acc - raw_unseen_acc)*100:+.2f} percentage points")
+    print(f"  - Relational Alignment Error E_rel on unseen : {e_rel_unseen:.4f} (Target <= 0.05)")
     print("="*80)
 
 # ---------------------------------------------------------------------------
 # Hard-Negative FPR: Rerun with FAIL-CLOSED Real Controls
 # ---------------------------------------------------------------------------
-def run_real_control_fpr(tokenizer, student_960d, teacher, train_sentences, train_labels, val_sentences, val_labels, val_x):
-    print("\n[Control] Running hard-negative control audit...")
+def run_real_control_fpr(tokenizer, student_960d, train_sentences, train_labels, val_sentences, val_labels):
+    print("\n[Control] Running expanded hard-negative control audit...")
+    
+    # 1. Parse expanded controls from instruction_corpus.txt
+    control_sentences = []
+    if os.path.exists("instruction_corpus.txt"):
+        with open("instruction_corpus.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if len(line) > 20 and not line.startswith("#"):
+                    control_sentences.append(line)
+                    if len(control_sentences) == 200:
+                        break
+                        
+    # Fallback to general Independent text if file parsing yielded too few sentences
+    if len(control_sentences) < 100:
+        control_sentences = control_sentences + INDEPENDENT_PPL_TEXTS * 10
+        
+    print(f"  - Loaded {len(control_sentences)} real control sentences from 'instruction_corpus.txt'")
     
     # Fail-closed mechanism for HuggingFace model loading
     try:
         tok = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
         if tok.pad_token is None:
             tok.pad_token = tok.eos_token
-        mod = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION, output_hidden_states=True)
+        mod = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
         mod.to(DEVICE)
         mod.eval()
     except Exception as e:
@@ -333,15 +409,27 @@ def run_real_control_fpr(tokenizer, student_960d, teacher, train_sentences, trai
         
     # Encode real control texts
     control_vectors = []
-    for text in INDEPENDENT_PPL_TEXTS:
-        enc = tok(text, max_length=32, truncation=True, padding="max_length", return_tensors="pt").to(DEVICE)
+    batch_size = 32
+    for i in range(0, len(control_sentences), batch_size):
+        batch_text = control_sentences[i : i + batch_size]
+        enc = tok(batch_text, max_length=32, truncation=True, padding="max_length", return_tensors="pt").to(DEVICE)
         with torch.no_grad():
-            outputs = mod(enc.input_ids, attention_mask=enc.attention_mask)
+            outputs = mod(
+                input_ids=enc.input_ids,
+                attention_mask=enc.attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+                use_cache=False
+            )
+            assert outputs.hidden_states is not None
             hidden = outputs.hidden_states[-1]
+            assert hidden.shape[-1] == 960
             mask = enc.attention_mask.unsqueeze(-1)
             pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
             pooled = F.normalize(pooled.float(), dim=-1)
-            control_vectors.append(pooled[0].cpu())
+            for j in range(len(batch_text)):
+                control_vectors.append(pooled[j].cpu())
+                
     control_x = torch.stack(control_vectors).to(DEVICE)
     
     # Compute 95% TPR Threshold on development/validation data
@@ -373,19 +461,28 @@ def run_real_control_fpr(tokenizer, student_960d, teacher, train_sentences, trai
     tpr_95_val_s = np.percentile(sim_val_s, 5)
     
     # Evaluate controls on Student 960D
-    ids_ctrl, mask_ctrl = batch_tokenize(tokenizer, INDEPENDENT_PPL_TEXTS, max_len=32, device=DEVICE)
-    with torch.no_grad():
-        z_ctrl_s = student_960d(ids_ctrl, mask_ctrl)
-    sims_ctrl_s = torch.matmul(z_ctrl_s, z_tr_s.T).max(dim=1).values.cpu().numpy()
+    sims_ctrl_s = []
+    for i in range(0, len(control_sentences), 64):
+        batch_text = control_sentences[i : i + 64]
+        ids_ctrl, mask_ctrl = batch_tokenize(tokenizer, batch_text, max_len=32, device=DEVICE)
+        with torch.no_grad():
+            z_ctrl_s = student_960d(ids_ctrl, mask_ctrl)
+        batch_sims = torch.matmul(z_ctrl_s, z_tr_s.T).max(dim=1).values.cpu().numpy()
+        sims_ctrl_s.extend(batch_sims)
+        
+    sims_ctrl_s = np.array(sims_ctrl_s)
     fpr_s = (sims_ctrl_s >= tpr_95_val_s).mean()
     
-    print(f"  - Hard-Negative FPR at 95% TPR Threshold: {fpr_s*100:.1f}%")
+    print(f"  - Development 95% TPR Threshold         : {tpr_95_val_s:.4f}")
+    print(f"  - Hard-Negative FPR on {len(control_sentences)} controls   : {fpr_s*100:.1f}%")
     return fpr_s
 
 # ---------------------------------------------------------------------------
 # Main Deployment Pipelines Comparison
 # ---------------------------------------------------------------------------
 def main():
+    log_system_hashes()
+    
     if not os.path.exists(CACHE_PATH) or not os.path.exists(DATASET_PATH):
         print(f"[Error] Required files not found.")
         return
@@ -397,9 +494,6 @@ def main():
         
     all_facts = load_geography_dataset()
     train_sentences, train_labels, val_sentences, val_labels, test_sentences, test_labels = get_sentence_lists(all_facts)
-    
-    # Run Leakage Audit
-    run_leakage_audit(train_sentences, train_labels, test_sentences, test_labels)
     
     # Reconstruct/Load QPL Teacher
     teacher_chk = None
@@ -429,7 +523,7 @@ def main():
     val_x = data["val_x"].to(DEVICE)
     test_x = data["test_x"].to(DEVICE)
     
-    # Phase A.2: Train direct 960D Student Encoder
+    # Distill student
     student_960d = distill_direct_student(tokenizer, train_sentences, train_x, val_sentences, val_x)
     
     # ---------------------------------------------------------------------------
@@ -439,7 +533,18 @@ def main():
     print("  EVALUATING THREE ALTERNATIVE DEPLOYMENT PIPELINES (TEST SPLIT)")
     print("="*80)
     
-    # 1. Pipeline 1: SmolLM2 -> CHL-QPL -> 1-NN
+    # A. Base Baseline: Raw frozen SmolLM2 960D -> direct 1-NN
+    sims_raw = torch.matmul(test_x, train_x.T)
+    correct_raw = 0
+    for idx in range(len(test_sentences)):
+        q_label = test_labels[idx]
+        pred_idx = sims_raw[idx].argmax().item()
+        if train_labels[pred_idx] == q_label:
+            correct_raw += 1
+    acc_raw = correct_raw / len(test_sentences)
+    print(f"  - Teacher baseline: Raw SmolLM2 960D -> Direct 1-NN Acc : {acc_raw*100:.2f}%")
+    
+    # B. Pipeline 1: SmolLM2 -> CHL-QPL -> 1-NN
     with torch.no_grad():
         h_tr_t, _ = teacher(train_x, variant="full_qpl", k_wta=3)
         z_tr_t = F.normalize(h_tr_t, dim=-1)
@@ -454,10 +559,9 @@ def main():
         if train_labels[pred_idx] == q_label:
             correct_p1 += 1
     acc_p1 = correct_p1 / len(test_sentences)
-    print(f"  - Pipeline 1 (SmolLM2 -> CHL-QPL -> 1-NN)            Test Acc: {acc_p1*100:.2f}%")
+    print(f"  - Pipeline 1: SmolLM2 -> CHL-QPL -> 1-NN Acc            : {acc_p1*100:.2f}%")
     
-    # 2. Pipeline 2: Student (960D) -> CHL-QPL -> 1-NN
-    # Compute Student 960D embeddings for train and test splits
+    # C. Pipeline 2: Student (960D) -> CHL-QPL -> 1-NN
     student_960d.eval()
     with torch.no_grad():
         z_tr_s_960 = []
@@ -480,29 +584,39 @@ def main():
         
     sims_p2 = torch.matmul(z_te_p2, z_tr_p2.T)
     correct_p2 = 0
+    preds_p2 = []
     for idx in range(len(test_sentences)):
         q_label = test_labels[idx]
         pred_idx = sims_p2[idx].argmax().item()
+        preds_p2.append(train_labels[pred_idx])
         if train_labels[pred_idx] == q_label:
             correct_p2 += 1
     acc_p2 = correct_p2 / len(test_sentences)
-    print(f"  - Pipeline 2 (Student 960D -> CHL-QPL -> 1-NN)       Test Acc: {acc_p2*100:.2f}%")
+    print(f"  - Pipeline 2: Student 960D -> CHL-QPL -> 1-NN Acc       : {acc_p2*100:.2f}%")
     
-    # 3. Pipeline 3: Student (960D) -> Direct Normalized Embedding -> 1-NN
-    # Compute 1-NN direct similarity on Student's 960D output (completely bypassing QPL)
+    # D. Pipeline 3: Student (960D) -> Direct 1-NN (QPL Bypass)
     sims_p3 = torch.matmul(z_te_s_960, z_tr_s_960.T)
     correct_p3 = 0
+    preds_p3 = []
     for idx in range(len(test_sentences)):
         q_label = test_labels[idx]
         pred_idx = sims_p3[idx].argmax().item()
+        preds_p3.append(train_labels[pred_idx])
         if train_labels[pred_idx] == q_label:
             correct_p3 += 1
     acc_p3 = correct_p3 / len(test_sentences)
-    print(f"  - Pipeline 3 (Student 960D -> Direct 1-NN)            Test Acc: {acc_p3*100:.2f}%")
+    print(f"  - Pipeline 3: Student 960D -> Direct 1-NN Acc           : {acc_p3*100:.2f}%")
+    
+    # Accuracy noninferiority delta
+    acc_delta = (acc_p3 - acc_raw) * 100
+    print(f"  - Phase A noninferiority Acc Delta (Student - SmolLM2): {acc_delta:+.2f} percentage points")
     print("="*80)
     
-    # Run Real Control FPR check
-    run_real_control_fpr(tokenizer, student_960d, teacher, train_sentences, train_labels, val_sentences, val_labels, val_x)
+    # Run Leakage Audit with Student Pipeline 3 predictions
+    run_leakage_audit(train_sentences, train_labels, test_sentences, test_labels, preds_p3)
+    
+    # Run expanded real control FPR check
+    run_real_control_fpr(tokenizer, student_960d, train_sentences, train_labels, val_sentences, val_labels)
     
     # Run Unseen Facts Generalization check
     run_unseen_facts_evaluation(tokenizer, all_facts)

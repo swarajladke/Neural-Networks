@@ -142,7 +142,7 @@ def load_and_cache_dataset():
         
     print(f"[Data] Extracting fresh representations using {MODEL_ID} (commit {MODEL_REVISION[:8]})...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
-    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION, output_hidden_states=True).to(DEVICE)
+    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION).to(DEVICE)
     model.eval()
     
     if tokenizer.pad_token is None:
@@ -182,8 +182,16 @@ def load_and_cache_dataset():
             return_tensors="pt"
         ).to(DEVICE)
         with torch.no_grad():
-            outputs = model(enc.input_ids, attention_mask=enc.attention_mask)
+            outputs = model(
+                input_ids=enc.input_ids,
+                attention_mask=enc.attention_mask,
+                output_hidden_states=True,
+                return_dict=True,
+                use_cache=False
+            )
+            assert outputs.hidden_states is not None
             hidden = outputs.hidden_states[-1]          # [B, T, INPUT_DIM]
+            assert hidden.shape[-1] == 960
             mask = enc.attention_mask.unsqueeze(-1)     # [B, T, 1]
             pooled = (hidden * mask).sum(dim=1)
             pooled = pooled / mask.sum(dim=1).clamp_min(1)
