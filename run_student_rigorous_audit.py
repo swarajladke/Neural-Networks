@@ -26,6 +26,30 @@ MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
 INPUT_DIM = 960
 
+# 20 Control Texts
+INDEPENDENT_PPL_TEXTS = [
+    "The Renaissance began in Italy during the 14th century.",
+    "Beethoven composed his ninth symphony while completely deaf.",
+    "The Amazon rainforest produces 20 percent of Earth's oxygen.",
+    "Chess was invented in India around the 6th century AD.",
+    "Elephants are the largest land animals on Earth.",
+    "William Shakespeare wrote 37 plays during his lifetime.",
+    "The human brain contains approximately 86 billion neurons.",
+    "Mount Everest is the highest mountain above sea level.",
+    "The speed of sound is 343 metres per second in air.",
+    "Leonardo da Vinci painted the Mona Lisa in the 1500s.",
+    "Quantum mechanics describes the behavior of matter at the atomic scale.",
+    "The Great Wall of China is a series of fortifications.",
+    "DNA consists of two polynucleotide chains forming a double helix.",
+    "Photosynthesis converts carbon dioxide and water into oxygen and glucose.",
+    "The Eiffel Tower is located in Paris and was completed in 1889.",
+    "Protons and neutrons are located in the nucleus of an atom.",
+    "The Sahara Desert is the largest hot desert in the world.",
+    "Marie Curie was the first woman to win a Nobel Prize.",
+    "Glaciers store about 69 percent of the world's freshwater.",
+    "The Pacific Ocean is the largest and deepest ocean on Earth."
+]
+
 # ---------------------------------------------------------------------------
 # Logging & Hash Extraction
 # ---------------------------------------------------------------------------
