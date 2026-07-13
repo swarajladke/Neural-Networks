@@ -2,8 +2,7 @@
 run_qpl_stage4_evaluation.py — Stage 4 Contrastive Hebbian Learning (CHL) Integration
 ======================================================================================
 Implements Contrastive Hebbian Learning (CHL) using positive/negative phases,
-relational distillation with Cosine Annealing learning rate schedule,
-and evaluates whether CHL solves the sparse representation collapse.
+relational distillation, and evaluates whether CHL solves the sparse representation collapse.
 """
 import os
 import math
@@ -48,7 +47,7 @@ class BalancedBatchSampler:
 # ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2e-1, eta_min=1e-3, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, eta_min=1e-3, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -65,7 +64,7 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2e-1, 
         qpl.train()
         
         # Cosine Annealing Learning Rate Schedule
-        lr = eta_min + 0.5 * (eta_max - eta_min) * (1.0 + math.cos(math.pi * epoch / epochs))
+        lr = eta_min + 0.5 * (initial_lr - eta_min) * (1.0 + math.cos(math.pi * epoch / epochs))
         
         # Run 35 batch updates per epoch
         for _ in range(35):
@@ -131,10 +130,12 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2e-1, 
                 qpl.V.add_(lr * 0.05 * dV_distill)
                 qpl.V[:, active_idx] = F.normalize(qpl.V[:, active_idx], dim=0, eps=1e-8)
                 
-        # Run local unsupervised updates on W and b_out
+        # Run local unsupervised updates on W and b_out only
+        # We disable unsupervised updates on V and b_in by setting their learning rates to 0.0
         with torch.no_grad():
             h_settled, _, _, _ = qpl.settle(train_x, variant="full_qpl", k_wta=3)
-            qpl.local_unsupervised_update(train_x, h_settled, kwta_mask=None, current_group=None)
+            lrs_unsup = {"V": 0.0, "W": 1e-2, "L": 1e-2, "b": 0.0, "homeo": 1e-3}
+            qpl.local_unsupervised_update(train_x, h_settled, kwta_mask=None, lrs=lrs_unsup, current_group=None)
             
         # Log validation accuracy
         val_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
@@ -213,7 +214,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2.5e-1, eta_min=1e-3, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2.5e-1, eta_min=1e-3, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
