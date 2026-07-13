@@ -174,7 +174,7 @@ def main():
         return
         
     print(f"[Distill] Loading QPL Teacher Checkpoint: {teacher_chk}")
-    teacher_weights = torch.load(teacher_chk, map_only=True if torch.cuda.is_available() else False)
+    teacher_weights = torch.load(teacher_chk, map_location=DEVICE)
     
     # Reconstruct teacher QPL representation targets
     teacher_qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128).to(DEVICE)
