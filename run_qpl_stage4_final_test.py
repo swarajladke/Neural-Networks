@@ -397,6 +397,15 @@ def main():
             
         train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, lr=lr, seed=seed)
         
+        # Save trained weights for subsequent student distillation phase
+        torch.save({
+            "V": qpl.V.clone().detach().cpu(),
+            "b_in": qpl.b_in.clone().detach().cpu(),
+            "W": qpl.W.clone().detach().cpu(),
+            "b_out": qpl.b_out.clone().detach().cpu(),
+            "L": qpl.L.clone().detach().cpu()
+        }, f"best_chl_qpl_seed{seed}.pt")
+        
         # Evaluate post-training test accuracy
         test_acc = evaluate_1nn_accuracy(qpl, train_x, train_y, test_x, test_y, k_wta=3)
         print(f"  CHL-QPL Test 1-NN accuracy: {test_acc*100:.2f}%")
