@@ -46,7 +46,7 @@ class BalancedBatchSampler:
 # ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, lr=2e-2, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5e-1, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -59,9 +59,10 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, lr=2e-2, seed=
     with torch.no_grad():
         z_anchor, _ = qpl(anchor_x, variant="full_qpl", k_wta=3)
     
+    lr = initial_lr
+    
     for epoch in range(epochs):
         qpl.train()
-        epoch_loss = 0.0
         
         # Run 30 batch updates per epoch
         for _ in range(30):
@@ -139,7 +140,10 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, lr=2e-2, seed=
         if val_eval["acc"] > best_val_acc:
             best_val_acc = val_eval["acc"]
             
-        print(f"Epoch {epoch+1:02d}/{epochs} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
+        
+        # Exponential LR decay to stabilize convergence
+        lr = lr * 0.95
         
     return best_val_acc
 
@@ -209,7 +213,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, lr=2e-1, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5e-1, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
