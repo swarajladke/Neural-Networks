@@ -46,14 +46,13 @@ class BalancedBatchSampler:
 # ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2e-1, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
     
     sampler = BalancedBatchSampler(train_x, train_y, num_groups=34)
-    best_val_acc_k1 = 0.0
-    best_val_acc_k3 = 0.0
+    best_val_acc = 0.0
     
     # Store raw query text coordinates as anchors for distillation
     anchor_x = train_x.clone().detach()
@@ -79,8 +78,11 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
                 h_neg, _, _, _ = qpl.settle(q_batch, variant="full_qpl", k_wta=3)
                 
                 # 2. Positive Phase (Teacher-clamped target state)
+                # Map target group to 3 dedicated, disjoint slots
                 h_pos = torch.zeros(B, qpl.output_dim, device=DEVICE)
-                h_pos[range(B), y_batch] = 1.0
+                h_pos[range(B), 3 * y_batch] = 1.0 / 3.0
+                h_pos[range(B), 3 * y_batch + 1] = 1.0 / 3.0
+                h_pos[range(B), 3 * y_batch + 2] = 1.0 / 3.0
                 
                 # CHL local weight updates: delta V = q^T (h_pos - h_neg)
                 dV = torch.matmul(q_batch.T, h_pos - h_neg) / B
@@ -120,7 +122,7 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
                 dz = 2.0 * torch.matmul(distill_error, z_replay) / 32.0
                 dV_distill = torch.matmul(q_replay.T, dz) / 32.0
                 
-                # Apply distillation step with low weight 0.05 to avoid blocking alignment
+                # Apply distillation step with low weight 0.05
                 for j in active_idx:
                     g_d = dV_distill[:, j]
                     v_c = qpl.V[:, j]
@@ -134,21 +136,17 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
             h_settled, _, _, _ = qpl.settle(train_x, variant="full_qpl", k_wta=3)
             qpl.local_unsupervised_update(train_x, h_settled, kwta_mask=None, current_group=None)
             
-        # Log validation accuracy for both kWTA=1 and kWTA=3
-        eval_k1 = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=1)
-        eval_k3 = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
-        
-        if eval_k1["acc"] > best_val_acc_k1:
-            best_val_acc_k1 = eval_k1["acc"]
-        if eval_k3["acc"] > best_val_acc_k3:
-            best_val_acc_k3 = eval_k3["acc"]
+        # Log validation accuracy
+        val_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
+        if val_eval["acc"] > best_val_acc:
+            best_val_acc = val_eval["acc"]
             
-        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val (kWTA=1): {eval_k1['acc']*100:.2f}% | Val (kWTA=3): {eval_k3['acc']*100:.2f}% | Gini: {eval_k1['gini']:.3f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
         
-        # Slower exponential decay to preserve gradient strength longer
+        # Exponential decay
         lr = lr * 0.98
         
-    return max(best_val_acc_k1, best_val_acc_k3)
+    return best_val_acc
 
 # ---------------------------------------------------------------------------
 # Validation Evaluation
@@ -208,7 +206,9 @@ def main():
     print("="*80)
     
     qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=1.0).to(DEVICE)
-    qpl.initialize_basis(34)
+    
+    # Initialize basis with 102 active slots (3 slots per group for 34 groups)
+    qpl.initialize_basis(102)
     
     # Verify initial accuracy under sparse kWTA collapse (should be ~11.0%)
     init_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
@@ -216,7 +216,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2.5e-1, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
