@@ -167,8 +167,10 @@ def main():
     gini_t = (np.sum((2 * index - 34 - 1) * usage_t_sorted)) / (34 * np.sum(usage_t_sorted) + 1e-8)
     
     with torch.no_grad():
-        V_active = teacher.V[:, :34]
-        student_test_x = z_te_s @ V_active.T[:128]
+        V_active = teacher.V[:, :34]  # (960, 34)
+        # Reconstruct approximate 960D input coordinates from 128D student output
+        # teacher.V is (960, 128). We project 128D coordinates back to 960D input space: z_te_s @ V^T
+        student_test_x = torch.matmul(z_te_s, teacher.V.T)  # (136, 960)
         h_test_s, _, _, _ = teacher.settle(student_test_x, variant="full_qpl", k_wta=3)
         scores_s = h_test_s.masked_fill(~teacher.active_mask.unsqueeze(0), -float("inf"))
         indices_s = scores_s.topk(3, dim=-1).indices
