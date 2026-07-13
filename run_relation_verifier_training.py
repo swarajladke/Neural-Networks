@@ -163,8 +163,8 @@ def compute_ece(probs, labels, n_bins=10):
 # Training & Verification Gate Check
 # ---------------------------------------------------------------------------
 def main():
-    if not os.path.exists(CACHE_100_PATH) or not os.path.exists(DATASET_PATH):
-        print(f"[Error] Required files not found.")
+    if not os.path.exists(DATASET_PATH):
+        print(f"[Error] Required dataset file {DATASET_PATH} not found.")
         return
         
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
@@ -180,7 +180,9 @@ def main():
         
     with open(DATASET_PATH, "r") as f:
         blocks = json.load(f)
-    cache_data = torch.load(CACHE_100_PATH, weights_only=True)
+        
+    from run_student_continual_benchmarks import ensure_100_fact_embeddings
+    cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
     all_facts = [fact for b in blocks for fact in b]
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     
