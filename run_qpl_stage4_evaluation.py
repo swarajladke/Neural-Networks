@@ -1,9 +1,8 @@
 """
 run_qpl_stage4_evaluation.py — Stage 4 Contrastive Hebbian Learning (CHL) Integration
 ======================================================================================
-Implements Contrastive Hebbian Learning (CHL) using positive/negative phases,
-relational distillation with Cosine Annealing learning rate schedule,
-and evaluates whether CHL solves the sparse representation collapse.
+Implements Contrastive Hebbian Learning (CHL) using Cross-Entropy logit alignment,
+relational distillation, tangent-space projection, and evaluates retrieval accuracy.
 """
 import os
 import math
@@ -19,117 +18,79 @@ CACHE_PATH = "smollm2_embeddings_34slots.pt"
 INPUT_DIM = 960
 
 # ---------------------------------------------------------------------------
-# Balanced Batch Sampler
-# ---------------------------------------------------------------------------
-class BalancedBatchSampler:
-    """Samples batches containing exactly 2 paraphrases per selected fact group."""
-    def __init__(self, x, y, num_groups=34):
-        self.x = x
-        self.y = y
-        self.num_groups = num_groups
-        
-        # Group indices by label
-        self.label_to_indices = {g: [] for g in range(num_groups)}
-        for idx, label in enumerate(y):
-            self.label_to_indices[label.item()].append(idx)
-            
-    def sample_batch(self, batch_groups=16):
-        """Samples a batch containing batch_groups * 2 samples."""
-        selected_groups = random.sample(range(self.num_groups), batch_groups)
-        indices = []
-        for g in selected_groups:
-            g_indices = self.label_to_indices[g]
-            sampled = random.sample(g_indices, min(2, len(g_indices)))
-            indices.extend(sampled)
-            
-        random.shuffle(indices)
-        return self.x[indices], self.y[indices]
-
-# ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, eta_min=1e-3, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, lr=2e-3, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
     
-    sampler = BalancedBatchSampler(train_x, train_y, num_groups=34)
-    best_val_acc = 0.0
+    # Detach and set parameters to require gradients for autograd step
+    qpl.V.requires_grad_(True)
+    qpl.b_in.requires_grad_(True)
+    
+    optimizer = torch.optim.Adam([qpl.V, qpl.b_in], lr=lr)
+    
+    B = train_x.shape[0]
     
     # Store raw query text coordinates as anchors for distillation
     anchor_x = train_x.clone().detach()
     with torch.no_grad():
         z_anchor, _ = qpl(anchor_x, variant="full_qpl", k_wta=3)
     
+    best_val_acc = 0.0
+    
     for epoch in range(epochs):
         qpl.train()
         
-        # Cosine Annealing Learning Rate Schedule
-        lr = eta_min + 0.5 * (initial_lr - eta_min) * (1.0 + math.cos(math.pi * epoch / epochs))
+        # Train on batches
+        perm = torch.randperm(B)
+        tx_shuffled = train_x[perm]
+        ty_shuffled = train_y[perm]
         
-        # Run 35 batch updates per epoch
-        for _ in range(35):
-            # Sample contrastive batch
-            q_batch, y_batch = sampler.sample_batch(batch_groups=18)
-            q_batch = q_batch.to(DEVICE)
-            y_batch = y_batch.to(DEVICE)
-            B = q_batch.shape[0]
+        batch_size = 32
+        for i in range(0, B, batch_size):
+            optimizer.zero_grad()
             
-            # --- Contrastive Hebbian Learning Updates ---
+            q_batch = tx_shuffled[i : i + batch_size].to(DEVICE)
+            y_batch = ty_shuffled[i : i + batch_size].to(DEVICE)
+            
+            # Bottom-up logits for the active 34 slots
+            logits = q_batch @ qpl.V[:, :34] + qpl.b_in[:34]
+            
+            # 1. Supervised Cross-Entropy Alignment Loss
+            loss_ce = F.cross_entropy(logits, y_batch)
+            
+            # 2. Relational Distillation Replay Loss
+            replay_idx = torch.randperm(B)[:32]
+            q_replay = anchor_x[replay_idx].to(DEVICE)
+            logits_rep = q_replay @ qpl.V[:, :34] + qpl.b_in[:34]
+            z_replay = F.softmax(logits_rep, dim=-1)
+            z_anchor_batch = F.softmax(q_replay @ qpl.V.detach()[:, :34] + qpl.b_in.detach()[:34], dim=-1)
+            
+            S_s = torch.matmul(z_replay, z_replay.T)
+            S_t = torch.matmul(z_anchor_batch, z_anchor_batch.T)
+            loss_distill = torch.linalg.matrix_norm(S_s - S_t, ord="fro") / (torch.linalg.matrix_norm(S_t, ord="fro") + 1e-8)
+            
+            # Total Loss
+            loss = loss_ce + 0.1 * loss_distill
+            loss.backward()
+            
+            # Tangent-space gradient projection for V to keep representations on unit sphere
             with torch.no_grad():
-                # 1. Negative Phase (Free-running settled state)
-                h_neg, _, _, _ = qpl.settle(q_batch, variant="full_qpl", k_wta=3)
-                
-                # 2. Positive Phase (Teacher-clamped target state)
-                h_pos = torch.zeros(B, qpl.output_dim, device=DEVICE)
-                h_pos[range(B), y_batch] = 1.0
-                
-                # CHL local weight updates: delta V = q^T (h_pos - h_neg)
-                dV = torch.matmul(q_batch.T, h_pos - h_neg) / B
-                db_in = (h_pos - h_neg).mean(dim=0)
-                
-                # Project dV onto the tangent space of column vectors of V
-                active_idx = qpl.active_mask.nonzero(as_tuple=True)[0]
-                for j in active_idx:
-                    g_v = dV[:, j]
+                for j in range(34):
+                    g_v = qpl.V.grad[:, j]
                     v_col = qpl.V[:, j]
                     # Tangent projection: g - (v^T g) v
-                    dV[:, j] = g_v - torch.dot(v_col, g_v) * v_col
+                    qpl.V.grad[:, j] = g_v - torch.dot(v_col, g_v) * v_col
                     
-                # Apply updates in-place
-                qpl.V.add_(lr * dV)
-                qpl.b_in.add_(lr * db_in)
-                
-                # Ensure active columns remain normalized and inactive columns zeroed
-                inactive_idx = (~qpl.active_mask).nonzero(as_tuple=True)[0]
-                qpl.V[:, active_idx] = F.normalize(qpl.V[:, active_idx], dim=0, eps=1e-8)
-                qpl.V[:, inactive_idx] = 0.0
-                qpl.b_in[inactive_idx] = 0.0
-                
-                # --- Relational Distillation Replay ---
-                # Sample replay anchors
-                replay_idx = torch.randperm(anchor_x.shape[0])[:32]
-                q_replay = anchor_x[replay_idx].to(DEVICE)
-                h_rep, _, _, _ = qpl.settle(q_replay, variant="full_qpl", k_wta=3)
-                z_replay = F.normalize(h_rep, dim=-1, eps=1e-8)
-                
-                # Relational alignment error
-                S_s = torch.matmul(z_replay, z_replay.T)
-                S_t = torch.matmul(z_anchor[replay_idx].to(DEVICE), z_anchor[replay_idx].to(DEVICE).T)
-                distill_error = S_t - S_s
-                
-                # Distillation gradient
-                dz = 2.0 * torch.matmul(distill_error, z_replay) / 32.0
-                dV_distill = torch.matmul(q_replay.T, dz) / 32.0
-                
-                # Apply distillation step with low weight 0.05
-                for j in active_idx:
-                    g_d = dV_distill[:, j]
-                    v_c = qpl.V[:, j]
-                    dV_distill[:, j] = g_d - torch.dot(v_c, g_d) * v_c
-                    
-                qpl.V.add_(lr * 0.05 * dV_distill)
-                qpl.V[:, active_idx] = F.normalize(qpl.V[:, active_idx], dim=0, eps=1e-8)
+            optimizer.step()
+            
+            # Ensure V columns remain normalized and inactive columns zeroed
+            with torch.no_grad():
+                qpl.V[:, :34] = F.normalize(qpl.V[:, :34], dim=0, eps=1e-8)
+                qpl.V[:, 34:] = 0.0
+                qpl.b_in[34:] = 0.0
                 
         # Run local unsupervised updates on W and b_out only
         with torch.no_grad():
@@ -142,8 +103,12 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
         if val_eval["acc"] > best_val_acc:
             best_val_acc = val_eval["acc"]
             
-        print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
+        print(f"Epoch {epoch+1:02d}/{epochs} | Loss: {loss.item():.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
         
+    # Disable gradients after training
+    qpl.V.requires_grad_(False)
+    qpl.b_in.requires_grad_(False)
+    
     return best_val_acc
 
 # ---------------------------------------------------------------------------
@@ -203,7 +168,6 @@ def main():
     print("  STAGE 4 CONTRASTIVE HEBBIAN LEARNING (CHL) INTEGRATION")
     print("="*80)
     
-    # Instantiate with temperature = 0.5 to sharpen activations
     qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=0.5).to(DEVICE)
     
     # Initialize basis with 34 active slots
@@ -215,7 +179,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2.5e-1, eta_min=1e-3, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, lr=2e-3, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
