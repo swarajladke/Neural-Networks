@@ -46,7 +46,7 @@ class BalancedBatchSampler:
 # ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5e-1, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -64,10 +64,10 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5
     for epoch in range(epochs):
         qpl.train()
         
-        # Run 30 batch updates per epoch
-        for _ in range(30):
+        # Run 35 batch updates per epoch
+        for _ in range(35):
             # Sample contrastive batch
-            q_batch, y_batch = sampler.sample_batch(batch_groups=16)
+            q_batch, y_batch = sampler.sample_batch(batch_groups=18)
             q_batch = q_batch.to(DEVICE)
             y_batch = y_batch.to(DEVICE)
             B = q_batch.shape[0]
@@ -78,7 +78,6 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5
                 h_neg, _, _, _ = qpl.settle(q_batch, variant="full_qpl", k_wta=3)
                 
                 # 2. Positive Phase (Teacher-clamped target state)
-                # Map target class to corresponding one-hot slot activation representation
                 h_pos = torch.zeros(B, qpl.output_dim, device=DEVICE)
                 h_pos[range(B), y_batch] = 1.0
                 
@@ -111,23 +110,22 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5
                 h_rep, _, _, _ = qpl.settle(q_replay, variant="full_qpl", k_wta=3)
                 z_replay = F.normalize(h_rep, dim=-1, eps=1e-8)
                 
-                # Relational alignment error to push student representations back to anchors
+                # Relational alignment error
                 S_s = torch.matmul(z_replay, z_replay.T)
                 S_t = torch.matmul(z_anchor[replay_idx].to(DEVICE), z_anchor[replay_idx].to(DEVICE).T)
                 distill_error = S_t - S_s
                 
-                # Update V using distillation gradient
-                # dL/dz = 2 * (S_s - S_t) * z
+                # Distillation gradient
                 dz = 2.0 * torch.matmul(distill_error, z_replay) / 32.0
                 dV_distill = torch.matmul(q_replay.T, dz) / 32.0
                 
-                # Apply distillation step
+                # Apply distillation step with low weight 0.05 to avoid blocking alignment
                 for j in active_idx:
                     g_d = dV_distill[:, j]
                     v_c = qpl.V[:, j]
                     dV_distill[:, j] = g_d - torch.dot(v_c, g_d) * v_c
                     
-                qpl.V.add_(lr * 0.5 * dV_distill)
+                qpl.V.add_(lr * 0.05 * dV_distill)
                 qpl.V[:, active_idx] = F.normalize(qpl.V[:, active_idx], dim=0, eps=1e-8)
                 
         # Run local unsupervised updates on W and b_out
@@ -142,8 +140,8 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5
             
         print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
         
-        # Exponential LR decay to stabilize convergence
-        lr = lr * 0.95
+        # Slower exponential decay to preserve gradient strength longer
+        lr = lr * 0.98
         
     return best_val_acc
 
@@ -213,7 +211,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=1.5e-1, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-1, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
