@@ -75,7 +75,7 @@ def main():
     
     # Load Teacher
     print(f"[Eval] Loading QPL Teacher: {teacher_chk}")
-    teacher_weights = torch.load(teacher_chk, map_only=True if torch.cuda.is_available() else False)
+    teacher_weights = torch.load(teacher_chk, map_location=DEVICE)
     teacher = HybridQPL(input_dim=INPUT_DIM, output_dim=128).to(DEVICE)
     with torch.no_grad():
         teacher.V.copy_(teacher_weights["V"].to(DEVICE))
