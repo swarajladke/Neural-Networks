@@ -68,7 +68,7 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
         
         for q in queries:
             for r in refs:
-                positive_pairs.append((q, r))
+                positive_pairs.append((q, r, f_idx))
                 
     # Generate Semantic Hard Negatives (Relational collisions / entity swaps)
     # Pair test queries of fact A with train references of fact B that shares the same entity but different relation
@@ -86,7 +86,7 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
                 refs_b = train_x[f_idx_b*3 : (f_idx_b+1)*3]
                 for q in queries_a:
                     for r in refs_b:
-                        semantic_neg_pairs.append((q, r))
+                        semantic_neg_pairs.append((q, r, f_idx_b))
                         
     # Shuffle and trim negatives to balance positives
     random.shuffle(semantic_neg_pairs)
@@ -133,7 +133,7 @@ def build_verifier_dataset(tokenizer, model, all_facts, cache_data, unique_probe
     general_neg_pairs = []
     for g_vec in general_x:
         for r_idx in range(len(train_x)):
-            general_neg_pairs.append((g_vec, train_x[r_idx]))
+            general_neg_pairs.append((g_vec, train_x[r_idx], r_idx // 3))
     random.shuffle(general_neg_pairs)
     general_neg_pairs = general_neg_pairs[:len(positive_pairs)]
     print(f"  - General Control pairs generated : {len(general_neg_pairs)}")
@@ -191,14 +191,14 @@ def main():
     
     # 2. Split into train & test (70/30 disjoint facts to verify generalization to unseen facts)
     # Train set uses pairs from first 70 facts, Test set uses pairs from last 30 facts
-    train_pos = [p for p in pos_pairs if cache_data["train_x"].to(DEVICE).index(p[1]) < 210]
-    test_pos = [p for p in pos_pairs if cache_data["train_x"].to(DEVICE).index(p[1]) >= 210]
+    train_pos = [p for p in pos_pairs if p[2] < 70]
+    test_pos = [p for p in pos_pairs if p[2] >= 70]
     
-    train_sem = [n for n in sem_negs if cache_data["train_x"].to(DEVICE).index(n[1]) < 210]
-    test_sem = [n for n in sem_negs if cache_data["train_x"].to(DEVICE).index(n[1]) >= 210]
+    train_sem = [n for n in sem_negs if n[2] < 70]
+    test_sem = [n for n in sem_negs if n[2] >= 70]
     
-    train_gen = [n for n in gen_negs if cache_data["train_x"].to(DEVICE).index(n[1]) < 210]
-    test_gen = [n for n in gen_negs if cache_data["train_x"].to(DEVICE).index(n[1]) >= 210]
+    train_gen = [n for n in gen_negs if n[2] < 70]
+    test_gen = [n for n in gen_negs if n[2] >= 70]
     
     print(f"\n[Split] Split Train/Test:")
     print(f"  - Train: Positives: {len(train_pos)} | Semantic Negatives: {len(train_sem)} | General Negatives: {len(train_gen)}")
