@@ -2,7 +2,8 @@
 run_qpl_stage4_evaluation.py — Stage 4 Contrastive Hebbian Learning (CHL) Integration
 ======================================================================================
 Implements Contrastive Hebbian Learning (CHL) using positive/negative phases,
-relational distillation, and evaluates whether CHL solves the sparse representation collapse.
+relational distillation with Cosine Annealing learning rate schedule,
+and evaluates whether CHL solves the sparse representation collapse.
 """
 import os
 import math
@@ -131,7 +132,6 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, initial_lr=2e-
                 qpl.V[:, active_idx] = F.normalize(qpl.V[:, active_idx], dim=0, eps=1e-8)
                 
         # Run local unsupervised updates on W and b_out only
-        # We disable unsupervised updates on V and b_in by setting their learning rates to 0.0
         with torch.no_grad():
             h_settled, _, _, _ = qpl.settle(train_x, variant="full_qpl", k_wta=3)
             lrs_unsup = {"V": 0.0, "W": 1e-2, "L": 1e-2, "b": 0.0, "homeo": 1e-3}
@@ -203,7 +203,8 @@ def main():
     print("  STAGE 4 CONTRASTIVE HEBBIAN LEARNING (CHL) INTEGRATION")
     print("="*80)
     
-    qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=1.0).to(DEVICE)
+    # Instantiate with temperature = 0.5 to sharpen activations
+    qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=0.5).to(DEVICE)
     
     # Initialize basis with 34 active slots
     qpl.initialize_basis(34)
