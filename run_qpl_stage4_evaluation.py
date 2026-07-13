@@ -2,9 +2,11 @@
 run_qpl_stage4_evaluation.py — Stage 4 Contrastive Hebbian Learning (CHL) Integration
 ======================================================================================
 Implements Contrastive Hebbian Learning (CHL) using positive/negative phases,
-relational distillation, and evaluates whether CHL solves the sparse representation collapse.
+relational distillation with Cosine Annealing learning rate schedule,
+and evaluates whether CHL solves the sparse representation collapse.
 """
 import os
+import math
 import random
 import numpy as np
 import torch
@@ -46,7 +48,7 @@ class BalancedBatchSampler:
 # ---------------------------------------------------------------------------
 # Stage 4 CHL Training Engine
 # ---------------------------------------------------------------------------
-def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2e-1, seed=42):
+def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2e-1, eta_min=1e-3, seed=42):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -59,10 +61,11 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2e-
     with torch.no_grad():
         z_anchor, _ = qpl(anchor_x, variant="full_qpl", k_wta=3)
     
-    lr = initial_lr
-    
     for epoch in range(epochs):
         qpl.train()
+        
+        # Cosine Annealing Learning Rate Schedule
+        lr = eta_min + 0.5 * (eta_max - eta_min) * (1.0 + math.cos(math.pi * epoch / epochs))
         
         # Run 35 batch updates per epoch
         for _ in range(35):
@@ -78,11 +81,8 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2e-
                 h_neg, _, _, _ = qpl.settle(q_batch, variant="full_qpl", k_wta=3)
                 
                 # 2. Positive Phase (Teacher-clamped target state)
-                # Map target group to 3 dedicated, disjoint slots
                 h_pos = torch.zeros(B, qpl.output_dim, device=DEVICE)
-                h_pos[range(B), 3 * y_batch] = 1.0 / 3.0
-                h_pos[range(B), 3 * y_batch + 1] = 1.0 / 3.0
-                h_pos[range(B), 3 * y_batch + 2] = 1.0 / 3.0
+                h_pos[range(B), y_batch] = 1.0
                 
                 # CHL local weight updates: delta V = q^T (h_pos - h_neg)
                 dV = torch.matmul(q_batch.T, h_pos - h_neg) / B
@@ -142,9 +142,6 @@ def train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2e-
             best_val_acc = val_eval["acc"]
             
         print(f"Epoch {epoch+1:02d}/{epochs} | LR: {lr:.4f} | Val 1-NN Acc: {val_eval['acc']*100:.2f}% | Gini: {val_eval['gini']:.3f}")
-        
-        # Exponential decay
-        lr = lr * 0.98
         
     return best_val_acc
 
@@ -207,8 +204,8 @@ def main():
     
     qpl = HybridQPL(input_dim=INPUT_DIM, output_dim=128, feedback_gain=0.5, alpha=0.2, temperature=1.0).to(DEVICE)
     
-    # Initialize basis with 102 active slots (3 slots per group for 34 groups)
-    qpl.initialize_basis(102)
+    # Initialize basis with 34 active slots
+    qpl.initialize_basis(34)
     
     # Verify initial accuracy under sparse kWTA collapse (should be ~11.0%)
     init_eval = evaluate_validation_split(qpl, train_x, train_y, val_x, val_y, k_wta=3)
@@ -216,7 +213,7 @@ def main():
     
     # Train QPL using local CHL updates
     print("\nTraining QPL routing layer using local tangent-space contrastive updates...")
-    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=35, initial_lr=2.5e-1, seed=42)
+    best_acc = train_qpl_chl(qpl, train_x, train_y, val_x, val_y, epochs=45, eta_max=2.5e-1, eta_min=1e-3, seed=42)
     
     print("\n" + "="*80)
     print("  STAGE 4 EXIT CHECKLIST & PERFORMANCE ANALYSIS")
