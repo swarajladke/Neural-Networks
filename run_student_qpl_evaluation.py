@@ -14,15 +14,13 @@ import json
 import numpy as np
 import torch
 import torch.nn.functional as F
-from tokenizers import Tokenizer
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer
 from student_encoder import StudentEncoder
 from hybrid_qpl import HybridQPL
 from train_student_encoder import get_sentence_lists, batch_tokenize
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CACHE_PATH = "smollm2_embeddings_34slots.pt"
-TOKENIZER_PATH = "slm_bpe_tokenizer.json"
 MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
 INPUT_DIM = 960
@@ -68,7 +66,11 @@ def main():
         print("[Error] QPL Teacher checkpoint not found.")
         return
         
-    tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
+    print("[Eval] Loading tokenizer and datasets...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        
     train_sentences, train_labels, val_sentences, val_labels, test_sentences, test_labels = get_sentence_lists()
     
     # Load Teacher
@@ -86,7 +88,7 @@ def main():
         
     # Load Student
     print("[Eval] Loading Standalone Student Encoder...")
-    student = StudentEncoder(vocab_size=4096, embed_dim=192, hidden_dim=256, output_dim=128).to(DEVICE)
+    student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=128).to(DEVICE)
     student.load_state_dict(torch.load("best_student_encoder.pt", map_location=DEVICE))
     student.eval()
     
@@ -125,7 +127,6 @@ def main():
     # ---------------------------------------------------------------------------
     # Evaluate 1-NN Test Accuracy
     # ---------------------------------------------------------------------------
-    # Teacher Test Accuracy
     sims_t = torch.matmul(z_te_t, z_tr_t.T)
     correct_t = 0
     for idx in range(len(test_sentences)):
@@ -135,7 +136,6 @@ def main():
             correct_t += 1
     acc_t = correct_t / len(test_sentences)
     
-    # Student Test Accuracy
     sims_s = torch.matmul(z_te_s, z_tr_s.T)
     correct_s = 0
     for idx in range(len(test_sentences)):
@@ -155,7 +155,6 @@ def main():
     # ---------------------------------------------------------------------------
     # Gini Usage Statistics over Active Slots
     # ---------------------------------------------------------------------------
-    # Teacher uses actual top-3 active slots from settle
     with torch.no_grad():
         h_test_t, _, _, _ = teacher.settle(test_x, variant="full_qpl", k_wta=3)
         scores_t = h_test_t.masked_fill(~teacher.active_mask.unsqueeze(0), -float("inf"))
@@ -167,16 +166,9 @@ def main():
     index = np.arange(1, 35)
     gini_t = (np.sum((2 * index - 34 - 1) * usage_t_sorted)) / (34 * np.sum(usage_t_sorted) + 1e-8)
     
-    # Student usage: project student coordinates onto the teacher's codebook V
-    # to evaluate how effectively the student coordinates select active units
     with torch.no_grad():
-        # Project student output onto teacher key bases
-        V_active = teacher.V[:, :34]  # (960, 34)
-        # Map 128D student coordinate to the 34D base QPL space
-        # For evaluation, find which key vectors have highest similarity to student output
-        # Let's project student test vectors to teacher key spaces
-        student_test_x = z_te_s @ V_active.T[:128] # approximate back-projection to input space
-        # Find winner slots in QPL settled drive
+        V_active = teacher.V[:, :34]
+        student_test_x = z_te_s @ V_active.T[:128]
         h_test_s, _, _, _ = teacher.settle(student_test_x, variant="full_qpl", k_wta=3)
         scores_s = h_test_s.masked_fill(~teacher.active_mask.unsqueeze(0), -float("inf"))
         indices_s = scores_s.topk(3, dim=-1).indices
@@ -189,7 +181,23 @@ def main():
     # ---------------------------------------------------------------------------
     # Hard-Negative FPR at 95% TPR Threshold
     # ---------------------------------------------------------------------------
-    # 1. Encode control/hard negative sentences on the fly via SmolLM2
+    sim_corrects_t = []
+    for idx in range(len(test_sentences)):
+        q_label = test_labels[idx]
+        ref_indices = [i for i, l in enumerate(train_labels) if l == q_label]
+        max_sim = torch.matmul(z_te_t[idx], z_tr_t[ref_indices].T).max().item()
+        sim_corrects_t.append(max_sim)
+    tpr_95_t = np.percentile(sim_corrects_t, 5)
+    
+    sim_corrects_s = []
+    for idx in range(len(test_sentences)):
+        q_label = test_labels[idx]
+        ref_indices = [i for i, l in enumerate(train_labels) if l == q_label]
+        max_sim = torch.matmul(z_te_s[idx], z_tr_s[ref_indices].T).max().item()
+        sim_corrects_s.append(max_sim)
+    tpr_95_s = np.percentile(sim_corrects_s, 5)
+    
+    # Encode control/hard negative sentences on the fly
     print("[Eval] Encoding hard negative control sentences...")
     control_vectors = []
     try:
@@ -213,34 +221,12 @@ def main():
         control_x = torch.randn(len(INDEPENDENT_PPL_TEXTS), INPUT_DIM, device=DEVICE)
         control_x = F.normalize(control_x, dim=-1)
         
-    # Teacher 1-NN similarity test queries
-    sim_corrects_t = []
-    for idx in range(len(test_sentences)):
-        q_label = test_labels[idx]
-        ref_indices = [i for i, l in enumerate(train_labels) if l == q_label]
-        max_sim = torch.matmul(z_te_t[idx], z_tr_t[ref_indices].T).max().item()
-        sim_corrects_t.append(max_sim)
-    tpr_95_t = np.percentile(sim_corrects_t, 5)
-    
-    # Student 1-NN similarity test queries
-    sim_corrects_s = []
-    for idx in range(len(test_sentences)):
-        q_label = test_labels[idx]
-        ref_indices = [i for i, l in enumerate(train_labels) if l == q_label]
-        max_sim = torch.matmul(z_te_s[idx], z_tr_s[ref_indices].T).max().item()
-        sim_corrects_s.append(max_sim)
-    tpr_95_s = np.percentile(sim_corrects_s, 5)
-    
-    # Compute false positive rate on control sentences
-    # For teacher:
     with torch.no_grad():
         h_ctrl_t, _ = teacher(control_x, variant="full_qpl", k_wta=3)
         z_ctrl_t = F.normalize(h_ctrl_t, dim=-1)
     sims_ctrl_t = torch.matmul(z_ctrl_t, z_tr_t.T).max(dim=1).values.cpu().numpy()
     fpr_t = (sims_ctrl_t >= tpr_95_t).mean()
     
-    # For student:
-    # Tokenize control texts for student
     ids_ctrl, mask_ctrl = batch_tokenize(tokenizer, INDEPENDENT_PPL_TEXTS, max_len=32, device=DEVICE)
     with torch.no_grad():
         z_ctrl_s = student(ids_ctrl, mask_ctrl)
@@ -267,20 +253,16 @@ def main():
     print(f"1. 1-NN Test Accuracy (SmolLM2-QPL Teacher): {acc_t*100:.2f}%")
     print(f"2. 1-NN Test Accuracy (GRU-Student Encoder) : {acc_s*100:.2f}%")
     
-    # Exit Criterion 1: Accuracy drop <= 1.5%
     acc_diff = (acc_t - acc_s) * 100
     crit_1_pass = acc_diff <= 1.5
     print(f"   -> Accuracy Delta: {acc_diff:+.2f} percentage points (Target <= 1.5%) -> {'PASS' if crit_1_pass else 'FAIL'}")
     
-    # Exit Criterion 2: Neighborhood Purity E_rel <= 0.05
     crit_2_pass = e_rel <= 0.05
     print(f"3. Relational Alignment Error E_rel         : {e_rel:.4f} (Target <= 0.05) -> {'PASS' if crit_2_pass else 'FAIL'}")
     
-    # Exit Criterion 3: Generalization / Control FPR
     crit_3_pass = fpr_s <= fpr_t + 0.02
     print(f"4. Hard-Negative FPR at 95% TPR Threshold   : Student {fpr_s*100:.1f}% vs. Teacher {fpr_t*100:.1f}% -> {'PASS' if crit_3_pass else 'FAIL'}")
     
-    # Additional Stats
     print("\nRepresentation and Structural Integrity:")
     print(f"  - Usage Gini Coefficient       : Student {gini_s:.3f} | Teacher {gini_t:.3f} | Expected Balanced Gini: 0.000")
     print(f"  - Representation Effective Rank: Student {rank_s:.2f} | Teacher {rank_t:.2f}")

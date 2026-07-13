@@ -1,7 +1,7 @@
 """
 train_student_encoder.py — Phase A Student Encoder Distillation Training.
 ==========================================================================
-Loads the pre-trained BPE tokenizer and training dataset. Loads the best CHL-trained
+Loads the pre-trained SmolLM2 tokenizer and training dataset. Loads the best CHL-trained
 QPL teacher checkpoint, generates teacher target representations, and distills them
 into the sub-10M parameter StudentEncoder using a multi-objective loss function.
 """
@@ -13,14 +13,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tokenizers import Tokenizer
+from transformers import AutoTokenizer
 from student_encoder import StudentEncoder
 from hybrid_qpl import HybridQPL
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CACHE_PATH = "smollm2_embeddings_34slots.pt"
 DATASET_PATH = "agnis_scaling_dataset.json"
-TOKENIZER_PATH = "slm_bpe_tokenizer.json"
+MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
+MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
 INPUT_DIM = 960
 OUTPUT_DIM = 128
 
@@ -71,20 +72,14 @@ def get_sentence_lists():
 # Tokenization Helper
 # ---------------------------------------------------------------------------
 def batch_tokenize(tokenizer, sentences, max_len=32, device="cpu"):
-    tokenized = [tokenizer.encode(s) for s in sentences]
-    input_ids = []
-    attention_masks = []
-    for enc in tokenized:
-        ids = enc.ids
-        if len(ids) < max_len:
-            mask = [1] * len(ids) + [0] * (max_len - len(ids))
-            ids = ids + [0] * (max_len - len(ids))
-        else:
-            ids = ids[:max_len]
-            mask = [1] * max_len
-        input_ids.append(ids)
-        attention_masks.append(mask)
-    return torch.tensor(input_ids, dtype=torch.long, device=device), torch.tensor(attention_masks, dtype=torch.float, device=device)
+    enc = tokenizer(
+        sentences,
+        max_length=max_len,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt"
+    )
+    return enc.input_ids.to(device), enc.attention_mask.to(device)
 
 # ---------------------------------------------------------------------------
 # Supervised Contrastive Loss (InfoNCE)
@@ -155,17 +150,18 @@ def evaluate_student(student, tokenizer, train_sentences, train_labels, val_sent
 # Main Training Loop
 # ---------------------------------------------------------------------------
 def main():
-    # 1. Load Data Splits & Tokenizer
-    if not os.path.exists(CACHE_PATH) or not os.path.exists(DATASET_PATH) or not os.path.exists(TOKENIZER_PATH):
-        print(f"[Error] Required files not found. Ensure '{CACHE_PATH}', '{DATASET_PATH}', and '{TOKENIZER_PATH}' exist.")
+    if not os.path.exists(CACHE_PATH) or not os.path.exists(DATASET_PATH):
+        print(f"[Error] Required files not found. Ensure '{CACHE_PATH}' and '{DATASET_PATH}' exist.")
         return
         
     print("[Distill] Loading tokenizer and datasets...")
-    tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        
     train_sentences, train_labels, val_sentences, val_labels, _, _ = get_sentence_lists()
     
-    # 2. Find and Load Teacher Checkpoint
-    # Search for the best saved checkpoint in run_qpl_stage4_final_test.py
+    # Find and Load Teacher Checkpoint
     teacher_chk = None
     for seed in [43, 41, 42, 44]:
         path = f"best_chl_qpl_seed{seed}.pt"
@@ -203,8 +199,8 @@ def main():
         h_val, _ = teacher_qpl(val_x, variant="full_qpl", k_wta=3)
         z_val_teacher = F.normalize(h_val, dim=-1)
         
-    # 3. Initialize Student Encoder
-    student = StudentEncoder(vocab_size=4096, embed_dim=192, hidden_dim=256, output_dim=128).to(DEVICE)
+    # Initialize Student Encoder
+    student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=128).to(DEVICE)
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=120)
     
