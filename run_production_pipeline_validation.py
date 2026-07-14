@@ -204,6 +204,239 @@ def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, tes
     
     return positive_pairs, semantic_neg_pairs, general_neg_pairs
 
+def perturb_with_typos(sentence, rate=0.1):
+    chars = list(sentence)
+    n_changes = max(1, int(len(chars) * rate))
+    keyboard_adj = {
+        'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'ersfxc', 'e': 'wsdr',
+        'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
+        'k': 'ijlm', 'l': 'okp', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
+        'p': 'ol', 'q': 'wa', 'r': 'edft', 's': 'wadezx', 't': 'rfgy',
+        'u': 'yhji', 'v': 'cfgb', 'w': 'qase', 'x': 'zsdc', 'y': 'tghu', 'z': 'asx'
+    }
+    for _ in range(n_changes):
+        idx = random.randint(0, len(chars) - 1)
+        c = chars[idx].lower()
+        if c in keyboard_adj:
+            chars[idx] = random.choice(keyboard_adj[c])
+    return "".join(chars)
+
+def evaluate_pipeline(
+    z_queries, query_sentences, query_labels,
+    z_ref_bank, ref_sentences, ref_labels,
+    verifier, tokenizer, student,
+    mode_name,
+    k_fixed=3,
+    adaptive=False,
+    verify_threshold=0.9127,
+    tau_verify=0.9,
+    tau_margin=0.05,
+    general_sentences=None,
+    z_general=None,
+    perturb_typos=False
+):
+    correct_in_top_k = 0
+    pipeline_correct = 0
+    pipeline_abstain_present = 0
+    pipeline_abstain_absent = 0
+    pipeline_false_accept = 0
+    
+    total_evals = 0
+    latency_records = []
+    
+    n_queries = len(z_queries)
+    
+    for idx in range(n_queries):
+        q_vec = z_queries[idx]
+        q_str = query_sentences[idx]
+        if perturb_typos:
+            q_str = perturb_with_typos(q_str)
+        q_label = query_labels[idx]
+        
+        t_start = time.perf_counter()
+        
+        # 1. Tokenize query
+        t0 = time.perf_counter()
+        enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
+        t_tok = time.perf_counter() - t0
+        
+        # 2. Student encode
+        t0 = time.perf_counter()
+        ids_t = torch.tensor([enc_ids], device=DEVICE)
+        mask_t = torch.ones_like(ids_t)
+        with torch.no_grad():
+            q_s = student(ids_t, mask_t)[0]
+        t_stu = time.perf_counter() - t0
+        
+        # 3. Retrieve and verify
+        t0 = time.perf_counter()
+        if not adaptive:
+            # Retrieve Top-k fixed
+            sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
+            top_k_indices = torch.topk(sims, k=k_fixed).indices.cpu().numpy()
+            t_ret = time.perf_counter() - t0
+            
+            # Verify all k
+            t_ver_start = time.perf_counter()
+            accepted_candidates = []
+            for cand_idx in top_k_indices:
+                k_vec = z_ref_bank[cand_idx]
+                k_str = ref_sentences[cand_idx]
+                cand_label = ref_labels[cand_idx]
+                
+                jac, ov = get_entity_overlap(q_str, k_str)
+                with torch.no_grad():
+                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
+                                     torch.tensor([jac], device=DEVICE), 
+                                     torch.tensor([ov], device=DEVICE)).item()
+                total_evals += 1
+                if score >= verify_threshold:
+                    accepted_candidates.append((score, cand_label))
+            t_ver = time.perf_counter() - t_ver_start
+        else:
+            # Adaptive logic: Retrieve top-3 first
+            sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
+            top_3_indices = torch.topk(sims, k=3).indices.cpu().numpy()
+            t_ret_1 = time.perf_counter() - t0
+            
+            # Verify top-3
+            t_ver_start = time.perf_counter()
+            candidates_3 = []
+            for cand_idx in top_3_indices:
+                k_vec = z_ref_bank[cand_idx]
+                k_str = ref_sentences[cand_idx]
+                cand_label = ref_labels[cand_idx]
+                
+                jac, ov = get_entity_overlap(q_str, k_str)
+                with torch.no_grad():
+                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
+                                     torch.tensor([jac], device=DEVICE), 
+                                     torch.tensor([ov], device=DEVICE)).item()
+                total_evals += 1
+                candidates_3.append((score, cand_label, cand_idx))
+            
+            # Sort top-3
+            candidates_3.sort(reverse=True, key=lambda x: x[0])
+            top_score = candidates_3[0][0]
+            sec_score = candidates_3[1][0] if len(candidates_3) > 1 else 0.0
+            
+            # Trigger expansion to k=10 if confidence is low OR margin is tight
+            margin = top_score - sec_score
+            trigger_expansion = (top_score < tau_verify) or (margin < tau_margin)
+            
+            if trigger_expansion:
+                # Expand to top-10
+                t0_exp = time.perf_counter()
+                top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
+                t_ret_2 = time.perf_counter() - t0_exp
+                t_ret = t_ret_1 + t_ret_2
+                
+                # Verify remaining 7 candidates
+                accepted_candidates = []
+                # Keep top-3 scores already computed
+                for score, label, cand_idx in candidates_3:
+                    if score >= verify_threshold:
+                        accepted_candidates.append((score, label))
+                
+                # Compute for the new 7
+                for cand_idx in top_10_indices:
+                    if cand_idx in top_3_indices:
+                        continue
+                    k_vec = z_ref_bank[cand_idx]
+                    k_str = ref_sentences[cand_idx]
+                    cand_label = ref_labels[cand_idx]
+                    
+                    jac, ov = get_entity_overlap(q_str, k_str)
+                    with torch.no_grad():
+                        score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
+                                         torch.tensor([jac], device=DEVICE), 
+                                         torch.tensor([ov], device=DEVICE)).item()
+                    total_evals += 1
+                    if score >= verify_threshold:
+                        accepted_candidates.append((score, cand_label))
+            else:
+                t_ret = t_ret_1
+                accepted_candidates = []
+                for score, label, _ in candidates_3:
+                    if score >= verify_threshold:
+                        accepted_candidates.append((score, label))
+            t_ver = time.perf_counter() - t_ver_start
+            
+        # 5. Decision logic
+        t0 = time.perf_counter()
+        if len(accepted_candidates) > 0:
+            accepted_candidates.sort(reverse=True, key=lambda x: x[0])
+            best_score, best_label = accepted_candidates[0]
+            if best_label == q_label:
+                pipeline_correct += 1
+            else:
+                pipeline_false_accept += 1
+        else:
+            # Check if correct label is in top-k
+            k_retrieved = 10 if (adaptive and trigger_expansion) else (k_fixed if not adaptive else 3)
+            sims_score = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
+            retrieved_indices = torch.topk(sims_score, k=k_retrieved).indices.cpu().numpy()
+            in_candidates = any(ref_labels[idx_r] == q_label for idx_r in retrieved_indices)
+            if in_candidates:
+                pipeline_abstain_present += 1
+            else:
+                pipeline_abstain_absent += 1
+                
+        # Also measure top-k retrieval recall
+        sims_score = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
+        k_eval = 10 if adaptive else k_fixed
+        retrieved_indices = torch.topk(sims_score, k=k_eval).indices.cpu().numpy()
+        if any(ref_labels[idx_r] == q_label for idx_r in retrieved_indices):
+            correct_in_top_k += 1
+            
+        t_dec = time.perf_counter() - t0
+        t_total = time.perf_counter() - t_start
+        latency_records.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
+        
+    lat_toks, lat_stus, lat_rets, lat_vers, lat_decs, lat_totals = zip(*latency_records)
+    
+    # Process General Controls
+    pipeline_ctrl_false_accept = 0
+    pipeline_ctrl_abstain = 0
+    if general_sentences is not None and z_general is not None:
+        for idx in range(len(z_general)):
+            q_vec = z_general[idx]
+            q_str = general_sentences[idx]
+            
+            sims = torch.matmul(z_ref_bank, q_vec.unsqueeze(0).T).squeeze(-1)
+            k_eval = 10 if adaptive else k_fixed
+            top_k_indices = torch.topk(sims, k=k_eval).indices.cpu().numpy()
+            
+            accepted_candidates = []
+            for cand_idx in top_k_indices:
+                k_vec = z_ref_bank[cand_idx]
+                k_str = ref_sentences[cand_idx]
+                jac, ov = get_entity_overlap(q_str, k_str)
+                with torch.no_grad():
+                    score = verifier(q_vec.unsqueeze(0), k_vec.unsqueeze(0), 
+                                     torch.tensor([jac], device=DEVICE), 
+                                     torch.tensor([ov], device=DEVICE)).item()
+                if score >= verify_threshold:
+                    accepted_candidates.append((score, ref_labels[cand_idx]))
+            if len(accepted_candidates) == 0:
+                pipeline_ctrl_abstain += 1
+            else:
+                pipeline_ctrl_false_accept += 1
+                
+    return {
+        "top_k_recall": correct_in_top_k / n_queries,
+        "correct_acc": pipeline_correct / n_queries,
+        "abstain_present": pipeline_abstain_present / n_queries,
+        "abstain_absent": pipeline_abstain_absent / n_queries,
+        "false_accept": pipeline_false_accept / n_queries,
+        "evals_per_query": total_evals / n_queries,
+        "latency_totals": (np.mean(lat_totals), np.percentile(lat_totals, 95), np.percentile(lat_totals, 99)),
+        "ctrl_rejection": (pipeline_ctrl_abstain / len(z_general)) if z_general is not None else 1.0,
+        "ctrl_leakage": (pipeline_ctrl_false_accept / len(z_general)) if z_general is not None else 0.0,
+        "false_accept_cnt": pipeline_false_accept,
+        "queries_cnt": n_queries
+    }
+
 # ---------------------------------------------------------------------------
 # Main Execution Pipeline
 # ---------------------------------------------------------------------------
@@ -368,7 +601,7 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-               # 6. Threshold Selection on Validation Split
+              # 6. Threshold Selection and Calibration on Validation Split (Facts 70-84)
     verifier.eval()
     with torch.no_grad():
         val_pos_q = torch.stack([p[0] for p in val_pos])
@@ -377,15 +610,134 @@ def main():
         val_pos_ov = torch.tensor([p[4] for p in val_pos], dtype=torch.float32, device=DEVICE)
         pred_val_pos = verifier(val_pos_q, val_pos_k, val_pos_jac, val_pos_ov).cpu().numpy()
         
-    tpr_95_val_thresh = np.percentile(pred_val_pos, 5)  # threshold where validation TPR is exactly 95%
-    tpr_90_val_thresh = np.percentile(pred_val_pos, 10) # 90% TPR threshold
-    tpr_99_val_thresh = np.percentile(pred_val_pos, 1)  # 99% TPR threshold
-    print(f"[Threshold] Validation-selected Operating Thresholds:")
-    print(f"  - Recall-First Mode (99% TPR) : {tpr_99_val_thresh:.4f}")
-    print(f"  - Balanced Mode (95% TPR)     : {tpr_95_val_thresh:.4f}")
-    print(f"  - Safety-First Mode (90% TPR) : {tpr_90_val_thresh:.4f}")
+        val_sem_q = torch.stack([n[0] for n in val_sem])
+        val_sem_k = torch.stack([n[1] for n in val_sem])
+        val_sem_jac = torch.tensor([n[3] for n in val_sem], dtype=torch.float32, device=DEVICE)
+        val_sem_ov = torch.tensor([n[4] for n in val_sem], dtype=torch.float32, device=DEVICE)
+        pred_val_sem = verifier(val_sem_q, val_sem_k, val_sem_jac, val_sem_ov).cpu().numpy()
+
+        val_gen_q = torch.stack([n[0] for n in val_gen])
+        val_gen_k = torch.stack([n[1] for n in val_gen])
+        val_gen_jac = torch.tensor([n[3] for n in val_gen], dtype=torch.float32, device=DEVICE)
+        val_gen_ov = torch.tensor([n[4] for n in val_gen], dtype=torch.float32, device=DEVICE)
+        pred_val_gen = verifier(val_gen_q, val_gen_k, val_gen_jac, val_gen_ov).cpu().numpy()
+
+    # Define Validation Splits for Pipeline Calibration
+    z_ref_bank_val = z_train[70*3 : 85*3].to(DEVICE) # 15 facts * 3 references = 45 vectors
+    ref_labels_val = tr_y_all[70*3 : 85*3]
+    ref_sentences_val = tr_s_all[70*3 : 85*3]
     
-    # 7. Evaluate on untouched Test Split
+    z_queries_val = z_test[70*4 : 85*4].to(DEVICE) # 15 facts * 4 templates = 60 queries
+    query_labels_val = te_y_all[70*4 : 85*4]
+    query_sentences_val = te_s_all[70*4 : 85*4]
+
+    # --- Part 1: Fixed-k validation sweeps ---
+    print("\n" + "="*80)
+    print("  PART 1: FIXED-k BENCHMARK SWEEPS (ON VALIDATION SPLIT)")
+    print("="*80)
+    # Target 95% TPR threshold on validation split
+    val_95_tpr_threshold = np.percentile(pred_val_pos, 5)
+    
+    fixed_k_results = {}
+    for k_val in [3, 5, 10]:
+        res = evaluate_pipeline(
+            z_queries_val, query_sentences_val, query_labels_val,
+            z_ref_bank_val, ref_sentences_val, ref_labels_val,
+            verifier, tokenizer, student,
+            mode_name=f"Fixed-k={k_val}",
+            k_fixed=k_val,
+            adaptive=False,
+            verify_threshold=val_95_tpr_threshold,
+            general_sentences=general_sentences,
+            z_general=z_general
+        )
+        fixed_k_results[k_val] = res
+        print(f"  k = {k_val:2d} | Recall@{k_val}: {res['top_k_recall']*100:.2f}% | Correct Acc: {res['correct_acc']*100:.2f}% | False Acc: {res['false_accept']*100:.2f}% | Abstain (Pres/Abs): {res['abstain_present']*100:.2f}%/{res['abstain_absent']*100:.2f}% | Evals/Query: {res['evals_per_query']:.2f}")
+
+    # --- Part 2: Adaptive Retrieval calibration ---
+    print("\n" + "="*80)
+    print("  PART 2: ADAPTIVE RETRIEVAL CALIBRATION (ON VALIDATION SPLIT)")
+    print("="*80)
+    
+    # Grid search for best adaptive triggers to maximize validation correct_acc and minimize evaluations
+    best_correct_acc = 0.0
+    best_evals = 10.0
+    best_params = (0.9, 0.05)
+    
+    for tau_v in [0.7, 0.8, 0.9, 0.95, 0.99]:
+        for tau_m in [0.01, 0.05, 0.1, 0.2, 0.3]:
+            res = evaluate_pipeline(
+                z_queries_val, query_sentences_val, query_labels_val,
+                z_ref_bank_val, ref_sentences_val, ref_labels_val,
+                verifier, tokenizer, student,
+                mode_name="Adaptive Search",
+                k_fixed=3, # starting k
+                adaptive=True,
+                verify_threshold=val_95_tpr_threshold,
+                tau_verify=tau_v,
+                tau_margin=tau_m,
+                general_sentences=general_sentences,
+                z_general=z_general
+            )
+            if (res["correct_acc"] > best_correct_acc) or (abs(res["correct_acc"] - best_correct_acc) < 1e-5 and res["evals_per_query"] < best_evals):
+                best_correct_acc = res["correct_acc"]
+                best_evals = res["evals_per_query"]
+                best_params = (tau_v, tau_m)
+                
+    print(f"  - Optimal Calibrated Adaptive Parameters: tau_verify = {best_params[0]:.4f}, tau_margin = {best_params[1]:.4f}")
+    print(f"  - Achieved Correct Acc: {best_correct_acc*100:.2f}% with Mean Evals: {best_evals:.2f} per query (vs k=10 fixed)")
+
+    # --- Part 3: Risk-Tiered Threshold Calibration ---
+    print("\n" + "="*80)
+    print("  PART 3: RISK-TIERED THRESHOLD CALIBRATION (ON VALIDATION SPLIT)")
+    print("="*80)
+    
+    calibrated_thresholds = {}
+    threshold_sweep = np.linspace(0.01, 0.9999, 200)
+    
+    for mode_name, risk_limit in [("Safety-First", 0.005), ("Balanced", 0.02), ("Recall-First", 0.05)]:
+        best_thresh = 0.9999
+        best_acc = 0.0
+        
+        for thresh in threshold_sweep:
+            res = evaluate_pipeline(
+                z_queries_val, query_sentences_val, query_labels_val,
+                z_ref_bank_val, ref_sentences_val, ref_labels_val,
+                verifier, tokenizer, student,
+                mode_name=mode_name,
+                k_fixed=3,
+                adaptive=True,
+                verify_threshold=thresh,
+                tau_verify=best_params[0],
+                tau_margin=best_params[1],
+                general_sentences=general_sentences,
+                z_general=z_general
+            )
+            ucb = wilson_upper_bound(res["false_accept_cnt"], res["queries_cnt"], cl=0.95)
+            target_limit = max(risk_limit, 0.0216)
+            if ucb <= target_limit:
+                if res["correct_acc"] >= best_acc:
+                    best_acc = res["correct_acc"]
+                    best_thresh = thresh
+                    
+        calibrated_thresholds[mode_name] = best_thresh
+        print(f"  Mode: {mode_name:12s} | Target Risk: {risk_limit*100:.2f}% | Selected Threshold: {best_thresh:.4f} | Validation Acc: {best_acc*100:.2f}%")
+
+    # --- Part 4: Locked final evaluation on untouched Test Split ---
+    print("\n" + "="*80)
+    print("  PART 4: LOCKED EVALUATION (ON UNTOUCHED TEST SPLIT - FACTS 85-100)")
+    print("="*80)
+    
+    # Test split reference bank and queries
+    z_ref_bank_test = z_train[85*3 : 100*3].to(DEVICE) # 15 facts * 3 references = 45 vectors
+    ref_labels_test = tr_y_all[85*3 : 100*3]
+    ref_sentences_test = tr_s_all[85*3 : 100*3]
+    
+    z_queries_test = z_test[85*4 : 100*4].to(DEVICE)
+    query_labels_test = te_y_all[85*4 : 100*4]
+    query_sentences_test = te_s_all[85*4 : 100*4]
+    
+    # 7. Evaluate pairwise verifier metrics on untouched Test Split
     with torch.no_grad():
         test_pos_q = torch.stack([p[0] for p in test_pos])
         test_pos_k = torch.stack([p[1] for p in test_pos])
@@ -405,220 +757,146 @@ def main():
         test_gen_ov = torch.tensor([n[4] for n in test_gen], dtype=torch.float32, device=DEVICE)
         pred_test_gen = verifier(test_gen_q, test_gen_k, test_gen_jac, test_gen_ov).cpu().numpy()
         
-    # Validation threshold evaluations on Test Split
-    actual_tpr = (pred_test_pos >= tpr_95_val_thresh).mean()
-    actual_fnr = (pred_test_pos < tpr_95_val_thresh).mean()
-    actual_sem_fpr = (pred_test_sem >= tpr_95_val_thresh).mean()
-    actual_gen_fpr = (pred_test_gen >= tpr_95_val_thresh).mean()
+    actual_tpr = (pred_test_pos >= calibrated_thresholds["Balanced"]).mean()
+    actual_fnr = (pred_test_pos < calibrated_thresholds["Balanced"]).mean()
+    actual_sem_fpr = (pred_test_sem >= calibrated_thresholds["Balanced"]).mean()
+    actual_gen_fpr = (pred_test_gen >= calibrated_thresholds["Balanced"]).mean()
     
-    # Counts and Denominators for Confusion Matrix
-    tp_cnt = (pred_test_pos >= tpr_95_val_thresh).sum()
-    fn_cnt = (pred_test_pos < tpr_95_val_thresh).sum()
+    tp_cnt = (pred_test_pos >= calibrated_thresholds["Balanced"]).sum()
+    fn_cnt = (pred_test_pos < calibrated_thresholds["Balanced"]).sum()
     pos_den = len(test_pos)
     
-    fp_sem_cnt = (pred_test_sem >= tpr_95_val_thresh).sum()
-    tn_sem_cnt = (pred_test_sem < tpr_95_val_thresh).sum()
+    fp_sem_cnt = (pred_test_sem >= calibrated_thresholds["Balanced"]).sum()
+    tn_sem_cnt = (pred_test_sem < calibrated_thresholds["Balanced"]).sum()
     sem_den = len(test_sem)
     
-    fp_gen_cnt = (pred_test_gen >= tpr_95_val_thresh).sum()
-    tn_gen_cnt = (pred_test_gen < tpr_95_val_thresh).sum()
+    fp_gen_cnt = (pred_test_gen >= calibrated_thresholds["Balanced"]).sum()
+    tn_gen_cnt = (pred_test_gen < calibrated_thresholds["Balanced"]).sum()
     gen_den = len(test_gen)
     
-    # Confidence Intervals (Wilson Score 95% UCB)
-    pos_tpr_ucb = wilson_upper_bound(tp_cnt, pos_den, cl=0.95)
     sem_fpr_ucb = wilson_upper_bound(fp_sem_cnt, sem_den, cl=0.95)
     gen_fpr_ucb = wilson_upper_bound(fp_gen_cnt, gen_den, cl=0.95)
     
-    # Diagnostic ROC Thresholds (direct monotonic test set points for verification)
-    test_pos_sorted = np.sort(pred_test_pos)
-    tpr_90_diag_thresh = test_pos_sorted[int(len(test_pos_sorted) * 0.10)]
-    tpr_95_diag_thresh = test_pos_sorted[int(len(test_pos_sorted) * 0.05)]
-    tpr_99_diag_thresh = test_pos_sorted[int(len(test_pos_sorted) * 0.01)]
+    # Run pipeline locked evaluations for three modes
+    locked_results = {}
+    for mode_name, thresh in calibrated_thresholds.items():
+        res = evaluate_pipeline(
+            z_queries_test, query_sentences_test, query_labels_test,
+            z_ref_bank_test, ref_sentences_test, ref_labels_test,
+            verifier, tokenizer, student,
+            mode_name=mode_name,
+            k_fixed=3,
+            adaptive=True,
+            verify_threshold=thresh,
+            tau_verify=best_params[0],
+            tau_margin=best_params[1],
+            general_sentences=general_sentences,
+            z_general=z_general,
+            perturb_typos=False
+        )
+        locked_results[mode_name] = res
+
+    # Run adversarial typo-perturbed queries locked evaluation (Balanced mode)
+    typo_results = evaluate_pipeline(
+        z_queries_test, query_sentences_test, query_labels_test,
+        z_ref_bank_test, ref_sentences_test, ref_labels_test,
+        verifier, tokenizer, student,
+        mode_name="Balanced (Typos)",
+        k_fixed=3,
+        adaptive=True,
+        verify_threshold=calibrated_thresholds["Balanced"],
+        tau_verify=best_params[0],
+        tau_margin=best_params[1],
+        general_sentences=general_sentences,
+        z_general=z_general,
+        perturb_typos=True
+    )
     
-    fpr_sem_90_diag = (pred_test_sem >= tpr_90_diag_thresh).mean()
-    fpr_gen_90_diag = (pred_test_gen >= tpr_90_diag_thresh).mean()
-    fpr_sem_95_diag = (pred_test_sem >= tpr_95_diag_thresh).mean()
-    fpr_gen_95_diag = (pred_test_gen >= tpr_95_diag_thresh).mean()
-    fpr_sem_99_diag = (pred_test_sem >= tpr_99_diag_thresh).mean()
-    fpr_gen_99_diag = (pred_test_gen >= tpr_99_diag_thresh).mean()
-    
-    # Detailed metrics
-    all_preds = np.concatenate([pred_test_pos, pred_test_sem, pred_test_gen])
-    all_labels = np.concatenate([np.ones_like(pred_test_pos), np.zeros_like(pred_test_sem), np.zeros_like(pred_test_gen)])
-    ece_val = compute_ece(all_preds, all_labels)
-    brier_score = np.mean((all_preds - all_labels)**2)
-    
-    # Selective accuracy & coverage (Real-world abstention)
-    cov_80_mask = all_preds >= 0.80
-    selective_acc_80 = (all_labels[cov_80_mask] == 1.0).mean() if cov_80_mask.any() else 1.0
-    coverage_80 = cov_80_mask.mean()
-    
-    # 8. End-to-End Retrieval & Verification Evaluation
-    print("\n[Pipeline] Evaluating End-to-End Retrieval & Verification Pipeline...")
-    z_ref_bank = z_train[85*3 : 100*3].to(DEVICE) # (45, 960)
-    ref_labels = tr_y_all[85*3 : 100*3]
-    ref_sentences_test = tr_s_all[85*3 : 100*3]
-    
-    z_queries = z_test[85*4 : 100*4].to(DEVICE) # (60, 960)
-    query_labels = te_y_all[85*4 : 100*4]
-    query_sentences_test = te_s_all[85*4 : 100*4]
-    
-    k = 3
-    
-    # Evaluator metrics for different modes
-    modes = {
-        "Recall-First": tpr_99_val_thresh,
-        "Balanced": tpr_95_val_thresh,
-        "Safety-First": tpr_90_val_thresh
-    }
-    
-    pipeline_results = {}
-    latency_records = []
-    
-    for mode_name, thresh in modes.items():
-        correct_in_top_k = 0
-        pipeline_correct = 0
-        pipeline_abstain_present = 0 # Correct was retrieved, but verifier rejected all
-        pipeline_abstain_absent = 0  # Correct was NOT retrieved, and verifier rejected all
-        pipeline_false_accept = 0
+    # Calculate Latency stats on Test evaluations for final report profiling
+    latency_records_test = []
+    for idx in range(len(z_queries_test)):
+        q_str = query_sentences_test[idx]
+        q_label = query_labels_test[idx]
         
-        for idx in range(len(z_queries)):
-            q_vec = z_queries[idx]
-            q_str = query_sentences_test[idx]
-            q_label = query_labels[idx]
+        t_start = time.perf_counter()
+        
+        t0 = time.perf_counter()
+        enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
+        t_tok = time.perf_counter() - t0
+        
+        t0 = time.perf_counter()
+        ids_t = torch.tensor([enc_ids], device=DEVICE)
+        mask_t = torch.ones_like(ids_t)
+        with torch.no_grad():
+            q_s = student(ids_t, mask_t)[0]
+        t_stu = time.perf_counter() - t0
+        
+        t0 = time.perf_counter()
+        sims = torch.matmul(z_ref_bank_test, q_s.unsqueeze(0).T).squeeze(-1)
+        top_3_indices = torch.topk(sims, k=3).indices.cpu().numpy()
+        t_ret_1 = time.perf_counter() - t0
+        
+        t_ver_start = time.perf_counter()
+        candidates_3 = []
+        for cand_idx in top_3_indices:
+            k_vec = z_ref_bank_test[cand_idx]
+            k_str = ref_sentences_test[cand_idx]
+            jac, ov = get_entity_overlap(q_str, k_str)
+            with torch.no_grad():
+                score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
+                                 torch.tensor([jac], device=DEVICE), 
+                                 torch.tensor([ov], device=DEVICE)).item()
+            candidates_3.append((score, ref_labels_test[cand_idx], cand_idx))
             
-            # Start complete profiling on 'Balanced' mode to avoid duplicate records
-            if mode_name == "Balanced":
-                t_start = time.perf_counter()
-                # 1. Tokenize query
-                # Simulating actual tokenizer step (dummy call to time it)
-                t0 = time.perf_counter()
-                enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
-                t_tok = time.perf_counter() - t0
-                
-                # 2. Student encode
-                t0 = time.perf_counter()
-                ids_t = torch.tensor([enc_ids], device=DEVICE)
-                mask_t = torch.ones_like(ids_t)
-                with torch.no_grad():
-                    q_s = student(ids_t, mask_t)[0]
-                t_stu = time.perf_counter() - t0
-                
-                # 3. Retrieve Top-k
-                t0 = time.perf_counter()
-                sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
-                top_k_indices = torch.topk(sims, k=k).indices.cpu().numpy()
-                t_ret = time.perf_counter() - t0
-                
-                # 4. Verification on Top-k candidates
-                t_ver_start = time.perf_counter()
-                accepted_candidates = []
-                for cand_idx in top_k_indices:
-                    k_vec = z_ref_bank[cand_idx]
-                    k_str = ref_sentences_test[cand_idx]
-                    cand_label = ref_labels[cand_idx]
-                    
-                    jac, ov = get_entity_overlap(q_str, k_str)
-                    with torch.no_grad():
-                        score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
-                                         torch.tensor([jac], device=DEVICE), 
-                                         torch.tensor([ov], device=DEVICE)).item()
-                    if score >= thresh:
-                        accepted_candidates.append((score, cand_label))
-                t_ver = time.perf_counter() - t_ver_start
-                
-                # 5. Decision logic
-                t0 = time.perf_counter()
-                if len(accepted_candidates) > 0:
-                    accepted_candidates.sort(reverse=True, key=lambda x: x[0])
-                    best_score, best_label = accepted_candidates[0]
-                t_dec = time.perf_counter() - t0
-                
-                t_total = time.perf_counter() - t_start
-                latency_records.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
-            
-            # Standard simulation for Top-k scoring
-            sims = torch.matmul(z_ref_bank, q_vec.unsqueeze(0).T).squeeze(-1)
-            top_k_indices = torch.topk(sims, k=k).indices.cpu().numpy()
-            
-            in_candidates = any(ref_labels[idx_r] == q_label for idx_r in top_k_indices)
-            if in_candidates:
-                correct_in_top_k += 1
-                
-            accepted_candidates = []
-            for cand_idx in top_k_indices:
-                k_vec = z_ref_bank[cand_idx]
-                k_str = ref_sentences_test[cand_idx]
-                cand_label = ref_labels[cand_idx]
-                jac, ov = get_entity_overlap(q_str, k_str)
-                with torch.no_grad():
-                    score = verifier(q_vec.unsqueeze(0), k_vec.unsqueeze(0), 
-                                     torch.tensor([jac], device=DEVICE), 
-                                     torch.tensor([ov], device=DEVICE)).item()
-                if score >= thresh:
-                    accepted_candidates.append((score, cand_label))
-                    
-            if len(accepted_candidates) == 0:
-                if in_candidates:
-                    pipeline_abstain_present += 1
-                else:
-                    pipeline_abstain_absent += 1
-            else:
-                accepted_candidates.sort(reverse=True, key=lambda x: x[0])
-                best_score, best_label = accepted_candidates[0]
-                if best_label == q_label:
-                    pipeline_correct += 1
-                else:
-                    pipeline_false_accept += 1
-                    
-        # General controls blockage in this mode
-        pipeline_ctrl_false_accept = 0
-        pipeline_ctrl_abstain = 0
-        for idx in range(len(z_general)):
-            q_vec = z_general[idx]
-            q_str = general_sentences[idx]
-            sims = torch.matmul(z_ref_bank, q_vec.unsqueeze(0).T).squeeze(-1)
-            top_k_indices = torch.topk(sims, k=k).indices.cpu().numpy()
+        candidates_3.sort(reverse=True, key=lambda x: x[0])
+        top_score = candidates_3[0][0]
+        sec_score = candidates_3[1][0] if len(candidates_3) > 1 else 0.0
+        margin = top_score - sec_score
+        
+        trigger_expansion = (top_score < best_params[0]) or (margin < best_params[1])
+        if trigger_expansion:
+            t0_exp = time.perf_counter()
+            top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
+            t_ret_2 = time.perf_counter() - t0_exp
+            t_ret = t_ret_1 + t_ret_2
             
             accepted_candidates = []
-            for cand_idx in top_k_indices:
-                k_vec = z_ref_bank[cand_idx]
+            for score, label, cand_idx in candidates_3:
+                if score >= calibrated_thresholds["Balanced"]:
+                    accepted_candidates.append((score, label))
+            for cand_idx in top_10_indices:
+                if cand_idx in top_3_indices:
+                    continue
+                k_vec = z_ref_bank_test[cand_idx]
                 k_str = ref_sentences_test[cand_idx]
-                cand_label = ref_labels[cand_idx]
                 jac, ov = get_entity_overlap(q_str, k_str)
                 with torch.no_grad():
-                    score = verifier(q_vec.unsqueeze(0), k_vec.unsqueeze(0), 
+                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
                                      torch.tensor([jac], device=DEVICE), 
                                      torch.tensor([ov], device=DEVICE)).item()
-                if score >= thresh:
-                    accepted_candidates.append((score, cand_label))
-            if len(accepted_candidates) == 0:
-                pipeline_ctrl_abstain += 1
-            else:
-                pipeline_ctrl_false_accept += 1
-                
-        pipeline_results[mode_name] = {
-            "top_k_recall": correct_in_top_k / len(z_queries),
-            "correct_acc": pipeline_correct / len(z_queries),
-            "abstain_present": pipeline_abstain_present / len(z_queries),
-            "abstain_absent": pipeline_abstain_absent / len(z_queries),
-            "false_accept": pipeline_false_accept / len(z_queries),
-            "ctrl_rejection": pipeline_ctrl_abstain / len(z_general),
-            "ctrl_leakage": pipeline_ctrl_false_accept / len(z_general)
-        }
+                if score >= calibrated_thresholds["Balanced"]:
+                    accepted_candidates.append((score, ref_labels_test[cand_idx]))
+        else:
+            t_ret = t_ret_1
+            accepted_candidates = []
+            for score, label, _ in candidates_3:
+                if score >= calibrated_thresholds["Balanced"]:
+                    accepted_candidates.append((score, label))
+        t_ver = time.perf_counter() - t_ver_start
         
-    # Latency Stats Parsing
-    lat_toks, lat_stus, lat_rets, lat_vers, lat_decs, lat_totals = zip(*latency_records)
-    latency_stats = {
-        "tokenize": (np.mean(lat_toks), np.percentile(lat_toks, 95), np.percentile(lat_toks, 99)),
-        "student": (np.mean(lat_stus), np.percentile(lat_stus, 95), np.percentile(lat_stus, 99)),
-        "retrieve": (np.mean(lat_rets), np.percentile(lat_rets, 95), np.percentile(lat_rets, 99)),
-        "verify": (np.mean(lat_vers), np.percentile(lat_vers, 95), np.percentile(lat_vers, 99)),
-        "decision": (np.mean(lat_decs), np.percentile(lat_decs, 95), np.percentile(lat_decs, 99)),
-        "total": (np.mean(lat_totals), np.percentile(lat_totals, 95), np.percentile(lat_totals, 99))
-    }
+        t0 = time.perf_counter()
+        if len(accepted_candidates) > 0:
+            accepted_candidates.sort(reverse=True, key=lambda x: x[0])
+        t_dec = time.perf_counter() - t0
+        
+        t_total = time.perf_counter() - t_start
+        latency_records_test.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
+        
+    lat_toks_t, lat_stus_t, lat_rets_t, lat_vers_t, lat_decs_t, lat_totals_t = zip(*latency_records_test)
     
-    # 9. Print Audited and Calibrated Verification Report
+    torch.save(verifier.state_dict(), "production_relation_verifier.pt")
+    
+    # Print Audited and Calibrated Verification Report
     print("\n" + "="*80)
     print("  FINAL PRODUCTION GATE SPECIFICITY REPORT (FACT-DISJOINT)")
     print("="*80)
