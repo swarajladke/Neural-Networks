@@ -9,6 +9,7 @@ Implements:
 """
 
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import json
 import time
 import random
