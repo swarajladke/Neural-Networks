@@ -678,16 +678,16 @@ def main():
     print(f"  T_decision              | {latency_stats['decision'][0]*1000:11.4f}ms | {latency_stats['decision'][1]*1000:14.4f}ms | {latency_stats['decision'][2]*1000:14.4f}ms")
     print(f"  T_total (End-to-End)    | {latency_stats['total'][0]*1000:11.4f}ms | {latency_stats['total'][1]*1000:14.4f}ms | {latency_stats['total'][2]*1000:14.4f}ms")
     
+    torch.save(verifier.state_dict(), "production_relation_verifier.pt")
+    
     print("-"*80)
     print("  Total System Footprint Accounting:")
     print("    - Student Encoder Module              : 28.40 MB")
-    print(f"    - Relation Verifier Module            : {os.path.getsize('best_relation_verifier.pt') / (1024*1024):.2f} MB")
+    print(f"    - Relation Verifier Module            : {os.path.getsize('production_relation_verifier.pt') / (1024*1024):.2f} MB")
     print("    - Reference Index Cache (45 vectors)   : ~0.17 MB")
     print("    - Causal Decoder & Tokenizer (SmolLM2): 724.00 MB")
-    print(f"    - Total Edge Routing Footprint         : {28.40 + os.path.getsize('best_relation_verifier.pt') / (1024*1024) + 0.17:.2f} MB")
+    print(f"    - Total Edge Routing Footprint         : {28.40 + os.path.getsize('production_relation_verifier.pt') / (1024*1024) + 0.17:.2f} MB")
     print("="*80)
-    
-    torch.save(verifier.state_dict(), "production_relation_verifier.pt")
 
 if __name__ == "__main__":
     main()
