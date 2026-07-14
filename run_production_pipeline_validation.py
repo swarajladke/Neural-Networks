@@ -511,7 +511,7 @@ def run_test_evaluation(
             decision = "abstain"
             decision_label = None
         t_dec = time.perf_counter() - t0
-        
+        evals_query = k_expanded if expand else k_initial
         t_total = time.perf_counter() - t_start
         latency_records.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
         
@@ -547,7 +547,7 @@ def run_test_evaluation(
             "cluster_id": q["cluster_id"],
             "is_error": is_error,
             "outcome": outcome,
-            "evals": evals,
+            "evals": evals_query,
             "expand": expand
         })
         
