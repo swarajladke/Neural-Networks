@@ -28,6 +28,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CACHE_100_PATH = "../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") or not os.path.exists("smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt"
 DATASET_PATH = "agnis_scaling_dataset.json"
 INPUT_DIM = 960
+MODEL_ID = "../local_smollm2" if os.path.exists("../local_smollm2") else ("local_smollm2" if os.path.exists("local_smollm2") else "HuggingFaceTB/SmolLM2-360M")
 
 def wilson_upper_bound(x, n, cl=0.95):
     if n == 0:
@@ -201,7 +202,7 @@ def main():
     print("="*80)
     
     # 1. Loading tokenizer and dataset
-    tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-360M")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         
@@ -221,7 +222,7 @@ def main():
         from transformers import AutoModelForCausalLM
         from run_student_continual_benchmarks import ensure_100_fact_embeddings
         try:
-            model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-360M", revision="f8027fd0eaeea54caa13c31d31b9fdc459c38b49")
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision="f8027fd0eaeea54caa13c31d31b9fdc459c38b49")
             model.to(DEVICE)
             model.eval()
         except Exception as e:
