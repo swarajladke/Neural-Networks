@@ -668,9 +668,18 @@ def main():
     
     # 2. Loading teacher model embeddings cache
     if not os.path.exists(CACHE_100_PATH):
-        raise RuntimeError(f"Teacher embeddings cache {CACHE_100_PATH} not found. Must run download_teacher.py / precompute first.")
-    
-    cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
+        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Loading teacher model to generate...")
+        from transformers import AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        try:
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+            model.to(DEVICE)
+            model.eval()
+        except Exception as e:
+            raise RuntimeError("FAIL-CLOSED: Failed to load real SmolLM2 model for verification generation") from e
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
     
     # Align training teacher references exactly to train_fact_ids
     train_indices = [idx for idx, f in enumerate(all_facts) if f["id"] in train_fact_ids]
