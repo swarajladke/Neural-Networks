@@ -399,6 +399,8 @@ def run_test_evaluation(
     eval_queries_test, z_ref_bank_test, ref_sentences_test, ref_labels_test,
     verifier, student, tokenizer, policy_dict
 ):
+    student.eval()
+    verifier.eval()
     results = []
     latency_records = []
     
@@ -796,6 +798,8 @@ def main():
             
     print("  - Relation Verifier trained successfully.")
     torch.save(verifier.state_dict(), "production_relation_verifier.pt")
+    verifier.eval()
+    student.eval()
     
     # 6. Build Policy Calibration split Query set
     print("\n[Calibration] Generating Policy Calibration evaluation query set...")
