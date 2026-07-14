@@ -23,7 +23,18 @@ from student_encoder import StudentEncoder
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CACHE_100_PATH = "../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") or not os.path.exists("smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt"
 DATASET_PATH = "agnis_scaling_dataset.json"
-MODEL_ID = "../local_smollm2" if os.path.exists("../local_smollm2") else ("local_smollm2" if os.path.exists("local_smollm2") else "HuggingFaceTB/SmolLM2-360M")
+def find_offline_model_path():
+    for path in ["../local_smollm2", "local_smollm2"]:
+        if os.path.exists(os.path.join(path, "model.safetensors")):
+            return path
+    if os.path.exists("/kaggle/input"):
+        for root, dirs, files in os.walk("/kaggle/input"):
+            if "config.json" in files and ("model.safetensors" in files or "pytorch_model.bin" in files):
+                if "smollm" in root.lower():
+                    return root
+    return "HuggingFaceTB/SmolLM2-360M"
+
+MODEL_ID = find_offline_model_path()
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
 INPUT_DIM = 960
 
