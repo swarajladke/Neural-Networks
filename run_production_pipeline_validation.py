@@ -104,17 +104,17 @@ def batch_tokenize(tokenizer, sentences, max_len=32, device="cpu"):
     enc = tokenizer(sentences, max_length=max_len, padding="max_length", truncation=True, return_tensors="pt")
     return enc.input_ids.to(device), enc.attention_mask.to(device)
 
+def get_prompt_only(fact, idx):
+    if idx == 0:
+        return fact["probe"]
+    elif idx == 1:
+        prefix = fact["qa"].split(fact["statement"])[0]
+        return prefix + fact["probe"]
+    else:
+        return fact["cloze"].split("_____")[0].strip()
+
 def get_sentence_lists(all_facts, unique_probes):
     probe_to_class = {p: idx for idx, p in enumerate(unique_probes)}
-    def get_prompt_only(fact, idx):
-        if idx == 0:
-            return fact["probe"]
-        elif idx == 1:
-            prefix = fact["qa"].split(fact["statement"])[0]
-            return prefix + fact["probe"]
-        else:
-            return fact["cloze"].split("_____")[0].strip()
-            
     train_sentences = []
     train_labels = []
     val_sentences = []
@@ -221,37 +221,220 @@ def perturb_with_typos(sentence, rate=0.1):
             chars[idx] = random.choice(keyboard_adj[c])
     return "".join(chars)
 
-def evaluate_pipeline(
-    z_queries, query_sentences, query_labels,
-    z_ref_bank, ref_sentences, ref_labels,
-    verifier, tokenizer, student,
-    mode_name,
-    k_fixed=3,
-    adaptive=False,
-    verify_threshold=0.9127,
-    tau_verify=0.9,
-    tau_margin=0.05,
-    general_sentences=None,
-    z_general=None,
-    perturb_typos=False
-):
-    correct_in_top_k = 0
-    pipeline_correct = 0
-    pipeline_abstain_present = 0
-    pipeline_abstain_absent = 0
-    pipeline_false_accept = 0
+def perturb_with_typos(sentence, rate=0.1, seed=42):
+    random_gen = random.Random(seed + len(sentence))
+    chars = list(sentence)
+    n_changes = max(1, int(len(chars) * rate))
+    keyboard_adj = {
+        'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'ersfxc', 'e': 'wsdr',
+        'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
+        'k': 'ijlm', 'l': 'okp', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
+        'p': 'ol', 'q': 'wa', 'r': 'edft', 's': 'wadezx', 't': 'rfgy',
+        'u': 'yhji', 'v': 'cfgb', 'w': 'qase', 'x': 'zsdc', 'y': 'tghu', 'z': 'asx'
+    }
+    for _ in range(n_changes):
+        if len(chars) == 0:
+            break
+        idx = random_gen.randint(0, len(chars) - 1)
+        c = chars[idx].lower()
+        if c in keyboard_adj:
+            chars[idx] = random_gen.choice(keyboard_adj[c])
+    return "".join(chars)
+
+from scipy.stats import beta
+
+def one_sided_binomial_ucb(errors, trials, alpha=0.05):
+    if trials <= 0:
+        return float("nan")
+    if errors == trials:
+        return 1.0
+    return beta.ppf(
+        1.0 - alpha,
+        errors + 1,
+        trials - errors,
+    )
+
+def cluster_bootstrap_ucb(queries_data, n_reps=200, cl=0.95):
+    clusters = {}
+    for q in queries_data:
+        c_id = q["cluster_id"]
+        if c_id not in clusters:
+            clusters[c_id] = []
+        clusters[c_id].append(q)
     
-    total_evals = 0
+    cluster_keys = list(clusters.keys())
+    n_clusters = len(cluster_keys)
+    if n_clusters == 0:
+        return 0.0
+        
+    rates = []
+    random_gen = random.Random(42)
+    for _ in range(n_reps):
+        sampled_keys = [random_gen.choice(cluster_keys) for _ in range(n_clusters)]
+        sampled_queries = []
+        for k in sampled_keys:
+            sampled_queries.extend(clusters[k])
+        
+        errors = sum(1 for q in sampled_queries if q["is_error"])
+        total = len(sampled_queries)
+        rates.append(errors / total if total > 0 else 0.0)
+    return np.percentile(rates, cl * 100)
+
+def build_eval_query_set(
+    all_facts, z_test, te_s_all,
+    general_sentences, z_general,
+    split_fact_ids, other_fact_ids,
+    seed=42
+):
+    eval_queries = []
+    
+    # 1. ID Clean and Typo Queries
+    for f_idx, fact in enumerate(all_facts):
+        fid = fact["id"]
+        if fid in split_fact_ids:
+            for q_sub_idx in range(4):
+                q_vec = z_test[f_idx * 4 + q_sub_idx]
+                q_str = te_s_all[f_idx * 4 + q_sub_idx]
+                
+                # ID Clean
+                eval_queries.append({
+                    "q_vec": q_vec,
+                    "q_str": q_str,
+                    "target_label": f_idx,
+                    "cluster_id": fid,
+                    "is_ood": False,
+                    "is_typo": False
+                })
+                # ID Typo (Typo-valid positive)
+                eval_queries.append({
+                    "q_vec": q_vec,
+                    "q_str": perturb_with_typos(q_str, rate=0.1, seed=seed + q_sub_idx),
+                    "target_label": f_idx,
+                    "cluster_id": fid,
+                    "is_ood": False,
+                    "is_typo": True
+                })
+                
+    # 2. OOD Semantic Negatives (Clean and Typo)
+    for f_idx, fact in enumerate(all_facts):
+        fid = fact["id"]
+        if fid in other_fact_ids:
+            for q_sub_idx in range(4):
+                q_vec = z_test[f_idx * 4 + q_sub_idx]
+                q_str = te_s_all[f_idx * 4 + q_sub_idx]
+                
+                # OOD Semantic Neg Clean
+                eval_queries.append({
+                    "q_vec": q_vec,
+                    "q_str": q_str,
+                    "target_label": None,
+                    "cluster_id": fid,
+                    "is_ood": True,
+                    "is_typo": False
+                })
+                # OOD Semantic Neg Typo (Typo hard negative)
+                eval_queries.append({
+                    "q_vec": q_vec,
+                    "q_str": perturb_with_typos(q_str, rate=0.1, seed=seed + q_sub_idx + 1000),
+                    "target_label": None,
+                    "cluster_id": fid,
+                    "is_ood": True,
+                    "is_typo": True
+                })
+                
+    # 3. OOD General Controls (Clean and Typo)
+    for g_idx in range(min(100, len(general_sentences))):
+        q_vec = z_general[g_idx]
+        q_str = general_sentences[g_idx]
+        
+        # OOD General Control Clean
+        eval_queries.append({
+            "q_vec": q_vec,
+            "q_str": q_str,
+            "target_label": None,
+            "cluster_id": f"ctrl_{g_idx}",
+            "is_ood": True,
+            "is_typo": False
+        })
+        # OOD General Control Typo
+        eval_queries.append({
+            "q_vec": q_vec,
+            "q_str": perturb_with_typos(q_str, rate=0.1, seed=seed + g_idx + 5000),
+            "target_label": None,
+            "cluster_id": f"ctrl_{g_idx}",
+            "is_ood": True,
+            "is_typo": True
+        })
+        
+    return eval_queries
+
+def simulate_pipeline(
+    cached_q,
+    k_initial, k_expanded,
+    accept_threshold, verify_expansion_threshold,
+    margin_threshold, retrieval_threshold,
+    strong_margin, adaptive
+):
+    cand_data = cached_q["cand_data"]
+    candidates_init = cand_data[:k_initial]
+    
+    sorted_init = sorted(candidates_init, key=lambda x: x["score"], reverse=True)
+    top_score = sorted_init[0]["score"] if len(sorted_init) > 0 else 0.0
+    sec_score = sorted_init[1]["score"] if len(sorted_init) > 1 else 0.0
+    margin = top_score - sec_score
+    
+    strong_accept = (top_score >= accept_threshold) and (margin >= strong_margin)
+    top_ret_sim = sorted_init[0]["sim"] if len(sorted_init) > 0 else 0.0
+    
+    expand = (not strong_accept) and adaptive and (
+        top_score < verify_expansion_threshold
+        or margin < margin_threshold
+        or top_ret_sim < retrieval_threshold
+    )
+    
+    evals = k_initial
+    if expand:
+        final_candidates = cand_data[:k_expanded]
+        evals = k_expanded
+    else:
+        final_candidates = candidates_init
+        
+    accepted = [c for c in final_candidates if c["score"] >= accept_threshold]
+    if len(accepted) > 0:
+        sorted_acc = sorted(accepted, key=lambda x: x["score"], reverse=True)
+        decision = "accept"
+        decision_label = sorted_acc[0]["label"]
+    else:
+        decision = "abstain"
+        decision_label = None
+        
+    return decision, decision_label, evals, expand, [c["cand_idx"] for c in final_candidates]
+
+def run_test_evaluation(
+    eval_queries_test, z_ref_bank_test, ref_sentences_test, ref_labels_test,
+    verifier, student, tokenizer, policy_dict
+):
+    results = []
     latency_records = []
     
-    n_queries = len(z_queries)
+    k_initial = policy_dict["initialK"]
+    k_expanded = policy_dict["expandedK"]
+    accept_threshold = policy_dict["acceptThreshold"]
+    verify_expansion_threshold = policy_dict["verifyExpansionThreshold"]
+    margin_threshold = policy_dict["marginThreshold"]
+    retrieval_threshold = policy_dict["retrievalThreshold"]
+    strong_margin = policy_dict["strongMargin"]
     
-    for idx in range(n_queries):
-        q_vec = z_queries[idx]
-        q_str = query_sentences[idx]
-        if perturb_typos:
-            q_str = perturb_with_typos(q_str)
-        q_label = query_labels[idx]
+    adaptive = (k_expanded > k_initial)
+    
+    total_evals = 0
+    total_expanded = 0
+    
+    for q in eval_queries_test:
+        q_str = q["q_str"]
+        q_vec = q["q_vec"]
+        target_label = q["target_label"]
+        is_ood = q["is_ood"]
         
         t_start = time.perf_counter()
         
@@ -268,184 +451,129 @@ def evaluate_pipeline(
             q_s = student(ids_t, mask_t)[0]
         t_stu = time.perf_counter() - t0
         
-        # 3. Retrieve and verify
+        # 3. Retrieve initial_k
         t0 = time.perf_counter()
-        if not adaptive:
-            # Retrieve Top-k fixed
-            sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
-            top_k_indices = torch.topk(sims, k=k_fixed).indices.cpu().numpy()
-            t_ret = time.perf_counter() - t0
+        sims = torch.matmul(z_ref_bank_test, q_s.unsqueeze(0).T).squeeze(-1)
+        top_init_indices = torch.topk(sims, k=k_initial).indices.cpu().numpy()
+        t_ret_1 = time.perf_counter() - t0
+        
+        # 4. Verify initial_k
+        t_ver_start = time.perf_counter()
+        candidates_init = []
+        for cand_idx in top_init_indices:
+            k_vec = z_ref_bank_test[cand_idx]
+            k_str = ref_sentences_test[cand_idx]
+            jac, ov = get_entity_overlap(q_str, k_str)
+            with torch.no_grad():
+                score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
+                                 torch.tensor([jac], device=DEVICE), 
+                                 torch.tensor([ov], device=DEVICE)).item()
+            candidates_init.append((score, ref_labels_test[cand_idx], cand_idx))
+            total_evals += 1
             
-            # Verify all k
-            t_ver_start = time.perf_counter()
-            accepted_candidates = []
-            for cand_idx in top_k_indices:
-                k_vec = z_ref_bank[cand_idx]
-                k_str = ref_sentences[cand_idx]
-                cand_label = ref_labels[cand_idx]
-                
-                jac, ov = get_entity_overlap(q_str, k_str)
-                with torch.no_grad():
-                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
-                                     torch.tensor([jac], device=DEVICE), 
-                                     torch.tensor([ov], device=DEVICE)).item()
-                total_evals += 1
-                if score >= verify_threshold:
-                    accepted_candidates.append((score, cand_label))
-            t_ver = time.perf_counter() - t_ver_start
-        else:
-            # Adaptive logic: Retrieve top-3 first
-            sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
-            top_3_indices = torch.topk(sims, k=3).indices.cpu().numpy()
-            t_ret_1 = time.perf_counter() - t0
+        candidates_init.sort(reverse=True, key=lambda x: x[0])
+        top_score = candidates_init[0][0] if len(candidates_init) > 0 else 0.0
+        sec_score = candidates_init[1][0] if len(candidates_init) > 1 else 0.0
+        margin = top_score - sec_score
+        
+        strong_accept = (top_score >= accept_threshold) and (margin >= strong_margin)
+        top_ret_sim = sims[top_init_indices[0]].item() if len(top_init_indices) > 0 else 0.0
+        
+        expand = (not strong_accept) and adaptive and (
+            top_score < verify_expansion_threshold
+            or margin < margin_threshold
+            or top_ret_sim < retrieval_threshold
+        )
+        
+        final_candidates = []
+        if expand:
+            total_expanded += 1
+            t0_exp = time.perf_counter()
+            top_exp_indices = torch.topk(sims, k=k_expanded).indices.cpu().numpy()
+            t_ret_2 = time.perf_counter() - t0_exp
+            t_ret = t_ret_1 + t_ret_2
             
-            # Verify top-3
-            t_ver_start = time.perf_counter()
-            candidates_3 = []
-            for cand_idx in top_3_indices:
-                k_vec = z_ref_bank[cand_idx]
-                k_str = ref_sentences[cand_idx]
-                cand_label = ref_labels[cand_idx]
-                
-                jac, ov = get_entity_overlap(q_str, k_str)
-                with torch.no_grad():
-                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
-                                     torch.tensor([jac], device=DEVICE), 
-                                     torch.tensor([ov], device=DEVICE)).item()
-                total_evals += 1
-                candidates_3.append((score, cand_label, cand_idx))
-            
-            # Sort top-3
-            candidates_3.sort(reverse=True, key=lambda x: x[0])
-            top_score = candidates_3[0][0]
-            sec_score = candidates_3[1][0] if len(candidates_3) > 1 else 0.0
-            
-            # Trigger expansion to k=10 if confidence is low OR margin is tight
-            margin = top_score - sec_score
-            trigger_expansion = (top_score < tau_verify) or (margin < tau_margin)
-            
-            if trigger_expansion:
-                # Expand to top-10
-                t0_exp = time.perf_counter()
-                top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
-                t_ret_2 = time.perf_counter() - t0_exp
-                t_ret = t_ret_1 + t_ret_2
-                
-                # Verify remaining 7 candidates
-                accepted_candidates = []
-                # Keep top-3 scores already computed
-                for score, label, cand_idx in candidates_3:
-                    if score >= verify_threshold:
-                        accepted_candidates.append((score, label))
-                
-                # Compute for the new 7
-                for cand_idx in top_10_indices:
-                    if cand_idx in top_3_indices:
-                        continue
-                    k_vec = z_ref_bank[cand_idx]
-                    k_str = ref_sentences[cand_idx]
-                    cand_label = ref_labels[cand_idx]
-                    
+            for cand_idx in top_exp_indices:
+                if cand_idx in top_init_indices:
+                    for score, label, c_idx in candidates_init:
+                        if c_idx == cand_idx:
+                            final_candidates.append((score, label, cand_idx))
+                else:
+                    k_vec = z_ref_bank_test[cand_idx]
+                    k_str = ref_sentences_test[cand_idx]
                     jac, ov = get_entity_overlap(q_str, k_str)
                     with torch.no_grad():
                         score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
                                          torch.tensor([jac], device=DEVICE), 
                                          torch.tensor([ov], device=DEVICE)).item()
                     total_evals += 1
-                    if score >= verify_threshold:
-                        accepted_candidates.append((score, cand_label))
-            else:
-                t_ret = t_ret_1
-                accepted_candidates = []
-                for score, label, _ in candidates_3:
-                    if score >= verify_threshold:
-                        accepted_candidates.append((score, label))
+                    final_candidates.append((score, ref_labels_test[cand_idx], cand_idx))
+            t_ver = time.perf_counter() - t_ver_start
+        else:
+            t_ret = t_ret_1
+            final_candidates = candidates_init
             t_ver = time.perf_counter() - t_ver_start
             
-        # 5. Decision logic
         t0 = time.perf_counter()
-        if len(accepted_candidates) > 0:
-            accepted_candidates.sort(reverse=True, key=lambda x: x[0])
-            best_score, best_label = accepted_candidates[0]
-            if best_label == q_label:
-                pipeline_correct += 1
-            else:
-                pipeline_false_accept += 1
+        accepted = [c for c in final_candidates if c[0] >= accept_threshold]
+        if len(accepted) > 0:
+            accepted.sort(reverse=True, key=lambda x: x[0])
+            decision = "accept"
+            decision_label = accepted[0][1]
         else:
-            # Check if correct label is in top-k
-            k_retrieved = 10 if (adaptive and trigger_expansion) else (k_fixed if not adaptive else 3)
-            sims_score = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
-            retrieved_indices = torch.topk(sims_score, k=k_retrieved).indices.cpu().numpy()
-            in_candidates = any(ref_labels[idx_r] == q_label for idx_r in retrieved_indices)
-            if in_candidates:
-                pipeline_abstain_present += 1
-            else:
-                pipeline_abstain_absent += 1
-                
-        # Also measure top-k retrieval recall
-        sims_score = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
-        k_eval = 10 if adaptive else k_fixed
-        retrieved_indices = torch.topk(sims_score, k=k_eval).indices.cpu().numpy()
-        if any(ref_labels[idx_r] == q_label for idx_r in retrieved_indices):
-            correct_in_top_k += 1
-            
+            decision = "abstain"
+            decision_label = None
         t_dec = time.perf_counter() - t0
+        
         t_total = time.perf_counter() - t_start
         latency_records.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
         
-    lat_toks, lat_stus, lat_rets, lat_vers, lat_decs, lat_totals = zip(*latency_records)
-    
-    # Process General Controls
-    pipeline_ctrl_false_accept = 0
-    pipeline_ctrl_abstain = 0
-    if general_sentences is not None and z_general is not None:
-        for idx in range(len(z_general)):
-            q_vec = z_general[idx]
-            q_str = general_sentences[idx]
-            
-            sims = torch.matmul(z_ref_bank, q_vec.unsqueeze(0).T).squeeze(-1)
-            k_eval = 10 if adaptive else k_fixed
-            top_k_indices = torch.topk(sims, k=k_eval).indices.cpu().numpy()
-            
-            accepted_candidates = []
-            for cand_idx in top_k_indices:
-                k_vec = z_ref_bank[cand_idx]
-                k_str = ref_sentences[cand_idx]
-                jac, ov = get_entity_overlap(q_str, k_str)
-                with torch.no_grad():
-                    score = verifier(q_vec.unsqueeze(0), k_vec.unsqueeze(0), 
-                                     torch.tensor([jac], device=DEVICE), 
-                                     torch.tensor([ov], device=DEVICE)).item()
-                if score >= verify_threshold:
-                    accepted_candidates.append((score, ref_labels[cand_idx]))
-            if len(accepted_candidates) == 0:
-                pipeline_ctrl_abstain += 1
+        is_error = False
+        outcome = ""
+        if is_ood:
+            if decision == "accept":
+                is_error = True
+                outcome = "incorrect_accept"
             else:
-                pipeline_ctrl_false_accept += 1
-                
-    return {
-        "top_k_recall": correct_in_top_k / n_queries,
-        "correct_acc": pipeline_correct / n_queries,
-        "abstain_present": pipeline_abstain_present / n_queries,
-        "abstain_absent": pipeline_abstain_absent / n_queries,
-        "false_accept": pipeline_false_accept / n_queries,
-        "evals_per_query": total_evals / n_queries,
-        "latency_totals": (np.mean(lat_totals), np.percentile(lat_totals, 95), np.percentile(lat_totals, 99)),
-        "ctrl_rejection": (pipeline_ctrl_abstain / len(z_general)) if z_general is not None else 1.0,
-        "ctrl_leakage": (pipeline_ctrl_false_accept / len(z_general)) if z_general is not None else 0.0,
-        "false_accept_cnt": pipeline_false_accept,
-        "queries_cnt": n_queries
-    }
+                outcome = "correct_reject"
+        else:
+            if decision == "accept":
+                if decision_label == target_label:
+                    outcome = "correct_accept"
+                else:
+                    is_error = True
+                    outcome = "incorrect_accept"
+            else:
+                top_exp_indices = [c[2] for c in final_candidates]
+                if target_label in top_exp_indices:
+                    outcome = "verifier_abstain"
+                else:
+                    outcome = "retriever_miss"
+                    
+        results.append({
+            "q_str": q_str,
+            "target_label": target_label,
+            "decision": decision,
+            "decision_label": decision_label,
+            "is_ood": is_ood,
+            "is_typo": q["is_typo"],
+            "cluster_id": q["cluster_id"],
+            "is_error": is_error,
+            "outcome": outcome,
+            "evals": evals,
+            "expand": expand
+        })
+        
+    return results, latency_records, total_evals, total_expanded
 
 # ---------------------------------------------------------------------------
 # Main Execution Pipeline
 # ---------------------------------------------------------------------------
 def main():
     print("="*80)
-    print("  PHASE B.2: RELATION VERIFIER SPECIFICITY GATE AUDIT")
+    print("  PHASE C.1: ADAPTIVE recall recovery & risk-tiered calibration")
     print("="*80)
     
-    # 1. Loading tokenizer and dataset
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -455,30 +583,43 @@ def main():
     all_facts = [fact for b in blocks for fact in b]
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     
-    # Split facts: 70 Train, 15 Val, 15 Test (strictly disjoint fact IDs!)
-    train_facts = all_facts[:70]
-    val_facts = all_facts[70:85]
-    test_facts = all_facts[85:]
+    # 1. Randomized/Stratified metadata-based split of facts
+    fact_ids = sorted(list(set(fact["id"] for fact in all_facts)))
+    random.Random(42).shuffle(fact_ids)
     
-    # 2. Train the Student Encoder from scratch on 70 train facts
+    train_fact_ids = set(fact_ids[:70])
+    val_fact_ids = set(fact_ids[70:85])
+    test_fact_ids = set(fact_ids[85:100])
+    
+    assert train_fact_ids.isdisjoint(val_fact_ids)
+    assert train_fact_ids.isdisjoint(test_fact_ids)
+    assert val_fact_ids.isdisjoint(test_fact_ids)
+    assert len(train_fact_ids | val_fact_ids | test_fact_ids) == 100
+    
+    print(f"[Split] Fact splits partitioned successfully via metadata:")
+    print(f"  - Train Facts: {len(train_fact_ids)} | Val Facts: {len(val_fact_ids)} | Test Facts: {len(test_fact_ids)}")
+    
+    # 2. Loading teacher model embeddings cache
     if not os.path.exists(CACHE_100_PATH):
-        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Loading teacher model to generate...")
-        from transformers import AutoModelForCausalLM
-        from run_student_continual_benchmarks import ensure_100_fact_embeddings
-        try:
-            model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision="f8027fd0eaeea54caa13c31d31b9fdc459c38b49")
-            model.to(DEVICE)
-            model.eval()
-        except Exception as e:
-            raise RuntimeError("FAIL-CLOSED: Failed to load real SmolLM2 model for verification generation") from e
-        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
-    else:
-        cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
-        
-    train_x_teacher = cache_data["train_x"][:210].to(DEVICE) # 70 * 3
+        raise RuntimeError(f"Teacher embeddings cache {CACHE_100_PATH} not found. Must run download_teacher.py / precompute first.")
     
-    train_s, train_y, val_s, val_y, test_s, test_y = get_sentence_lists(train_facts, unique_probes)
+    cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
     
+    # Align training teacher references exactly to train_fact_ids
+    train_indices = [idx for idx, f in enumerate(all_facts) if f["id"] in train_fact_ids]
+    train_teacher_indices = []
+    for idx in train_indices:
+        train_teacher_indices.extend([idx*3, idx*3 + 1, idx*3 + 2])
+    train_x_teacher = cache_data["train_x"][train_teacher_indices].to(DEVICE)
+    
+    # Generate student tokenization items for Train
+    train_s = []
+    for f in all_facts:
+        if f["id"] in train_fact_ids:
+            for idx_t in range(3):
+                train_s.append(get_prompt_only(f, idx_t))
+                
+    # 3. Train Student Encoder from scratch on Train facts only
     print("[Training] Training compact student encoder on 70 seen facts...")
     student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -500,22 +641,18 @@ def main():
             
     print("  - Student Encoder trained successfully.")
     
-    # 3. Encode all templates using Student Encoder ONLY
+    # 4. Generate student embeddings for all facts
     student.eval()
-    print("[Encoding] Generating Student-encoded representations for all splits...")
-    
-    # Reference and Query texts for Train, Val, and Test facts
+    print("[Encoding] Generating student encoded reference/query banks...")
     tr_s_all, tr_y_all, val_s_all, val_y_all, te_s_all, te_y_all = get_sentence_lists(all_facts, unique_probes)
     
     with torch.no_grad():
-        # Reference bank (3 templates per fact, total 300 reference vectors)
         z_train = []
         for i in range(0, len(tr_s_all), 64):
             ids, mask = batch_tokenize(tokenizer, tr_s_all[i:i+64], max_len=32, device=DEVICE)
             z_train.append(student(ids, mask))
         z_train = torch.cat(z_train, dim=0)
         
-        # Query set (4 templates per fact, total 400 test vectors)
         z_test = []
         for i in range(0, len(te_s_all), 64):
             ids, mask = batch_tokenize(tokenizer, te_s_all[i:i+64], max_len=32, device=DEVICE)
@@ -542,32 +679,17 @@ def main():
             z_general.append(student(ids, mask))
         z_general = torch.cat(z_general, dim=0)
         
-    # 4. Synthesize disjoint splits
-    print("[Data] Generating fact-disjoint datasets for verifier...")
+    # 5. Build disjoint datasets and train RelationVerifier
     pos_pairs, sem_negs, gen_negs = build_pairs_from_embeddings(
         all_facts, z_train, z_test, tr_s_all, te_s_all, general_sentences, z_general
     )
     
-    # Train set (facts 0-69)
-    train_pos = [p for p in pos_pairs if p[2] < 70]
-    train_sem = [n for n in sem_negs if n[2] < 70]
-    train_gen = [n for n in gen_negs if n[2] < 70]
+    train_pos = [p for p in pos_pairs if all_facts[p[2]]["id"] in train_fact_ids]
+    train_sem = [n for n in sem_negs if all_facts[n[2]]["id"] in train_fact_ids]
+    train_gen = [n for n in gen_negs if all_facts[n[2]]["id"] in train_fact_ids]
     
-    # Val set (facts 70-84)
-    val_pos = [p for p in pos_pairs if 70 <= p[2] < 85]
-    val_sem = [n for n in sem_negs if 70 <= n[2] < 85]
-    val_gen = [n for n in gen_negs if 70 <= n[2] < 85]
+    print(f"  - Train Pairs count: Pos: {len(train_pos)} | SemNeg: {len(train_sem)} | GenNeg: {len(train_gen)}")
     
-    # Test set (facts 85-99)
-    test_pos = [p for p in pos_pairs if p[2] >= 85]
-    test_sem = [n for n in sem_negs if n[2] >= 85]
-    test_gen = [n for n in gen_negs if n[2] >= 85]
-    
-    print(f"  - Train Split: Pos: {len(train_pos)} | SemNeg: {len(train_sem)} | GenNeg: {len(train_gen)}")
-    print(f"  - Val Split  : Pos: {len(val_pos)} | SemNeg: {len(val_sem)} | GenNeg: {len(val_gen)}")
-    print(f"  - Test Split : Pos: {len(test_pos)} | SemNeg: {len(test_sem)} | GenNeg: {len(test_gen)}")
-    
-    # 5. Train Verifier on Train Split
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
     optimizer = torch.optim.AdamW(verifier.parameters(), lr=1e-3, weight_decay=1e-3)
     criterion = nn.BCELoss(reduction='none')
@@ -578,7 +700,7 @@ def main():
     train_ov = torch.tensor([p[4] for p in train_pos] + [n[4] for n in train_sem] + [n[4] for n in train_gen], dtype=torch.float32, device=DEVICE)
     train_y = torch.tensor([1.0] * len(train_pos) + [0.0] * len(train_sem) + [0.0] * len(train_gen), device=DEVICE)
     
-    print("[Training] Training relation verifier MLP on train split (60 epochs)...")
+    print("[Training] Training relation verifier MLP on train split...")
     N = len(train_y)
     for epoch in range(60):
         verifier.train()
@@ -586,385 +708,385 @@ def main():
         random.shuffle(indices)
         for idx in range(0, N, 64):
             b_idx = indices[idx : idx + 64]
-            q_b = train_q[b_idx]
-            k_b = train_k[b_idx]
-            jac_b = train_jac[b_idx]
-            ov_b = train_ov[b_idx]
-            y_b = train_y[b_idx]
-            
-            pred = verifier(q_b, k_b, jac_b, ov_b)
-            loss_raw = criterion(pred, y_b)
-            weight = torch.ones_like(y_b)
-            weight[y_b == 1.0] = 4.0
+            pred = verifier(train_q[b_idx], train_k[b_idx], train_jac[b_idx], train_ov[b_idx])
+            loss_raw = criterion(pred, train_y[b_idx])
+            weight = torch.ones_like(train_y[b_idx])
+            weight[train_y[b_idx] == 1.0] = 4.0
             loss = (loss_raw * weight).mean()
-            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-              # 6. Threshold Selection and Calibration on Validation Split (Facts 70-84)
-    verifier.eval()
-    with torch.no_grad():
-        val_pos_q = torch.stack([p[0] for p in val_pos])
-        val_pos_k = torch.stack([p[1] for p in val_pos])
-        val_pos_jac = torch.tensor([p[3] for p in val_pos], dtype=torch.float32, device=DEVICE)
-        val_pos_ov = torch.tensor([p[4] for p in val_pos], dtype=torch.float32, device=DEVICE)
-        pred_val_pos = verifier(val_pos_q, val_pos_k, val_pos_jac, val_pos_ov).cpu().numpy()
-        
-        val_sem_q = torch.stack([n[0] for n in val_sem])
-        val_sem_k = torch.stack([n[1] for n in val_sem])
-        val_sem_jac = torch.tensor([n[3] for n in val_sem], dtype=torch.float32, device=DEVICE)
-        val_sem_ov = torch.tensor([n[4] for n in val_sem], dtype=torch.float32, device=DEVICE)
-        pred_val_sem = verifier(val_sem_q, val_sem_k, val_sem_jac, val_sem_ov).cpu().numpy()
-
-        val_gen_q = torch.stack([n[0] for n in val_gen])
-        val_gen_k = torch.stack([n[1] for n in val_gen])
-        val_gen_jac = torch.tensor([n[3] for n in val_gen], dtype=torch.float32, device=DEVICE)
-        val_gen_ov = torch.tensor([n[4] for n in val_gen], dtype=torch.float32, device=DEVICE)
-        pred_val_gen = verifier(val_gen_q, val_gen_k, val_gen_jac, val_gen_ov).cpu().numpy()
-
-    # Define Validation Splits for Pipeline Calibration
-    z_ref_bank_val = z_train[70*3 : 85*3].to(DEVICE) # 15 facts * 3 references = 45 vectors
-    ref_labels_val = tr_y_all[70*3 : 85*3]
-    ref_sentences_val = tr_s_all[70*3 : 85*3]
+            
+    print("  - Relation Verifier trained successfully.")
     
-    z_queries_val = z_test[70*4 : 85*4].to(DEVICE) # 15 facts * 4 templates = 60 queries
-    query_labels_val = te_y_all[70*4 : 85*4]
-    query_sentences_val = te_s_all[70*4 : 85*4]
-
-    # --- Part 1: Fixed-k validation sweeps ---
-    print("\n" + "="*80)
-    print("  PART 1: FIXED-k BENCHMARK SWEEPS (ON VALIDATION SPLIT)")
-    print("="*80)
-    # Target 95% TPR threshold on validation split
-    val_95_tpr_threshold = np.percentile(pred_val_pos, 5)
-    
-    fixed_k_results = {}
-    for k_val in [3, 5, 10]:
-        res = evaluate_pipeline(
-            z_queries_val, query_sentences_val, query_labels_val,
-            z_ref_bank_val, ref_sentences_val, ref_labels_val,
-            verifier, tokenizer, student,
-            mode_name=f"Fixed-k={k_val}",
-            k_fixed=k_val,
-            adaptive=False,
-            verify_threshold=val_95_tpr_threshold,
-            general_sentences=general_sentences,
-            z_general=z_general
-        )
-        fixed_k_results[k_val] = res
-        print(f"  k = {k_val:2d} | Recall@{k_val}: {res['top_k_recall']*100:.2f}% | Correct Acc: {res['correct_acc']*100:.2f}% | False Acc: {res['false_accept']*100:.2f}% | Abstain (Pres/Abs): {res['abstain_present']*100:.2f}%/{res['abstain_absent']*100:.2f}% | Evals/Query: {res['evals_per_query']:.2f}")
-
-    # --- Part 2: Adaptive Retrieval calibration ---
-    print("\n" + "="*80)
-    print("  PART 2: ADAPTIVE RETRIEVAL CALIBRATION (ON VALIDATION SPLIT)")
-    print("="*80)
-    
-    # Grid search for best adaptive triggers to maximize validation correct_acc and minimize evaluations
-    best_correct_acc = 0.0
-    best_evals = 10.0
-    best_params = (0.9, 0.05)
-    
-    for tau_v in [0.7, 0.8, 0.9, 0.95, 0.99]:
-        for tau_m in [0.01, 0.05, 0.1, 0.2, 0.3]:
-            res = evaluate_pipeline(
-                z_queries_val, query_sentences_val, query_labels_val,
-                z_ref_bank_val, ref_sentences_val, ref_labels_val,
-                verifier, tokenizer, student,
-                mode_name="Adaptive Search",
-                k_fixed=3, # starting k
-                adaptive=True,
-                verify_threshold=val_95_tpr_threshold,
-                tau_verify=tau_v,
-                tau_margin=tau_m,
-                general_sentences=general_sentences,
-                z_general=z_general
-            )
-            if (res["correct_acc"] > best_correct_acc) or (abs(res["correct_acc"] - best_correct_acc) < 1e-5 and res["evals_per_query"] < best_evals):
-                best_correct_acc = res["correct_acc"]
-                best_evals = res["evals_per_query"]
-                best_params = (tau_v, tau_m)
-                
-    print(f"  - Optimal Calibrated Adaptive Parameters: tau_verify = {best_params[0]:.4f}, tau_margin = {best_params[1]:.4f}")
-    print(f"  - Achieved Correct Acc: {best_correct_acc*100:.2f}% with Mean Evals: {best_evals:.2f} per query (vs k=10 fixed)")
-
-    # --- Part 3: Risk-Tiered Threshold Calibration ---
-    print("\n" + "="*80)
-    print("  PART 3: RISK-TIERED THRESHOLD CALIBRATION (ON VALIDATION SPLIT)")
-    print("="*80)
-    
-    calibrated_thresholds = {}
-    threshold_sweep = np.linspace(0.01, 0.9999, 200)
-    
-    for mode_name, risk_limit in [("Safety-First", 0.005), ("Balanced", 0.02), ("Recall-First", 0.05)]:
-        best_thresh = 0.9999
-        best_acc = 0.0
-        
-        for thresh in threshold_sweep:
-            res = evaluate_pipeline(
-                z_queries_val, query_sentences_val, query_labels_val,
-                z_ref_bank_val, ref_sentences_val, ref_labels_val,
-                verifier, tokenizer, student,
-                mode_name=mode_name,
-                k_fixed=3,
-                adaptive=True,
-                verify_threshold=thresh,
-                tau_verify=best_params[0],
-                tau_margin=best_params[1],
-                general_sentences=general_sentences,
-                z_general=z_general
-            )
-            ucb = wilson_upper_bound(res["false_accept_cnt"], res["queries_cnt"], cl=0.95)
-            target_limit = max(risk_limit, 0.0216)
-            if ucb <= target_limit:
-                if res["correct_acc"] >= best_acc:
-                    best_acc = res["correct_acc"]
-                    best_thresh = thresh
-                    
-        calibrated_thresholds[mode_name] = best_thresh
-        print(f"  Mode: {mode_name:12s} | Target Risk: {risk_limit*100:.2f}% | Selected Threshold: {best_thresh:.4f} | Validation Acc: {best_acc*100:.2f}%")
-
-    # --- Part 4: Locked final evaluation on untouched Test Split ---
-    print("\n" + "="*80)
-    print("  PART 4: LOCKED EVALUATION (ON UNTOUCHED TEST SPLIT - FACTS 85-100)")
-    print("="*80)
-    
-    # Test split reference bank and queries
-    z_ref_bank_test = z_train[85*3 : 100*3].to(DEVICE) # 15 facts * 3 references = 45 vectors
-    ref_labels_test = tr_y_all[85*3 : 100*3]
-    ref_sentences_test = tr_s_all[85*3 : 100*3]
-    
-    z_queries_test = z_test[85*4 : 100*4].to(DEVICE)
-    query_labels_test = te_y_all[85*4 : 100*4]
-    query_sentences_test = te_s_all[85*4 : 100*4]
-    
-    # 7. Evaluate pairwise verifier metrics on untouched Test Split
-    with torch.no_grad():
-        test_pos_q = torch.stack([p[0] for p in test_pos])
-        test_pos_k = torch.stack([p[1] for p in test_pos])
-        test_pos_jac = torch.tensor([p[3] for p in test_pos], dtype=torch.float32, device=DEVICE)
-        test_pos_ov = torch.tensor([p[4] for p in test_pos], dtype=torch.float32, device=DEVICE)
-        pred_test_pos = verifier(test_pos_q, test_pos_k, test_pos_jac, test_pos_ov).cpu().numpy()
-        
-        test_sem_q = torch.stack([n[0] for n in test_sem])
-        test_sem_k = torch.stack([n[1] for n in test_sem])
-        test_sem_jac = torch.tensor([n[3] for n in test_sem], dtype=torch.float32, device=DEVICE)
-        test_sem_ov = torch.tensor([n[4] for n in test_sem], dtype=torch.float32, device=DEVICE)
-        pred_test_sem = verifier(test_sem_q, test_sem_k, test_sem_jac, test_sem_ov).cpu().numpy()
-        
-        test_gen_q = torch.stack([n[0] for n in test_gen])
-        test_gen_k = torch.stack([n[1] for n in test_gen])
-        test_gen_jac = torch.tensor([n[3] for n in test_gen], dtype=torch.float32, device=DEVICE)
-        test_gen_ov = torch.tensor([n[4] for n in test_gen], dtype=torch.float32, device=DEVICE)
-        pred_test_gen = verifier(test_gen_q, test_gen_k, test_gen_jac, test_gen_ov).cpu().numpy()
-        
-    actual_tpr = (pred_test_pos >= calibrated_thresholds["Balanced"]).mean()
-    actual_fnr = (pred_test_pos < calibrated_thresholds["Balanced"]).mean()
-    actual_sem_fpr = (pred_test_sem >= calibrated_thresholds["Balanced"]).mean()
-    actual_gen_fpr = (pred_test_gen >= calibrated_thresholds["Balanced"]).mean()
-    
-    tp_cnt = (pred_test_pos >= calibrated_thresholds["Balanced"]).sum()
-    fn_cnt = (pred_test_pos < calibrated_thresholds["Balanced"]).sum()
-    pos_den = len(test_pos)
-    
-    fp_sem_cnt = (pred_test_sem >= calibrated_thresholds["Balanced"]).sum()
-    tn_sem_cnt = (pred_test_sem < calibrated_thresholds["Balanced"]).sum()
-    sem_den = len(test_sem)
-    
-    fp_gen_cnt = (pred_test_gen >= calibrated_thresholds["Balanced"]).sum()
-    tn_gen_cnt = (pred_test_gen < calibrated_thresholds["Balanced"]).sum()
-    gen_den = len(test_gen)
-    
-    sem_fpr_ucb = wilson_upper_bound(fp_sem_cnt, sem_den, cl=0.95)
-    gen_fpr_ucb = wilson_upper_bound(fp_gen_cnt, gen_den, cl=0.95)
-    
-    # Run pipeline locked evaluations for three modes
-    locked_results = {}
-    for mode_name, thresh in calibrated_thresholds.items():
-        res = evaluate_pipeline(
-            z_queries_test, query_sentences_test, query_labels_test,
-            z_ref_bank_test, ref_sentences_test, ref_labels_test,
-            verifier, tokenizer, student,
-            mode_name=mode_name,
-            k_fixed=3,
-            adaptive=True,
-            verify_threshold=thresh,
-            tau_verify=best_params[0],
-            tau_margin=best_params[1],
-            general_sentences=general_sentences,
-            z_general=z_general,
-            perturb_typos=False
-        )
-        locked_results[mode_name] = res
-
-    # Run adversarial typo-perturbed queries locked evaluation (Balanced mode)
-    typo_results = evaluate_pipeline(
-        z_queries_test, query_sentences_test, query_labels_test,
-        z_ref_bank_test, ref_sentences_test, ref_labels_test,
-        verifier, tokenizer, student,
-        mode_name="Balanced (Typos)",
-        k_fixed=3,
-        adaptive=True,
-        verify_threshold=calibrated_thresholds["Balanced"],
-        tau_verify=best_params[0],
-        tau_margin=best_params[1],
-        general_sentences=general_sentences,
-        z_general=z_general,
-        perturb_typos=True
+    # 6. Build Validation split Query set (including ID, OOD, and Typos)
+    print("\n[Calibration] Generating Validation evaluation query set...")
+    val_queries = build_eval_query_set(
+        all_facts, z_test, te_s_all,
+        general_sentences, z_general,
+        val_fact_ids, train_fact_ids | test_fact_ids,
+        seed=42
     )
     
-    # Calculate Latency stats on Test evaluations for final report profiling
-    latency_records_test = []
-    for idx in range(len(z_queries_test)):
-        q_str = query_sentences_test[idx]
-        q_label = query_labels_test[idx]
-        
-        t_start = time.perf_counter()
-        
-        t0 = time.perf_counter()
+    z_ref_bank_val = []
+    ref_sentences_val = []
+    ref_labels_val = []
+    for f_idx, fact in enumerate(all_facts):
+        if fact["id"] in val_fact_ids:
+            z_ref_bank_val.append(z_train[f_idx*3 : (f_idx+1)*3])
+            ref_sentences_val.extend(tr_s_all[f_idx*3 : (f_idx+1)*3])
+            ref_labels_val.extend([f_idx] * 3)
+    z_ref_bank_val = torch.cat(z_ref_bank_val, dim=0).to(DEVICE)
+    
+    # Precompute scores and sims for all validation queries to optimize grid search
+    print("[Calibration] Precomputing validation pipeline matrices (grid optimization)...")
+    cached_val_queries = []
+    for q in val_queries:
+        q_str = q["q_str"]
         enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
-        t_tok = time.perf_counter() - t0
-        
-        t0 = time.perf_counter()
         ids_t = torch.tensor([enc_ids], device=DEVICE)
         mask_t = torch.ones_like(ids_t)
         with torch.no_grad():
             q_s = student(ids_t, mask_t)[0]
-        t_stu = time.perf_counter() - t0
+            
+        sims = torch.matmul(z_ref_bank_val, q_s.unsqueeze(0).T).squeeze(-1)
+        top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
         
-        t0 = time.perf_counter()
-        sims = torch.matmul(z_ref_bank_test, q_s.unsqueeze(0).T).squeeze(-1)
-        top_3_indices = torch.topk(sims, k=3).indices.cpu().numpy()
-        t_ret_1 = time.perf_counter() - t0
-        
-        t_ver_start = time.perf_counter()
-        candidates_3 = []
-        for cand_idx in top_3_indices:
-            k_vec = z_ref_bank_test[cand_idx]
-            k_str = ref_sentences_test[cand_idx]
+        cand_data = []
+        for rank, cand_idx in enumerate(top_10_indices):
+            k_vec = z_ref_bank_val[cand_idx]
+            k_str = ref_sentences_val[cand_idx]
             jac, ov = get_entity_overlap(q_str, k_str)
             with torch.no_grad():
                 score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
                                  torch.tensor([jac], device=DEVICE), 
                                  torch.tensor([ov], device=DEVICE)).item()
-            candidates_3.append((score, ref_labels_test[cand_idx], cand_idx))
-            
-        candidates_3.sort(reverse=True, key=lambda x: x[0])
-        top_score = candidates_3[0][0]
-        sec_score = candidates_3[1][0] if len(candidates_3) > 1 else 0.0
-        margin = top_score - sec_score
+            cand_data.append({
+                "cand_idx": cand_idx,
+                "score": score,
+                "sim": sims[cand_idx].item(),
+                "label": ref_labels_val[cand_idx]
+            })
+        cached_val_queries.append({
+            "q": q,
+            "cand_data": cand_data
+        })
         
-        trigger_expansion = (top_score < best_params[0]) or (margin < best_params[1])
-        if trigger_expansion:
-            t0_exp = time.perf_counter()
-            top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
-            t_ret_2 = time.perf_counter() - t0_exp
-            t_ret = t_ret_1 + t_ret_2
-            
-            accepted_candidates = []
-            for score, label, cand_idx in candidates_3:
-                if score >= calibrated_thresholds["Balanced"]:
-                    accepted_candidates.append((score, label))
-            for cand_idx in top_10_indices:
-                if cand_idx in top_3_indices:
-                    continue
-                k_vec = z_ref_bank_test[cand_idx]
-                k_str = ref_sentences_test[cand_idx]
-                jac, ov = get_entity_overlap(q_str, k_str)
-                with torch.no_grad():
-                    score = verifier(q_s.unsqueeze(0), k_vec.unsqueeze(0), 
-                                     torch.tensor([jac], device=DEVICE), 
-                                     torch.tensor([ov], device=DEVICE)).item()
-                if score >= calibrated_thresholds["Balanced"]:
-                    accepted_candidates.append((score, ref_labels_test[cand_idx]))
-        else:
-            t_ret = t_ret_1
-            accepted_candidates = []
-            for score, label, _ in candidates_3:
-                if score >= calibrated_thresholds["Balanced"]:
-                    accepted_candidates.append((score, label))
-        t_ver = time.perf_counter() - t_ver_start
-        
-        t0 = time.perf_counter()
-        if len(accepted_candidates) > 0:
-            accepted_candidates.sort(reverse=True, key=lambda x: x[0])
-        t_dec = time.perf_counter() - t0
-        
-        t_total = time.perf_counter() - t_start
-        latency_records_test.append((t_tok, t_stu, t_ret, t_ver, t_dec, t_total))
-        
-    lat_toks_t, lat_stus_t, lat_rets_t, lat_vers_t, lat_decs_t, lat_totals_t = zip(*latency_records_test)
+    # Run the grid search optimizer over policies
+    print("[Calibration] Running grid search optimizer (588 configurations)...")
     
-    torch.save(verifier.state_dict(), "production_relation_verifier.pt")
+    accept_thresholds = [0.80, 0.85, 0.90, 0.93, 0.95, 0.97, 0.99]
+    verify_expansion_thresholds = [0.85, 0.90, 0.95]
+    margin_thresholds = [0.02, 0.05, 0.10]
+    retrieval_thresholds = [0.50, 0.60, 0.70]
+    strong_margins = [0.02, 0.05, 0.10]
+    
+    configs = []
+    
+    # Fixed k=3
+    for t in accept_thresholds:
+        configs.append({
+            "name": "Fixed-k=3", "k_initial": 3, "k_expanded": 3, "accept_threshold": t,
+            "verify_expansion_threshold": 0.0, "margin_threshold": 0.0, "retrieval_threshold": 0.0,
+            "strong_margin": 0.0, "adaptive": False
+        })
+    # Fixed k=5
+    for t in accept_thresholds:
+        configs.append({
+            "name": "Fixed-k=5", "k_initial": 5, "k_expanded": 5, "accept_threshold": t,
+            "verify_expansion_threshold": 0.0, "margin_threshold": 0.0, "retrieval_threshold": 0.0,
+            "strong_margin": 0.0, "adaptive": False
+        })
+    # Fixed k=10
+    for t in accept_thresholds:
+        configs.append({
+            "name": "Fixed-k=10", "k_initial": 10, "k_expanded": 10, "accept_threshold": t,
+            "verify_expansion_threshold": 0.0, "margin_threshold": 0.0, "retrieval_threshold": 0.0,
+            "strong_margin": 0.0, "adaptive": False
+        })
+    # Adaptive 3 -> 10
+    for t in accept_thresholds:
+        for ve in verify_expansion_thresholds:
+            for mt in margin_thresholds:
+                for rt in retrieval_thresholds:
+                    for sm in strong_margins:
+                        configs.append({
+                            "name": "Adaptive-3->10", "k_initial": 3, "k_expanded": 10, "accept_threshold": t,
+                            "verify_expansion_threshold": ve, "margin_threshold": mt, "retrieval_threshold": rt,
+                            "strong_margin": sm, "adaptive": True
+                        })
+                        
+    evaluated_configs = []
+    for c in configs:
+        results = []
+        for cq in cached_val_queries:
+            dec, dec_label, evals, expand, top_exp = simulate_pipeline(
+                cq,
+                c["k_initial"], c["k_expanded"],
+                c["accept_threshold"], c["verify_expansion_threshold"],
+                c["margin_threshold"], c["retrieval_threshold"],
+                c["strong_margin"], c["adaptive"]
+            )
+            
+            q = cq["q"]
+            is_ood = q["is_ood"]
+            target_label = q["target_label"]
+            
+            is_error = False
+            outcome = ""
+            if is_ood:
+                if dec == "accept":
+                    is_error = True
+                    outcome = "incorrect_accept"
+                else:
+                    outcome = "correct_reject"
+            else:
+                if dec == "accept":
+                    if dec_label == target_label:
+                        outcome = "correct_accept"
+                    else:
+                        is_error = True
+                        outcome = "incorrect_accept"
+                else:
+                    if target_label in top_exp:
+                        outcome = "verifier_abstain"
+                    else:
+                        outcome = "retriever_miss"
+                        
+            results.append({
+                "cluster_id": q["cluster_id"],
+                "is_error": is_error,
+                "outcome": outcome,
+                "is_ood": is_ood
+            })
+            
+        total_queries = len(results)
+        total_errors = sum(1 for r in results if r["is_error"])
+        fr_rate = total_errors / total_queries
+        
+        ucb_cp = one_sided_binomial_ucb(total_errors, total_queries, alpha=0.05)
+        ucb_bs = cluster_bootstrap_ucb(results, n_reps=100, cl=0.95)
+        
+        id_results = [r for r in results if not r["is_ood"]]
+        total_id = len(id_results)
+        correct_acc = sum(1 for r in id_results if r["outcome"] == "correct_accept") / total_id if total_id > 0 else 0.0
+        abstain_present = sum(1 for r in id_results if r["outcome"] == "verifier_abstain") / total_id if total_id > 0 else 0.0
+        abstain_absent = sum(1 for r in id_results if r["outcome"] == "retriever_miss") / total_id if total_id > 0 else 0.0
+        
+        evaluated_configs.append({
+            "config": c,
+            "correct_acc": correct_acc,
+            "false_accept_rate": fr_rate,
+            "ucb_cp": ucb_cp,
+            "ucb_bs": ucb_bs,
+            "abstain_present": abstain_present,
+            "abstain_absent": abstain_absent,
+            "evals": c["k_initial"] if not c["adaptive"] else np.mean([simulate_pipeline(cq, c["k_initial"], c["k_expanded"], c["accept_threshold"], c["verify_expansion_threshold"], c["margin_threshold"], c["retrieval_threshold"], c["strong_margin"], c["adaptive"])[2] for cq in cached_val_queries])
+        })
+        
+    # Solve constrained optimization
+    selected_policies = {}
+    print("\n" + "="*80)
+    print("  VAL CALIBRATION COMPLETED")
+    print("="*80)
+    for tier_name, eps in [("Safety-First", 0.005), ("Balanced", 0.02), ("Recall-First", 0.05)]:
+        valid = [ec for ec in evaluated_configs if ec["ucb_cp"] <= eps]
+        if len(valid) == 0:
+            selected_policies[tier_name] = "No validation policy could statistically certify this tier."
+            print(f"  Tier: {tier_name:12s} (Target <={eps*100:.1f}%) | Status: {selected_policies[tier_name]}")
+        else:
+            # Deterministic tie-breakers
+            valid.sort(key=lambda x: (
+                -x["correct_acc"],
+                x["ucb_cp"],
+                x["abstain_present"] + x["abstain_absent"],
+                x["evals"]
+            ))
+            selected_policies[tier_name] = valid[0]
+            cfg = valid[0]["config"]
+            print(f"  Tier: {tier_name:12s} (Target <={eps*100:.1f}%) | Locked: {cfg['name']} (Thresh: {cfg['accept_threshold']:.4f}) | CorrectAcc: {valid[0]['correct_acc']*100:.2f}% | FalseRoute: {valid[0]['false_accept_rate']*100:.2f}% (UCB95_CP: {valid[0]['ucb_cp']*100:.2f}%) | Evals: {valid[0]['evals']:.2f}")
+
+    # Compute Delta Correct Acceptance for the Balanced mode
+    # Comparison of adaptive Balanced policy against best fixed-k correct acceptance on validation
+    best_fixed_ca = 0.0
+    for ec in evaluated_configs:
+        if not ec["config"]["adaptive"] and ec["ucb_cp"] <= 0.02:
+            best_fixed_ca = max(best_fixed_ca, ec["correct_acc"])
+            
+    bal_policy = selected_policies["Balanced"]
+    if not isinstance(bal_policy, str):
+        delta_ca = bal_policy["correct_acc"] - best_fixed_ca
+        print(f"\n[Comparison] Delta CorrectAcceptance (Adaptive vs. Best Fixed-k) on Validation: {delta_ca*100:+.2f}%")
+        
+    # Serialize primary locked policy
+    primary_policy = selected_policies["Balanced"] if not isinstance(selected_policies["Balanced"], str) else selected_policies["Recall-First"]
+    if isinstance(primary_policy, str):
+        # absolute fallback
+        policy_dict = {
+            "primaryPolicy": "fallback", "initialK": 3, "expandedK": 3, "acceptThreshold": 0.95,
+            "verifyExpansionThreshold": 0.0, "marginThreshold": 0.0, "retrievalThreshold": 0.0,
+            "strongMargin": 0.0, "riskEpsilon": 0.02
+        }
+    else:
+        cfg = primary_policy["config"]
+        policy_dict = {
+            "primaryPolicy": "Balanced" if not isinstance(selected_policies["Balanced"], str) else "Recall-First",
+            "initialK": cfg["k_initial"],
+            "expandedK": cfg["k_expanded"],
+            "acceptThreshold": cfg["accept_threshold"],
+            "verifyExpansionThreshold": cfg["verify_expansion_threshold"],
+            "marginThreshold": cfg["margin_threshold"],
+            "retrievalThreshold": cfg["retrieval_threshold"],
+            "strongMargin": cfg["strong_margin"],
+            "riskEpsilon": 0.02 if not isinstance(selected_policies["Balanced"], str) else 0.05
+        }
+        
+    with open("locked_policy.json", "w") as f:
+        json.dump(policy_dict, f, indent=2)
+        
+    with open("locked_policy.json", "rb") as f:
+        policy_hash = hashlib.md5(f.read()).hexdigest()
+    print(f"[Locked Policy] Serialized primary policy saved to locked_policy.json with MD5 hash: {policy_hash}")
+    
+    # 7. Locked final evaluation on untouched Test Split (Facts 85-100)
+    print("\n" + "="*80)
+    print("  PART 4: LOCKED TEST SET EVALUATION (ONCE-THROUGH ON TEST SPLIT)")
+    print("="*80)
+    
+    eval_queries_test = build_eval_query_set(
+        all_facts, z_test, te_s_all,
+        general_sentences, z_general,
+        test_fact_ids, train_fact_ids | val_fact_ids,
+        seed=12345
+    )
+    
+    z_ref_bank_test = []
+    ref_sentences_test = []
+    ref_labels_test = []
+    for f_idx, fact in enumerate(all_facts):
+        if fact["id"] in test_fact_ids:
+            z_ref_bank_test.append(z_train[f_idx*3 : (f_idx+1)*3])
+            ref_sentences_test.extend(tr_s_all[f_idx*3 : (f_idx+1)*3])
+            ref_labels_test.extend([f_idx] * 3)
+    z_ref_bank_test = torch.cat(z_ref_bank_test, dim=0).to(DEVICE)
+    
+    # Run complete evaluation using the locked policy
+    test_results, latency_records_test, test_evals, test_expanded = run_test_evaluation(
+        eval_queries_test, z_ref_bank_test, ref_sentences_test, ref_labels_test,
+        verifier, student, tokenizer, policy_dict
+    )
+    
+    # Compile metrics
+    # Strata definitions
+    clean_id_res = [r for r in test_results if not r["is_ood"] and not r["is_typo"]]
+    typo_id_res = [r for r in test_results if not r["is_ood"] and r["is_typo"]]
+    clean_ood_res = [r for r in test_results if r["is_ood"] and not r["is_typo"]]
+    typo_ood_res = [r for r in test_results if r["is_ood"] and r["is_typo"]]
+    
+    # Clean ID metrics
+    tot_clean_id = len(clean_id_res)
+    correct_acc_clean = sum(1 for r in clean_id_res if r["outcome"] == "correct_accept") / tot_clean_id if tot_clean_id > 0 else 0.0
+    false_acc_clean = sum(1 for r in clean_id_res if r["outcome"] == "incorrect_accept") / tot_clean_id if tot_clean_id > 0 else 0.0
+    abstain_pres_clean = sum(1 for r in clean_id_res if r["outcome"] == "verifier_abstain") / tot_clean_id if tot_clean_id > 0 else 0.0
+    abstain_abs_clean = sum(1 for r in clean_id_res if r["outcome"] == "retriever_miss") / tot_clean_id if tot_clean_id > 0 else 0.0
+    
+    # Typo ID metrics
+    tot_typo_id = len(typo_id_res)
+    correct_acc_typo = sum(1 for r in typo_id_res if r["outcome"] == "correct_accept") / tot_typo_id if tot_typo_id > 0 else 0.0
+    false_acc_typo = sum(1 for r in typo_id_res if r["outcome"] == "incorrect_accept") / tot_typo_id if tot_typo_id > 0 else 0.0
+    abstain_pres_typo = sum(1 for r in typo_id_res if r["outcome"] == "verifier_abstain") / tot_typo_id if tot_typo_id > 0 else 0.0
+    abstain_abs_typo = sum(1 for r in typo_id_res if r["outcome"] == "retriever_miss") / tot_typo_id if tot_typo_id > 0 else 0.0
+    
+    # OOD Clean metrics
+    tot_clean_ood = len(clean_ood_res)
+    correct_reject_clean = sum(1 for r in clean_ood_res if r["outcome"] == "correct_reject") / tot_clean_ood if tot_clean_ood > 0 else 0.0
+    false_accept_clean_ood = sum(1 for r in clean_ood_res if r["outcome"] == "incorrect_accept") / tot_clean_ood if tot_clean_ood > 0 else 0.0
+    
+    # OOD Typo metrics
+    tot_typo_ood = len(typo_ood_res)
+    correct_reject_typo = sum(1 for r in typo_ood_res if r["outcome"] == "correct_reject") / tot_typo_ood if tot_typo_ood > 0 else 0.0
+    false_accept_typo_ood = sum(1 for r in typo_ood_res if r["outcome"] == "incorrect_accept") / tot_typo_ood if tot_typo_ood > 0 else 0.0
+    
+    # Clean vs Typo Accuracy Degradation
+    acc_degradation = correct_acc_clean - correct_acc_typo
+    
+    # Total error count and UCB95 on the whole Test split
+    total_test_queries = len(test_results)
+    total_test_errors = sum(1 for r in test_results if r["is_error"])
+    test_false_routing_rate = total_test_errors / total_test_queries
+    test_ucb_cp = one_sided_binomial_ucb(total_test_errors, total_test_queries, alpha=0.05)
+    test_ucb_bs = cluster_bootstrap_ucb(test_results, n_reps=100, cl=0.95)
+    
+    # Latency parsing
+    lat_toks_t, lat_stus_t, lat_rets_t, lat_vers_t, lat_decs_t, lat_totals_t = zip(*latency_records_test)
     
     # Print Audited and Calibrated Verification Report
     print("\n" + "="*80)
     print("  FINAL PRODUCTION GATE SPECIFICITY REPORT (FACT-DISJOINT)")
     print("="*80)
-    print(f"  - Actual Test TPR (Recall)                    : {actual_tpr*100:.2f}% ({tp_cnt}/{pos_den})")
-    print(f"  - Actual Test FNR                             : {actual_fnr*100:.2f}% ({fn_cnt}/{pos_den})")
-    print(f"  - General Controls FPR                        : {actual_gen_fpr*100:.2f}% ({fp_gen_cnt}/{gen_den})")
-    print(f"  - Semantic Hard-Negatives FPR                 : {actual_sem_fpr*100:.2f}% ({fp_sem_cnt}/{sem_den})")
-    print(f"  - Semantic Hard-Negatives 95% One-sided UCB   : {sem_fpr_ucb*100:.2f}%")
-    print(f"  - General Controls 95% One-sided UCB          : {gen_fpr_ucb*100:.2f}%")
+    print(f"  - Primary Policy Locked File Name           : locked_policy.json")
+    print(f"  - Primary Policy MD5 Hash                   : {policy_hash}")
+    print(f"  - Target False Routing UCB95 Bound          : <= {policy_dict['riskEpsilon']*100:.1f}%")
+    print(f"  - Observed False Routing Rate (Test Set)    : {test_false_routing_rate*100:.2f}% ({total_test_errors}/{total_test_queries})")
+    print(f"  - One-sided Clopper-Pearson UCB95           : {test_ucb_cp*100:.2f}%")
+    print(f"  - Fact-Cluster Bootstrap UCB95              : {test_ucb_bs*100:.2f}%")
     
-    if actual_sem_fpr <= 0.05:
-        if sem_fpr_ucb <= 0.05:
-            status = "PASSED (Statistically Robust)"
-        else:
-            status = "PROVISIONALLY PASSED (FPR meets target, but statistical noninferiority is not yet established)"
+    if test_ucb_cp <= policy_dict['riskEpsilon']:
+        status = "PASSED (Statistically Certified)"
     else:
         status = "FAILED"
-    print(f"  - Specificity Gate Status                     : {status}")
-    print(f"  * Note: The FPR criterion passed by point estimate, but recall under distribution shift declined to {actual_tpr*100:.2f}%.")
+    print(f"  - Specificity Gate Status                   : {status}")
     
+    print("\n" + "-"*80)
+    print("  LOCKED POLICY QUERY-LEVEL OUTCOME PARTITIONS (CLEAN STRATA)")
     print("-"*80)
-    print("  Diagnostic ROC Operating Curves (Monotonic direct Test evaluation):")
-    print(f"    - FPR at 90% TPR Threshold (Semantic/General) : {fpr_sem_90_diag*100:.2f}% / {fpr_gen_90_diag*100:.2f}% (Thresh: {tpr_90_diag_thresh:.4f})")
-    print(f"    - FPR at 95% TPR Threshold (Semantic/General) : {fpr_sem_95_diag*100:.2f}% / {fpr_gen_95_diag*100:.2f}% (Thresh: {tpr_95_diag_thresh:.4f})")
-    print(f"    - FPR at 99% TPR Threshold (Semantic/General) : {fpr_sem_99_diag*100:.2f}% / {fpr_gen_99_diag*100:.2f}% (Thresh: {tpr_99_diag_thresh:.4f})")
+    print("  ID Clean Queries (60 queries):")
+    print(f"    - Correct Accept                          : {correct_acc_clean*100:.2f}%")
+    print(f"    - Incorrect Accept (False Route)          : {false_acc_clean*100:.2f}%")
+    print(f"    - Verifier Abstain                        : {abstain_pres_clean*100:.2f}%")
+    print(f"    - Retriever Miss                          : {abstain_abs_clean*100:.2f}%")
+    print("  OOD Clean Queries (440 queries):")
+    print(f"    - Correct Reject                          : {correct_reject_clean*100:.2f}%")
+    print(f"    - Incorrect Accept (False Route)          : {false_accept_clean_ood*100:.2f}%")
     
+    print("\n" + "-"*80)
+    print("  LOCKED POLICY QUERY-LEVEL OUTCOME PARTITIONS (TYPO STRATA)")
     print("-"*80)
-    print("  Verifier Classification Confusion Matrix (Balanced Mode):")
-    print("                 Predicted Positive | Predicted Negative | Total")
-    print(f"    True Positives      : {tp_cnt:17d} | {fn_cnt:18d} | {pos_den}")
-    print(f"    True Negatives (Sem): {fp_sem_cnt:17d} | {tn_sem_cnt:18d} | {sem_den}")
-    print(f"    True Negatives (Gen): {fp_gen_cnt:17d} | {tn_gen_cnt:18d} | {gen_den}")
-    print(f"    - Expected Calibration Error (ECE)            : {ece_val:.4f}")
-    print(f"    - Brier Score                                 : {brier_score:.4f}")
-    print(f"    - Selective Accuracy (at >= 0.80 Confidence)  : {selective_acc_80*100:.2f}% (Coverage: {coverage_80*100:.1f}%)")
+    print("  ID Typo Queries (60 queries - Typo-valid positives):")
+    print(f"    - Correct Accept (Typo Recall)            : {correct_acc_typo*100:.2f}%")
+    print(f"    - Incorrect Accept (False Route)          : {false_acc_typo*100:.2f}%")
+    print(f"    - Verifier Abstain                        : {abstain_pres_typo*100:.2f}%")
+    print(f"    - Retriever Miss                          : {abstain_abs_typo*100:.2f}%")
+    print("  OOD Typo Queries (440 queries - Typo hard negatives):")
+    print(f"    - Correct Reject                          : {correct_reject_typo*100:.2f}%")
+    print(f"    - Incorrect Accept (False Route)          : {false_accept_typo_ood*100:.2f}%")
+    print(f"  - Clean-versus-Typo Accuracy Degradation    : {acc_degradation*100:.2f}%")
     
+    print("\n" + "-"*80)
+    print("  LOCKED POLICY RUNTIME COMPUTATION & LATENCY PROFILING")
     print("-"*80)
-    print("  Risk-Tiered End-to-End Pipeline Comparison Table:")
-    print("  Metric / Operating Mode       | Recall-First | Balanced     | Safety-First")
-    print(f"  Validation Threshold Target   | 99% TPR      | 95% TPR      | 90% TPR")
-    print(f"  Test Score Threshold          | {tpr_99_val_thresh:12.4f} | {tpr_95_val_thresh:12.4f} | {tpr_90_val_thresh:12.4f}")
-    print(f"  Top-k (k=3) Retrieval Recall  | {pipeline_results['Recall-First']['top_k_recall']*100:11.2f}% | {pipeline_results['Balanced']['top_k_recall']*100:11.2f}% | {pipeline_results['Safety-First']['top_k_recall']*100:11.2f}%")
-    print(f"  Pipeline Correct Acceptance   | {pipeline_results['Recall-First']['correct_acc']*100:11.2f}% | {pipeline_results['Balanced']['correct_acc']*100:11.2f}% | {pipeline_results['Safety-First']['correct_acc']*100:11.2f}%")
-    print(f"  Safe Abstention (Target In)   | {pipeline_results['Recall-First']['abstain_present']*100:11.2f}% | {pipeline_results['Balanced']['abstain_present']*100:11.2f}% | {pipeline_results['Safety-First']['abstain_present']*100:11.2f}%")
-    print(f"  Safe Abstention (Target Out)  | {pipeline_results['Recall-First']['abstain_absent']*100:11.2f}% | {pipeline_results['Balanced']['abstain_absent']*100:11.2f}% | {pipeline_results['Safety-First']['abstain_absent']*100:11.2f}%")
-    print(f"  Pipeline False Acceptance     | {pipeline_results['Recall-First']['false_accept']*100:11.2f}% | {pipeline_results['Balanced']['false_accept']*100:11.2f}% | {pipeline_results['Safety-First']['false_accept']*100:11.2f}%")
-    print(f"  OOD Controls Correct Reject   | {pipeline_results['Recall-First']['ctrl_rejection']*100:11.2f}% | {pipeline_results['Balanced']['ctrl_rejection']*100:11.2f}% | {pipeline_results['Safety-First']['ctrl_rejection']*100:11.2f}%")
-    print(f"  OOD Controls Leakage          | {pipeline_results['Recall-First']['ctrl_leakage']*100:11.2f}% | {pipeline_results['Balanced']['ctrl_leakage']*100:11.2f}% | {pipeline_results['Safety-First']['ctrl_leakage']*100:11.2f}%")
+    print(f"  - Average Verifier Evals per Query          : {np.mean([r['evals'] for r in test_results]):.2f}")
+    print(f"  - Adaptive Expansion Rate (k=3 -> k=10)     : {test_expanded/total_test_queries*100:.2f}%")
     
-    print("-"*80)
-    print("  Complete System Latency Profiling (Batch Size = 1):")
     print("  Latency Component       | Mean Latency | 95th Percentile | 99th Percentile")
-    print(f"  T_tokenize              | {latency_stats['tokenize'][0]*1000:11.4f}ms | {latency_stats['tokenize'][1]*1000:14.4f}ms | {latency_stats['tokenize'][2]*1000:14.4f}ms")
-    print(f"  T_student               | {latency_stats['student'][0]*1000:11.4f}ms | {latency_stats['student'][1]*1000:14.4f}ms | {latency_stats['student'][2]*1000:14.4f}ms")
-    print(f"  T_retrieve              | {latency_stats['retrieve'][0]*1000:11.4f}ms | {latency_stats['retrieve'][1]*1000:14.4f}ms | {latency_stats['retrieve'][2]*1000:14.4f}ms")
-    print(f"  T_verify (k=3)          | {latency_stats['verify'][0]*1000:11.4f}ms | {latency_stats['verify'][1]*1000:14.4f}ms | {latency_stats['verify'][2]*1000:14.4f}ms")
-    print(f"  T_decision              | {latency_stats['decision'][0]*1000:11.4f}ms | {latency_stats['decision'][1]*1000:14.4f}ms | {latency_stats['decision'][2]*1000:14.4f}ms")
-    print(f"  T_total (End-to-End)    | {latency_stats['total'][0]*1000:11.4f}ms | {latency_stats['total'][1]*1000:14.4f}ms | {latency_stats['total'][2]*1000:14.4f}ms")
+    print(f"  T_tokenize              | {np.mean(lat_toks_t)*1000:11.4f}ms | {np.percentile(lat_toks_t, 95)*1000:14.4f}ms | {np.percentile(lat_toks_t, 99)*1000:14.4f}ms")
+    print(f"  T_student               | {np.mean(lat_stus_t)*1000:11.4f}ms | {np.percentile(lat_stus_t, 95)*1000:14.4f}ms | {np.percentile(lat_stus_t, 99)*1000:14.4f}ms")
+    print(f"  T_retrieve              | {np.mean(lat_rets_t)*1000:11.4f}ms | {np.percentile(lat_rets_t, 95)*1000:14.4f}ms | {np.percentile(lat_rets_t, 99)*1000:14.4f}ms")
+    print(f"  T_verify (Adaptive k)   | {np.mean(lat_vers_t)*1000:11.4f}ms | {np.percentile(lat_vers_t, 95)*1000:14.4f}ms | {np.percentile(lat_vers_t, 99)*1000:14.4f}ms")
+    print(f"  T_decision              | {np.mean(lat_decs_t)*1000:11.4f}ms | {np.percentile(lat_decs_t, 95)*1000:14.4f}ms | {np.percentile(lat_decs_t, 99)*1000:14.4f}ms")
+    print(f"  T_total (End-to-End)    | {np.mean(lat_totals_t)*1000:11.4f}ms | {np.percentile(lat_totals_t, 95)*1000:14.4f}ms | {np.percentile(lat_totals_t, 99)*1000:14.4f}ms")
     
-    torch.save(verifier.state_dict(), "production_relation_verifier.pt")
-    
+    print("\n" + "-"*80)
+    print("  LOCKED POLICY MEMORY FOOTPRINT ACCOUNTING")
     print("-"*80)
-    print("  Total System Footprint Accounting:")
-    print("    - Student Encoder Module              : 28.40 MB")
-    print(f"    - Relation Verifier Module            : {os.path.getsize('production_relation_verifier.pt') / (1024*1024):.2f} MB")
-    print("    - Reference Index Cache (45 vectors)   : ~0.17 MB")
-    print("    - Causal Decoder & Tokenizer (SmolLM2): 724.00 MB")
-    print(f"    - Total Edge Routing Footprint         : {28.40 + os.path.getsize('production_relation_verifier.pt') / (1024*1024) + 0.17:.2f} MB")
+    print("  - Persistent Index Cache (45 vectors)       : 172.80 KB (0.17 MB)")
+    print("  - Student Encoder Module                    : 28.40 MB")
+    print(f"  - Relation Verifier Module                  : {os.path.getsize('production_relation_verifier.pt') / (1024*1024):.2f} MB")
+    print(f"  - Total Routing Memory Footprint            : {28.40 + os.path.getsize('production_relation_verifier.pt') / (1024*1024) + 0.17:.2f} MB")
+    print("  - Peak Temporary Index Memory Buffers:")
+    print("      * k = 3                                 : 11.53 KB")
+    print("      * k = 5                                 : 19.22 KB")
+    print("      * k = 10                                : 38.44 KB")
     print("="*80)
 
 if __name__ == "__main__":
