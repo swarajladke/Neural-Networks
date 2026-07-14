@@ -589,6 +589,132 @@ def get_git_commit():
         return "unknown_commit"
 
 # ---------------------------------------------------------------------------
+# Extra Certification Facts Generator
+# ---------------------------------------------------------------------------
+def get_extra_certification_facts():
+    def gen_unique(count, prefixes, suffixes):
+        out = []
+        for p in prefixes:
+            for s in suffixes:
+                out.append(f"{p}{s}")
+                if len(out) == count:
+                    return out
+        return out
+
+    loc_prefixes = ["Luma", "Aura", "Kael", "Vesp", "Sola", "Zeph", "Nebu", "Bore", "Aeth", "Chro"]
+    loc_suffixes = ["ria", "ntia", "len", "per", "ris", "phyra", "lia", "as", "hel", "nos"]
+    LOCATIONS = gen_unique(100, loc_prefixes, loc_suffixes)
+
+    cap_prefixes = ["Varek", "Velath", "Xenon", "Selen", "Pyros", "Kryos", "Nova", "Oros", "Zirco", "Helio"]
+    cap_suffixes = [" City", " Port", " Vale", " Spire", " Peak", " Cove", " Ridge", " Town", " Bay", " Dome"]
+    CAPITALS = gen_unique(100, cap_prefixes, cap_suffixes)
+
+    comp_prefixes = ["Xenol", "Therm", "Auran", "Helio", "Zirco", "Neptu", "Krypt", "Solit", "Pyrot", "Selen"]
+    comp_suffixes = ["-A", "-B", "-C", "-D", "-E", "-F", "-G", "-H", "-X", "-Z"]
+    COMPOUNDS = gen_unique(100, comp_prefixes, comp_suffixes)
+
+    planet_prefixes = ["Kepler", "Gliese", "Luyten", "Proxima", "Trappist", "Wasp", "Osiris", "K2", "TOI", "HD"]
+    planet_suffixes = ["-101b", "-202c", "-303d", "-404e", "-505f", "-606g", "-707h", "-808i", "-909j", "-1000k"]
+    PLANETS = gen_unique(100, planet_prefixes, planet_suffixes)
+
+    moon_prefixes = ["Aria", "Bello", "Ceres", "Deim", "Phob", "Tita", "Euro", "Calli", "Gany", "Io"]
+    moon_suffixes = ["-Alpha", "-Beta", "-Gamma", "-Delta", "-Epsilon", "-Zeta", "-Eta", "-Theta", "-Iota", "-Kappa"]
+    MOONS = gen_unique(100, moon_prefixes, moon_suffixes)
+
+    NUMBERS_STR = [
+        "forty two", "eighty five", "one hundred", "two hundred", 
+        "three hundred", "five hundred", "eight hundred", "nine hundred",
+        "seventy six", "sixty four", "fifty eight", "ninety one"
+    ]
+    PERIODS = ["forty seven", "eighty eight", "twelve days", "nineteen days", "thirty six", "six days", "fifteen days"]
+
+    extra_facts = []
+    
+    # 4 Geography (G35 to G38)
+    for i in range(34, 38):
+        loc = LOCATIONS[i]
+        cap = CAPITALS[i]
+        extra_facts.append({
+            "id": f"G{i+1:02d}",
+            "category": "geography",
+            "location": loc,
+            "capital": cap,
+            "statement": f"The official capital city of {loc} is {cap}.",
+            "qa": f"Q: What is the capital of {loc}? A: The official capital city of {loc} is {cap}.",
+            "cloze": f"The official capital city of {loc} is _____.",
+            "probe": f"The official capital city of {loc} is",
+            "answer": cap,
+            "keywords": [cap.split()[0]],
+            "train_paraphrases": [
+                f"Identify the capital city of {loc}.",
+                f"Which city serves as the capital of {loc}?",
+                f"The administrative capital of {loc} is located in"
+            ],
+            "eval_paraphrases": [
+                f"What is the official capital of the region of {loc}?",
+                f"Name the city that functions as {loc}'s capital.",
+                f"In the land of {loc}, the capital city is known as"
+            ]
+        })
+
+    # 3 Science (S34 to S36)
+    for i in range(33, 36):
+        comp = COMPOUNDS[i]
+        num = NUMBERS_STR[i % len(NUMBERS_STR)]
+        extra_facts.append({
+            "id": f"S{i+1:02d}",
+            "category": "science",
+            "compound": comp,
+            "temperature": num,
+            "statement": f"The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
+            "qa": f"Q: At what temperature does {comp} melt? A: The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
+            "cloze": f"The molecular compound {comp} liquefies at exactly _____ degrees Celsius.",
+            "probe": f"The molecular compound {comp} liquefies at exactly",
+            "answer": num,
+            "keywords": [num.split()[0]],
+            "train_paraphrases": [
+                f"Specify the melting temperature of {comp}.",
+                f"At how many degrees Celsius does {comp} melt?",
+                f"The compound {comp} changes to liquid state at"
+            ],
+            "eval_paraphrases": [
+                f"The molecular compound {comp} liquefies at exactly",
+                f"What temperature is required to melt the compound {comp}?",
+                f"Determine the melting point of the compound {comp} in degrees."
+            ]
+        })
+
+    # 3 Astronomy (A34 to A36)
+    for i in range(33, 36):
+        planet = PLANETS[i]
+        moon = MOONS[i]
+        period = PERIODS[i % len(PERIODS)]
+        extra_facts.append({
+            "id": f"A{i+1:02d}",
+            "category": "astronomy",
+            "planet": planet,
+            "moon": moon,
+            "period": period,
+            "statement": f"The planetary satellite {moon} orbits {planet} in exactly {period} days.",
+            "qa": f"Q: How long does it take for {moon} to orbit {planet}? A: The planetary satellite {moon} orbits {planet} in exactly {period} days.",
+            "cloze": f"The planetary satellite {moon} orbits {planet} in exactly _____ days.",
+            "probe": f"The planetary satellite {moon} orbits {planet} in exactly",
+            "answer": period,
+            "keywords": [period.split()[0]],
+            "train_paraphrases": [
+                f"What is the orbital period of the satellite {moon} around {planet}?",
+                f"How many days does it take {moon} to circle {planet}?",
+                f"The moon {moon} completes one full orbit of {planet} in"
+            ],
+            "eval_paraphrases": [
+                f"The planetary satellite {moon} orbits {planet} in exactly",
+                f"Give the time duration in days for the moon {moon} to circle {planet}.",
+                f"How long is one orbit of the satellite {moon} around {planet}?"
+            ]
+        })
+    return extra_facts
+
+# ---------------------------------------------------------------------------
 # Main Execution Pipeline
 # ---------------------------------------------------------------------------
 def main():
@@ -603,6 +729,10 @@ def main():
     with open(DATASET_PATH, "r") as f:
         blocks = json.load(f)
     all_facts = [fact for b in blocks for fact in b]
+    
+    # Load and append 10 new fact-disjoint certification facts
+    extra_facts = get_extra_certification_facts()
+    all_facts.extend(extra_facts)
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     
     # 1. Stratified metadata split manifest generation
@@ -611,15 +741,17 @@ def main():
         print(f"[Split] Loading existing split manifest from {MANIFEST_PATH}")
         with open(MANIFEST_PATH, "r") as f:
             manifest = json.load(f)
-        train_fact_ids = set(manifest["trainFactIds"])
-        policy_cal_ids = set(manifest["policyCalibrationFactIds"])
-        val_cert_ids = set(manifest["validationCertificationFactIds"])
-        test_fact_ids = set(manifest["testFactIds"])
-    else:
+        if len(manifest["validationCertificationFactIds"]) < 25:
+            print("[Split] Re-generating manifest to include 10 extra certification facts...")
+            if os.path.exists(MANIFEST_PATH):
+                os.remove(MANIFEST_PATH)
+                
+    if not os.path.exists(MANIFEST_PATH):
         print(f"[Split] Generating stratified fact split manifest...")
         from collections import defaultdict
         by_domain = defaultdict(list)
-        for fact in all_facts:
+        original_facts = [f for f in all_facts if int(f["id"][1:]) <= (34 if f["id"][0] == "G" else 33)]
+        for fact in original_facts:
             by_domain[fact["category"]].append(fact["id"])
             
         rng = random.Random(42)
@@ -641,6 +773,9 @@ def main():
             val_cert_ids_list.extend(ids[n_train + n_policy:n_train + n_policy + n_cert])
             test_fact_ids_list.extend(ids[n_train + n_policy + n_cert:])
             
+        extra_ids = [f["id"] for f in extra_facts]
+        val_cert_ids_list.extend(extra_ids)
+        
         manifest = {
             "seed": 42,
             "trainFactIds": train_fact_ids_list,
@@ -651,10 +786,12 @@ def main():
         with open(MANIFEST_PATH, "w") as f:
             json.dump(manifest, f, indent=2)
             
-        train_fact_ids = set(train_fact_ids_list)
-        policy_cal_ids = set(policy_cal_ids_list)
-        val_cert_ids = set(val_cert_ids_list)
-        test_fact_ids = set(test_fact_ids_list)
+    with open(MANIFEST_PATH, "r") as f:
+        manifest = json.load(f)
+    train_fact_ids = set(manifest["trainFactIds"])
+    policy_cal_ids = set(manifest["policyCalibrationFactIds"])
+    val_cert_ids = set(manifest["validationCertificationFactIds"])
+    test_fact_ids = set(manifest["testFactIds"])
         
     # Assert split constraints
     assert train_fact_ids.isdisjoint(policy_cal_ids)
@@ -663,7 +800,7 @@ def main():
     assert policy_cal_ids.isdisjoint(val_cert_ids)
     assert policy_cal_ids.isdisjoint(test_fact_ids)
     assert val_cert_ids.isdisjoint(test_fact_ids)
-    assert len(train_fact_ids | policy_cal_ids | val_cert_ids | test_fact_ids) == 100
+    assert len(train_fact_ids | policy_cal_ids | val_cert_ids | test_fact_ids) == 110
     
     print(f"[Split] Fact splits partitioned successfully via manifest:")
     print(f"  - Train Facts: {len(train_fact_ids)} | Policy Cal Facts: {len(policy_cal_ids)} | Val Cert Facts: {len(val_cert_ids)} | Test Facts: {len(test_fact_ids)}")
@@ -1082,6 +1219,28 @@ def main():
     with open("locked_policy.json", "w") as f:
         json.dump(policy_dict, f, indent=2)
         
+    # Save extra certification facts to disk to preserve them
+    with open("extra_certification_facts.json", "w") as f:
+        json.dump(extra_facts, f, indent=2)
+        
+    # Save typo datasets to disk to preserve them
+    typo_data = {
+        "typo_id_probes": [q["q_str"] for q in cert_queries if q["is_typo"] and not q["is_ood"]],
+        "typo_ood_probes": [q["q_str"] for q in cert_queries if q["is_typo"] and q["is_ood"]]
+    }
+    with open("typo_datasets.json", "w") as f:
+        json.dump(typo_data, f, indent=2)
+        
+    # Save package lock
+    import subprocess
+    try:
+        pkgs = subprocess.check_output(["pip", "freeze"]).decode("utf-8")
+        with open("package_lock.txt", "w") as f:
+            f.write(pkgs)
+    except Exception:
+        with open("package_lock.txt", "w") as f:
+            f.write("Failed to retrieve package lock")
+        
     policy_sha = sha256_file("locked_policy.json")
     manifest_sha = sha256_file(MANIFEST_PATH)
     verifier_sha = sha256_file("production_relation_verifier.pt")
@@ -1089,6 +1248,9 @@ def main():
     dataset_sha = sha256_file(DATASET_PATH)
     script_sha = sha256_file("run_production_pipeline_validation.py")
     commit_sha = get_git_commit()
+    extra_cert_sha = sha256_file("extra_certification_facts.json")
+    typo_sha = sha256_file("typo_datasets.json")
+    pkg_sha = sha256_file("package_lock.txt")
     
     print(f"\n[Lock] SHA-256 Hashed Artifact Locks:")
     print(f"  - Policy Configuration JSON : {policy_sha}")
@@ -1098,6 +1260,9 @@ def main():
     print(f"  - Scaling Dataset (JSON)    : {dataset_sha}")
     print(f"  - Evaluation Script (Py)    : {script_sha}")
     print(f"  - Repository Commit Hash    : {commit_sha}")
+    print(f"  - Extra Certification JSON  : {extra_cert_sha}")
+    print(f"  - Typo Probes Dataset JSON  : {typo_sha}")
+    print(f"  - Environment Package Lock  : {pkg_sha}")
 
     if not balanced_policy_certified:
         print("\n" + "="*80)
