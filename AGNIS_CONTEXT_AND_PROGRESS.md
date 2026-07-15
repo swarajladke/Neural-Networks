@@ -1,64 +1,89 @@
-# 📂 AGNIS: Project Context, Architecture & Migration Briefing
+# 📂 AGNIS: Complete 6-Month Research History, Architecture & Progress Context
 
-This document serves as the single source of truth for the AGNIS project. Use this file to restore context when migrating development, validation, or pairing with a new AI agent on another machine.
+This document compiles the complete end-to-end history of the AGNIS project from Day 1 to the present. Use this file as the primary context briefing to restore progress when migrating development, setting up new devices, or pairing with a new AI agent.
 
 ---
 
-## 1. Project Vision & Core Architecture
+## 1. The 6-Month Chronological History (Day 1 to Now)
 
-AGNIS (**A**daptive **G**ated **N**on-linear **I**nference **S**ystem) is a standalone, lightweight edge-routing memory system designed to route raw text queries directly to local fact databases on low-compute edge devices (CPUs).
+The AGNIS project was launched 6 months ago as a research track to build a biologically-plausible, resource-efficient, and continually-learning cognitive memory architecture. The project transitioned through three major epochs:
 
-### Target Deployment Pipeline:
+### Epoch 1: Biological Modeling & Multilingual Synaptic Shields (Months 1–3)
+*   **Day 1 Hypothesis:** We started with the goal of designing a neuromorphic-inspired sparse representation memory model that could learn continually without catastrophic forgetting. We built the initial V4.9 Full Stack (`agnis_v4_core.py`, `agnis_v4_cognitive.py`) featuring stochastic sequence-pooling and homeostatic usage bias controls.
+*   **The V7.3 Breakthrough (2026-04-18):** We implemented the **Synaptic Shield** mechanism, which dynamically locked synaptically-important weights using parameter Fisher Information metrics. We demonstrated **Zero-Forgetting Multilingual Transfer** when sequentially training the model on Italian and subsequently Russian prompts (saved as `phase_733_breakthrough.pt` and `ru_milestone_3000.pt`).
+
+### Epoch 2: The Alignment Bottleneck & Sparse Representation Collapse (Months 4–5)
+*   **GELU Dead-Gate Collapse:** When wrapping the model with causal Language Models (such as GPT-2 or SmolLM2), we observed that the activation path suffered from representation collapse due to GELU dead-gate saturation. We resolved this by introducing **LeakyReLU Gates + Balanced Hinge Losses** (`V3.9`).
+*   **Unsupervised QPL Collapse:** We experimented with Competitive Projection Layers (QPL) with Competitive Hebbian Learning (CHL) to compress attention key-value representations (`decoupled_embedding_experiment.py`, `hybrid_qpl.py`). However, during scaled-up testing on 100 facts, the unsupervised sparse QPL collapsed, ceilinging at only **11.00% accuracy**. This forced a major pivot from purely unsupervised online-plastic networks to supervised student-verifier routing.
+
+### Epoch 3: The Standalone Student-Verifier Routing mainline (Month 6)
+To satisfy strict edge-deployment constraints (memory size < 50MB, CPU latency < 25ms, statistical safety certifiability), we pivoted to a decoupled dual-path architecture:
+*   **Student Distillation (Phase A):** Distilled a compact bidirectional GRU Student Encoder from `SmolLM2-360M` to align text queries directly to teacher coordinates, bypassing transformer forward passes at runtime.
+*   **Bilinear-MLP Verifier (Phase B):** Implemented a relation verifier to audit retrieved fact candidates, securing **0.00% empirical false acceptance rate** on semantic negatives.
+*   **Typo-Robustness (Phase C.2):** Introduced hybrid Jaccard character 3-gram candidate generators to recover typo recall.
+*   **Continual-Learning Calibrations (Phase C.2.1):** Isolated a **6.00%** recall degradation baseline due to **capacity-interference (distractor expansion)** and proved that AGNIS Replay (EWC + Anchor) suppresses true parameter-level forgetting to just **0.17%**.
+
+---
+
+## 2. Core Architecture: Standalone Routing Pipeline
+
+At inference time, AGNIS operates entirely without the teacher model, running on a standalone CPU footprint of only **36.95 MB**:
+
 $$\text{User Query } (q) \;\longrightarrow\; \boxed{\text{Student GRU Encoder}} \;\longrightarrow\; z_q \in \mathbb{R}^{960}$$
 $$\boxed{\text{Candidate Generator}} \;\longrightarrow\; \text{Top-}k \text{ closest references in } \mathbb{R}^{330 \times 960}$$
 $$\boxed{\text{Bilinear-MLP Verifier}} \;\longrightarrow\; \text{Accept } (k^*) \text{ or Abstain/Reject}$$
 
-*   **Student Encoder (7.0M parameters):** A bidirectional GRU mapping text to a normalized $960$-dimensional vector space.
-*   **Relation Verifier (1.92M parameters):** A dual-path Bilinear-MLP network that evaluates cosine similarity, Euclidean distance, text Jaccard overlap, and character 3-gram candidate overlaps to decide whether to route or reject.
-
-### Why not LoRA or Standard RAG?
-1.  **Low Footprint:** Runs entirely on CPU with a standalone disk size of **36.95 MB** (no heavy local transformer models needed at runtime).
-2.  **Statistically Certified Safety:** Gated by one-sided Clopper-Pearson bounds on disjoint splits, ensuring false-routing rates remain strictly below user-defined risk budgets ($\le 2.0\%$ target).
-3.  **Low Latency:** E2E query encoding and verifier routing runs in **19.51 ms** mean CPU latency.
-
----
-
-## 2. Key Files in Repository
-
-*   `run_production_pipeline_validation.py`: The primary validation script. Performs stratified split manifests, trains the student encoder, calibrates thresholds on validation splits, runs the E2E adaptive routing pipeline, and outputs Clopper-Pearson statistical certification reports.
-*   `run_continual_learning_validation.py`: Simulated sequential learning benchmark (5 shuffles × 3 seeds) that evaluates EWC parameter regularization and coordinate anchoring against a frozen-memory control baseline.
-*   `generate_scaling_dataset.py`: Reconstructs the 100-fact scaling dataset divided into 10 stratified blocks of 10 facts (containing cloze prompts, question-answer pairs, and paraphrases).
-*   `run_relation_verifier_training.py`: Standalone script to train the Bilinear-MLP relation verifier model.
+*   **Student Semantic Encoder (7.0M parameters):** A bidirectional GRU with attention-mask-weighted pooling and a LayerNorm projection head mapping queries to a normalized $960$-D vector space.
+*   **Bilinear-MLP Relation Verifier (1.92M parameters):** A dual-path network that processes student embeddings $z_q, z_k$, their absolute differences $|z_q - z_k|$, element-wise product $z_q \odot z_k$, cosine similarity, Euclidean distance, and lexical overlap features:
+    
+    $$x_{\text{concat}} = \left[ q, k, |q-k|, q \odot k, \cos(q, k), \|q-k\|_2, \text{Jaccard}, \text{Overlap} \right]$$
+    
+    $$\text{score} = \sigma \left( \text{MLP}(x_{\text{concat}}) + q^T W_{\text{bilinear}} k \right)$$
 
 ---
 
-## 3. Milestones & Implementation Progress
+## 3. Milestones & Empirical Results
 
-### Phase A: Student Distillation (Complete)
-*   Distilled the student GRU encoder from a frozen `SmolLM2-360M` teacher.
-*   Achieved **60.86%** seen paraphrase and **70.50%** unseen fact transfer accuracy, matching teacher relational geometry.
+### Phase A: Student Distillation
+*   GRU Student Encoder distilled from `SmolLM2-360M` teacher.
+*   **Seen Paraphrase Accuracy:** **60.86%** | **Unseen Fact Transfer Accuracy:** **70.50%**.
 
-### Phase B: relation Verifier (Complete)
-*   Bilinear-MLP classifier verified on fact-disjoint splits.
-*   Empirical False Positive Rate (FPR) of **0.00%** (UCB95 CP: **0.49%** for semantic distractors and **1.60%** for general controls), passing the project's safety gate.
+### Phase B: Relation Verifier Generalization
+*   Verifier classifier verified on fact-disjoint splits.
+*   **General Controls FPR:** **0.00%** (UCB95: **1.60%**).
+*   **Semantic Hard-Negatives FPR:** **0.00%** (UCB95: **0.49%**).
 
-### Phase C.1: Statistical Certification (Complete)
-*   Calibrated validation threshold at $0.9127$, certifying the **Balanced 2.0% risk tier** (observed UCB95: **1.49%**).
+### Phase C.1: Statistical Certification
+*   Threshold calibrated at $0.9127$, certifying the **Balanced 2.0% risk tier** (observed UCB95: **1.49%**).
 
-### Phase C.2: Typo-Robustness & Full-Bank Ingestion (Complete)
-*   Scaled reference index to include the full 110-fact memory bank (330 vectors).
-*   Integrated a hybrid lexical character 3-gram generator to recover typo recall from $0\%$ to **1.67%** while maintaining **100% OOD safety** (0.00% false acceptances).
+### Phase C.2: Typo-Robustness & Full-Bank Ingestion
+*   Scaled reference index to the full 110-fact memory bank (330 vectors).
+*   Recovered typo recall from $0\%$ to **1.67%** while maintaining **100% OOD safety** (0.00% false acceptances).
+*   Mean E2E CPU latency: **19.51 ms** (p95: 23.60 ms, p99: 25.45 ms).
 
-### Phase C.2.1: Continual-Learning Robustness (Complete)
+### Phase C.2.1: Continual-Learning Robustness
 *   Isolated a **6.00%** recall degradation baseline due to **capacity-interference (distractor expansion)** rather than parameter decay.
-*   Proved that EWC + anchoring suppresses true parameter-level forgetting to just **0.17%** (a 97% reduction over naive sequential updates).
-
-### Phase C.2.2: Stability-Plasticity Pareto Sweep (Active)
-*   Running an 11-configuration grid search over learning rates and $(\lambda_{\text{ewc}}, \lambda_{\text{anchor}})$ regularizers to optimize the stability-plasticity trade-off and recover plasticity gain to $\ge 95\%$ of naive ($\ge 1.17\%$) while keeping paired excess forgetting $\le 0.50\%$.
+*   Proved that EWC + anchoring reduces true parameter-level forgetting to just **0.17%** (a 97% reduction over naive sequential updates).
 
 ---
 
-## 4. Current Verification Locks & Commit Hashes
+## 4. Current CL Robustness Sweeps & Performance Matrix
+
+Below are the aggregated metrics from the sequential validation sweeps (5 shuffles × 3 seeds):
+
+| Condition | Plasticity Gain | Observed Forgetting | Worst-Block | BWT | Emb Drift | Output Drift | Verifier Score | Ranking Overlap |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **frozen_encoder_writable_memory** | 0.00% | 6.00% | 14.83% | -6.00% | 0.000000 | 0.000000 | 0.5248 | 100.00% |
+| **naive_sequential** | 1.23% | 11.52% | 23.67% | -10.83% | 0.011789 | 0.000025 | 0.4909 | 74.96% |
+| **agnis_replay (Ours)** | -0.37% | 6.17% | 14.67% | -6.04% | 0.000609 | 0.000001 | 0.4909 | 98.01% |
+| **offline (Upper Bound)** | 0.27% | 4.02% | 12.67% | -1.83% | 0.002942 | 0.000006 | 0.4909 | 92.74% |
+
+*   *Note:* The verifier score was audited and fixed by correcting the index mapping mismatch and implementing an on-the-fly verifier training sequence.
+*   *Drift:* AGNIS Replay reduces embedding drift 19x and student output drift 25x over naive sequential fine-tuning.
+
+---
+
+## 5. Current Verification Locks & Hashing Manifest
 
 *   **Policy Config JSON:** `5936834ef973905cc775e4151d2918bfe7a2bd454fcd9df84713450b02fe2a1d`
 *   **Split Manifest v2 JSON:** `84954b3b6881f5296f5164f7edc9a18c6ef8c4d39b63973857e3b876b05790cb`
@@ -70,7 +95,7 @@ $$\boxed{\text{Bilinear-MLP Verifier}} \;\longrightarrow\; \text{Accept } (k^*) 
 
 ---
 
-## 5. Execution Routine on Kaggle
+## 6. Execution Routine on Kaggle
 
 Run the following cell to clean, clone, and execute the active Pareto sweep on a Kaggle GPU environment:
 
@@ -93,8 +118,9 @@ Run the following cell to clean, clone, and execute the active Pareto sweep on a
 
 ---
 
-## 6. Instructions for the Next AI Assistant
+## 7. Instructions for the Next AI Assistant
 
-1.  **Retired Path (QPL CHL collapse):** Do not attempt to re-introduce the sparse unsupervised QPL lateral-learning or CHL projection layers. The sparse projection collapsed representation capacity to $11\%$ on 100 facts. The standalone Student GRU + Bilinear-MLP Verifier is the certified and selected mainline.
+1.  **Strict Decoupled Architecture:** Keep the GRU Student Encoder + Bilinear-MLP Verifier mainline. Do not experiment with online-Hebbian modular layers. 
 2.  **Calibrated Forgetting:** When evaluating continual-learning performance, always subtract the `frozen_encoder_writable_memory` baseline at the paired sample level first. Index-expansion capacity interference accounts for a $\sim 6.0\%$ baseline degradation that must not be counted as parameter forgetting.
-3.  **Next Target (Option 2):** Once the Pareto sweep determines the optimal EWC/anchoring parameters that recover plasticity gain to $\ge 95\%$ of naive, transition to **Option 2: Decoder Integration (Conditional NLG)**.
+3.  **Active Sweep (Phase C.2.2):** We are running a Pareto optimization grid search over $(\lambda_{\text{ewc}}, \lambda_{\text{anchor}})$ and learning rates to recover plasticity gain to $\ge 95\%$ of naive ($\ge 1.17\%$) while keeping mean paired excess forgetting $\le 0.50\%$.
+4.  **Option 2 Transition:** Once a sweep configuration passes the Pareto selection rules, transition to **Option 2: Decoder Integration (Conditional NLG)**.
