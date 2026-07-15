@@ -907,7 +907,7 @@ def main():
     print(f"  - Train Pairs count: Pos: {len(train_pos)} | SemNeg: {len(train_sem)} | GenNeg: {len(train_gen)}")
     
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
-    optimizer = torch.optim.AdamW(verifier.parameters(), lr=1e-3, weight_decay=1e-3)
+    optimizer = torch.optim.AdamW(verifier.parameters(), lr=5e-4, weight_decay=1e-2)
     criterion = nn.BCELoss(reduction='none')
     
     train_q = torch.stack([p[0] for p in train_pos] + [n[0] for n in train_sem] + [n[0] for n in train_gen])
@@ -918,7 +918,7 @@ def main():
     
     print("[Training] Training relation verifier MLP on train split...")
     N = len(train_y)
-    for epoch in range(60):
+    for epoch in range(120):
         verifier.train()
         indices = list(range(N))
         random.shuffle(indices)
@@ -1173,9 +1173,9 @@ def main():
                 verifier, student, tokenizer, cert_policy_dict
             )
             
-            _, _, val_ucb_cp, val_ucb_bs, val_ucb_policy = get_stratum_ucb(results_cert, "valid", cl=0.95)
-            _, _, sem_ucb_cp, sem_ucb_bs, sem_ucb_policy = get_stratum_ucb(results_cert, "semantic", cl=0.95)
-            _, _, gen_ucb_cp, gen_ucb_bs, gen_ucb_policy = get_stratum_ucb(results_cert, "general", cl=0.95)
+            n_err_val, n_tot_val, val_ucb_cp, val_ucb_bs, val_ucb_policy = get_stratum_ucb(results_cert, "valid", cl=0.95)
+            n_err_sem, n_tot_sem, sem_ucb_cp, sem_ucb_bs, sem_ucb_policy = get_stratum_ucb(results_cert, "semantic", cl=0.95)
+            n_err_gen, n_tot_gen, gen_ucb_cp, gen_ucb_bs, gen_ucb_policy = get_stratum_ucb(results_cert, "general", cl=0.95)
             max_policy_ucb = max(val_ucb_policy, sem_ucb_policy, gen_ucb_policy)
             
             if max_policy_ucb <= eps:
@@ -1184,6 +1184,10 @@ def main():
             else:
                 certified_policies[tier_name] = f"No validation policy could statistically certify this tier (Max UCB: {max_policy_ucb*100:.2f}% > {eps*100:.1f}%)"
                 print(f"  Tier: {tier_name:12s} (Target <={eps*100:.1f}%) | Certification Status: {certified_policies[tier_name]}")
+                print(f"    [Diagnostics] Stratum details for {tier_name}:")
+                print(f"      * Valid queries stratum: Errors: {n_err_val}/{n_tot_val} | UCB95: {val_ucb_policy*100:.2f}% (CP: {val_ucb_cp*100:.2f}%, BS: {val_ucb_bs*100:.2f}%)")
+                print(f"      * Semantic OOD stratum : Errors: {n_err_sem}/{n_tot_sem} | UCB95: {sem_ucb_policy*100:.2f}% (CP: {sem_ucb_cp*100:.2f}%, BS: {sem_ucb_bs*100:.2f}%)")
+                print(f"      * General OOD stratum  : Errors: {n_err_gen}/{n_tot_gen} | UCB95: {gen_ucb_policy*100:.2f}% (CP: {gen_ucb_cp*100:.2f}%, BS: {gen_ucb_bs*100:.2f}%)")
 
     best_fixed_ca = 0.0
     for ec in evaluated_configs:
