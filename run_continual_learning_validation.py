@@ -340,7 +340,7 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                 
                 # Set up optimizer for this block's updates
                 if condition == "agnis_replay":
-                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-2)
+                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-4)
                 else:
                     inc_optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
 
@@ -646,19 +646,17 @@ def main():
         cache_data = torch.load(CACHE_100_PATH, weights_only=True)
     
     sweep_configs = [
-        # Regularization ablation (lr = 3e-4)
-        ("agnis_replay_ewc0.00_anc0.00", 3e-4, 0.0, 0.0),
-        ("agnis_replay_ewc0.00_anc0.02", 3e-4, 0.0, 0.02),
-        ("agnis_replay_ewc0.02_anc0.00", 3e-4, 0.02, 0.0),
-        ("agnis_replay_ewc0.01_anc0.01", 3e-4, 0.01, 0.01),
-        ("agnis_replay_ewc0.02_anc0.02", 3e-4, 0.02, 0.02),
-        ("agnis_replay_ewc0.05_anc0.02", 3e-4, 0.05, 0.02),
-        ("agnis_replay_ewc0.02_anc0.05", 3e-4, 0.02, 0.05),
-        ("agnis_replay_ewc0.05_anc0.05", 3e-4, 0.05, 0.05),
-        ("agnis_replay_ewc0.10_anc0.10", 3e-4, 0.10, 0.10),
-        # LR Scaling sweeps on (0.02, 0.02)
-        ("agnis_replay_lr1.5e-4_ewc0.02", 1.5e-4, 0.02, 0.02),
-        ("agnis_replay_lr6e-4_ewc0.02", 6e-4, 0.02, 0.02)
+        # Regularization ablation at standard lr = 1e-3
+        ("agnis_replay_ewc0.00_anc0.00", 1e-3, 0.0, 0.0),
+        ("agnis_replay_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
+        ("agnis_replay_ewc0.05_anc0.02", 1e-3, 0.05, 0.02),
+        ("agnis_replay_ewc0.05_anc0.05", 1e-3, 0.05, 0.05),
+        ("agnis_replay_ewc0.10_anc0.10", 1e-3, 0.10, 0.10),
+        ("agnis_replay_ewc0.20_anc0.20", 1e-3, 0.20, 0.20),
+        ("agnis_replay_ewc0.50_anc0.50", 1e-3, 0.50, 0.50),
+        # LR Scaling sweeps on (0.05, 0.05)
+        ("agnis_replay_lr5e-4_ewc0.05", 5e-4, 0.05, 0.05),
+        ("agnis_replay_lr2e-3_ewc0.05", 2e-3, 0.05, 0.05)
     ]
     conditions = ["frozen_encoder_writable_memory", "naive_sequential"]
     for name, _, _, _ in sweep_configs:
