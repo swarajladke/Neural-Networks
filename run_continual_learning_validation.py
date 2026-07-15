@@ -735,8 +735,8 @@ def main():
         s = all_summary[name]
         
         # Calculate paired excess forgetting at the run/seed/block level
-        res_cond = all_runs_results[name]
-        res_frozen = all_runs_results["frozen_encoder_writable_memory"]
+        res_cond = [r for r in all_runs_results[name] if "forgetting_per_block" in r]
+        res_frozen = [r for r in all_runs_results["frozen_encoder_writable_memory"] if "forgetting_per_block" in r]
         
         excess_mean_runs = []
         excess_worst_runs = []
