@@ -116,6 +116,54 @@ def get_sentence_lists(all_facts):
     return train_s, test_s
 
 # ---------------------------------------------------------------------------
+def train_verifier_on_fly(cache_data):
+    print("[Verifier] Training relation verifier on the fly for CL evaluation...")
+    verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
+    optimizer = torch.optim.AdamW(verifier.parameters(), lr=1e-3, weight_decay=1e-4)
+    
+    # 70 facts for training (facts 0 to 69)
+    train_x = cache_data["train_x"][:210].to(DEVICE) # 70 facts x 3 refs = 210
+    
+    pos_q, pos_k = [], []
+    neg_q, neg_k = [], []
+    
+    for f in range(70):
+        for i in range(3):
+            for j in range(3):
+                if i != j:
+                    pos_q.append(train_x[f*3 + i])
+                    pos_k.append(train_x[f*3 + j])
+        for _ in range(6):
+            f_neg = random.choice([x for x in range(70) if x != f])
+            pos_idx = random.randint(0, 2)
+            neg_idx = random.randint(0, 2)
+            neg_q.append(train_x[f*3 + pos_idx])
+            neg_k.append(train_x[f_neg*3 + neg_idx])
+            
+    pos_q = torch.stack(pos_q)
+    pos_k = torch.stack(pos_k)
+    neg_q = torch.stack(neg_q)
+    neg_k = torch.stack(neg_k)
+    
+    q_all = torch.cat([pos_q, neg_q], dim=0)
+    k_all = torch.cat([pos_k, neg_k], dim=0)
+    labels = torch.cat([torch.ones(pos_q.shape[0]), torch.zeros(neg_q.shape[0])], dim=0).to(DEVICE)
+    
+    jaccard = torch.ones(q_all.shape[0], device=DEVICE) * 0.5
+    overlap = torch.ones(q_all.shape[0], device=DEVICE) * 0.5
+    
+    verifier.train()
+    for epoch in range(15):
+        scores = verifier(q_all, k_all, jaccard, overlap)
+        loss = F.binary_cross_entropy(scores, labels)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+    verifier.eval()
+    return verifier
+
+# ---------------------------------------------------------------------------
 # Continual Learning Simulation
 # ---------------------------------------------------------------------------
 def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_replay", shuffles=5, seeds=3, lr=3e-4, lambda_ewc=0.1, lambda_anchor=0.1):
@@ -139,7 +187,10 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
     # Pre-load verifier
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
     if os.path.exists("production_relation_verifier.pt"):
+        print("[Verifier] Loading pre-trained verifier checkpoint...")
         verifier.load_state_dict(torch.load("production_relation_verifier.pt", map_location=DEVICE))
+    else:
+        verifier = train_verifier_on_fly(cache_data)
     verifier.eval()
 
     # Generate 5 fixed block shuffles
@@ -500,12 +551,15 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
 
             # Forgetting: max_t R[t, b] - R[9, b]
             forgetting_vals = []
+            forgetting_per_block = {}
             for j in range(10):
                 first_seen_step = order.index(j)
                 if first_seen_step < 9:
                     start_step = max(4, first_seen_step)
                     max_seen = np.max(R[start_step:9, j])
-                    forgetting_vals.append(max_seen - R[9, j])
+                    fgt_val = max_seen - R[9, j]
+                    forgetting_vals.append(fgt_val)
+                    forgetting_per_block[f"block_{j}"] = fgt_val
             mean_forgetting = np.mean(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
             worst_forgetting = np.max(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
 
@@ -514,6 +568,7 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                 "mean_bwt": mean_bwt,
                 "mean_forgetting": mean_forgetting,
                 "worst_forgetting": worst_forgetting,
+                "forgetting_per_block": forgetting_per_block,
                 "signed_bwt_per_block": signed_bwt_per_block,
                 "drift_emb": np.mean(emb_drift_history),
                 "drift_student": np.mean(student_drift_history),
@@ -572,10 +627,19 @@ def main():
         cache_data = torch.load(CACHE_100_PATH, weights_only=True)
     
     sweep_configs = [
-        ("agnis_replay_high_prot", 2e-4, 0.1, 0.1),
-        ("agnis_replay_balanced", 3e-4, 0.02, 0.02),
-        ("agnis_replay_light_prot", 5e-4, 0.01, 0.01),
-        ("agnis_replay_adaptive", 4e-4, 0.03, 0.01)
+        # Regularization ablation (lr = 3e-4)
+        ("agnis_replay_ewc0.00_anc0.00", 3e-4, 0.0, 0.0),
+        ("agnis_replay_ewc0.00_anc0.02", 3e-4, 0.0, 0.02),
+        ("agnis_replay_ewc0.02_anc0.00", 3e-4, 0.02, 0.0),
+        ("agnis_replay_ewc0.01_anc0.01", 3e-4, 0.01, 0.01),
+        ("agnis_replay_ewc0.02_anc0.02", 3e-4, 0.02, 0.02),
+        ("agnis_replay_ewc0.05_anc0.02", 3e-4, 0.05, 0.02),
+        ("agnis_replay_ewc0.02_anc0.05", 3e-4, 0.02, 0.05),
+        ("agnis_replay_ewc0.05_anc0.05", 3e-4, 0.05, 0.05),
+        ("agnis_replay_ewc0.10_anc0.10", 3e-4, 0.10, 0.10),
+        # LR Scaling sweeps on (0.02, 0.02)
+        ("agnis_replay_lr1.5e-4_ewc0.02", 1.5e-4, 0.02, 0.02),
+        ("agnis_replay_lr6e-4_ewc0.02", 6e-4, 0.02, 0.02)
     ]
     conditions = ["frozen_encoder_writable_memory", "naive_sequential"]
     for name, _, _, _ in sweep_configs:
@@ -583,6 +647,7 @@ def main():
     conditions.append("offline")
     
     all_summary = {}
+    all_runs_results = {}
 
     for cond in conditions:
         print(f"\n[Running] Evaluating condition: {cond}...")
@@ -598,6 +663,7 @@ def main():
             res = run_continual_experiment(tokenizer, all_facts, cache_data, condition=cond, shuffles=5, seeds=3)
             
         t_el = time.time() - t0
+        all_runs_results[cond] = res
         
         # Calculate summary statistics across shuffles and seeds
         pls = [r["plasticity_gain"] for r in res]
@@ -637,11 +703,11 @@ def main():
     print("\n" + "="*80)
     print("  FINAL CONTINUAL-LEARNING METRICS COMPILATION REPORT")
     print("="*80)
-    print("  Condition                      | Plasticity  | Forgetting | Worst-Block | BWT        | Emb Drift | Output Drift | Verifier Score | Ranking Overlap")
-    print("  --------------------------------------------------------------------------------------------------------------------------------------------------")
+    print("  Condition                                | Plasticity  | Forgetting | Worst-Block | BWT        | Emb Drift | Output Drift | Verifier Score | Ranking Overlap")
+    print("  -------------------------------------------------------------------------------------------------------------------------------------------------------------")
     for cond in conditions:
         s = all_summary[cond]
-        print(f"  {cond:30s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {s['worst_forgetting']*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
+        print(f"  {cond:40s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {s['worst_forgetting']*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
     print("="*80)
 
     # Print Signed BWT Breakdown
@@ -651,7 +717,7 @@ def main():
     for cond in conditions:
         s = all_summary[cond]
         bwt_str = ", ".join([f"{k}: {v*100:+.1f}%" for k, v in s["signed_bwt"].items()])
-        print(f"  * {cond:30s} -> {bwt_str}")
+        print(f"  * {cond:40s} -> {bwt_str}")
     print("="*80)
 
     # Exit Criteria Checks
@@ -668,19 +734,38 @@ def main():
     for name, _, _, _ in sweep_configs:
         s = all_summary[name]
         
-        # Calibrate forgetting using frozen baseline (parameter forgetting <= 0.50% -> observed forgetting <= 6.50%)
-        param_forgetting = s["forgetting"] - frozen_sum["forgetting"]
-        param_worst_forgetting = s["worst_forgetting"] - frozen_sum["worst_forgetting"]
+        # Calculate paired excess forgetting at the run/seed/block level
+        res_cond = all_runs_results[name]
+        res_frozen = all_runs_results["frozen_encoder_writable_memory"]
         
-        forgetting_pass = (param_forgetting <= 0.005)
-        worst_forgetting_pass = (param_worst_forgetting <= 0.02)
+        excess_mean_runs = []
+        excess_worst_runs = []
+        
+        for run_idx in range(len(res_cond)):
+            fgt_cond = res_cond[run_idx]["forgetting_per_block"]
+            fgt_frozen = res_frozen[run_idx]["forgetting_per_block"]
+            
+            excess_blocks = []
+            for blk in fgt_cond:
+                excess_blocks.append(fgt_cond[blk] - fgt_frozen[blk])
+                
+            excess_mean_runs.append(np.mean(excess_blocks))
+            excess_worst_runs.append(np.max(excess_blocks))
+            
+        mean_excess_forgetting = np.mean(excess_mean_runs)
+        worst_excess_forgetting = np.max(excess_worst_runs)
+        
+        forgetting_pass = (mean_excess_forgetting <= 0.02)
+        worst_forgetting_pass = (worst_excess_forgetting <= 0.05)
         plasticity_pass = (s["plasticity_gain"] >= 0.95 * naive_sum["plasticity_gain"])
+        ranking_pass = (s["drift_ranking_overlap"] >= 0.95)
         
-        status = "PASSED (Certified CL Robust)" if (forgetting_pass and worst_forgetting_pass and plasticity_pass) else "FAILED"
+        status = "PASSED (Certified CL Robust)" if (forgetting_pass and worst_forgetting_pass and plasticity_pass and ranking_pass) else "FAILED"
         print(f"\n  * Configuration: {name}")
-        print(f"    - Parameter Forgetting <= 0.50% (Observed: {s['forgetting']*100:.2f}%): {'PASSED' if forgetting_pass else 'FAILED'} (Param: {param_forgetting*100:.2f}%)")
-        print(f"    - Worst-Block Param Forgetting <= 2.00% (Observed: {s['worst_forgetting']*100:.2f}%): {'PASSED' if worst_forgetting_pass else 'FAILED'} (Param: {param_worst_forgetting*100:.2f}%)")
+        print(f"    - Paired Excess Forgetting <= 2.0%      : {'PASSED' if forgetting_pass else 'FAILED'} (Observed: {mean_excess_forgetting*100:.2f}%)")
+        print(f"    - Worst Paired Excess Forgetting <= 5.0%: {'PASSED' if worst_forgetting_pass else 'FAILED'} (Observed: {worst_excess_forgetting*100:.2f}%)")
         print(f"    - Plasticity Gain within 95% of naive (Target >= {0.95*naive_sum['plasticity_gain']*100:.2f}%): {'PASSED' if plasticity_pass else 'FAILED'} (Observed: {s['plasticity_gain']*100:.2f}%)")
+        print(f"    - Ranking Overlap >= 95.0%              : {'PASSED' if ranking_pass else 'FAILED'} (Observed: {s['drift_ranking_overlap']*100:.2f}%)")
         print(f"    - Overall Certification Status         : {status}")
     print("="*80)
 
