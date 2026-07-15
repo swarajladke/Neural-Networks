@@ -365,7 +365,11 @@ def main():
     
     # Load dataset
     if not os.path.exists(DATASET_PATH):
-        raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}")
+        print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
+        os.system("python generate_scaling_dataset.py")
+        if not os.path.exists(DATASET_PATH):
+            raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}")
+            
     with open(DATASET_PATH, "r") as f:
         all_facts = json.load(f)
     print(f"[Data] Loaded {len(all_facts)} facts from dataset.")
@@ -375,8 +379,19 @@ def main():
     
     # Load cache
     if not os.path.exists(CACHE_100_PATH):
-        raise FileNotFoundError(f"Embeddings cache not found at {CACHE_100_PATH}")
-    cache_data = torch.load(CACHE_100_PATH, weights_only=True)
+        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")
+        blocks = [all_facts[i*10 : (i+1)*10] for i in range(10)]
+        from transformers import AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        try:
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+            model.to(DEVICE)
+            model.eval()
+        except Exception as e:
+            raise RuntimeError("FAIL-CLOSED: Failed to load SmolLM2 model to generate embeddings cache") from e
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        cache_data = torch.load(CACHE_100_PATH, weights_only=True)
     
     conditions = ["frozen", "naive_sequential", "agnis_replay", "offline"]
     all_summary = {}
