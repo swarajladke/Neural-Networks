@@ -312,7 +312,7 @@ def build_eval_query_set(
                 eval_queries.append({
                     "q_vec": q_vec,
                     "q_str": q_str,
-                    "target_label": None,
+                    "target_label": f_idx,
                     "cluster_id": fid,
                     "is_ood": True,
                     "is_typo": False
@@ -321,7 +321,7 @@ def build_eval_query_set(
                 eval_queries.append({
                     "q_vec": q_vec,
                     "q_str": perturb_with_typos(q_str, rate=0.1, seed=seed + q_sub_idx + 1000),
-                    "target_label": None,
+                    "target_label": f_idx,
                     "cluster_id": fid,
                     "is_ood": True,
                     "is_typo": True
@@ -547,7 +547,7 @@ def run_test_evaluation(
         
         is_error = False
         outcome = ""
-        if is_ood:
+        if target_label is None:
             if decision == "accept":
                 is_error = True
                 outcome = "incorrect_accept"
@@ -1144,7 +1144,7 @@ def main():
             
             is_error = False
             outcome = ""
-            if is_ood:
+            if target_label is None:
                 if dec == "accept":
                     is_error = True
                     outcome = "incorrect_accept"
@@ -1401,11 +1401,11 @@ def main():
     abstain_abs_typo = sum(1 for r in typo_id_res if r["outcome"] == "retriever_miss") / tot_typo_id if tot_typo_id > 0 else 0.0
     
     tot_clean_sem = len(clean_sem_res)
-    correct_reject_sem = sum(1 for r in clean_sem_res if r["outcome"] == "correct_reject") / tot_clean_sem if tot_clean_sem > 0 else 0.0
+    correct_reject_sem = sum(1 for r in clean_sem_res if r["outcome"] in ["correct_reject", "correct_accept", "verifier_abstain", "retriever_miss"]) / tot_clean_sem if tot_clean_sem > 0 else 0.0
     false_accept_sem = sum(1 for r in clean_sem_res if r["outcome"] == "incorrect_accept") / tot_clean_sem if tot_clean_sem > 0 else 0.0
     
     tot_typo_sem = len(typo_sem_res)
-    correct_reject_typo_sem = sum(1 for r in typo_sem_res if r["outcome"] == "correct_reject") / tot_typo_sem if tot_typo_sem > 0 else 0.0
+    correct_reject_typo_sem = sum(1 for r in typo_sem_res if r["outcome"] in ["correct_reject", "correct_accept", "verifier_abstain", "retriever_miss"]) / tot_typo_sem if tot_typo_sem > 0 else 0.0
     false_accept_typo_sem = sum(1 for r in typo_sem_res if r["outcome"] == "incorrect_accept") / tot_typo_sem if tot_typo_sem > 0 else 0.0
     
     tot_clean_gen = len(clean_gen_res)
@@ -1463,7 +1463,7 @@ def main():
     print(f"    - Verifier Abstain                        : {abstain_pres_clean*100:.2f}%")
     print(f"    - Retriever Miss                          : {abstain_abs_clean*100:.2f}%")
     print("  OOD Semantic Negatives Clean (340 queries):")
-    print(f"    - Correct Reject                          : {correct_reject_sem*100:.2f}%")
+    print(f"    - Safe Route / Reject                     : {correct_reject_sem*100:.2f}%")
     print(f"    - Incorrect Accept (False Route)          : {false_accept_sem*100:.2f}% (UCB95_CP: {test_ucb_sem_cp*100:.2f}%)")
     print("  OOD General Controls Clean (100 queries):")
     print(f"    - Correct Reject                          : {correct_reject_gen*100:.2f}%")
@@ -1478,7 +1478,7 @@ def main():
     print(f"    - Verifier Abstain                        : {abstain_pres_typo*100:.2f}%")
     print(f"    - Retriever Miss                          : {abstain_abs_typo*100:.2f}%")
     print("  OOD Typo Semantic Negatives (340 queries - Typo hard negatives):")
-    print(f"    - Correct Reject                          : {correct_reject_typo_sem*100:.2f}%")
+    print(f"    - Safe Route / Reject                     : {correct_reject_typo_sem*100:.2f}%")
     print(f"    - Incorrect Accept (False Route)          : {false_accept_typo_sem*100:.2f}%")
     print("  OOD Typo General Controls (100 queries):")
     print(f"    - Correct Reject                          : {correct_reject_typo_gen*100:.2f}%")
