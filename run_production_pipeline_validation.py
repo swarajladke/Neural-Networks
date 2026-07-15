@@ -1547,7 +1547,7 @@ def main():
     print("  Leave-One-Fact-Out (LOFO) Sensitivity (Overall Test Error Rate):")
     for fid in sorted(test_fact_totals.keys()):
         lofo_results = [r for r in test_results if r["cluster_id"] != fid]
-        lofo_err = sum(1 for r in lof_results if r["is_error"]) / len(lofo_results) if len(lofo_results) > 0 else 0.0
+        lofo_err = sum(1 for r in lofo_results if r["is_error"]) / len(lofo_results) if len(lofo_results) > 0 else 0.0
         print(f"    * LOFO {fid} excluded                      : {lofo_err*100:.4f}%")
     print("="*80)
 
