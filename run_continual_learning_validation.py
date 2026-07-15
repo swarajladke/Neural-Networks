@@ -371,8 +371,9 @@ def main():
             raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}")
             
     with open(DATASET_PATH, "r") as f:
-        all_facts = json.load(f)
-    print(f"[Data] Loaded {len(all_facts)} facts from dataset.")
+        blocks = json.load(f)
+    all_facts = [fact for b in blocks for fact in b]
+    print(f"[Data] Loaded {len(blocks)} blocks containing {len(all_facts)} total facts.")
     
     # Load tokenizers
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
@@ -380,7 +381,6 @@ def main():
     # Load cache
     if not os.path.exists(CACHE_100_PATH):
         print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")
-        blocks = [all_facts[i*10 : (i+1)*10] for i in range(10)]
         from transformers import AutoModelForCausalLM
         from run_student_continual_benchmarks import ensure_100_fact_embeddings
         try:
