@@ -156,27 +156,93 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
             torch.manual_seed(seed)
             np.random.seed(seed)
             random.seed(seed)
-            
             student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
             optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
-
-            # R[step, block] matrix to evaluate block j's recall at step t
+            
+            # 1. Base Pre-training Phase (jointly pre-train student on the first 5 blocks of the order)
+            # This represents initializing the student on a stable, converged base memory representation.
+            base_blocks = order[:5]
+            base_s = [s for b in base_blocks for s in block_train_s[b]]
+            base_x = torch.cat([block_train_x[b] for b in base_blocks], dim=0)
+            
+            student.train()
+            N_base = len(base_s)
+            for epoch in range(60):
+                indices = list(range(N_base))
+                random.shuffle(indices)
+                for idx in range(0, N_base, 32):
+                    b_idx = indices[idx : idx + 32]
+                    b_s = [base_s[k] for k in b_idx]
+                    ids, mask = batch_tokenize(tokenizer, b_s, device=DEVICE)
+                    z_s = student(ids, mask)
+                    z_t = base_x[b_idx]
+                    loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+            
+            # Save the pre-trained base parameters to regularize incremental updates
+            base_state = {k: v.clone() for k, v in student.state_dict().items()}
+            
+            # Record initial evaluations for the base blocks (step = 4)
+            student.eval()
             R = np.zeros((10, 10))
+            
+            # Evaluate base blocks after pre-training to establish baseline recall
+            with torch.no_grad():
+                for b in base_blocks:
+                    ref_s = block_train_s[b]
+                    ref_labels = list(range(b*10, (b+1)*10))
+                    test_s = block_test_s[b]
+                    test_labels = [idx for idx in ref_labels for _ in range(4)]
+                    
+                    z_refs = []
+                    for k in range(0, len(ref_s), 32):
+                        ids, mask = batch_tokenize(tokenizer, ref_s[k:k+32], device=DEVICE)
+                        z_refs.append(student(ids, mask))
+                    z_refs = torch.cat(z_refs, dim=0)
+                    
+                    z_queries = []
+                    for k in range(0, len(test_s), 32):
+                        ids, mask = batch_tokenize(tokenizer, test_s[k:k+32], device=DEVICE)
+                        z_queries.append(student(ids, mask))
+                    z_queries = torch.cat(z_queries, dim=0)
+                    
+                    recall_count = 0
+                    for q_idx, q_vec in enumerate(z_queries):
+                        sims = torch.matmul(z_refs, q_vec.unsqueeze(0).T).squeeze(-1)
+                        best_idx = torch.argmax(sims).item()
+                        pred_label = ref_labels[best_idx // 3]
+                        if pred_label == test_labels[q_idx]:
+                            recall_count += 1
+                    R[4, b] = recall_count / len(z_queries)
+                    
+            prev_embeddings = {}
+            for b in base_blocks:
+                with torch.no_grad():
+                    ref_s = block_train_s[b]
+                    z_refs = []
+                    for k in range(0, len(ref_s), 32):
+                        ids, mask = batch_tokenize(tokenizer, ref_s[k:k+32], device=DEVICE)
+                        z_refs.append(student(ids, mask))
+                    prev_embeddings[f"{shuffle_idx}_{seed}_{b}"] = torch.cat(z_refs, dim=0)
+
             drift_list = []
             far_list = []
             
-            # Keep track of previous embeddings to measure drift
-            prev_embeddings = {}
-
-            # Sequentially learn blocks in order
-            for step in range(10):
+            # 2. Incremental Learning Phase (sequential updates on blocks 5 to 9)
+            for step in range(5, 10):
                 curr_block = order[step]
                 
+                # Configure incremental optimizer
+                if condition == "agnis_replay":
+                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=2e-4, weight_decay=1e-2)
+                else:
+                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
+                
                 if condition == "frozen":
-                    # No updates at all
                     pass
                 elif condition == "naive_sequential":
-                    # Fine-tune only on current block prompts
                     student.train()
                     curr_s = block_train_s[curr_block]
                     curr_x = block_train_x[curr_block]
@@ -190,11 +256,10 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             z_s = student(ids, mask)
                             z_t = curr_x[b_idx]
                             loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
-                            optimizer.zero_grad()
+                            inc_optimizer.zero_grad()
                             loss.backward()
-                            optimizer.step()
+                            inc_optimizer.step()
                 elif condition == "agnis_replay":
-                    # Fine-tune on current block + replay all previously learned blocks
                     student.train()
                     replayed_blocks = order[:step + 1]
                     replay_s = []
@@ -214,30 +279,39 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             ids, mask = batch_tokenize(tokenizer, b_s, device=DEVICE)
                             z_s = student(ids, mask)
                             z_t = replay_x[b_idx]
-                            loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
-                            optimizer.zero_grad()
+                            
+                            # Distillation loss
+                            loss_distill = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+                            
+                            # L2 parameter regularization to protect base representation (EWC-style)
+                            loss_reg = 0.0
+                            for name, param in student.named_parameters():
+                                if param.requires_grad:
+                                    loss_reg += torch.sum((param - base_state[name]) ** 2)
+                                    
+                            loss = loss_distill + 0.2 * loss_reg
+                            
+                            inc_optimizer.zero_grad()
                             loss.backward()
-                            optimizer.step()
+                            inc_optimizer.step()
                 elif condition == "offline":
-                    # Joint offline training: train on all 10 blocks simultaneously at step 0
-                    if step == 0:
-                        student.train()
-                        all_tr_s = [s for b in range(10) for s in block_train_s[b]]
-                        all_tr_x = torch.cat([block_train_x[b] for b in range(10)], dim=0)
-                        N_total = len(all_tr_s)
-                        for epoch in range(15):
-                            indices = list(range(N_total))
-                            random.shuffle(indices)
-                            for idx in range(0, N_total, 32):
-                                b_idx = indices[idx : idx + 32]
-                                b_s = [all_tr_s[i] for i in b_idx]
-                                ids, mask = batch_tokenize(tokenizer, b_s, device=DEVICE)
-                                z_s = student(ids, mask)
-                                z_t = all_tr_x[b_idx]
-                                loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
-                                optimizer.zero_grad()
-                                loss.backward()
-                                optimizer.step()
+                    student.train()
+                    all_tr_s = [s for b in order[:step+1] for s in block_train_s[b]]
+                    all_tr_x = torch.cat([block_train_x[b] for b in order[:step+1]], dim=0)
+                    N_total = len(all_tr_s)
+                    for epoch in range(15):
+                        indices = list(range(N_total))
+                        random.shuffle(indices)
+                        for idx in range(0, N_total, 32):
+                            b_idx = indices[idx : idx + 32]
+                            b_s = [all_tr_s[i] for i in b_idx]
+                            ids, mask = batch_tokenize(tokenizer, b_s, device=DEVICE)
+                            z_s = student(ids, mask)
+                            z_t = all_tr_x[b_idx]
+                            loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+                            inc_optimizer.zero_grad()
+                            loss.backward()
+                            inc_optimizer.step()
 
                 student.eval()
                 
@@ -325,14 +399,15 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                 drift_list.append(np.mean(seen_drift) if len(seen_drift) > 0 else 0.0)
             
             # Compute step 9 metrics for this run
-            plasticity = np.mean([R[i, order[i]] for i in range(10)])
+            plasticity = np.mean([R[i, order[i]] for i in range(5, 10)])
             
             # Forgetting: R[max_t, j] - R[9, j]
             forgetting_vals = []
             for j in range(10):
                 first_seen_step = order.index(j)
                 if first_seen_step < 9:
-                    max_seen = np.max(R[first_seen_step:9, j])
+                    start_step = max(4, first_seen_step)
+                    max_seen = np.max(R[start_step:9, j])
                     forgetting_vals.append(max_seen - R[9, j])
             forgetting = np.mean(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
             worst_forgetting = np.max(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
@@ -341,7 +416,8 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
             for j in range(10):
                 first_seen_step = order.index(j)
                 if first_seen_step < 9:
-                    bwt_vals.append(R[9, j] - R[first_seen_step, j])
+                    start_step = max(4, first_seen_step)
+                    bwt_vals.append(R[9, j] - R[start_step, j])
             bwt = np.mean(bwt_vals) if len(bwt_vals) > 0 else 0.0
 
             results.append({
