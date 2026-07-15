@@ -438,10 +438,33 @@ def run_test_evaluation(
             q_s = student(ids_t, mask_t)[0]
         t_stu = time.perf_counter() - t0
         
-        # 3. Retrieve initial_k
+        # 3. Retrieve initial_k (Hybrid Semantic + Lexical)
         t0 = time.perf_counter()
         sims = torch.matmul(z_ref_bank_test, q_s.unsqueeze(0).T).squeeze(-1)
-        top_init_indices = torch.topk(sims, k=k_initial).indices.cpu().numpy()
+        sem_init = torch.topk(sims, k=k_initial).indices.cpu().numpy()
+        
+        # Lexical Jaccard 3-gram overlap
+        def get_3grams(s):
+            s = s.lower()
+            return set(s[i:i+3] for i in range(len(s)-2))
+        q_grams = get_3grams(q_str)
+        lex_scores = []
+        for idx, ref in enumerate(ref_sentences_test):
+            r_grams = get_3grams(ref)
+            intersection = len(q_grams & r_grams)
+            union = len(q_grams | r_grams)
+            jaccard = intersection / union if union > 0 else 0.0
+            lex_scores.append((jaccard, idx))
+        lex_scores.sort(reverse=True, key=lambda x: x[0])
+        lex_init = [item[1] for item in lex_scores[:k_initial]]
+        
+        # Merge unique initial indices
+        top_init_indices = []
+        seen = set()
+        for idx in list(sem_init) + lex_init:
+            if idx not in seen:
+                top_init_indices.append(idx)
+                seen.add(idx)
         t_ret_1 = time.perf_counter() - t0
         
         # 4. Verify initial_k
@@ -476,7 +499,14 @@ def run_test_evaluation(
         if expand:
             total_expanded += 1
             t0_exp = time.perf_counter()
-            top_exp_indices = torch.topk(sims, k=k_expanded).indices.cpu().numpy()
+            sem_exp = torch.topk(sims, k=k_expanded).indices.cpu().numpy()
+            lex_exp = [item[1] for item in lex_scores[:k_expanded]]
+            top_exp_indices = []
+            seen_exp = set()
+            for idx in list(sem_exp) + lex_exp:
+                if idx not in seen_exp:
+                    top_exp_indices.append(idx)
+                    seen_exp.add(idx)
             t_ret_2 = time.perf_counter() - t0_exp
             t_ret = t_ret_1 + t_ret_2
             
@@ -714,6 +744,37 @@ def get_extra_certification_facts():
         })
     return extra_facts
 
+def perturb_typo(text, seed=None):
+    if seed is not None:
+        random.seed(seed)
+    chars = list(text)
+    if len(chars) < 5:
+        return text
+    adj_map = {
+        'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'ersfxc', 'e': 'wsdr',
+        'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
+        'k': 'ijlm', 'l': 'okp', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
+        'p': 'ol', 'q': 'wa', 'r': 'edft', 's': 'wedxza', 't': 'rfgy',
+        'u': 'yhji', 'v': 'cfgb', 'w': 'qase', 'x': 'zsdc', 'y': 'tghu', 'z': 'asx'
+    }
+    typo_type = random.choice([0, 1, 2, 3])
+    pos = random.randint(0, len(chars) - 1)
+    
+    if typo_type == 0:
+        c = chars[pos].lower()
+        if c in adj_map:
+            chars[pos] = random.choice(adj_map[c])
+    elif typo_type == 1:
+        chars.pop(pos)
+    elif typo_type == 2:
+        c = chars[pos].lower()
+        if c in adj_map:
+            chars.insert(pos, random.choice(adj_map[c]))
+    elif typo_type == 3:
+        if pos < len(chars) - 1:
+            chars[pos], chars[pos+1] = chars[pos+1], chars[pos]
+    return "".join(chars)
+
 # ---------------------------------------------------------------------------
 # Main Execution Pipeline
 # ---------------------------------------------------------------------------
@@ -839,17 +900,28 @@ def main():
     student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
     
-    for epoch in range(60):
+    for epoch in range(120):
         student.train()
         indices = list(range(len(train_s)))
         random.shuffle(indices)
         for idx in range(0, len(train_s), 64):
             batch_idx = indices[idx : idx + 64]
             batch_s = [train_s[i] for i in batch_idx]
+            
+            # Standard distillation loss
             ids, mask = batch_tokenize(tokenizer, batch_s, max_len=32, device=DEVICE)
             z_s = student(ids, mask)
             z_t = train_x_teacher[batch_idx]
-            loss = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+            loss_distill = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+            
+            # Typo consistency loss
+            batch_typo = [perturb_typo(s) for s in batch_s]
+            ids_typo, mask_typo = batch_tokenize(tokenizer, batch_typo, max_len=32, device=DEVICE)
+            z_s_typo = student(ids_typo, mask_typo)
+            loss_typo = (1.0 - (z_s * z_s_typo).sum(dim=-1)).mean()
+            
+            loss = loss_distill + 0.5 * loss_typo
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -947,16 +1019,10 @@ def main():
         seed=42
     )
     
-    # Validation Reference bank for Calibration (policy calibration facts only)
-    z_ref_bank_cal = []
-    ref_sentences_cal = []
-    ref_labels_cal = []
-    for f_idx, fact in enumerate(all_facts):
-        if fact["id"] in policy_cal_ids:
-            z_ref_bank_cal.append(z_train[f_idx*3 : (f_idx+1)*3])
-            ref_sentences_cal.extend(tr_s_all[f_idx*3 : (f_idx+1)*3])
-            ref_labels_cal.extend([f_idx] * 3)
-    z_ref_bank_cal = torch.cat(z_ref_bank_cal, dim=0).to(DEVICE)
+    # Validation Reference bank for Calibration (full 110-fact memory bank!)
+    z_ref_bank_cal = z_train.to(DEVICE)
+    ref_sentences_cal = tr_s_all
+    ref_labels_cal = [i // 3 for i in range(len(tr_s_all))]
     
     # Precompute scores and sims for all calibration queries to optimize grid search
     print("[Calibration] Precomputing validation pipeline matrices (grid optimization)...")
@@ -969,11 +1035,35 @@ def main():
         with torch.no_grad():
             q_s = student(ids_t, mask_t)[0]
             
+        # Hybrid Semantic + Lexical Candidates Retrieval
         sims = torch.matmul(z_ref_bank_cal, q_s.unsqueeze(0).T).squeeze(-1)
-        top_10_indices = torch.topk(sims, k=10).indices.cpu().numpy()
+        sem_idx = torch.topk(sims, k=10).indices.cpu().numpy()
+        
+        # Lexical Jaccard 3-gram overlap
+        def get_3grams(s):
+            s = s.lower()
+            return set(s[i:i+3] for i in range(len(s)-2))
+        q_grams = get_3grams(q_str)
+        lex_scores = []
+        for idx, ref in enumerate(ref_sentences_cal):
+            r_grams = get_3grams(ref)
+            intersection = len(q_grams & r_grams)
+            union = len(q_grams | r_grams)
+            jaccard = intersection / union if union > 0 else 0.0
+            lex_scores.append((jaccard, idx))
+        lex_scores.sort(reverse=True, key=lambda x: x[0])
+        lex_idx = [item[1] for item in lex_scores[:10]]
+        
+        # Merge unique indices
+        merged_indices = []
+        seen = set()
+        for idx in list(sem_idx) + lex_idx:
+            if idx not in seen:
+                merged_indices.append(idx)
+                seen.add(idx)
         
         cand_data = []
-        for rank, cand_idx in enumerate(top_10_indices):
+        for rank, cand_idx in enumerate(merged_indices):
             k_vec = z_ref_bank_cal[cand_idx]
             k_str = ref_sentences_cal[cand_idx]
             jac, ov = get_entity_overlap(q_str, k_str)
@@ -1129,15 +1219,9 @@ def main():
         seed=100
     )
     
-    z_ref_bank_cert = []
-    ref_sentences_cert = []
-    ref_labels_cert = []
-    for f_idx, fact in enumerate(all_facts):
-        if fact["id"] in val_cert_ids:
-            z_ref_bank_cert.append(z_train[f_idx*3 : (f_idx+1)*3])
-            ref_sentences_cert.extend(tr_s_all[f_idx*3 : (f_idx+1)*3])
-            ref_labels_cert.extend([f_idx] * 3)
-    z_ref_bank_cert = torch.cat(z_ref_bank_cert, dim=0).to(DEVICE)
+    z_ref_bank_cert = z_train.to(DEVICE)
+    ref_sentences_cert = tr_s_all
+    ref_labels_cert = [i // 3 for i in range(len(tr_s_all))]
     
     # Calculate best possible zero-error UCB95 bounds on certification split
     n_valid_queries = sum(1 for q in cert_queries if not q["is_ood"])
@@ -1288,15 +1372,9 @@ def main():
         seed=12345
     )
     
-    z_ref_bank_test = []
-    ref_sentences_test = []
-    ref_labels_test = []
-    for f_idx, fact in enumerate(all_facts):
-        if fact["id"] in test_fact_ids:
-            z_ref_bank_test.append(z_train[f_idx*3 : (f_idx+1)*3])
-            ref_sentences_test.extend(tr_s_all[f_idx*3 : (f_idx+1)*3])
-            ref_labels_test.extend([f_idx] * 3)
-    z_ref_bank_test = torch.cat(z_ref_bank_test, dim=0).to(DEVICE)
+    z_ref_bank_test = z_train.to(DEVICE)
+    ref_sentences_test = tr_s_all
+    ref_labels_test = [i // 3 for i in range(len(tr_s_all))]
     
     test_results, latency_records_test, test_evals, test_expanded = run_test_evaluation(
         eval_queries_test, z_ref_bank_test, ref_sentences_test, ref_labels_test,
@@ -1424,14 +1502,82 @@ def main():
     print("\n" + "-"*80)
     print("  LOCKED POLICY MEMORY FOOTPRINT ACCOUNTING")
     print("-"*80)
-    print("  - Persistent Index Cache (45 vectors)       : 172.80 KB (0.17 MB)")
+    print(f"  - Persistent Index Cache ({len(z_ref_bank_test)} vectors)     : {len(z_ref_bank_test)*960*4 / 1024:.2f} KB ({len(z_ref_bank_test)*960*4 / (1024*1024):.2f} MB)")
     print("  - Student Encoder Module                    : 28.40 MB")
     print(f"  - Relation Verifier Module                  : {os.path.getsize('production_relation_verifier.pt') / (1024*1024):.2f} MB")
-    print(f"  - Total Routing Memory Footprint            : {28.40 + os.path.getsize('production_relation_verifier.pt') / (1024*1024) + 0.17:.2f} MB")
+    print(f"  - Total Routing Memory Footprint            : {28.40 + os.path.getsize('production_relation_verifier.pt') / (1024*1024) + len(z_ref_bank_test)*960*4 / (1024*1024):.2f} MB")
     print("  - Peak Temporary Index Memory Buffers:")
     print("      * k = 3                                 : 11.53 KB")
     print("      * k = 5                                 : 19.22 KB")
     print("      * k = 10                                : 38.44 KB")
+    print("="*80)
+
+    # 1. Index Audit Log
+    print("\n" + "-"*80)
+    print("  INDEX RETRIEVAL AUDIT")
+    print("-"*80)
+    print(f"  - Number of facts in index                  : {len(all_facts)}")
+    print(f"  - Number of references per fact             : 3")
+    print(f"  - Total index vectors                       : {len(z_ref_bank_test)}")
+    print(f"  - Number of candidate fact IDs              : {len(all_facts)}")
+    print(f"  - Test-target facts                         : {len(test_fact_ids)}")
+    print(f"  - Distractor facts                          : {len(all_facts) - len(test_fact_ids)}")
+    print("="*80)
+
+    # 2. Fact-Cluster Diagnostics & Uncertainty
+    print("\n" + "-"*80)
+    print("  FACT-CLUSTER DIAGNOSTICS & UNCERTAINTY (ON TEST SPLIT)")
+    print("-"*80)
+    print(f"  - Number of Test Facts                      : {len(test_fact_ids)}")
+    print(f"  - Worst-Fact query error rate               : {worst_fact_rate*100:.2f}%")
+    
+    test_fact_errors = defaultdict(int)
+    test_fact_totals = defaultdict(int)
+    for r in test_results:
+        if not r["is_ood"]:
+            fid = r["cluster_id"]
+            test_fact_totals[fid] += 1
+            if r["is_error"]:
+                test_fact_errors[fid] += 1
+                
+    print("  Errors per Fact:")
+    for fid in sorted(test_fact_totals.keys()):
+        print(f"    * Fact {fid}: {test_fact_errors[fid]}/{test_fact_totals[fid]} errors")
+        
+    print("  Leave-One-Fact-Out (LOFO) Sensitivity (Overall Test Error Rate):")
+    for fid in sorted(test_fact_totals.keys()):
+        lofo_results = [r for r in test_results if r["cluster_id"] != fid]
+        lofo_err = sum(1 for r in lof_results if r["is_error"]) / len(lofo_results) if len(lofo_results) > 0 else 0.0
+        print(f"    * LOFO {fid} excluded                      : {lofo_err*100:.4f}%")
+    print("="*80)
+
+    # 3. Policy Comparison: Adaptive vs. Fixed
+    fixed_policy_dict = policy_dict.copy()
+    fixed_policy_dict["initialK"] = 10
+    fixed_policy_dict["expandedK"] = 10
+    fixed_policy_dict["adaptive"] = False
+    
+    fixed_results, latency_records_fixed, fixed_evals, _ = run_test_evaluation(
+        eval_queries_test, z_ref_bank_test, ref_sentences_test, ref_labels_test,
+        verifier, student, tokenizer, fixed_policy_dict
+    )
+    
+    fixed_clean_id = [r for r in fixed_results if not r["is_ood"] and not r["is_typo"]]
+    fixed_correct_acc = sum(1 for r in fixed_clean_id if r["outcome"] == "correct_accept") / len(fixed_clean_id) if len(fixed_clean_id) > 0 else 0.0
+    _, _, fixed_ucb_valid_cp, _, _ = get_stratum_ucb(fixed_results, "valid", cl=0.95)
+    fixed_typo_id = [r for r in fixed_results if not r["is_ood"] and r["is_typo"]]
+    fixed_typo_acc = sum(1 for r in fixed_typo_id if r["outcome"] == "correct_accept") / len(fixed_typo_id) if len(fixed_typo_id) > 0 else 0.0
+    fixed_mean_lat = np.mean([lat[-1] for lat in latency_records_fixed])
+    
+    print("\n" + "-"*80)
+    print("  POLICY COMPARISON: ADAPTIVE (3->10) VS FIXED (k=10)")
+    print("-"*80)
+    print("  Metric                      | Adaptive (3->10)   | Fixed (k=10)")
+    print(f"  Correct Acceptance (Clean)  | {correct_acc_clean*100:16.2f}% | {fixed_correct_acc*100:12.2f}%")
+    print(f"  Valid Wrong Route UCB95     | {test_ucb_valid_cp*100:16.2f}% | {fixed_ucb_valid_cp*100:12.2f}%")
+    print(f"  Valid Typo Recall           | {correct_acc_typo*100:16.2f}% | {fixed_typo_acc*100:12.2f}%")
+    print(f"  Verifier Evals per Query    | {np.mean([r['evals'] for r in test_results]):16.2f} | {np.mean([r['evals'] for r in fixed_results]):12.2f}")
+    print(f"  Mean End-to-End Latency     | {np.mean(lat_totals_t)*1000:14.2f}ms | {fixed_mean_lat*1000:10.2f}ms")
     print("="*80)
 
 if __name__ == "__main__":
