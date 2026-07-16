@@ -22,6 +22,7 @@ import random
 import hashlib
 import math
 import re
+import subprocess
 import numpy as np
 import torch
 import torch.nn as nn
@@ -395,41 +396,116 @@ def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, tes
     return positive_pairs, semantic_neg_pairs, general_neg_pairs
 
 # ---------------------------------------------------------------------------
-# Runtime Grounding Validator & Scorer (Separated)
+# Structured Grounding Validator & Scorer (Separated)
 # ---------------------------------------------------------------------------
-def validate_grounding(query, retrieved_fact_statement, generated_answer):
+def validate_grounding(query, retrieved_fact, generated_answer):
     """
     Validates a generated answer strictly without access to the ground-truth target label or entities.
-    Uses only the raw query and the retrieved context fact.
+    Uses structured fact record entities and values to avoid capitalization heuristics.
     """
     raw_clean = generated_answer.strip()
     if not raw_clean:
-        return False, False
+        return False, False, ["Empty raw generation"]
         
-    # Check for decoder-initiated abstention
-    if "INSUFFICIENT_VERIFIED_CONTEXT" in raw_clean:
-        return False, True
+    # Strict normalization of decoder-initiated abstention
+    if raw_clean == "INSUFFICIENT_VERIFIED_CONTEXT":
+        return False, True, ["Model generated explicit abstention token"]
         
-    # 1. Number & Date validation (must exist in context fact)
-    gen_nums = re.findall(r'\d+', raw_clean)
-    fact_nums = re.findall(r'\d+', retrieved_fact_statement)
-    for num in gen_nums:
-        if num not in fact_nums:
-            return False, False
+    reasons = []
+    
+    # Extract allowed entities from the retrieved fact dictionary keys (structured records)
+    allowed_entities = []
+    for key in ["location", "capital", "compound", "planet", "moon", "comp"]:
+        val = retrieved_fact.get(key)
+        if val:
+            allowed_entities.append(val.lower())
             
-    # 2. Named Entity / Capitalized Word Validation
+    # Parse numbers
+    allowed_numbers = []
+    for key in ["temperature", "period"]:
+        val = retrieved_fact.get(key)
+        if val:
+            allowed_numbers.append(val.lower())
+            
+    # Parse all numbers in the fact statement text
+    fact_statement = retrieved_fact["statement"]
+    fact_nums = re.findall(r'\d+', fact_statement)
+    for num in fact_nums:
+        allowed_numbers.append(num)
+        
+    # 1. Number & Date validation (strict numerical invariance)
+    gen_nums = re.findall(r'\d+', raw_clean)
+    for num in gen_nums:
+        if num not in allowed_numbers:
+            reasons.append(f"Generated unsupported numerical value: {num}")
+            return False, False, reasons
+            
+    # 2. Named Entity / Capitalized Word Validation using structured allowlist
     words = re.findall(r'\b[A-Z][a-zA-Z]*\b', raw_clean)
-    fact_lower = retrieved_fact_statement.lower()
     query_lower = query.lower()
+    
+    # Build strict allowlist matching allowed entities
+    entity_words = set()
+    for ent in allowed_entities:
+        for w in ent.split():
+            entity_words.add(w.lower())
+            
     for w in words:
         w_l = w.lower()
         # Permit ordinary grammatical constructs at start of output sentences
         if w_l in ["the", "a", "an", "this", "it", "there", "is", "in", "on", "at", "what", "question", "answer", "context", "verified"]:
             continue
-        if w_l not in fact_lower and w_l not in query_lower:
-            return False, False
+        # Must either be part of the allowed entities or present in the query
+        if w_l not in entity_words and w_l not in query_lower:
+            reasons.append(f"Generated unsupported named entity token: '{w}'")
+            return False, False, reasons
             
-    return True, False
+    # 3. Relation-Consistency Validation (Subject-Object Alignment)
+    # Check template constraints based on fact category
+    category = retrieved_fact.get("category")
+    ans_lower = raw_clean.lower()
+    
+    if category == "geography":
+        # Fact template: "The official capital city of {location} is {capital}."
+        # Relation: capital is the capital of location.
+        # E.g. "Paris is the capital of France"
+        # Prevent reversal: France is the capital of Paris.
+        loc = retrieved_fact.get("location")
+        cap = retrieved_fact.get("capital")
+        if loc and cap:
+            loc = loc.lower()
+            cap = cap.lower()
+            if loc in ans_lower and cap in ans_lower:
+                idx_loc = ans_lower.index(loc)
+                idx_cap = ans_lower.index(cap)
+                if "capital of" in ans_lower:
+                    idx_cap_of = ans_lower.index("capital of")
+                    if idx_cap_of < idx_loc:
+                        # E.g. "is the capital of France" -> Target capital (cap) must precede "capital of"
+                        if idx_cap > idx_cap_of:
+                            reasons.append("Swapped relation detected: location placed as the capital of object")
+                            return False, False, reasons
+                            
+    elif category == "astronomy":
+        # Fact template: "The planetary satellite {moon} orbits {planet} in exactly {period} days."
+        # Relation: moon orbits planet
+        # Prevent reversal: planet orbits moon
+        moon = retrieved_fact.get("moon")
+        planet = retrieved_fact.get("planet")
+        if moon and planet:
+            moon = moon.lower()
+            planet = planet.lower()
+            if moon in ans_lower and planet in ans_lower:
+                idx_moon = ans_lower.index(moon)
+                idx_planet = ans_lower.index(planet)
+                if "orbits" in ans_lower:
+                    idx_orbits = ans_lower.index("orbits")
+                    # Moon orbits planet => moon should precede orbits, planet should follow orbits
+                    if idx_moon > idx_orbits or idx_planet < idx_orbits:
+                        reasons.append("Swapped relation detected: planet placed as orbiting the moon")
+                        return False, False, reasons
+                        
+    return True, False, []
 
 def score_against_ground_truth(final_answer, target_entity, declared_aliases):
     """
@@ -625,7 +701,6 @@ def main():
     decoder = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
     decoder.eval()
     
-    # Record Checkpoint revision/tokenizer details
     checkpoint_revision = getattr(decoder.config, "_commit_hash", "unknown_revision")
     print(f"[Revision] Decoder Checkpoint Revision: {checkpoint_revision}")
     
@@ -675,9 +750,42 @@ def main():
     
     fallback_response = "I do not have verified information to answer this question."
     
-    records_saved = {}
+    # Save Run-level metadata
+    gpu_type = "CPU"
+    if torch.cuda.is_available():
+        gpu_type = torch.cuda.get_device_name(0)
+        
+    pkgs = {}
+    try:
+        pip_out = subprocess.check_output(["pip", "freeze"]).decode("utf-8")
+        for line in pip_out.splitlines():
+            if "==" in line:
+                k, v = line.split("==")[:2]
+                pkgs[k] = v
+    except Exception:
+        pkgs = "failed_to_retrieve"
+        
+    run_metadata = {
+        "model_id": MODEL_ID,
+        "checkpoint_revision": checkpoint_revision,
+        "threshold": theta,
+        "generation_settings": {
+            "do_sample": False,
+            "max_new_tokens": 48,
+            "num_beams": 1,
+            "repetition_penalty": 1.0
+        },
+        "dataset_hash": hashlib.sha256(open(DATASET_PATH, "rb").read()).hexdigest(),
+        "random_seeds": {"python": 42, "numpy": 42, "torch": 42},
+        "gpu_type": gpu_type,
+        "package_versions": pkgs
+    }
     
-    # We run three comparison conditions
+    records_saved = {
+        "run_metadata": run_metadata,
+        "records": []
+    }
+    
     conditions = [
         "Ungated Decoder",
         "Verifier-gated Decoder",
@@ -686,8 +794,6 @@ def main():
     
     for cond in conditions:
         print(f"\n[Running] Evaluating condition: {cond}...")
-        
-        results_list = []
         
         # PPL Stratification accumulation dictionaries
         ppl_acc_loss = {"all": 0.0, "correct_ret": 0.0, "incorrect_ret": 0.0}
@@ -700,18 +806,36 @@ def main():
         verifier_accept_incorrect_ret = 0
         decoder_acc_correct_accepted = 0
         
-        for q in test_queries:
+        id_results_count = 0
+        ood_results_count = 0
+        
+        # Outcomes for decision mapping
+        correct_id = 0
+        incorrect_id = 0
+        final_ood_unsafe = 0
+        
+        counts_id = {"VERIFIER_REJECTED": 0, "DECODER_ABSTAINED": 0, "VALIDATOR_REJECTED": 0, "ANSWER_ACCEPTED": 0}
+        counts_ood = {"VERIFIER_REJECTED": 0, "DECODER_ABSTAINED": 0, "VALIDATOR_REJECTED": 0, "ANSWER_ACCEPTED": 0}
+        
+        for q_idx, q in enumerate(test_queries):
             q_str = q["q_str"]
             is_ood = q["is_ood"]
+            split_name = "OOD_TEST" if is_ood else "ID_TEST"
             
-            # 1. Encode query
+            # Latency profiling
+            t0 = time.perf_counter()
+            
+            # 1. Tokenize & Encode query
+            t_enc_start = time.perf_counter()
             enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
             ids_t = torch.tensor([enc_ids], device=DEVICE)
             mask_t = torch.ones_like(ids_t)
             with torch.inference_mode():
                 q_s = student(ids_t, mask_t)[0]
-                
-            # 2. Hybrid search candidates
+            latency_enc = (time.perf_counter() - t_enc_start) * 1000
+            
+            # 2. Hybrid search candidates (Retrieval step)
+            t_ret_start = time.perf_counter()
             sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
             sem_idx = torch.topk(sims, k=10).indices.cpu().numpy()
             
@@ -735,8 +859,10 @@ def main():
                 if idx not in seen:
                     candidate_indices.append(idx)
                     seen.add(idx)
-                    
-            # 3. Compute verifier scores
+            latency_ret = (time.perf_counter() - t_ret_start) * 1000
+            
+            # 3. Verification step
+            t_ver_start = time.perf_counter()
             candidates = []
             for cand_idx in candidate_indices:
                 k_vec = z_ref_bank[cand_idx]
@@ -753,8 +879,9 @@ def main():
             best_fact_idx = candidates[0][1] if len(candidates) > 0 else 0
             best_fact = all_facts[best_fact_idx]
             best_fact_sentence = best_fact["statement"]
+            latency_ver = (time.perf_counter() - t_ver_start) * 1000
             
-            # Track component metrics for In-Domain queries
+            # Track components
             is_correct_ret = False
             if not is_ood:
                 total_retrieval_attempts += 1
@@ -769,13 +896,16 @@ def main():
                     if best_score >= theta:
                         verifier_accept_incorrect_ret += 1
             
-            # Gating Logic
             gated_accept = (best_score >= theta)
             
-            # Evaluate Decision Taxonomy
             decision_state = "VERIFIER_REJECTED"
             final_answer = fallback_response
             raw_gen = ""
+            val_passed = False
+            reasons = []
+            
+            latency_gen = 0.0
+            latency_val = 0.0
             
             if cond == "Ungated Decoder" or gated_accept:
                 # Format prompts via tokenizer template
@@ -786,7 +916,8 @@ def main():
                 ]
                 formatted_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                 
-                # Deterministic Greedy Generation Configuration
+                # Deterministic Greedy Generation
+                t_gen_start = time.perf_counter()
                 with torch.inference_mode():
                     enc_prompt = tokenizer(formatted_prompt, return_tensors="pt").to(DEVICE)
                     outputs = decoder.generate(
@@ -799,42 +930,41 @@ def main():
                     )
                 gen_tokens = outputs[0, enc_prompt.input_ids.shape[1]:]
                 raw_gen = tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
+                latency_gen = (time.perf_counter() - t_gen_start) * 1000
                 
-                # Run the isolated runtime grounding validator
-                val_pass, dec_abstain = validate_grounding(q_str, best_fact_sentence, raw_gen)
+                # Run the isolated structured grounding validator
+                t_val_start = time.perf_counter()
+                val_passed, dec_abstain, reasons = validate_grounding(q_str, best_fact, raw_gen)
+                latency_val = (time.perf_counter() - t_val_start) * 1000
                 
-                # Teacher-Forcing PPL Stratification (In-Domain only)
+                # Teacher-Forced PPL Stratification (In-Domain only)
                 if not is_ood:
                     target_ans = q["target_fact"]["answer"]
                     nll, num_toks = calculate_reference_nll_and_tokens(decoder, tokenizer, formatted_prompt, target_ans)
                     
-                    # Accumulate for Stratum 1: All accepted in-domain queries
                     ppl_acc_loss["all"] += nll * num_toks
                     ppl_acc_tokens["all"] += num_toks
                     
                     if is_correct_ret:
-                        # Accumulate for Stratum 2: Correctly retrieved & accepted
                         ppl_acc_loss["correct_ret"] += nll * num_toks
                         ppl_acc_tokens["correct_ret"] += num_toks
                     else:
-                        # Accumulate for Stratum 3: Incorrectly retrieved but accepted
                         ppl_acc_loss["incorrect_ret"] += nll * num_toks
                         ppl_acc_tokens["incorrect_ret"] += num_toks
                 
-                # Process outputs according to Condition config
                 if dec_abstain:
                     decision_state = "DECODER_ABSTAINED"
                     final_answer = fallback_response
                 else:
                     if cond == "Verifier-gated + Grounding Validator (Recommended)":
-                        if val_pass:
+                        if val_passed:
                             decision_state = "ANSWER_ACCEPTED"
                             final_answer = raw_gen
                         else:
                             decision_state = "VALIDATOR_REJECTED"
                             final_answer = fallback_response
                     else:
-                        # Validation disabled for un-gated and standard gated baseline
+                        # Validation disabled for ungated/standard gated baselines
                         decision_state = "ANSWER_ACCEPTED"
                         final_answer = raw_gen
             else:
@@ -842,68 +972,84 @@ def main():
                 final_answer = fallback_response
                 
             # Perform factual evaluation using the isolated evaluation scorer
-            eval_outcome = "UNSUPPORTED"
+            factually_correct = False
             if decision_state == "ANSWER_ACCEPTED":
                 target_ans = best_fact["answer"] if is_ood else q["target_fact"]["answer"]
                 target_kws = best_fact["keywords"] if is_ood else q["target_fact"]["keywords"]
                 
-                is_correct_ans = score_against_ground_truth(final_answer, target_ans, target_kws)
-                eval_outcome = "FACTUALLY_CORRECT" if is_correct_ans else "FACTUALLY_INCORRECT"
-                
-                # Log local decoder accuracy under correct retrieval
+                factually_correct = score_against_ground_truth(final_answer, target_ans, target_kws)
+                if not is_ood:
+                    if factually_correct:
+                        correct_id += 1
+                    else:
+                        incorrect_id += 1
+                else:
+                    final_ood_unsafe += 1
+                    
+                # Track conditional accuracy of the decoder given correct context fact
                 if not is_ood and is_correct_ret:
                     if score_against_ground_truth(raw_gen, target_ans, target_kws):
                         decoder_acc_correct_accepted += 1
-                        
-            results_list.append({
-                "q_str": q_str,
-                "is_ood": is_ood,
-                "is_correct_ret": is_correct_ret if not is_ood else False,
-                "decision_state": decision_state,
+            
+            # Map outputs into counter taxonomy
+            if is_ood:
+                counts_ood[decision_state] += 1
+                ood_results_count += 1
+            else:
+                counts_id[decision_state] += 1
+                id_results_count += 1
+                
+            total_latency = (time.perf_counter() - t0) * 1000
+            
+            records_saved["records"].append({
+                "query_id": f"q_{q_idx:03d}",
+                "split": split_name,
+                "condition": cond,
+                "query": q_str,
+                "expected_fact_id": q["target_fact"]["id"] if not is_ood else "OOD",
+                "retrieved_fact_id": best_fact["id"],
+                "retrieval_correct": is_correct_ret,
+                "retrieval_score": sims[best_fact_idx].item(),
+                "verifier_score": best_score,
+                "threshold": theta,
+                "verifier_accepted": gated_accept,
                 "raw_generation": raw_gen,
+                "runtime_validation_passed": val_passed,
+                "validation_reasons": reasons,
+                "decision_state": decision_state,
                 "final_answer": final_answer,
-                "eval_outcome": eval_outcome
+                "factually_correct": factually_correct,
+                "latency_ms": {
+                    "retrieval": latency_ret,
+                    "verification": latency_ver,
+                    "generation": latency_gen,
+                    "validation": latency_val,
+                    "total": total_latency
+                }
             })
             
-        records_saved[cond] = results_list
-        
         # 5. Summarize Metrics
-        id_results = [r for r in results_list if not r["is_ood"]]
-        ood_results = [r for r in results_list if r["is_ood"]]
-        
-        # Decision counts
-        counts_id = {state: len([r for r in id_results if r["decision_state"] == state]) for state in ["VERIFIER_REJECTED", "DECODER_ABSTAINED", "VALIDATOR_REJECTED", "ANSWER_ACCEPTED"]}
-        counts_ood = {state: len([r for r in ood_results if r["decision_state"] == state]) for state in ["VERIFIER_REJECTED", "DECODER_ABSTAINED", "VALIDATOR_REJECTED", "ANSWER_ACCEPTED"]}
-        
-        # Factual correct counts
-        correct_id = len([r for r in id_results if r["decision_state"] == "ANSWER_ACCEPTED" and r["eval_outcome"] == "FACTUALLY_CORRECT"])
-        incorrect_id = len([r for r in id_results if r["decision_state"] == "ANSWER_ACCEPTED" and r["eval_outcome"] == "FACTUALLY_INCORRECT"])
-        
-        # Stratum PPLs
         strat_ppl = {}
         for key in ["all", "correct_ret", "incorrect_ret"]:
             tot_toks = ppl_acc_tokens[key]
             strat_ppl[key] = math.exp(ppl_acc_loss[key] / tot_toks) if tot_toks > 0 else float("nan")
             
-        # OOD Rejections/Safety
-        final_ood_unsafe = len([r for r in ood_results if r["decision_state"] == "ANSWER_ACCEPTED"])
-        
         print("\n" + "-"*70)
         print(f"  CONDITION SUMMARY: {cond}")
         print("-"*70)
         print(f"  * In-Domain (ID) Decision Strata:")
-        print(f"    - VERIFIER_REJECTED            : {counts_id['VERIFIER_REJECTED']} / {len(id_results)}")
-        print(f"    - DECODER_ABSTAINED            : {counts_id['DECODER_ABSTAINED']} / {len(id_results)}")
-        print(f"    - VALIDATOR_REJECTED           : {counts_id['VALIDATOR_REJECTED']} / {len(id_results)}")
-        print(f"    - ANSWER_ACCEPTED              : {counts_id['ANSWER_ACCEPTED']} / {len(id_results)}")
+        print(f"    - VERIFIER_REJECTED            : {counts_id['VERIFIER_REJECTED']} / {id_results_count}")
+        print(f"    - DECODER_ABSTAINED            : {counts_id['DECODER_ABSTAINED']} / {id_results_count}")
+        print(f"    - VALIDATOR_REJECTED           : {counts_id['VALIDATOR_REJECTED']} / {id_results_count}")
+        print(f"    - ANSWER_ACCEPTED              : {counts_id['ANSWER_ACCEPTED']} / {id_results_count}")
         print(f"      -> FACTUALLY_CORRECT         : {correct_id}")
         print(f"      -> FACTUALLY_INCORRECT       : {incorrect_id}")
         
         print(f"  * In-Domain Performance Rates:")
-        print(f"    - Retrieval Recall@1           : {correct_retrievals / len(id_results) * 100:.2f}%")
-        print(f"    - Verifier Coverage            : {counts_id['ANSWER_ACCEPTED'] / len(id_results) * 100:.2f}%")
+        print(f"    - Retrieval Recall@1           : {correct_retrievals / id_results_count * 100:.2f}%")
+        print(f"    - Verifier Coverage            : {counts_id['ANSWER_ACCEPTED'] / id_results_count * 100:.2f}%")
         print(f"    - Selective Factual Exactness  : {correct_id / max(1, counts_id['ANSWER_ACCEPTED']) * 100:.2f}%")
-        print(f"    - End-to-End Factual Accuracy  : {correct_id / len(id_results) * 100:.2f}%")
+        print(f"    - End-to-End Factual Accuracy  : {correct_id / id_results_count * 100:.2f}%")
         print(f"    - Decoder Accuracy | Accepted  : {decoder_acc_correct_accepted / max(1, verifier_accept_correct_ret) * 100:.2f}%")
         
         print(f"  * Stratified Reference-Answer Perplexity (PPL):")
@@ -912,21 +1058,21 @@ def main():
         print(f"    - Stratum 3: Incorrect & Accept: {strat_ppl['incorrect_ret']:.2f}")
         
         print(f"  * Out-of-Domain (OOD) Decision Strata:")
-        print(f"    - VERIFIER_REJECTED            : {counts_ood['VERIFIER_REJECTED']} / {len(ood_results)}")
-        print(f"    - DECODER_ABSTAINED            : {counts_ood['DECODER_ABSTAINED']} / {len(ood_results)}")
-        print(f"    - VALIDATOR_REJECTED           : {counts_ood['VALIDATOR_REJECTED']} / {len(ood_results)}")
-        print(f"    - ANSWER_ACCEPTED              : {counts_ood['ANSWER_ACCEPTED']} / {len(ood_results)}")
+        print(f"    - VERIFIER_REJECTED            : {counts_ood['VERIFIER_REJECTED']} / {ood_results_count}")
+        print(f"    - DECODER_ABSTAINED            : {counts_ood['DECODER_ABSTAINED']} / {ood_results_count}")
+        print(f"    - VALIDATOR_REJECTED           : {counts_ood['VALIDATOR_REJECTED']} / {ood_results_count}")
+        print(f"    - ANSWER_ACCEPTED              : {counts_ood['ANSWER_ACCEPTED']} / {ood_results_count}")
         
         print(f"  * Out-of-Domain Performance Rates:")
-        print(f"    - OOD Rejection Rate (Verifier): {counts_ood['VERIFIER_REJECTED'] / len(ood_results) * 100:.2f}%")
-        print(f"    - Final OOD Hallucination Rate : {final_ood_unsafe / len(ood_results) * 100:.2f}%")
+        print(f"    - OOD Rejection Rate (Verifier): {counts_ood['VERIFIER_REJECTED'] / ood_results_count * 100:.2f}%")
+        print(f"    - Final OOD Hallucination Rate : {final_ood_unsafe / ood_results_count * 100:.2f}%")
         
         if final_ood_unsafe == 0:
-            print(f"    - [Safety Certification]       : Zero OOD failures observed among {len(ood_results)} test cases.")
+            print(f"    - [Safety Certification]       : Zero OOD failures observed among {ood_results_count} test cases.")
         else:
-            print(f"    - [Safety Certification]       : FAILED with {final_ood_unsafe} unsafe answers out of {len(ood_results)} cases.")
+            print(f"    - [Safety Certification]       : FAILED with {final_ood_unsafe} unsafe answers out of {ood_results_count} cases.")
             
-    # Save NLG records to workspace
+    # Save records to workspace
     with open("nlg_evaluation_records.json", "w") as f:
         json.dump(records_saved, f, indent=2)
     print("\n[Save] Detailed NLG records written to nlg_evaluation_records.json")
