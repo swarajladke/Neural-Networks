@@ -398,6 +398,55 @@ def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, tes
 # ---------------------------------------------------------------------------
 # Structured Grounding Validator & Scorer (Separated)
 # ---------------------------------------------------------------------------
+
+# Mapping of English number words to their integer values, used to resolve
+# digit equivalents when the fact stores spelled-out numbers like "two hundred".
+_WORD_NUM = {
+    "zero":0,"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,
+    "seven":7,"eight":8,"nine":9,"ten":10,"eleven":11,"twelve":12,
+    "thirteen":13,"fourteen":14,"fifteen":15,"sixteen":16,
+    "seventeen":17,"eighteen":18,"nineteen":19,
+    "twenty":20,"thirty":30,"forty":40,"fifty":50,
+    "sixty":60,"seventy":70,"eighty":80,"ninety":90,
+    "hundred":100,"thousand":1000,
+}
+
+def text_to_digit_equivalents(text):
+    """Return a set of digit-string equivalents for any spelled-out numbers in text.
+
+    Examples:
+        "two hundred degrees Celsius" -> {"200"}
+        "fifteen days"                -> {"15"}
+        "forty two"                   -> {"42"}
+    """
+    nums = set()
+    words = re.sub(r'[^a-z ]', ' ', text.lower()).split()
+    i = 0
+    while i < len(words):
+        w = words[i]
+        if w not in _WORD_NUM:
+            i += 1
+            continue
+        val = _WORD_NUM[w]
+        # Look ahead: handle patterns like "forty two", "two hundred", "one thousand"
+        if i + 1 < len(words):
+            w2 = words[i + 1]
+            if w2 in ("hundred", "thousand"):
+                # e.g. "two hundred" -> 200, "one thousand" -> 1000
+                val *= _WORD_NUM[w2]
+                nums.add(str(val))
+                i += 2
+                continue
+            elif w2 in _WORD_NUM and _WORD_NUM[w2] < 100 and val >= 20 and val % 10 == 0:
+                # e.g. "forty two" -> 42
+                val += _WORD_NUM[w2]
+                nums.add(str(val))
+                i += 2
+                continue
+        nums.add(str(val))
+        i += 1
+    return nums
+
 def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities=None):
     """
     Runtime grounding validator — strictly separated from ground-truth evaluation.
@@ -439,11 +488,15 @@ def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities
     # --- Check 2: Number invariance ---
     fact_statement = retrieved_fact.get("statement", "")
     allowed_numbers = set(re.findall(r'\d+', fact_statement))
+    # Also allow digit equivalents of any spelled-out numbers in the fact
+    allowed_numbers.update(text_to_digit_equivalents(fact_statement))
     for key in ["temperature", "period"]:
         val = retrieved_fact.get(key)
         if val:
             for n in re.findall(r'\d+', str(val)):
                 allowed_numbers.add(n)
+            # Also allow digit equivalents of the spelled-out value itself
+            allowed_numbers.update(text_to_digit_equivalents(str(val)))
 
     for num in re.findall(r'\d+', raw_clean):
         if num not in allowed_numbers:
