@@ -1228,6 +1228,20 @@ def main():
         else:
             print(f"    - [Safety Certification]       : FAILED with {final_ood_unsafe} unsafe answers out of {ood_results_count} cases.")
             
+    # Print factually incorrect accepted answers diagnostic
+    c3_records = records_saved["records"]
+    c3_incorrect = [x for x in c3_records if x["condition"] == "Verifier-gated + Grounding Validator (Recommended)" and not x["is_ood"] and x["decision_state"] == "ANSWER_ACCEPTED" and not x["factually_correct"]]
+    if c3_incorrect:
+        print("\n[DIAG] Factually Incorrect Accepted Answers for Condition 3:")
+        for idx, x in enumerate(c3_incorrect):
+            print(f"  #{idx+1}:")
+            print(f"    Expected Fact ID  : {x['expected_fact_id']}")
+            print(f"    Retrieved Fact ID : {x['retrieved_fact_id']}")
+            print(f"    Query             : {x['query']}")
+            print(f"    Raw Generation    : {x['raw_generation']}")
+            print(f"    Final Answer      : {x['final_answer']}")
+            print(f"    Validation Reasons: {x['validation_reasons']}")
+            
     # Save records to workspace
     with open("nlg_evaluation_records.json", "w") as f:
         json.dump(records_saved, f, indent=2)
