@@ -484,6 +484,7 @@ def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities
 
     reasons = []
     ans_lower = raw_clean.lower()
+    query_lower = query.lower()
 
     # --- Check 2: Number invariance ---
     fact_statement = retrieved_fact.get("statement", "")
