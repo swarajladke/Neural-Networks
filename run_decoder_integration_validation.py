@@ -28,6 +28,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from collections import defaultdict
 
 # Set all random seeds for deterministic execution
 random.seed(42)
@@ -552,6 +553,14 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         
+    if not os.path.exists(DATASET_PATH):
+        print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
+        if os.path.exists("generate_scaling_dataset.py"):
+            import subprocess
+            subprocess.run(["python", "generate_scaling_dataset.py"], check=True)
+        else:
+            raise FileNotFoundError(f"Scaling dataset not found and generate_scaling_dataset.py missing!")
+
     with open(DATASET_PATH, "r") as f:
         blocks = json.load(f)
     all_facts = [fact for b in blocks for fact in b]
@@ -560,9 +569,45 @@ def main():
     all_facts.extend(extra_facts)
     unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
     
-    # Load splits from manifest
+    # Load or generate splits manifest
     if not os.path.exists(MANIFEST_PATH):
-        raise FileNotFoundError(f"[Error] split_manifest.json not found. Please run run_production_pipeline_validation.py first.")
+        print(f"[Split] Split manifest not found. Generating stratified fact split manifest on the fly...")
+        by_domain = defaultdict(list)
+        original_facts = [f for f in all_facts if int(f["id"][1:]) <= (34 if f["id"][0] == "G" else 33)]
+        for fact in original_facts:
+            by_domain[fact["category"]].append(fact["id"])
+            
+        rng = random.Random(42)
+        train_fact_ids_list = []
+        policy_cal_ids_list = []
+        val_cert_ids_list = []
+        test_fact_ids_list = []
+        
+        for domain, ids in sorted(by_domain.items()):
+            ids = list(ids)
+            rng.shuffle(ids)
+            n = len(ids)
+            n_train = round(n * 0.55)
+            n_policy = round(n * 0.15)
+            n_cert = round(n * 0.15)
+            
+            train_fact_ids_list.extend(ids[:n_train])
+            policy_cal_ids_list.extend(ids[n_train:n_train + n_policy])
+            val_cert_ids_list.extend(ids[n_train + n_policy:n_train + n_policy + n_cert])
+            test_fact_ids_list.extend(ids[n_train + n_policy + n_cert:])
+            
+        extra_ids = [f["id"] for f in extra_facts]
+        val_cert_ids_list.extend(extra_ids)
+        
+        manifest = {
+            "seed": 42,
+            "trainFactIds": train_fact_ids_list,
+            "policyCalibrationFactIds": policy_cal_ids_list,
+            "validationCertificationFactIds": val_cert_ids_list,
+            "testFactIds": test_fact_ids_list
+        }
+        with open(MANIFEST_PATH, "w") as f:
+            json.dump(manifest, f, indent=2)
         
     with open(MANIFEST_PATH, "r") as f:
         manifest = json.load(f)
