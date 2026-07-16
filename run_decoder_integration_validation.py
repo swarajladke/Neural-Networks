@@ -722,7 +722,7 @@ def main():
     student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
     
-    for epoch in range(15):
+    for epoch in range(120):
         student.train()
         indices = list(range(len(train_s)))
         random.shuffle(indices)
