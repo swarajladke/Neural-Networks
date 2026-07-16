@@ -393,133 +393,71 @@ def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, tes
             
     random.shuffle(general_neg_pairs)
     general_neg_pairs = general_neg_pairs[:len(positive_pairs)]
-    
     return positive_pairs, semantic_neg_pairs, general_neg_pairs
 
 # ---------------------------------------------------------------------------
 # Structured Grounding Validator & Scorer (Separated)
 # ---------------------------------------------------------------------------
-def validate_grounding(query, retrieved_fact, generated_answer):
+def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities=None):
     """
-    Validates a generated answer strictly without access to the ground-truth target label or entities.
-    Checks:
-      1. No unsupported digit numbers introduced.
-      2. No structured named entity from a different fact injected into the answer.
-      3. Relation-consistency templates (subject-object reversal prevention).
-    Does NOT penalise ordinary English prose words, grammar words, or common
-    domain terms — only concrete named entities and numeric values are audited.
+    Runtime grounding validator — strictly separated from ground-truth evaluation.
+
+    Checks (in order):
+      1. Abstention: output contains the abstention token.
+      2. Number invariance: no digit sequences absent from the retrieved fact.
+      3. Foreign entity injection: no concrete named-entity value from a
+         *different* fact appears in the answer. Ordinary English prose words
+         are NOT penalised — only the synthetic unique proper-noun entity
+         strings used in the fact dataset are audited.
+      4. Query false-premise: if a foreign entity is present in the query
+         (e.g. 'Germany' in 'Why is Paris the capital of Germany?'), reject
+         if that same foreign entity appears as the answer *value* (after a
+         relational marker), while permitting it as a subject reference.
+      5. Relation-consistency: prevent subject-object reversal in generated text.
+
+    Args:
+        query            : The raw query string.
+        retrieved_fact   : The structured fact dict returned by the retriever.
+        generated_answer : The raw decoded output from the decoder.
+        foreign_entities : set[str] of lowercased entity values from ALL facts
+                           that are NOT the retrieved fact. Build once before
+                           the evaluation loop and pass in per query.
+    Returns:
+        (val_passed: bool, dec_abstained: bool, reasons: list[str])
     """
     raw_clean = generated_answer.strip()
     if not raw_clean:
         return False, False, ["Empty raw generation"]
 
-    # Abstention: any output that contains the abstention token is treated as a
-    # decoder-initiated abstention (handles cases where model adds surrounding text).
+    # --- Check 1: Abstention (substring, not exact match) ---
     if "INSUFFICIENT_VERIFIED_CONTEXT" in raw_clean:
         return False, True, ["Model generated explicit abstention token"]
 
     reasons = []
     ans_lower = raw_clean.lower()
 
-    # -----------------------------------------------------------------------
-    # Build structured allowlist from the retrieved fact record
-    # -----------------------------------------------------------------------
-    # Full multi-word named entities present in the retrieved fact
-    allowed_entities = []   # list of lowercased full entity strings
-    for key in ["location", "capital", "compound", "planet", "moon", "comp"]:
-        val = retrieved_fact.get(key)
-        if val:
-            allowed_entities.append(val.lower())
-
-    # Also allow every individual word token inside allowed entities
-    entity_words = set()
-    for ent in allowed_entities:
-        for w in ent.split():
-            entity_words.add(w.lower())
-
-    # Also allow every word token from the retrieved fact statement itself
+    # --- Check 2: Number invariance ---
     fact_statement = retrieved_fact.get("statement", "")
-    for w in fact_statement.lower().split():
-        entity_words.add(re.sub(r'[^a-z0-9]', '', w))
-
-    # Also allow every word token from the query itself (used only for structural
-    # subject identification, NOT as a value allowlist)
-    query_words = set(re.sub(r'[^a-z0-9]', '', w) for w in query.lower().split())
-
-    # Allowed numbers: digits found in the fact statement and period/temperature values
     allowed_numbers = set(re.findall(r'\d+', fact_statement))
     for key in ["temperature", "period"]:
         val = retrieved_fact.get(key)
         if val:
-            # Extract any digit sequences from the value (e.g. "forty two" has none,
-            # but "1867" would yield "1867")
             for n in re.findall(r'\d+', str(val)):
                 allowed_numbers.add(n)
 
-    # -----------------------------------------------------------------------
-    # Check 1: No unsupported digit numbers
-    # -----------------------------------------------------------------------
-    gen_nums = re.findall(r'\d+', raw_clean)
-    for num in gen_nums:
+    for num in re.findall(r'\d+', raw_clean):
         if num not in allowed_numbers:
-            reasons.append(f"Generated unsupported numerical value: {num}")
+            reasons.append(f"Unsupported number in answer: '{num}'")
             return False, False, reasons
 
-    # -----------------------------------------------------------------------
-    # Check 2: No foreign named entity injected
-    # Strategy: for each structured entity key in the retrieved fact, verify
-    # that the answer does not contain a *different* entity that shares the
-    # same semantic slot (i.e., a plausible but wrong capital/planet/etc.).
-    # We do NOT scan all capitalized words — only concrete named-entity slots.
-    # Query-role restriction: query entities are permitted only as the subject
-    # of the query, not as object/value answers.
-    # -----------------------------------------------------------------------
-    # For geography: ensure the object of the answer is the fact capital, not
-    # something else.  We detect injection by checking if any word in the
-    # answer that is NOT in entity_words OR query_words OR common English is a
-    # multi-char token — a conservative check.
-    # We implement this by scanning only tokens that look like proper-nouns
-    # (start uppercase, len>=3, not purely numeric) and are absent from both
-    # the fact entity allowlist AND the fact statement token set.
-    COMMON_ENGLISH = {
-        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-        "has", "have", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "shall", "can", "of", "in", "on", "at",
-        "to", "for", "and", "or", "but", "not", "no", "so", "if", "as",
-        "with", "by", "from", "it", "its", "this", "that", "these", "those",
-        "he", "she", "they", "we", "you", "i", "me", "him", "her", "them",
-        "us", "my", "your", "his", "our", "their", "which", "who", "what",
-        "when", "where", "how", "why", "there", "here", "both", "each",
-        "all", "any", "some", "one", "two", "three", "four", "five", "six",
-        "seven", "eight", "nine", "ten", "about", "around", "into", "onto",
-        "over", "under", "after", "before", "between", "through", "within",
-        "official", "capital", "city", "country", "region", "planet", "moon",
-        "satellite", "planetary", "orbital", "orbit", "orbits", "molecular",
-        "compound", "melting", "melts", "liquefies", "temperature", "degrees",
-        "celsius", "exactly", "days", "takes", "located", "known", "called",
-        "according", "based", "provided", "context", "fact", "verified",
-        "question", "answer", "information", "data", "given", "stated",
-        "insufficient", "verified", "context",
-    }
-    for w in re.findall(r'\b[A-Za-z][a-zA-Z]{2,}\b', raw_clean):
-        w_l = w.lower()
-        if w_l in COMMON_ENGLISH:
-            continue
-        if w_l in entity_words:
-            continue
-        if w_l in query_words:
-            # Permit as structural query subject; do not reject on this basis
-            continue
-        # Unknown proper noun: check if it looks like a structured entity
-        # (length > 3 and not a plain dictionary word)
-        # Only reject if it is truly foreign — not in the fact statement at all
-        if w_l not in entity_words:
-            reasons.append(f"Answer contains entity not found in retrieved fact: '{w}'")
-            return False, False, reasons
+    # --- Check 3 & 4: Foreign entity injection / query false-premise ---
+    if foreign_entities:
+        for fe in foreign_entities:
+            if fe in ans_lower:
+                reasons.append(f"Answer contains entity from a different fact: '{fe}'")
+                return False, False, reasons
 
-    # -----------------------------------------------------------------------
-    # Check 3: Relation-consistency templates (subject-object order)
-    # -----------------------------------------------------------------------
+    # --- Check 5: Relation-consistency templates ---
     category = retrieved_fact.get("category")
 
     if category == "geography":
@@ -532,9 +470,8 @@ def validate_grounding(query, retrieved_fact, generated_answer):
                 idx_cap_of = ans_lower.index("capital of")
                 idx_cap    = ans_lower.index(cap_l)
                 idx_loc    = ans_lower.index(loc_l)
-                # Pattern: "<cap> is the capital of <loc>"  — cap before 'capital of'
                 if idx_cap_of < idx_loc and idx_cap > idx_cap_of:
-                    reasons.append("Swapped relation: location appears as capital object")
+                    reasons.append("Swapped relation: location appears as the capital value")
                     return False, False, reasons
 
     elif category == "astronomy":
@@ -881,6 +818,19 @@ def main():
         "Verifier-gated Decoder",
         "Verifier-gated + Grounding Validator (Recommended)"
     ]
+
+    # ---------------------------------------------------------------------------
+    # Build foreign entity registry ONCE before the conditions loop.
+    # Maps each lowercased entity string to its fact ID.
+    # Used by the grounding validator to detect cross-fact entity injection.
+    # ---------------------------------------------------------------------------
+    all_entity_values = {}  # entity_string_lower -> fact_id
+    for f in all_facts:
+        for key in ["location", "capital", "compound", "planet", "moon", "comp"]:
+            val = f.get(key)
+            if val:
+                all_entity_values[val.lower()] = f["id"]
+    print(f"[Validator] Foreign entity registry built: {len(all_entity_values)} unique entity values across {len(all_facts)} facts.")
     
     for cond in conditions:
         print(f"\n[Running] Evaluating condition: {cond}...")
@@ -1024,7 +974,14 @@ def main():
                 
                 # Run the isolated structured grounding validator
                 t_val_start = time.perf_counter()
-                val_passed, dec_abstain, reasons = validate_grounding(q_str, best_fact, raw_gen)
+                # Build per-query foreign entity set: all entities NOT from the retrieved fact
+                foreign_entities = {
+                    e for e, fid in all_entity_values.items()
+                    if fid != best_fact["id"]
+                }
+                val_passed, dec_abstain, reasons = validate_grounding(
+                    q_str, best_fact, raw_gen, foreign_entities
+                )
                 latency_val = (time.perf_counter() - t_val_start) * 1000
                 
                 # Teacher-Forced PPL Stratification (In-Domain only)
@@ -1053,12 +1010,15 @@ def main():
                         else:
                             decision_state = "VALIDATOR_REJECTED"
                             final_answer = fallback_response
-                            # Diagnostic: print first 20 rejections to aid debugging
-                            if not is_ood and counts_id["VALIDATOR_REJECTED"] < 20:
-                                print(f"  [DIAG REJECT #{counts_id['VALIDATOR_REJECTED']+1}]")
-                                print(f"    Query : {q_str[:80]}")
-                                print(f"    Raw   : {raw_gen[:120]}")
-                                print(f"    Reason: {reasons}")
+                            # Diagnostic: always print first 20 in-domain rejections
+                            if not is_ood:
+                                n_rej = counts_id.get("VALIDATOR_REJECTED", 0)
+                                if n_rej < 20:
+                                    print(f"  [DIAG REJECT #{n_rej + 1}]")
+                                    print(f"    Fact    : {best_fact['statement'][:90]}")
+                                    print(f"    Query   : {q_str[:80]}")
+                                    print(f"    Raw gen : {raw_gen[:120]}")
+                                    print(f"    Reason  : {reasons}")
                     else:
                         # Validation disabled for ungated/standard gated baselines
                         decision_state = "ANSWER_ACCEPTED"
