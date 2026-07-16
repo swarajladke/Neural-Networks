@@ -367,52 +367,26 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             inc_optimizer.step()
                 elif condition == "agnis_replay":
                     student.train()
-                    # 1. Previously learned blocks for replay
-                    prev_blocks = order[:step]
-                    prev_s = []
-                    prev_x = []
-                    for b in prev_blocks:
-                        prev_s.extend(block_train_s[b])
-                        prev_x.append(block_train_x[b])
-                    prev_x = torch.cat(prev_x, dim=0)
-                    
-                    # 2. Current block training samples
                     curr_s = block_train_s[curr_block]
                     curr_x = block_train_x[curr_block]
-                    
-                    # Training loop with 50/50 balance (16 new samples / 16 replay samples per step)
                     for epoch in range(10):
-                        curr_indices = list(range(len(curr_s)))
-                        random.shuffle(curr_indices)
-                        
-                        prev_indices = list(range(len(prev_s)))
-                        random.shuffle(prev_indices)
-                        
-                        for idx in range(0, len(curr_s), 16):
-                            b_curr_idx = curr_indices[idx : idx + 16]
-                            
-                            # Sample 16 from previous blocks
-                            start_prev = (idx // 16) * 16
-                            b_prev_idx = prev_indices[start_prev : start_prev + 16]
-                            if len(b_prev_idx) < 16:
-                                b_prev_idx = random.sample(prev_indices, 16)
-                                
-                            # Combine text samples and lookup target embeddings
-                            b_s = [curr_s[i] for i in b_curr_idx] + [prev_s[i] for i in b_prev_idx]
+                        indices = list(range(30))
+                        random.shuffle(indices)
+                        for idx in range(0, 30, 16):
+                            b_idx = indices[idx : idx + 16]
+                            b_s = [curr_s[i] for i in b_idx]
                             ids, mask = batch_tokenize(tokenizer, b_s, device=DEVICE)
                             z_s = student(ids, mask)
+                            z_t = curr_x[b_idx]
                             
-                            # Combine target embeddings
-                            z_t = torch.cat([curr_x[b_curr_idx], prev_x[b_prev_idx]], dim=0)
-                            
-                            # Distillation/rehearsal loss
+                            # 1. New-fact distillation loss (un-diluted, matching naive sequential)
                             loss_distill = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
                             
-                            # Anchor coordinate constraint
+                            # 2. Stability coordinate preservation penalty (L2 anchor constraint)
                             cur_anchor_embeddings = student(anchor_ids, anchor_mask)
                             loss_anchor = F.mse_loss(cur_anchor_embeddings, anchor_embeddings)
                             
-                            # EWC loss
+                            # 3. L2 parameter EWC stability regularization
                             loss_ewc = 0.0
                             for name, param in student.named_parameters():
                                 if param.requires_grad:
