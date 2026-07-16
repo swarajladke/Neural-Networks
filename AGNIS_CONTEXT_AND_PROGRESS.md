@@ -91,7 +91,7 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 *   **Student weights Checkpoint:** `d10ae2edf7c46192fd5a2bc0c794b445099645d76da02c0586b17047195d36f6`
 *   **Scaling Dataset JSON:** `5ce9b57f25f38c051d6ea77ce823e92a8d12996c94667287688867ac4ec76b75`
 *   **Evaluation Script:** `2edbee21deb63581953125b3f4cfcc4a75a1a96d45766f178928cb4a33d3c385`
-*   **Repository HEAD Commit:** `67332cd`
+*   **Repository HEAD Commit:** `1edc0c0`
 
 ---
 
