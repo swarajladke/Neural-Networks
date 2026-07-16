@@ -603,7 +603,42 @@ def main():
     assert policy_cal_ids.isdisjoint(test_fact_ids), "Leaked: Test facts overlap with calibration!"
     print(f"[Split] Memory Isolation Check: Passed. Test facts are strictly disjoint from train/calibration splits.")
     
-    cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
+    if not os.path.exists(CACHE_100_PATH) and not os.path.exists(CACHE_100_PATH.replace("../", "")):
+        print(f"[Cache] Embeddings cache not found at {CACHE_100_PATH}. Generating on-the-fly using SmolLM2...")
+        _tmp_model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
+        _tmp_model.eval()
+
+        def _encode_sentences(model, tok, sentences, max_len=32, batch=32):
+            vecs = []
+            for i in range(0, len(sentences), batch):
+                b = sentences[i:i+batch]
+                enc = tok(b, max_length=max_len, padding="max_length",
+                          truncation=True, return_tensors="pt").to(DEVICE)
+                with torch.inference_mode():
+                    out = model(**enc, output_hidden_states=True)
+                hidden = out.hidden_states[-1]  # (B, T, D)
+                # Mean-pool over non-padding tokens
+                mask = enc.attention_mask.unsqueeze(-1).float()
+                pooled = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1)
+                vecs.append(pooled.cpu())
+            return torch.cat(vecs, dim=0)
+
+        tr_s_tmp, _, val_s_tmp, _, te_s_tmp, _ = get_sentence_lists(all_facts, unique_probes)
+        print(f"  Encoding {len(tr_s_tmp)} train / {len(te_s_tmp)} test sentences...")
+        z_tr_tmp  = _encode_sentences(_tmp_model, tokenizer, tr_s_tmp)
+        z_val_tmp = _encode_sentences(_tmp_model, tokenizer, val_s_tmp)
+        z_te_tmp  = _encode_sentences(_tmp_model, tokenizer, te_s_tmp)
+        cache_save_path = CACHE_100_PATH if "/" not in CACHE_100_PATH.lstrip("./") else "smollm2_embeddings_100slots.pt"
+        torch.save({"train_x": z_tr_tmp, "val_x": z_val_tmp, "test_x": z_te_tmp}, cache_save_path)
+        print(f"  [Cache] Saved to {cache_save_path}")
+        del _tmp_model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        CACHE_100_PATH_RESOLVED = cache_save_path
+    else:
+        CACHE_100_PATH_RESOLVED = CACHE_100_PATH if os.path.exists(CACHE_100_PATH) else CACHE_100_PATH.replace("../", "")
+
+    cache_data = torch.load(CACHE_100_PATH_RESOLVED, map_location=DEVICE)
     
     train_indices = [idx for idx, f in enumerate(all_facts) if f["id"] in train_fact_ids]
     train_teacher_indices = []
