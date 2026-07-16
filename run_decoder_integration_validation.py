@@ -455,8 +455,8 @@ def validate_grounding(query, retrieved_fact, generated_answer):
         # Permit ordinary grammatical constructs at start of output sentences
         if w_l in ["the", "a", "an", "this", "it", "there", "is", "in", "on", "at", "what", "question", "answer", "context", "verified"]:
             continue
-        # Must either be part of the allowed entities or present in the query
-        if w_l not in entity_words and w_l not in query_lower:
+        # Must be part of the allowed entities from the context fact
+        if w_l not in entity_words:
             reasons.append(f"Generated unsupported named entity token: '{w}'")
             return False, False, reasons
             
