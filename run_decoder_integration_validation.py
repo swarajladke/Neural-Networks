@@ -551,10 +551,22 @@ def score_against_ground_truth(final_answer, target_entity, declared_aliases):
     target_lower = target_entity.lower().strip()
     if target_lower in ans_lower:
         return True
+        
+    # Check digit equivalents (e.g. target "two hundred" matches answer "200")
+    target_digits = text_to_digit_equivalents(target_lower)
+    for d in target_digits:
+        if d in ans_lower:
+            return True
+            
     if declared_aliases:
         for alias in declared_aliases:
-            if alias.lower().strip() in ans_lower:
+            alias_lower = alias.lower().strip()
+            if alias_lower in ans_lower:
                 return True
+            alias_digits = text_to_digit_equivalents(alias_lower)
+            for d in alias_digits:
+                if d in ans_lower:
+                    return True
     return False
 
 def calculate_reference_nll_and_tokens(model, tokenizer, prompt, target_answer):
