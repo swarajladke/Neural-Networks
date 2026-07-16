@@ -1230,7 +1230,7 @@ def main():
             
     # Print factually incorrect accepted answers diagnostic
     c3_records = records_saved["records"]
-    c3_incorrect = [x for x in c3_records if x["condition"] == "Verifier-gated + Grounding Validator (Recommended)" and not x["is_ood"] and x["decision_state"] == "ANSWER_ACCEPTED" and not x["factually_correct"]]
+    c3_incorrect = [x for x in c3_records if x["condition"] == "Verifier-gated + Grounding Validator (Recommended)" and x["split"] != "OOD_TEST" and x["decision_state"] == "ANSWER_ACCEPTED" and not x["factually_correct"]]
     if c3_incorrect:
         print("\n[DIAG] Factually Incorrect Accepted Answers for Condition 3:")
         for idx, x in enumerate(c3_incorrect):
