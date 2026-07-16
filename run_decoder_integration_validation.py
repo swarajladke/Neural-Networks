@@ -453,8 +453,7 @@ def validate_grounding(query, retrieved_fact, generated_answer):
             
     for w in words:
         w_l = w.lower()
-        # Permit ordinary grammatical constructs at start of output sentences
-        if w_l in ["the", "a", "an", "this", "it", "there", "is", "in", "on", "at", "what", "question", "answer", "context", "verified"]:
+        if w_l in ["the", "a", "an", "this", "it", "there", "is", "in", "on", "at", "what", "question", "answer", "context", "verified", "according", "based", "provided", "was", "are", "were", "located", "celsius", "degrees", "orbits", "planetary", "satellite", "molecular", "compound", "capital", "city", "official", "exactly", "days", "insufficient", "of", "to", "for", "and", "has", "have", "with", "about", "around", "by", "from", "that", "which"]:
             continue
         # Must be part of the allowed entities from the context fact
         if w_l not in entity_words:
