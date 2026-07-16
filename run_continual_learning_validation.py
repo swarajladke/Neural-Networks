@@ -620,17 +620,17 @@ def main():
         cache_data = torch.load(CACHE_100_PATH, weights_only=True)
     
     sweep_configs = [
-        # Regularization ablation at standard lr = 1e-3
-        ("agnis_replay_ewc0.00_anc0.00", 1e-3, 0.0, 0.0),
+        # Milli-scale sweeps at standard learning rate 1e-3
+        ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
+        ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
+        ("agnis_replay_ewc0.005_anc0.002", 1e-3, 0.005, 0.002),
+        ("agnis_replay_ewc0.005_anc0.005", 1e-3, 0.005, 0.005),
+        ("agnis_replay_ewc0.01_anc0.01", 1e-3, 0.01, 0.01),
+        ("agnis_replay_ewc0.02_anc0.01", 1e-3, 0.02, 0.01),
         ("agnis_replay_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
-        ("agnis_replay_ewc0.05_anc0.02", 1e-3, 0.05, 0.02),
-        ("agnis_replay_ewc0.05_anc0.05", 1e-3, 0.05, 0.05),
-        ("agnis_replay_ewc0.10_anc0.10", 1e-3, 0.10, 0.10),
-        ("agnis_replay_ewc0.20_anc0.20", 1e-3, 0.20, 0.20),
-        ("agnis_replay_ewc0.50_anc0.50", 1e-3, 0.50, 0.50),
-        # LR Scaling sweeps on (0.05, 0.05)
-        ("agnis_replay_lr5e-4_ewc0.05", 5e-4, 0.05, 0.05),
-        ("agnis_replay_lr2e-3_ewc0.05", 2e-3, 0.05, 0.05)
+        # Higher learning rates to overcome EWC anchoring tension
+        ("agnis_replay_lr1.5e-3_ewc0.005", 1.5e-3, 0.005, 0.005),
+        ("agnis_replay_lr2e-3_ewc0.01", 2e-3, 0.01, 0.01)
     ]
     conditions = ["frozen_encoder_writable_memory", "naive_sequential"]
     for name, _, _, _ in sweep_configs:
