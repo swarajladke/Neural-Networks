@@ -541,6 +541,50 @@ def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities
                     reasons.append("Swapped relation: planet placed as orbiting the moon")
                     return False, False, reasons
 
+    # --- Check 6: Query-present entity exclusion as answer value ---
+    # If a structured entity is already present in the query, it cannot be the answer value.
+    if category == "geography":
+        loc = retrieved_fact.get("location")
+        cap = retrieved_fact.get("capital")
+        if loc and cap:
+            loc_l = loc.lower()
+            cap_l = cap.lower()
+            if loc_l in query_lower:
+                if loc_l in ans_lower and cap_l not in ans_lower:
+                    reasons.append("Answer contains queried location but lacks the capital")
+                    return False, False, reasons
+            if cap_l in query_lower:
+                if cap_l in ans_lower and loc_l not in ans_lower:
+                    reasons.append("Answer contains queried capital but lacks the location")
+                    return False, False, reasons
+
+    elif category == "science":
+        comp = retrieved_fact.get("compound") or retrieved_fact.get("comp")
+        temp = retrieved_fact.get("temperature")
+        if comp and temp:
+            comp_l = comp.lower()
+            temp_l = temp.lower()
+            if comp_l in query_lower:
+                if comp_l in ans_lower and temp_l not in ans_lower:
+                    reasons.append("Answer contains queried compound but lacks the temperature")
+                    return False, False, reasons
+
+    elif category == "astronomy":
+        moon = retrieved_fact.get("moon")
+        planet = retrieved_fact.get("planet")
+        period = retrieved_fact.get("period")
+        if moon and planet and period:
+            moon_l = moon.lower()
+            planet_l = planet.lower()
+            period_l = period.lower()
+            if moon_l in query_lower and planet_l in query_lower:
+                if (moon_l in ans_lower or planet_l in ans_lower) and period_l not in ans_lower:
+                    period_digits = text_to_digit_equivalents(period_l)
+                    has_period_digit = any(d in ans_lower for d in period_digits)
+                    if not has_period_digit:
+                        reasons.append("Answer contains queried moon/planet but lacks the orbital period")
+                        return False, False, reasons
+
     return True, False, []
 
 def score_against_ground_truth(final_answer, target_entity, declared_aliases):
