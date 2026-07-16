@@ -567,8 +567,11 @@ def validate_grounding(query, retrieved_fact, generated_answer, foreign_entities
             temp_l = temp.lower()
             if comp_l in query_lower:
                 if comp_l in ans_lower and temp_l not in ans_lower:
-                    reasons.append("Answer contains queried compound but lacks the temperature")
-                    return False, False, reasons
+                    temp_digits = text_to_digit_equivalents(temp_l)
+                    has_temp_digit = any(d in ans_lower for d in temp_digits)
+                    if not has_temp_digit:
+                        reasons.append("Answer contains queried compound but lacks the temperature")
+                        return False, False, reasons
 
     elif category == "astronomy":
         moon = retrieved_fact.get("moon")
