@@ -6,11 +6,11 @@ Implements:
 2. Training Student Encoder and Bilinear-MLP Verifier on-the-fly.
 3. Loading SmolLM2-360M-Instruct as the Conditional NLG Decoder.
 4. Evaluating Selective RAG NLG:
-   - Baseline (No Gating)
-   - Verifier-gated NLG (Gated, threshold = 0.9127)
-   - Verifier-gated + Grounding Validator (Recommended)
+   - Condition 1: Ungated Decoder (always generates, validation disabled)
+   - Condition 2: Verifier-gated Decoder (generates after verifier acceptance, validation disabled)
+   - Condition 3: Verifier-gated + Grounding Validator (generates after verifier acceptance, validation enabled)
 5. Calculating:
-   - Teacher-forced reference-answer perplexity
+   - Stratified teacher-forced reference-answer perplexity
    - Factual Exactness (ground-truth target entity presence)
    - OOD Hallucination / Rejection Rate
 """
@@ -27,7 +27,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from scipy.stats import beta
 
 # Set all random seeds for deterministic execution
 random.seed(42)
@@ -396,52 +395,55 @@ def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, tes
     return positive_pairs, semantic_neg_pairs, general_neg_pairs
 
 # ---------------------------------------------------------------------------
-# Grounding Validator & Perplexity
+# Runtime Grounding Validator & Scorer (Separated)
 # ---------------------------------------------------------------------------
-def validate_generation(raw_generation, verified_fact_statement, target_answer, keywords, query_str):
-    raw_clean = raw_generation.strip()
-    if not raw_clean or raw_clean == "INSUFFICIENT_VERIFIED_CONTEXT":
-        return False
+def validate_grounding(query, retrieved_fact_statement, generated_answer):
+    """
+    Validates a generated answer strictly without access to the ground-truth target label or entities.
+    Uses only the raw query and the retrieved context fact.
+    """
+    raw_clean = generated_answer.strip()
+    if not raw_clean:
+        return False, False
         
-    # 1. Expected target entity is preserved (case-insensitive check)
-    target_clean = target_answer.strip().lower()
-    in_gen = (target_clean in raw_clean.lower())
-    if not in_gen and keywords:
-        for kw in keywords:
-            if kw.strip().lower() in raw_clean.lower():
-                in_gen = True
-                break
-    if not in_gen:
-        return False
+    # Check for decoder-initiated abstention
+    if "INSUFFICIENT_VERIFIED_CONTEXT" in raw_clean:
+        return False, True
         
-    # 2. Numbers and dates match verified fact exactly
+    # 1. Number & Date validation (must exist in context fact)
     gen_nums = re.findall(r'\d+', raw_clean)
-    fact_nums = re.findall(r'\d+', verified_fact_statement)
-    
-    # All digits in generation must be present in verified fact
+    fact_nums = re.findall(r'\d+', retrieved_fact_statement)
     for num in gen_nums:
         if num not in fact_nums:
-            return False
+            return False, False
             
-    # All digits in target_answer must be present in generation
-    target_nums = re.findall(r'\d+', target_answer)
-    for num in target_nums:
-        if num not in gen_nums:
-            return False
-            
-    # 3. No unsupported named entities introduced
+    # 2. Named Entity / Capitalized Word Validation
     words = re.findall(r'\b[A-Z][a-zA-Z]*\b', raw_clean)
-    fact_lower = verified_fact_statement.lower()
-    query_lower = query_str.lower()
+    fact_lower = retrieved_fact_statement.lower()
+    query_lower = query.lower()
     for w in words:
         w_l = w.lower()
-        # Accept common grammatical words at start of sentence
+        # Permit ordinary grammatical constructs at start of output sentences
         if w_l in ["the", "a", "an", "this", "it", "there", "is", "in", "on", "at", "what", "question", "answer", "context", "verified"]:
             continue
         if w_l not in fact_lower and w_l not in query_lower:
-            return False
+            return False, False
             
-    return True
+    return True, False
+
+def score_against_ground_truth(final_answer, target_entity, declared_aliases):
+    """
+    Evaluation scoring function. Compares final validated/output string against ground-truth targets.
+    """
+    ans_lower = final_answer.lower().strip()
+    target_lower = target_entity.lower().strip()
+    if target_lower in ans_lower:
+        return True
+    if declared_aliases:
+        for alias in declared_aliases:
+            if alias.lower().strip() in ans_lower:
+                return True
+    return False
 
 def calculate_reference_nll_and_tokens(model, tokenizer, prompt, target_answer):
     full_text = prompt + " " + target_answer
@@ -455,7 +457,7 @@ def calculate_reference_nll_and_tokens(model, tokenizer, prompt, target_answer):
     labels[0, :prompt_len] = -100
     labels[input_ids == tokenizer.pad_token_id] = -100
     
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model(input_ids, labels=labels)
         loss = outputs.loss.item()
         
@@ -463,7 +465,7 @@ def calculate_reference_nll_and_tokens(model, tokenizer, prompt, target_answer):
     return loss, num_tokens
 
 # ---------------------------------------------------------------------------
-# Main Execution
+# Main Routine
 # ---------------------------------------------------------------------------
 def main():
     print("="*80)
@@ -623,6 +625,10 @@ def main():
     decoder = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
     decoder.eval()
     
+    # Record Checkpoint revision/tokenizer details
+    checkpoint_revision = getattr(decoder.config, "_commit_hash", "unknown_revision")
+    print(f"[Revision] Decoder Checkpoint Revision: {checkpoint_revision}")
+    
     # 4. Prepare Evaluation Queries on Test Set + OOD
     print("[Evaluation] Generating RAG test queries...")
     test_queries = []
@@ -655,16 +661,7 @@ def main():
     # Certified Threshold Lock
     theta = 0.9127
     
-    # Run evaluation across three policies
-    records_saved = {}
-    
-    policies = [
-        "Baseline (Always Generate)",
-        "Verifier-gated NLG (Gated)",
-        "Verifier-gated + Output Validation (Recommended)"
-    ]
-    
-    # Grounding Prompts
+    # Target Grounding Prompts
     system_prompt = (
         "You are a grounded answer generator.\n\n"
         "Rules:\n"
@@ -676,14 +673,27 @@ def main():
         "5. Keep the answer concise."
     )
     
-    for policy in policies:
-        print(f"\n[Running] Evaluating policy: {policy}...")
+    fallback_response = "I do not have verified information to answer this question."
+    
+    records_saved = {}
+    
+    # We run three comparison conditions
+    conditions = [
+        "Ungated Decoder",
+        "Verifier-gated Decoder",
+        "Verifier-gated + Grounding Validator (Recommended)"
+    ]
+    
+    for cond in conditions:
+        print(f"\n[Running] Evaluating condition: {cond}...")
         
         results_list = []
-        nlls = []
-        num_tokens_list = []
         
-        # Retrieval variables
+        # PPL Stratification accumulation dictionaries
+        ppl_acc_loss = {"all": 0.0, "correct_ret": 0.0, "incorrect_ret": 0.0}
+        ppl_acc_tokens = {"all": 0, "correct_ret": 0, "incorrect_ret": 0}
+        
+        # Component Metrics
         total_retrieval_attempts = 0
         correct_retrievals = 0
         verifier_accept_correct_ret = 0
@@ -694,14 +704,14 @@ def main():
             q_str = q["q_str"]
             is_ood = q["is_ood"]
             
-            # Encode query
+            # 1. Encode query
             enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
             ids_t = torch.tensor([enc_ids], device=DEVICE)
             mask_t = torch.ones_like(ids_t)
             with torch.inference_mode():
                 q_s = student(ids_t, mask_t)[0]
                 
-            # Hybrid candidates search
+            # 2. Hybrid search candidates
             sims = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
             sem_idx = torch.topk(sims, k=10).indices.cpu().numpy()
             
@@ -726,7 +736,7 @@ def main():
                     candidate_indices.append(idx)
                     seen.add(idx)
                     
-            # Compute verifier scores
+            # 3. Compute verifier scores
             candidates = []
             for cand_idx in candidate_indices:
                 k_vec = z_ref_bank[cand_idx]
@@ -744,7 +754,8 @@ def main():
             best_fact = all_facts[best_fact_idx]
             best_fact_sentence = best_fact["statement"]
             
-            # Record component metrics for ID queries
+            # Track component metrics for In-Domain queries
+            is_correct_ret = False
             if not is_ood:
                 total_retrieval_attempts += 1
                 target_fact = q["target_fact"]
@@ -758,15 +769,15 @@ def main():
                     if best_score >= theta:
                         verifier_accept_incorrect_ret += 1
             
-            # Policy Decisions
+            # Gating Logic
             gated_accept = (best_score >= theta)
-            is_accepted = True if (policy == "Baseline (Always Generate)" or gated_accept) else False
             
+            # Evaluate Decision Taxonomy
+            decision_state = "VERIFIER_REJECTED"
+            final_answer = fallback_response
             raw_gen = ""
-            validated_output = ""
-            outcome = "abstain"
             
-            if is_accepted:
+            if cond == "Ungated Decoder" or gated_accept:
                 # Format prompts via tokenizer template
                 user_msg = f"VERIFIED_FACT:\n{best_fact_sentence}\n\nQUESTION:\n{q_str}\n\nANSWER:"
                 messages = [
@@ -789,101 +800,131 @@ def main():
                 gen_tokens = outputs[0, enc_prompt.input_ids.shape[1]:]
                 raw_gen = tokenizer.decode(gen_tokens, skip_special_tokens=True).strip()
                 
-                # Grounding Gate checks
-                target_ans = best_fact["answer"] if is_ood else q["target_fact"]["answer"]
-                target_keywords = best_fact["keywords"] if is_ood else q["target_fact"]["keywords"]
+                # Run the isolated runtime grounding validator
+                val_pass, dec_abstain = validate_grounding(q_str, best_fact_sentence, raw_gen)
                 
-                validator_pass = validate_generation(raw_gen, best_fact_sentence, target_ans, target_keywords, q_str)
-                
-                if policy == "Verifier-gated + Output Validation (Recommended)":
-                    if validator_pass:
-                        validated_output = raw_gen
-                        outcome = "accept_correct" if (not is_ood and target_ans.lower() in raw_gen.lower()) else "accept_incorrect"
-                    else:
-                        validated_output = "I do not have verified information to answer this question."
-                        outcome = "abstain"
-                else:
-                    # For baseline and standard gated, output validation is disabled
-                    validated_output = raw_gen
-                    is_correct_ans = (not is_ood and target_ans.lower() in raw_gen.lower())
-                    outcome = "accept_correct" if is_correct_ans else "accept_incorrect"
+                # Teacher-Forcing PPL Stratification (In-Domain only)
+                if not is_ood:
+                    target_ans = q["target_fact"]["answer"]
+                    nll, num_toks = calculate_reference_nll_and_tokens(decoder, tokenizer, formatted_prompt, target_ans)
                     
-                # Track conditional accuracy of the decoder given correct context fact
+                    # Accumulate for Stratum 1: All accepted in-domain queries
+                    ppl_acc_loss["all"] += nll * num_toks
+                    ppl_acc_tokens["all"] += num_toks
+                    
+                    if is_correct_ret:
+                        # Accumulate for Stratum 2: Correctly retrieved & accepted
+                        ppl_acc_loss["correct_ret"] += nll * num_toks
+                        ppl_acc_tokens["correct_ret"] += num_toks
+                    else:
+                        # Accumulate for Stratum 3: Incorrectly retrieved but accepted
+                        ppl_acc_loss["incorrect_ret"] += nll * num_toks
+                        ppl_acc_tokens["incorrect_ret"] += num_toks
+                
+                # Process outputs according to Condition config
+                if dec_abstain:
+                    decision_state = "DECODER_ABSTAINED"
+                    final_answer = fallback_response
+                else:
+                    if cond == "Verifier-gated + Grounding Validator (Recommended)":
+                        if val_pass:
+                            decision_state = "ANSWER_ACCEPTED"
+                            final_answer = raw_gen
+                        else:
+                            decision_state = "VALIDATOR_REJECTED"
+                            final_answer = fallback_response
+                    else:
+                        # Validation disabled for un-gated and standard gated baseline
+                        decision_state = "ANSWER_ACCEPTED"
+                        final_answer = raw_gen
+            else:
+                decision_state = "VERIFIER_REJECTED"
+                final_answer = fallback_response
+                
+            # Perform factual evaluation using the isolated evaluation scorer
+            eval_outcome = "UNSUPPORTED"
+            if decision_state == "ANSWER_ACCEPTED":
+                target_ans = best_fact["answer"] if is_ood else q["target_fact"]["answer"]
+                target_kws = best_fact["keywords"] if is_ood else q["target_fact"]["keywords"]
+                
+                is_correct_ans = score_against_ground_truth(final_answer, target_ans, target_kws)
+                eval_outcome = "FACTUALLY_CORRECT" if is_correct_ans else "FACTUALLY_INCORRECT"
+                
+                # Log local decoder accuracy under correct retrieval
                 if not is_ood and is_correct_ret:
-                    is_correct_ans = (target_ans.lower() in raw_gen.lower())
-                    if is_correct_ans:
+                    if score_against_ground_truth(raw_gen, target_ans, target_kws):
                         decoder_acc_correct_accepted += 1
                         
-                # Reference NLL perplexity under teacher forcing (for ID queries)
-                if not is_ood:
-                    nll, num_tokens = calculate_reference_nll_and_tokens(decoder, tokenizer, formatted_prompt, target_ans)
-                    nlls.append(nll)
-                    num_tokens_list.append(num_tokens)
-            else:
-                validated_output = "I do not have verified information to answer this question."
-                outcome = "abstain"
-                
             results_list.append({
                 "q_str": q_str,
                 "is_ood": is_ood,
-                "is_accepted": is_accepted,
+                "is_correct_ret": is_correct_ret if not is_ood else False,
+                "decision_state": decision_state,
                 "raw_generation": raw_gen,
-                "validated_output": validated_output,
-                "outcome": outcome
+                "final_answer": final_answer,
+                "eval_outcome": eval_outcome
             })
             
-        records_saved[policy] = results_list
+        records_saved[cond] = results_list
         
-        # Calculate policy summary metrics
+        # 5. Summarize Metrics
         id_results = [r for r in results_list if not r["is_ood"]]
         ood_results = [r for r in results_list if r["is_ood"]]
         
-        # In-Domain Metrics
-        id_coverage = len([r for r in id_results if r["is_accepted"]]) / len(id_results)
-        id_selective_exactness = len([r for r in id_results if r["outcome"] == "accept_correct"]) / max(1, len([r for r in id_results if r["is_accepted"]]))
-        id_end_to_end_exactness = len([r for r in id_results if r["outcome"] == "accept_correct"]) / len(id_results)
+        # Decision counts
+        counts_id = {state: len([r for r in id_results if r["decision_state"] == state]) for state in ["VERIFIER_REJECTED", "DECODER_ABSTAINED", "VALIDATOR_REJECTED", "ANSWER_ACCEPTED"]}
+        counts_ood = {state: len([r for r in ood_results if r["decision_state"] == state]) for state in ["VERIFIER_REJECTED", "DECODER_ABSTAINED", "VALIDATOR_REJECTED", "ANSWER_ACCEPTED"]}
         
-        mean_nll = np.mean(nlls) if len(nlls) > 0 else float("nan")
-        corpus_ppl = math.exp(sum(n * nll for n, nll in zip(num_tokens_list, nlls)) / sum(num_tokens_list)) if len(nlls) > 0 else float("nan")
-        median_ppl = np.median([math.exp(nll) for nll in nlls]) if len(nlls) > 0 else float("nan")
+        # Factual correct counts
+        correct_id = len([r for r in id_results if r["decision_state"] == "ANSWER_ACCEPTED" and r["eval_outcome"] == "FACTUALLY_CORRECT"])
+        incorrect_id = len([r for r in id_results if r["decision_state"] == "ANSWER_ACCEPTED" and r["eval_outcome"] == "FACTUALLY_INCORRECT"])
         
-        # OOD Metrics
-        ood_rejection_rate = len([r for r in ood_results if not r["is_accepted"]]) / len(ood_results)
-        ood_generation_rate = len([r for r in ood_results if r["is_accepted"]]) / len(ood_results)
-        ood_post_validator_rejections = len([r for r in ood_results if r["is_accepted"] and r["validated_output"].startswith("I do not have")])
-        ood_unsafe_answer_rate = len([r for r in ood_results if r["is_accepted"] and not r["validated_output"].startswith("I do not have")]) / len(ood_results)
+        # Stratum PPLs
+        strat_ppl = {}
+        for key in ["all", "correct_ret", "incorrect_ret"]:
+            tot_toks = ppl_acc_tokens[key]
+            strat_ppl[key] = math.exp(ppl_acc_loss[key] / tot_toks) if tot_toks > 0 else float("nan")
+            
+        # OOD Rejections/Safety
+        final_ood_unsafe = len([r for r in ood_results if r["decision_state"] == "ANSWER_ACCEPTED"])
         
-        # Safe abstentions / Hallucinations
-        correct_abstentions_id = len([r for r in id_results if not r["is_accepted"]])
+        print("\n" + "-"*70)
+        print(f"  CONDITION SUMMARY: {cond}")
+        print("-"*70)
+        print(f"  * In-Domain (ID) Decision Strata:")
+        print(f"    - VERIFIER_REJECTED            : {counts_id['VERIFIER_REJECTED']} / {len(id_results)}")
+        print(f"    - DECODER_ABSTAINED            : {counts_id['DECODER_ABSTAINED']} / {len(id_results)}")
+        print(f"    - VALIDATOR_REJECTED           : {counts_id['VALIDATOR_REJECTED']} / {len(id_results)}")
+        print(f"    - ANSWER_ACCEPTED              : {counts_id['ANSWER_ACCEPTED']} / {len(id_results)}")
+        print(f"      -> FACTUALLY_CORRECT         : {correct_id}")
+        print(f"      -> FACTUALLY_INCORRECT       : {incorrect_id}")
         
-        print("\n" + "-"*60)
-        print(f"  METRICS FOR: {policy}")
-        print("-"*60)
-        print(f"  * In-Domain (ID) Metrics:")
-        print(f"    - Retrieval Recall@1           : {correct_retrievals / total_retrieval_attempts * 100:.2f}%")
-        print(f"    - Verifier Coverage            : {id_coverage * 100:.2f}%")
-        print(f"    - Selective Factual Exactness  : {id_selective_exactness * 100:.2f}%")
-        print(f"    - End-to-End Factual Accuracy  : {id_end_to_end_exactness * 100:.2f}%")
-        print(f"    - Correct Abstention Rate      : {correct_abstentions_id / len(id_results) * 100:.2f}%")
-        print(f"    - Mean Token-level NLL         : {mean_nll:.4f}")
-        print(f"    - Token-weighted Corpus PPL    : {corpus_ppl:.2f}")
-        print(f"    - Median Per-answer PPL        : {median_ppl:.2f}")
-        print(f"    - Verifier Accept | Correct    : {verifier_accept_correct_ret / max(1, correct_retrievals) * 100:.2f}%")
-        print(f"    - Verifier Accept | Incorrect  : {verifier_accept_incorrect_ret / max(1, (total_retrieval_attempts - correct_retrievals)) * 100:.2f}%")
-        print(f"    - Decoder Acc | Accepted       : {decoder_acc_correct_accepted / max(1, verifier_accept_correct_ret) * 100:.2f}%")
+        print(f"  * In-Domain Performance Rates:")
+        print(f"    - Retrieval Recall@1           : {correct_retrievals / len(id_results) * 100:.2f}%")
+        print(f"    - Verifier Coverage            : {counts_id['ANSWER_ACCEPTED'] / len(id_results) * 100:.2f}%")
+        print(f"    - Selective Factual Exactness  : {correct_id / max(1, counts_id['ANSWER_ACCEPTED']) * 100:.2f}%")
+        print(f"    - End-to-End Factual Accuracy  : {correct_id / len(id_results) * 100:.2f}%")
+        print(f"    - Decoder Accuracy | Accepted  : {decoder_acc_correct_accepted / max(1, verifier_accept_correct_ret) * 100:.2f}%")
         
-        print(f"  * Out-of-Domain (OOD) Metrics:")
-        print(f"    - Rejection Rate (Verifier)    : {ood_rejection_rate * 100:.2f}%")
-        print(f"    - Generation Rate (Accepted)   : {ood_generation_rate * 100:.2f}%")
-        print(f"    - Post-Validator Rejections    : {ood_post_validator_rejections}")
-        print(f"    - Final Unsafe-Answer Rate     : {ood_unsafe_answer_rate * 100:.2f}%")
+        print(f"  * Stratified Reference-Answer Perplexity (PPL):")
+        print(f"    - Stratum 1: All Accepted ID   : {strat_ppl['all']:.2f}")
+        print(f"    - Stratum 2: Correct & Accepted: {strat_ppl['correct_ret']:.2f}")
+        print(f"    - Stratum 3: Incorrect & Accept: {strat_ppl['incorrect_ret']:.2f}")
         
-        # Zero safety failure reporting formatting
-        unsafe_count = len([r for r in ood_results if r["is_accepted"] and not r["validated_output"].startswith("I do not have")])
-        if unsafe_count == 0:
+        print(f"  * Out-of-Domain (OOD) Decision Strata:")
+        print(f"    - VERIFIER_REJECTED            : {counts_ood['VERIFIER_REJECTED']} / {len(ood_results)}")
+        print(f"    - DECODER_ABSTAINED            : {counts_ood['DECODER_ABSTAINED']} / {len(ood_results)}")
+        print(f"    - VALIDATOR_REJECTED           : {counts_ood['VALIDATOR_REJECTED']} / {len(ood_results)}")
+        print(f"    - ANSWER_ACCEPTED              : {counts_ood['ANSWER_ACCEPTED']} / {len(ood_results)}")
+        
+        print(f"  * Out-of-Domain Performance Rates:")
+        print(f"    - OOD Rejection Rate (Verifier): {counts_ood['VERIFIER_REJECTED'] / len(ood_results) * 100:.2f}%")
+        print(f"    - Final OOD Hallucination Rate : {final_ood_unsafe / len(ood_results) * 100:.2f}%")
+        
+        if final_ood_unsafe == 0:
             print(f"    - [Safety Certification]       : Zero OOD failures observed among {len(ood_results)} test cases.")
         else:
-            print(f"    - [Safety Certification]       : FAILED with {unsafe_count} unsafe answers out of {len(ood_results)} cases.")
+            print(f"    - [Safety Certification]       : FAILED with {final_ood_unsafe} unsafe answers out of {len(ood_results)} cases.")
             
     # Save NLG records to workspace
     with open("nlg_evaluation_records.json", "w") as f:
