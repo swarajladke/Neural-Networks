@@ -1480,7 +1480,7 @@ def main():
     print(f"[Save] verifier_false_negatives.json ({len(vfn_records)} false negatives)")
 
     # Validator leakage audit
-    n_changed = sum(1 for r in leakage_audit if r["decision_changed"])
+    n_changed = sum(1 for r in leakage_audit if r["decision_or_extraction_changed"])
     with open("validator_leakage_audit.json", "w") as f:
         json.dump({
             "total_audited": len(leakage_audit),
@@ -1488,11 +1488,11 @@ def main():
             "ground_truth_isolated": (n_changed == 0),
             "records": leakage_audit
         }, f, indent=2)
-    print(f"\n[Leakage Audit] {len(leakage_audit)} decisions audited.")
+    print(f"\n[Leakage Audit] {len(leakage_audit)} decisions/extractions audited.")
     if n_changed == 0:
-        print(f"  RESULT: Ground-truth isolated — 0 decisions changed after stripping eval labels. ✓")
+        print(f"  RESULT: Ground-truth isolated — No label-dependent decision changes were observed in the 120-record leakage audit. ✓")
     else:
-        print(f"  WARNING: {n_changed} decisions changed after stripping eval labels!")
+        print(f"  WARNING: {n_changed} decisions/extractions changed after stripping eval labels!")
 
     # Validator ablation
     with open("validator_ablation.json", "w") as f:
