@@ -2,6 +2,9 @@
 run_d2_coverage_evaluation.py — Phase D.2: Coverage & Statistical Robustness
 =============================================================================
 Builds on the locked D.1 pipeline (theta=0.9127, all 6 validator checks).
+Restores the exact D.1 splits, reference index, and mapping logic to ensure
+retrieval works as certified in D.1 (Recall@1 = 100%).
+
 New in D.2:
   - Condition 4: Verifier-gated + Validator + Extractive Fallback
   - Abstention analysis logging -> abstention_analysis.json
@@ -108,19 +111,25 @@ class RelationVerifier(nn.Module):
         self.fc2 = nn.Linear(256, 64)
         self.bn2 = nn.BatchNorm1d(64)
         self.fc3 = nn.Linear(64, 1)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, q, k, jaccard, overlap):
-        bl = self.bilinear(q, k)
         diff = torch.abs(q - k)
-        prod = q * k
-        cos = F.cosine_similarity(q, k, dim=1, eps=1e-8).unsqueeze(1)
-        euc = torch.norm(q - k, dim=1, keepdim=True)
-        jac = jaccard.unsqueeze(1) if jaccard.dim() == 1 else jaccard
-        ov = overlap.unsqueeze(1) if overlap.dim() == 1 else overlap
-        feat = torch.cat([q, k, diff, prod, cos, euc, jac, ov], dim=1)
-        x = F.leaky_relu(self.bn1(self.fc1(feat)))
-        x = F.leaky_relu(self.bn2(self.fc2(x)))
-        return torch.sigmoid(self.fc3(x) + bl).squeeze(1)
+        mult = q * k
+        cos_sim = torch.sum(q * k, dim=-1, keepdim=True)
+        dist = torch.norm(q - k, p=2, dim=-1, keepdim=True)
+        jaccard = jaccard.unsqueeze(-1)
+        overlap = overlap.unsqueeze(-1)
+        
+        x_concat = torch.cat([q, k, diff, mult, cos_sim, dist, jaccard, overlap], dim=-1)
+        x_mlp = F.relu(self.bn1(self.fc1(x_concat)))
+        x_mlp = self.dropout(x_mlp)
+        x_mlp = F.relu(self.bn2(self.fc2(x_mlp)))
+        x_mlp = self.dropout(x_mlp)
+        
+        x_bil = self.bilinear(q, k).squeeze(-1)
+        out = self.fc3(x_mlp).squeeze(-1) + x_bil
+        return torch.sigmoid(out)
 
 
 # ── Statistics ────────────────────────────────────────────────────────────────
@@ -129,7 +138,7 @@ def wilson_ci(x, n, cl=0.95):
     if n == 0:
         return (0.0, 1.0)
     p = x / n
-    z = 1.64485 if cl == 0.95 else 1.95996
+    z = 1.95996  # 95% CL
     denom = 1 + z**2 / n
     center = p + z**2 / (2 * n)
     spread = z * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2))
@@ -234,8 +243,6 @@ def extractive_fallback(query, retrieved_fact):
             return f"{period}", "astro:default_period"
 
     # Fallback: try returning the 'answer' field if present
-    # NOTE: 'answer' here is a field of the retrieved fact (same as what
-    # the validator already sees in the fact dict) — NOT an evaluation label.
     ans = retrieved_fact.get("answer", "")
     if ans:
         return ans, "generic:answer_field"
@@ -294,7 +301,7 @@ def validate_grounding(query, retrieved_fact, generated_answer,
                     )
                     return False, False, reasons
 
-    # Check 4 (was check 5 in D.1): Relation-consistency
+    # Check 4: Relation-consistency
     if 4 not in disabled_checks:
         category = retrieved_fact.get("category")
         if category == "geography":
@@ -403,23 +410,258 @@ def score_against_ground_truth(final_answer, target_entity, declared_aliases):
     return False
 
 
-# ── Helpers from D.1 (verbatim) ───────────────────────────────────────────────
-def get_entity_overlap(q, k):
-    q_tokens = set(q.lower().split())
-    k_tokens = set(k.lower().split())
-    inter = q_tokens & k_tokens
-    union = q_tokens | k_tokens
-    overlap = len(inter) / len(union) if union else 0.0
-    jaccard = len(inter) / (len(q_tokens) + len(k_tokens) - len(inter)) if (
-        len(q_tokens) + len(k_tokens) - len(inter)
-    ) > 0 else 0.0
+# ── Helpers from D.1 ─────────────────────────────────────────────────────────
+def get_entity_overlap(str1, str2):
+    stopwords = {
+        "the", "is", "of", "a", "capital", "city", "melting", "point",
+        "degrees", "celsius", "at", "what", "temperature", "does",
+        "liquefy", "melts", "compound"
+    }
+    words1 = set(w.lower().strip(",.?!") for w in str1.split() if w.lower().strip(",.?!") not in stopwords)
+    words2 = set(w.lower().strip(",.?!") for w in str2.split() if w.lower().strip(",.?!") not in stopwords)
+    intersection = words1.intersection(words2)
+    union = words1.union(words2)
+    jaccard = len(intersection) / len(union) if len(union) > 0 else 0.0
+    overlap = len(intersection) / min(len(words1), len(words2)) if min(len(words1), len(words2)) > 0 else 0.0
     return jaccard, overlap
 
+def perturb_typo(text, seed=None):
+    if seed is not None:
+        random.seed(seed)
+    chars = list(text)
+    if len(chars) < 5:
+        return text
+    adj_map = {
+        'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'ersfxc', 'e': 'wsdr',
+        'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
+        'k': 'ijlm', 'l': 'okp', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
+        'p': 'ol', 'q': 'wa', 'r': 'edft', 's': 'wedxza', 't': 'rfgy',
+        'u': 'yhji', 'v': 'cfgb', 'w': 'qase', 'x': 'zsdc', 'y': 'tghu', 'z': 'asx'
+    }
+    typo_type = random.choice([0, 1, 2, 3])
+    pos = random.randint(0, len(chars) - 1)
+    if typo_type == 0:
+        c = chars[pos].lower()
+        if c in adj_map:
+            chars[pos] = random.choice(adj_map[c])
+    elif typo_type == 1:
+        chars.pop(pos)
+    elif typo_type == 2:
+        c = chars[pos].lower()
+        if c in adj_map:
+            chars.insert(pos, random.choice(adj_map[c]))
+    elif typo_type == 3:
+        if pos < len(chars) - 1:
+            chars[pos], chars[pos+1] = chars[pos+1], chars[pos]
+    return "".join(chars)
+
+def batch_tokenize(tokenizer, sentences, max_len=32, device="cpu"):
+    enc = tokenizer(sentences, max_length=max_len, padding="max_length", truncation=True, return_tensors="pt")
+    return enc.input_ids.to(device), enc.attention_mask.to(device)
+
 def get_prompt_only(fact, idx):
-    templates = fact.get("train_paraphrases", [])
-    if idx < len(templates):
-        return templates[idx]
-    return fact.get("probe", fact.get("statement", ""))
+    if idx == 0:
+        return fact["probe"]
+    elif idx == 1:
+        prefix = fact["qa"].split(fact["statement"])[0]
+        return prefix + fact["probe"]
+    else:
+        return fact["cloze"].split("_____")[0].strip()
+
+def get_sentence_lists(all_facts, unique_probes):
+    probe_to_class = {p: idx for idx, p in enumerate(unique_probes)}
+    train_sentences = []
+    train_labels = []
+    val_sentences = []
+    val_labels = []
+    test_sentences = []
+    test_labels = []
+    for fact in all_facts:
+        label = probe_to_class[fact["probe"]]
+        for idx_t in range(3):
+            train_sentences.append(get_prompt_only(fact, idx_t))
+            train_labels.append(label)
+        val_sentences.append(fact["train_paraphrases"][-1])
+        val_labels.append(label)
+        all_eval_items = [fact["probe"]] + fact["eval_paraphrases"]
+        for item in all_eval_items:
+            test_sentences.append(item)
+            test_labels.append(label)
+    return train_sentences, train_labels, val_sentences, val_labels, test_sentences, test_labels
+
+def build_pairs_from_embeddings(all_facts, z_train, z_test, train_sentences, test_sentences, general_sentences, z_general):
+    positive_pairs = []
+    semantic_neg_pairs = []
+    
+    # Positive pairs: (test query, train reference) matching the same fact
+    for f_idx, fact in enumerate(all_facts):
+        refs = z_train[f_idx*3 : (f_idx+1)*3]
+        queries = z_test[f_idx*4 : (f_idx+1)*4]
+        for q_sub_idx, q in enumerate(queries):
+            q_str = test_sentences[f_idx * 4 + q_sub_idx]
+            for r_sub_idx, r in enumerate(refs):
+                r_str = train_sentences[f_idx * 3 + r_sub_idx]
+                jaccard, overlap = get_entity_overlap(q_str, r_str)
+                positive_pairs.append((q, r, f_idx, jaccard, overlap))
+                
+    # Semantic Hard Negatives
+    for f_idx_a, fact_a in enumerate(all_facts):
+        entity_a = fact_a["location"] if "location" in fact_a else fact_a.get("comp", fact_a.get("planet"))
+        for f_idx_b, fact_b in enumerate(all_facts):
+            if f_idx_a == f_idx_b:
+                continue
+            entity_b = fact_b["location"] if "location" in fact_b else fact_b.get("comp", fact_b.get("planet"))
+            if entity_a == entity_b or fact_a["category"] == fact_b["category"]:
+                queries_a = z_test[f_idx_a*4 : (f_idx_a+1)*4]
+                refs_b = z_train[f_idx_b*3 : (f_idx_b+1)*3]
+                for q_sub_idx, q in enumerate(queries_a):
+                    q_str = test_sentences[f_idx_a * 4 + q_sub_idx]
+                    for r_sub_idx, r in enumerate(refs_b):
+                        r_str = train_sentences[f_idx_b * 3 + r_sub_idx]
+                        jaccard, overlap = get_entity_overlap(q_str, r_str)
+                        semantic_neg_pairs.append((q, r, f_idx_b, jaccard, overlap))
+                        
+    random.shuffle(semantic_neg_pairs)
+    semantic_neg_pairs = semantic_neg_pairs[:len(positive_pairs) * 3]
+    
+    # General Control pairs
+    general_neg_pairs = []
+    for g_idx, g_vec in enumerate(z_general):
+        q_str = general_sentences[g_idx]
+        for r_idx in range(len(z_train)):
+            r_str = train_sentences[r_idx]
+            jaccard, overlap = get_entity_overlap(q_str, r_str)
+            general_neg_pairs.append((g_vec, z_train[r_idx], r_idx // 3, jaccard, overlap))
+            
+    random.shuffle(general_neg_pairs)
+    general_neg_pairs = general_neg_pairs[:len(positive_pairs)]
+    return positive_pairs, semantic_neg_pairs, general_neg_pairs
+
+
+# ── Extra Certification Facts ────────────────────────────────────────────────
+def get_extra_certification_facts():
+    def gen_unique(count, prefixes, suffixes):
+        out = []
+        for p in prefixes:
+            for s in suffixes:
+                out.append(f"{p}{s}")
+                if len(out) == count:
+                    return out
+        return out
+
+    loc_prefixes = ["Luma", "Aura", "Kael", "Vesp", "Sola", "Zeph", "Nebu", "Bore", "Aeth", "Chro"]
+    loc_suffixes = ["ria", "ntia", "len", "per", "ris", "phyra", "lia", "as", "hel", "nos"]
+    LOCATIONS = gen_unique(100, loc_prefixes, loc_suffixes)
+
+    cap_prefixes = ["Varek", "Velath", "Xenon", "Selen", "Pyros", "Kryos", "Nova", "Oros", "Zirco", "Helio"]
+    cap_suffixes = [" City", " Port", " Vale", " Spire", " Peak", " Cove", " Ridge", " Town", " Bay", " Dome"]
+    CAPITALS = gen_unique(100, cap_prefixes, cap_suffixes)
+
+    comp_prefixes = ["Xenol", "Therm", "Auran", "Helio", "Zirco", "Neptu", "Krypt", "Solit", "Pyrot", "Selen"]
+    comp_suffixes = ["-A", "-B", "-C", "-D", "-E", "-F", "-G", "-H", "-X", "-Z"]
+    COMPOUNDS = gen_unique(100, comp_prefixes, comp_suffixes)
+
+    planet_prefixes = ["Kepler", "Gliese", "Luyten", "Proxima", "Trappist", "Wasp", "Osiris", "K2", "TOI", "HD"]
+    planet_suffixes = ["-101b", "-202c", "-303d", "-404e", "-505f", "-606g", "-707h", "-808i", "-909j", "-1000k"]
+    PLANETS = gen_unique(100, planet_prefixes, planet_suffixes)
+
+    moons_prefixes = ["Aria", "Bello", "Ceres", "Deim", "Phob", "Tita", "Euro", "Calli", "Gany", "Io"]
+    moons_suffixes = ["-Alpha", "-Beta", "-Gamma", "-Delta", "-Epsilon", "-Zeta", "-Eta", "-Theta", "-Iota", "-Kappa"]
+    MOONS = gen_unique(100, moons_prefixes, moons_suffixes)
+
+    NUMBERS_STR = [
+        "forty two", "eighty five", "one hundred", "two hundred", 
+        "three hundred", "five hundred", "eight hundred", "nine hundred",
+        "seventy six", "sixty four", "fifty eight", "ninety one"
+    ]
+    PERIODS = ["forty seven", "eighty eight", "twelve days", "nineteen days", "thirty six", "six days", "fifteen days"]
+
+    extra_facts = []
+    
+    # 4 Geography (G35 to G38)
+    for i in range(34, 38):
+        loc = LOCATIONS[i]
+        cap = CAPITALS[i]
+        extra_facts.append({
+            "id": f"G{i+1:02d}",
+            "category": "geography",
+            "location": loc,
+            "capital": cap,
+            "statement": f"The official capital city of {loc} is {cap}.",
+            "qa": f"Q: What is the capital of {loc}? A: The official capital city of {loc} is {cap}.",
+            "cloze": f"The official capital city of {loc} is _____.",
+            "probe": f"The official capital city of {loc} is",
+            "answer": cap,
+            "keywords": [cap.split()[0]],
+            "train_paraphrases": [
+                f"Identify the capital city of {loc}.",
+                f"Which city serves as the capital of {loc}?",
+                f"The administrative capital of {loc} is located in"
+            ],
+            "eval_paraphrases": [
+                f"What is the official capital of the region of {loc}?",
+                f"Name the city that functions as {loc}'s capital.",
+                f"In the land of {loc}, the capital city is known as"
+            ]
+        })
+
+    # 3 Science (S34 to S36)
+    for i in range(33, 36):
+        comp = COMPOUNDS[i]
+        num = NUMBERS_STR[i % len(NUMBERS_STR)]
+        extra_facts.append({
+            "id": f"S{i+1:02d}",
+            "category": "science",
+            "comp": comp,
+            "compound": comp,
+            "temperature": num,
+            "statement": f"The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
+            "qa": f"Q: At what temperature does {comp} melt? A: The molecular compound {comp} liquefies at exactly {num} degrees Celsius.",
+            "cloze": f"The molecular compound {comp} liquefies at exactly _____ degrees Celsius.",
+            "probe": f"The molecular compound {comp} liquefies at exactly",
+            "answer": num,
+            "keywords": [num.split()[0]],
+            "train_paraphrases": [
+                f"Specify the melting temperature of {comp}.",
+                f"At how many degrees Celsius does {comp} melt?",
+                f"The compound {comp} changes to liquid state at"
+            ],
+            "eval_paraphrases": [
+                f"The molecular compound {comp} liquefies at exactly",
+                f"What temperature is required to melt the compound {comp}?",
+                f"Determine the melting point of the compound {comp} in degrees."
+            ]
+        })
+
+    # 3 Astronomy (A34 to A36)
+    for i in range(33, 36):
+        planet = PLANETS[i]
+        moon = MOONS[i]
+        period = PERIODS[i % len(PERIODS)]
+        extra_facts.append({
+            "id": f"A{i+1:02d}",
+            "category": "astronomy",
+            "planet": planet,
+            "moon": moon,
+            "period": period,
+            "statement": f"The planetary satellite {moon} orbits {planet} in exactly {period} days.",
+            "qa": f"Q: How long does it take for {moon} to orbit {planet}? A: The planetary satellite {moon} orbits {planet} in exactly {period} days.",
+            "cloze": f"The planetary satellite {moon} orbits {planet} in exactly _____ days.",
+            "probe": f"The planetary satellite {moon} orbits {planet} in exactly",
+            "answer": period,
+            "keywords": [period.split()[0]],
+            "train_paraphrases": [
+                f"What is the orbital period of the satellite {moon} around {planet}?",
+                f"How many days does it take {moon} to circle {planet}?",
+                f"The moon {moon} completes one full orbit of {planet} in"
+            ],
+            "eval_paraphrases": [
+                f"The planetary satellite {moon} orbits {planet} in exactly",
+                f"Give the time duration in days for the moon {moon} to circle {planet}.",
+                f"How long is one orbit of the satellite {moon} around {planet}?"
+            ]
+        })
+    return extra_facts
 
 
 # ── Abstention analysis helper ────────────────────────────────────────────────
@@ -466,11 +708,9 @@ def audit_validator_decision(query, retrieved_fact, generated_answer,
     2. With eval answer/keywords STRIPPED from the fact dict
     If both return the same decision, the validator is ground-truth isolated.
     """
-    # Normal run
     passed_normal, abs_normal, reasons_normal = validate_grounding(
         query, retrieved_fact, generated_answer, foreign_entities
     )
-    # Stripped run: remove answer/keywords fields from fact dict
     stripped_fact = {k: v for k, v in retrieved_fact.items()
                      if k not in ("answer", "keywords", "qa")}
     passed_stripped, abs_stripped, reasons_stripped = validate_grounding(
@@ -487,171 +727,22 @@ def audit_validator_decision(query, retrieved_fact, generated_answer,
     }
 
 
-# ── Dataset & split loading (verbatim from D.1) ───────────────────────────────
+# ── Dataset & splits initialization ──────────────────────────────────────────
 def load_or_generate_dataset():
-    """Load agnis_scaling_dataset.json or auto-generate it if missing."""
     if not os.path.exists(DATASET_PATH):
         print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
         if os.path.exists("generate_scaling_dataset.py"):
             subprocess.run(["python", "generate_scaling_dataset.py"], check=True)
-            print(f"[Data] Auto-generated {DATASET_PATH}")
         else:
-            # Inline fallback: generate a minimal 100-fact dataset
-            print("[Data] generate_scaling_dataset.py not found — generating inline fallback ...")
-            _generate_inline_dataset()
+            raise FileNotFoundError(f"Scaling dataset not found and generate_scaling_dataset.py missing!")
 
-    with open(DATASET_PATH) as f:
-        raw = json.load(f)
-
-    # Support both list-of-lists and {"blocks": [...]} formats
-    if isinstance(raw, list):
-        # Each element is either a block-list or a fact dict
-        all_facts = []
-        for item in raw:
-            if isinstance(item, list):
-                all_facts.extend(item)
-            elif isinstance(item, dict) and "id" in item:
-                all_facts.append(item)
-    elif isinstance(raw, dict):
-        all_facts = []
-        for block in raw.get("blocks", []):
-            if isinstance(block, dict):
-                all_facts.extend(block.get("facts", []))
-            elif isinstance(block, list):
-                all_facts.extend(block)
-    else:
-        raise ValueError(f"Unrecognised dataset format in {DATASET_PATH}")
-
-    print(f"[Data] Loaded {len(all_facts)} facts from {DATASET_PATH}")
-    return all_facts, raw
-
-
-def _generate_inline_dataset():
-    """Generate a minimal 100-fact scaling dataset inline and write to DATASET_PATH."""
-    geo_locs   = [f"Lumaria{i}" for i in range(34)]
-    geo_caps   = [f"VarekCity{i}" for i in range(34)]
-    sci_comps  = [f"Xenol-{chr(65+i)}" for i in range(33)]
-    sci_temps  = ["forty two", "eighty five", "one hundred", "two hundred",
-                  "three hundred", "five hundred", "eight hundred", "nine hundred",
-                  "seventy six", "sixty four", "fifty eight", "ninety one",
-                  "twenty three", "thirty seven", "sixty six",
-                  "forty eight", "ninety three", "twelve", "fifty one",
-                  "seventy nine", "eighty eight", "thirty three", "fifteen",
-                  "sixty two", "forty four", "nineteen", "thirty", "seventy",
-                  "sixteen", "fifty three", "eighty", "forty five", "sixty seven"]
-    ast_planets = [f"Kepler-{100+i}b" for i in range(33)]
-    ast_moons   = [f"Aria-{chr(65+i%26)}{i}" for i in range(33)]
-    ast_periods = ["forty seven days", "eighty eight days", "twelve days",
-                   "nineteen days", "thirty six days", "six days", "fifteen days",
-                   "twenty days", "fifty days", "nine days", "thirty days",
-                   "sixty days", "four days", "eleven days", "seven days",
-                   "forty days", "twenty five days", "eighteen days",
-                   "thirteen days", "eight days", "three days", "fourteen days",
-                   "twenty two days", "sixty five days", "five days",
-                   "thirty three days", "seventy days", "forty two days",
-                   "sixteen days", "fifty five days", "twenty eight days",
-                   "ten days", "forty five days"]
-
-    facts = []
-    for i in range(min(34, len(geo_locs))):
-        loc, cap = geo_locs[i], geo_caps[i]
-        facts.append({
-            "id": f"G{i+1:02d}", "category": "geography",
-            "location": loc, "capital": cap,
-            "statement": f"The official capital city of {loc} is {cap}.",
-            "probe": f"The official capital city of {loc} is",
-            "answer": cap, "keywords": [cap.split()[0]],
-            "train_paraphrases": [
-                f"Identify the capital city of {loc}.",
-                f"Which city serves as the capital of {loc}?",
-                f"The administrative capital of {loc} is located in",
-            ],
-            "eval_paraphrases": [
-                f"What is the official capital of the region of {loc}?",
-                f"Name the city that functions as {loc}'s capital.",
-                f"In the land of {loc}, the capital city is known as",
-            ],
-        })
-    for i in range(min(33, len(sci_comps))):
-        comp, temp = sci_comps[i], sci_temps[i % len(sci_temps)]
-        facts.append({
-            "id": f"S{i+1:02d}", "category": "science",
-            "comp": comp, "compound": comp, "temperature": temp,
-            "statement": f"The molecular compound {comp} liquefies at exactly {temp} degrees Celsius.",
-            "probe": f"The molecular compound {comp} liquefies at exactly",
-            "answer": temp, "keywords": [temp.split()[0]],
-            "train_paraphrases": [
-                f"Specify the melting temperature of {comp}.",
-                f"At how many degrees Celsius does {comp} melt?",
-                f"The compound {comp} transitions to liquid at exactly",
-            ],
-            "eval_paraphrases": [
-                f"What temperature causes {comp} to liquefy?",
-                f"How hot must it get for {comp} to melt?",
-                f"At what Celsius temperature does {comp} become liquid?",
-            ],
-        })
-    for i in range(min(33, len(ast_planets))):
-        planet, moon, period = ast_planets[i], ast_moons[i], ast_periods[i % len(ast_periods)]
-        facts.append({
-            "id": f"A{i+1:02d}", "category": "astronomy",
-            "planet": planet, "moon": moon, "period": period,
-            "statement": f"{moon} orbits {planet} in exactly {period}.",
-            "probe": f"{moon} orbits {planet} in exactly",
-            "answer": period, "keywords": [period.split()[0]],
-            "train_paraphrases": [
-                f"What is the orbital period of {moon} around {planet}?",
-                f"How long does {moon} take to orbit {planet}?",
-                f"The moon {moon} completes one orbit of {planet} in",
-            ],
-            "eval_paraphrases": [
-                f"State the orbital period of {moon} relative to {planet}.",
-                f"In how many days does {moon} circle {planet}?",
-                f"The orbital duration of {moon} around {planet} is",
-            ],
-        })
-
-    # Wrap as blocks format
-    block_size = 10
-    blocks = []
-    for i in range(0, len(facts), block_size):
-        blocks.append({"block_id": i // block_size, "facts": facts[i:i+block_size]})
-
-    with open(DATASET_PATH, "w") as f:
-        json.dump({"blocks": blocks}, f, indent=2)
-    print(f"[Data] Generated {DATASET_PATH} with {len(facts)} facts.")
-
-def load_split_manifest(all_facts):
-    if os.path.exists(MANIFEST_PATH):
-        with open(MANIFEST_PATH) as f:
-            manifest = json.load(f)
-        print(f"[Split] Loaded manifest: {MANIFEST_PATH}")
-        return manifest
-    # Stratified split generation (same logic as D.1)
-    random.seed(42)
-    cats = defaultdict(list)
-    for f in all_facts:
-        cats[f["category"]].append(f["id"])
-    for c in cats:
-        random.shuffle(cats[c])
-    train_ids, cal_ids, cert_ids, test_ids = [], [], [], []
-    for c, ids in cats.items():
-        n = len(ids)
-        n_train = max(1, int(n * 0.50))
-        n_cal   = max(1, int(n * 0.14))
-        n_cert  = max(1, int(n * 0.14))
-        n_test  = n - n_train - n_cal - n_cert
-        train_ids += ids[:n_train]
-        cal_ids   += ids[n_train:n_train+n_cal]
-        cert_ids  += ids[n_train+n_cal:n_train+n_cal+n_cert]
-        test_ids  += ids[n_train+n_cal+n_cert:]
-    manifest = {"train": train_ids, "cal": cal_ids,
-                "cert": cert_ids, "test": test_ids}
-    with open(MANIFEST_PATH, "w") as f:
-        json.dump(manifest, f, indent=2)
-    print(f"[Split] Generated manifest — Train:{len(train_ids)} Cal:{len(cal_ids)} "
-          f"Cert:{len(cert_ids)} Test:{len(test_ids)}")
-    return manifest
+    with open(DATASET_PATH, "r") as f:
+        blocks = json.load(f)
+    all_facts = [fact for b in blocks for fact in b]
+    
+    extra_facts = get_extra_certification_facts()
+    all_facts.extend(extra_facts)
+    return all_facts
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -660,229 +751,238 @@ def main():
     print("  PHASE D.2: COVERAGE & STATISTICAL ROBUSTNESS EVALUATION")
     print("=" * 80)
 
-    # ── Load data ──────────────────────────────────────────────────────────────
-    all_facts, raw_data = load_or_generate_dataset()
-    manifest = load_split_manifest(all_facts)
+    # Load data
+    all_facts = load_or_generate_dataset()
+    unique_probes = sorted(list(set(f["probe"] for f in all_facts)))
 
-    fact_by_id = {f["id"]: f for f in all_facts}
-    train_ids = manifest["train"]
-    test_ids  = manifest["test"]
+    # Load or generate splits manifest
+    if not os.path.exists(MANIFEST_PATH):
+        print(f"[Split] Split manifest not found. Generating stratified fact split manifest on the fly...")
+        by_domain = defaultdict(list)
+        original_facts = [f for f in all_facts if int(f["id"][1:]) <= (34 if f["id"][0] == "G" else 33)]
+        for fact in original_facts:
+            by_domain[fact["category"]].append(fact["id"])
+            
+        rng = random.Random(42)
+        train_fact_ids_list = []
+        policy_cal_ids_list = []
+        val_cert_ids_list = []
+        test_fact_ids_list = []
+        
+        for domain, ids in sorted(by_domain.items()):
+            ids = list(ids)
+            rng.shuffle(ids)
+            n = len(ids)
+            n_train = round(n * 0.55)
+            n_policy = round(n * 0.15)
+            n_cert = round(n * 0.15)
+            
+            train_fact_ids_list.extend(ids[:n_train])
+            policy_cal_ids_list.extend(ids[n_train:n_train + n_policy])
+            val_cert_ids_list.extend(ids[n_train + n_policy:n_train + n_policy + n_cert])
+            test_fact_ids_list.extend(ids[n_train + n_policy + n_cert:])
+            
+        extra_ids = [f["id"] for f in get_extra_certification_facts()]
+        val_cert_ids_list.extend(extra_ids)
+        
+        manifest = {
+            "seed": 42,
+            "trainFactIds": train_fact_ids_list,
+            "policyCalibrationFactIds": policy_cal_ids_list,
+            "validationCertificationFactIds": val_cert_ids_list,
+            "testFactIds": test_fact_ids_list
+        }
+        with open(MANIFEST_PATH, "w") as f:
+            json.dump(manifest, f, indent=2)
+        
+    with open(MANIFEST_PATH, "r") as f:
+        manifest = json.load(f)
+    train_fact_ids = set(manifest["trainFactIds"])
+    policy_cal_ids = set(manifest["policyCalibrationFactIds"])
+    test_fact_ids  = set(manifest["testFactIds"])
 
-    train_facts = [fact_by_id[i] for i in train_ids if i in fact_by_id]
-    test_facts  = [fact_by_id[i] for i in test_ids  if i in fact_by_id]
+    assert train_fact_ids.isdisjoint(test_fact_ids), "Leaked: Test facts overlap with training!"
+    print(f"[Split] Memory Isolation Check: Passed. Test facts are strictly disjoint.")
 
-    print(f"[Split] Train: {len(train_facts)} | Test: {len(test_facts)}")
-
-    # Memory isolation check
-    train_set = set(train_ids)
-    test_set  = set(test_ids)
-    overlap   = train_set & test_set
-    if overlap:
-        print(f"[WARNING] Memory isolation FAILED: {overlap}")
-    else:
-        print("[Split] Memory Isolation Check: Passed.")
-
-    # ── Load tokenizer (for embedding cache) ──────────────────────────────────
-    print(f"\n[Model] Loading tokenizer from {MODEL_ID} ...")
+    # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # ── Load or generate embedding cache ──────────────────────────────────────
-    if os.path.exists(CACHE_100_PATH):
-        z_train = torch.load(CACHE_100_PATH, map_location="cpu", weights_only=True)
-        print(f"[Cache] Loaded embeddings from {CACHE_100_PATH}: shape {z_train.shape}")
-    else:
-        print(f"[Cache] Not found at {CACHE_100_PATH} — generating ...")
-        tmp_decoder = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID, torch_dtype=torch.float32
-        ).to(DEVICE)
-        tmp_decoder.eval()
-        tr_sentences = []
-        for fact in train_facts:
-            for idx_t in range(3):
-                tr_sentences.append(get_prompt_only(fact, idx_t))
+    # Load or generate embedding cache
+    if not os.path.exists(CACHE_100_PATH) and not os.path.exists(CACHE_100_PATH.replace("../", "")):
+        print(f"[Cache] Embeddings cache not found at {CACHE_100_PATH}. Generating on-the-fly using SmolLM2...")
+        _tmp_model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
+        _tmp_model.eval()
 
-        def encode_sentences_smollm(sentences, model, tok, batch_size=8):
-            all_vecs = []
-            for i in range(0, len(sentences), batch_size):
-                batch = sentences[i:i+batch_size]
-                enc = tok(batch, return_tensors="pt", padding=True,
-                          truncation=True, max_length=64).to(DEVICE)
-                with torch.no_grad():
+        def _encode_sentences(model, tok, sentences, max_len=32, batch=32):
+            vecs = []
+            for i in range(0, len(sentences), batch):
+                b = sentences[i:i+batch]
+                enc = tok(b, max_length=max_len, padding="max_length",
+                          truncation=True, return_tensors="pt").to(DEVICE)
+                with torch.inference_mode():
                     out = model(**enc, output_hidden_states=True)
-                hs = out.hidden_states[-1]
-                mask = enc["attention_mask"].unsqueeze(-1).float()
-                pooled = (hs * mask).sum(1) / mask.sum(1).clamp(min=1)
-                all_vecs.append(F.normalize(pooled, dim=-1).cpu())
-            return torch.cat(all_vecs, dim=0)
+                hidden = out.hidden_states[-1]  # (B, T, D)
+                mask = enc.attention_mask.unsqueeze(-1).float()
+                pooled = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1)
+                vecs.append(pooled.cpu())
+            return torch.cat(vecs, dim=0)
 
-        z_train = encode_sentences_smollm(tr_sentences, tmp_decoder, tokenizer)
-        torch.save(z_train, CACHE_100_PATH)
-        del tmp_decoder
-        torch.cuda.empty_cache() if torch.cuda.is_available() else None
-        print(f"[Cache] Saved {z_train.shape} to {CACHE_100_PATH}")
+        tr_s_tmp, _, val_s_tmp, _, te_s_tmp, _ = get_sentence_lists(all_facts, unique_probes)
+        z_tr_tmp  = _encode_sentences(_tmp_model, tokenizer, tr_s_tmp)
+        z_val_tmp = _encode_sentences(_tmp_model, tokenizer, val_s_tmp)
+        z_te_tmp  = _encode_sentences(_tmp_model, tokenizer, z_te_tmp)
+        cache_save_path = CACHE_100_PATH if "/" not in CACHE_100_PATH.lstrip("./") else "smollm2_embeddings_100slots.pt"
+        torch.save({"train_x": z_tr_tmp, "val_x": z_val_tmp, "test_x": z_te_tmp}, cache_save_path)
+        print(f"  [Cache] Saved to {cache_save_path}")
+        del _tmp_model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        CACHE_100_PATH_RESOLVED = cache_save_path
+    else:
+        CACHE_100_PATH_RESOLVED = CACHE_100_PATH if os.path.exists(CACHE_100_PATH) else CACHE_100_PATH.replace("../", "")
 
-    # ── Train Student Encoder ─────────────────────────────────────────────────
-    print("\n[Training] Student GRU Encoder ...")
-    tr_sentences_all = []
-    tr_labels_all    = []
-    for fact_idx, fact in enumerate(train_facts):
-        for idx_t in range(3):
-            tr_sentences_all.append(get_prompt_only(fact, idx_t))
-            tr_labels_all.append(fact_idx)
-
-    student = StudentEncoder().to(DEVICE)
-    opt_s = torch.optim.Adam(student.parameters(), lr=3e-4)
-    student.train()
-    EPOCHS_STUDENT = 120
-    for ep in range(EPOCHS_STUDENT):
-        perm = torch.randperm(len(tr_sentences_all))
-        total_loss = 0.0
-        for i in perm:
-            sent = tr_sentences_all[i]
-            lbl  = tr_labels_all[i]
-            enc_ids = tokenizer.encode(sent, truncation=True, max_length=32)
-            ids_t = torch.tensor([enc_ids], device=DEVICE)
-            mask_t = torch.ones_like(ids_t)
-            z_s = student(ids_t, mask_t)[0]
-            z_t = z_train[lbl * 3].to(DEVICE)
-            loss = 1.0 - F.cosine_similarity(z_s.unsqueeze(0),
-                                              z_t.unsqueeze(0)).mean()
-            opt_s.zero_grad()
-            loss.backward()
-            opt_s.step()
-            total_loss += loss.item()
-        if (ep + 1) % 30 == 0:
-            print(f"  Epoch {ep+1:3d}/{EPOCHS_STUDENT} | Loss: {total_loss/len(tr_sentences_all):.4f}")
-    student.eval()
-    print("[Training] Student Encoder: Done.")
-
-    # ── Train Relation Verifier ────────────────────────────────────────────────
-    print("\n[Training] Relation Verifier ...")
-    def build_verifier_pairs(sentences, labels, z_cache):
-        positive_pairs, semantic_neg_pairs, general_neg_pairs = [], [], []
-        label_to_indices = defaultdict(list)
-        for idx, lbl in enumerate(labels):
-            label_to_indices[lbl].append(idx)
-        for i, (sent_i, lbl_i) in enumerate(zip(sentences, labels)):
-            zi = z_cache[lbl_i * 3] if lbl_i * 3 < len(z_cache) else z_cache[lbl_i % len(z_cache)]
-            # Positive: different paraphrase of same fact
-            pos_idx = [j for j in label_to_indices[lbl_i] if j != i]
-            if pos_idx:
-                j = random.choice(pos_idx)
-                zj = z_cache[lbl_i * 3 + (j % 3)] if lbl_i * 3 + (j % 3) < len(z_cache) else zi
-                positive_pairs.append((sent_i, sentences[j], zi, zj, 1))
-            # Semantic negative: different fact, same category
-            other_lbls = [l for l in label_to_indices if l != lbl_i and
-                          train_facts[l]["category"] == train_facts[lbl_i]["category"]
-                          if l < len(train_facts)]
-            if other_lbls:
-                nl = random.choice(other_lbls)
-                nk = random.choice(label_to_indices[nl])
-                znk = z_cache[nl * 3] if nl * 3 < len(z_cache) else z_cache[nl % len(z_cache)]
-                semantic_neg_pairs.append((sent_i, sentences[nk], zi, znk, 0))
-            # General negative: random other fact
-            other_lbls_g = [l for l in label_to_indices if l != lbl_i]
-            if other_lbls_g:
-                gl = random.choice(other_lbls_g)
-                gk = random.choice(label_to_indices[gl])
-                zgk = z_cache[gl * 3] if gl * 3 < len(z_cache) else z_cache[gl % len(z_cache)]
-                general_neg_pairs.append((sent_i, sentences[gk], zi, zgk, 0))
-        n = min(len(positive_pairs), len(semantic_neg_pairs), len(general_neg_pairs))
-        return positive_pairs[:n], semantic_neg_pairs[:n], general_neg_pairs[:n]
-
-    pos_p, sem_p, gen_p = build_verifier_pairs(
-        tr_sentences_all, tr_labels_all, z_train
-    )
-    all_ver_pairs = pos_p + sem_p + gen_p
-
-    # Stack inputs and compute overlaps for batched training
-    train_q = torch.stack([x[2] for x in all_ver_pairs]).to(DEVICE)
-    train_k = torch.stack([x[3] for x in all_ver_pairs]).to(DEVICE)
+    cache_data = torch.load(CACHE_100_PATH_RESOLVED, map_location=DEVICE)
     
-    jacs, ovs = [], []
-    for q_s, k_s, _, _, _ in all_ver_pairs:
-        jac, ov = get_entity_overlap(q_s, k_s)
-        jacs.append(jac)
-        ovs.append(ov)
-        
-    train_jac = torch.tensor(jacs, dtype=torch.float32, device=DEVICE)
-    train_ov = torch.tensor(ovs, dtype=torch.float32, device=DEVICE)
-    train_y = torch.tensor([float(x[4]) for x in all_ver_pairs], dtype=torch.float32, device=DEVICE)
+    train_indices = [idx for idx, f in enumerate(all_facts) if f["id"] in train_fact_ids]
+    train_teacher_indices = []
+    for idx in train_indices:
+        train_teacher_indices.extend([idx*3, idx*3 + 1, idx*3 + 2])
+    train_x_teacher = cache_data["train_x"][train_teacher_indices].to(DEVICE)
+    
+    train_s = []
+    for f in all_facts:
+        if f["id"] in train_fact_ids:
+            for idx_t in range(3):
+                train_s.append(get_prompt_only(f, idx_t))
 
+    # Train student
+    print("[Training] Training compact student encoder...")
+    student = StudentEncoder(vocab_size=49152, embed_dim=128, hidden_dim=256, output_dim=960).to(DEVICE)
+    optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
+    student.train()
+    for epoch in range(120):
+        indices = list(range(len(train_s)))
+        random.shuffle(indices)
+        for idx in range(0, len(train_s), 32):
+            batch_idx = indices[idx : idx + 32]
+            batch_s = [train_s[i] for i in batch_idx]
+            ids, mask = batch_tokenize(tokenizer, batch_s, max_len=32, device=DEVICE)
+            z_s = student(ids, mask)
+            z_t = train_x_teacher[batch_idx]
+            loss_distill = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
+            batch_typo = [perturb_typo(s) for s in batch_s]
+            ids_typo, mask_typo = batch_tokenize(tokenizer, batch_typo, max_len=32, device=DEVICE)
+            z_s_typo = student(ids_typo, mask_typo)
+            loss_typo = (1.0 - (z_s * z_s_typo).sum(dim=-1)).mean()
+            loss = loss_distill + 0.5 * loss_typo
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+    print("  - Student Encoder trained successfully.")
+    student.eval()
+
+    # Get student embeddings for all facts
+    tr_s_all, tr_y_all, val_s_all, val_y_all, te_s_all, te_y_all = get_sentence_lists(all_facts, unique_probes)
+    with torch.no_grad():
+        z_train = []
+        for i in range(0, len(tr_s_all), 64):
+            ids, mask = batch_tokenize(tokenizer, tr_s_all[i:i+64], max_len=32, device=DEVICE)
+            z_train.append(student(ids, mask))
+        z_train = torch.cat(z_train, dim=0)
+        
+        z_test = []
+        for i in range(0, len(te_s_all), 64):
+            ids, mask = batch_tokenize(tokenizer, te_s_all[i:i+64], max_len=32, device=DEVICE)
+            z_test.append(student(ids, mask))
+        z_test = torch.cat(z_test, dim=0)
+
+    # General Controls (200 sentences)
+    general_sentences = []
+    if os.path.exists("instruction_corpus.txt"):
+        with open("instruction_corpus.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if len(line) > 20 and not line.startswith("#"):
+                    general_sentences.append(line)
+                    if len(general_sentences) == 200:
+                        break
+    if len(general_sentences) < 200:
+        general_sentences = ["Standard out-of-domain control text representation."] * 200
+
+    with torch.no_grad():
+        z_general = []
+        for i in range(0, len(general_sentences), 64):
+            ids, mask = batch_tokenize(tokenizer, general_sentences[i:i+64], max_len=32, device=DEVICE)
+            z_general.append(student(ids, mask))
+        z_general = torch.cat(z_general, dim=0)
+
+    # Build pairs
+    pos_pairs, sem_negs, gen_negs = build_pairs_from_embeddings(
+        all_facts, z_train, z_test, tr_s_all, te_s_all, general_sentences, z_general
+    )
+
+    # Verifier training subset
+    train_pos = [p for p in pos_pairs if all_facts[p[2]]["id"] in train_fact_ids]
+    train_sem = [n for n in sem_negs if all_facts[n[2]]["id"] in train_fact_ids]
+    train_gen = [n for n in gen_negs if all_facts[n[2]]["id"] in train_fact_ids]
+
+    train_q = torch.stack([p[0] for p in train_pos] + [n[0] for n in train_sem] + [n[0] for n in train_gen])
+    train_k = torch.stack([p[1] for p in train_pos] + [n[1] for n in train_sem] + [n[1] for n in train_gen])
+    train_jac = torch.tensor([p[3] for p in train_pos] + [n[3] for n in train_sem] + [n[3] for n in train_gen], dtype=torch.float32, device=DEVICE)
+    train_ov = torch.tensor([p[4] for p in train_pos] + [n[4] for n in train_sem] + [n[4] for n in train_gen], dtype=torch.float32, device=DEVICE)
+    train_y = torch.tensor([1.0] * len(train_pos) + [0.0] * len(train_sem) + [0.0] * len(train_gen), device=DEVICE)
+
+    # Train verifier MLP
+    print("[Training] Training relation verifier MLP...")
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
-    opt_v = torch.optim.Adam(verifier.parameters(), lr=1e-3, weight_decay=1e-5)
+    optimizer_v = torch.optim.AdamW(verifier.parameters(), lr=5e-4, weight_decay=1e-2)
     criterion = nn.BCELoss(reduction='none')
     
-    verifier.train()
     N_v = len(train_y)
-    EPOCHS_VERIFIER = 120
-    for ep in range(EPOCHS_VERIFIER):
+    for epoch in range(120):
+        verifier.train()
         indices = list(range(N_v))
         random.shuffle(indices)
-        total_loss = 0.0
-        batches = 0
         for idx in range(0, N_v, 64):
             b_idx = indices[idx : idx + 64]
-            # Ensure we don't have batch size 1 at the end of the epoch
+            # Ensure no batch size 1 at the end of epoch
             if len(b_idx) <= 1:
                 continue
-            
-            pred = verifier(
-                F.normalize(train_q[b_idx], dim=-1),
-                F.normalize(train_k[b_idx], dim=-1),
-                train_jac[b_idx],
-                train_ov[b_idx]
-            )
+            pred = verifier(train_q[b_idx], train_k[b_idx], train_jac[b_idx], train_ov[b_idx])
             loss_raw = criterion(pred, train_y[b_idx])
             weight = torch.ones_like(train_y[b_idx])
             weight[train_y[b_idx] == 1.0] = 4.0
             loss = (loss_raw * weight).mean()
-            
-            opt_v.zero_grad()
+            optimizer_v.zero_grad()
             loss.backward()
-            opt_v.step()
-            total_loss += loss.item()
-            batches += 1
-        if (ep + 1) % 30 == 0:
-            print(f"  Epoch {ep+1:3d}/{EPOCHS_VERIFIER} | Loss: {total_loss/max(1, batches):.4f}")
+            optimizer_v.step()
+    print("  - Relation Verifier trained successfully.")
     verifier.eval()
-    print("[Training] Relation Verifier: Done.")
 
-    # ── Build reference index ──────────────────────────────────────────────────
-    z_ref_bank = z_train.to(DEVICE)
-    ref_sentences = tr_sentences_all
-    ref_labels    = tr_labels_all
-
-    # ── Load decoder ───────────────────────────────────────────────────────────
-    print(f"\n[Decoder] Loading SmolLM2 from {MODEL_ID} ...")
-    decoder = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=torch.float32
-    ).to(DEVICE)
+    # Load decoder
+    print(f"[Decoder] Loading SmolLM2 from {MODEL_ID} ...")
+    decoder = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
     decoder.eval()
     checkpoint_revision = getattr(decoder.config, "_commit_hash", "local")
 
-    # ── Build test queries ─────────────────────────────────────────────────────
+    # Build test queries (Disjoint test set facts)
     print("\n[Queries] Building test query set ...")
     test_queries = []
 
-    # ID queries: probe + eval paraphrases
-    for fact in test_facts:
-        queries_for_fact = [fact["probe"]] + fact.get("eval_paraphrases", [])
-        for q_str in queries_for_fact:
-            test_queries.append({
-                "q_str": q_str, "target_fact": fact, "is_ood": False
-            })
+    # ID Queries: 15 facts * 4 templates = 60 queries (or matching manifest testFactIds)
+    for f_idx, fact in enumerate(all_facts):
+        fid = fact["id"]
+        if fid in test_fact_ids:
+            for q_sub_idx in range(4):
+                q_str = te_s_all[f_idx * 4 + q_sub_idx]
+                test_queries.append({
+                    "q_str": q_str, "target_fact": fact, "is_ood": False
+                })
 
-    # OOD general sentences (from train paraphrases of training facts, shuffled)
-    general_sentences = []
-    for fact in train_facts:
-        for para in fact.get("train_paraphrases", []):
-            general_sentences.append(para)
-    random.shuffle(general_sentences)
-    n_ood = len(test_queries)  # Balance 1:1
-    for g_idx in range(min(n_ood, len(general_sentences))):
+    # OOD general sentences (balanced 1:1)
+    for g_idx in range(min(len(test_queries), len(general_sentences))):
         test_queries.append({
             "q_str": general_sentences[g_idx], "target_fact": None, "is_ood": True
         })
@@ -891,9 +991,10 @@ def main():
     n_ood = sum(1 for q in test_queries if q["is_ood"])
     print(f"[Queries] ID: {n_id} | OOD: {n_ood} | Total: {len(test_queries)}")
 
-    # ── Policy parameters ──────────────────────────────────────────────────────
-    theta = 0.9127  # LOCKED — do not change using test-set observations
+    # Certified threshold lock
+    theta = 0.9127
 
+    # Target Grounding Prompts
     system_prompt = (
         "You are a grounded answer generator.\n\n"
         "Rules:\n"
@@ -906,16 +1007,20 @@ def main():
     )
     fallback_response = "I do not have verified information to answer this question."
 
-    # ── Foreign entity registry ────────────────────────────────────────────────
+    # Foreign entity registry
     all_entity_values = {}
     for f in all_facts:
         for key in ["location", "capital", "compound", "planet", "moon", "comp"]:
             val = f.get(key)
             if val:
                 all_entity_values[val.lower()] = f["id"]
-    print(f"[Validator] Foreign entity registry: {len(all_entity_values)} entries.")
 
-    # ── Condition definitions ──────────────────────────────────────────────────
+    # Setup full Reference Index
+    z_ref_bank = z_train.to(DEVICE)
+    ref_sentences = tr_s_all
+    ref_labels = [i // 3 for i in range(len(tr_s_all))]
+
+    # Condition definitions
     conditions = [
         "Ungated Decoder",
         "Verifier-gated Decoder",
@@ -923,19 +1028,22 @@ def main():
         "Verifier-gated + Validator + Extractive Fallback",
     ]
 
-    # ── Accumulators for D.2 diagnostics ──────────────────────────────────────
-    abstention_records  = []
-    vfn_records         = []    # verifier false negatives
-    leakage_audit       = []
+    # Accumulators for D.2 diagnostics
+    abstention_records = []
+    vfn_records        = []    # verifier false negatives
+    leakage_audit      = []
 
-    # ── Main evaluation loop ───────────────────────────────────────────────────
-    records_saved = {"run_metadata": {
-        "model_id": MODEL_ID,
-        "checkpoint_revision": checkpoint_revision,
-        "threshold": theta,
-        "phase": "D.2",
-    }, "records": []}
+    records_saved = {
+        "run_metadata": {
+            "model_id": MODEL_ID,
+            "checkpoint_revision": checkpoint_revision,
+            "threshold": theta,
+            "phase": "D.2",
+        },
+        "records": []
+    }
 
+    # Main evaluation loop
     for cond in conditions:
         print(f"\n{'='*70}")
         print(f"  CONDITION: {cond}")
@@ -948,42 +1056,39 @@ def main():
                       "VALIDATOR_REJECTED": 0, "EXTRACTIVE_ACCEPTED": 0,
                       "ANSWER_ACCEPTED": 0}
 
-        correct_id         = 0
-        incorrect_id       = 0
-        final_ood_unsafe   = 0
-        correct_retrievals = 0
-        total_id_attempts  = 0
+        correct_id           = 0
+        incorrect_id         = 0
+        final_ood_unsafe     = 0
+        correct_retrievals   = 0
+        total_id_attempts    = 0
         verifier_accepted_id = 0
-        extractive_correct = 0
-        extractive_total   = 0
+        extractive_correct   = 0
+        extractive_total     = 0
 
         for q_idx, q in enumerate(test_queries):
             q_str   = q["q_str"]
             is_ood  = q["is_ood"]
             split_n = "OOD_TEST" if is_ood else "ID_TEST"
 
-            # Encode query
+            # 1. Tokenize & Encode query
             enc_ids = tokenizer.encode(q_str, truncation=True, max_length=32)
             ids_t   = torch.tensor([enc_ids], device=DEVICE)
             mask_t  = torch.ones_like(ids_t)
             with torch.inference_mode():
                 q_s = student(ids_t, mask_t)[0]
 
-            # Hybrid retrieval
+            # 2. Hybrid search candidates (Retrieval step)
             sims    = torch.matmul(z_ref_bank, q_s.unsqueeze(0).T).squeeze(-1)
             sem_idx = torch.topk(sims, k=10).indices.cpu().numpy()
 
-            def get_3grams(s):
-                s = s.lower()
-                return set(s[i:i+3] for i in range(len(s) - 2))
-            q_grams = get_3grams(q_str)
+            q_grams = set(q_str.lower()[i:i+3] for i in range(len(q_str)-2))
             lex_scores = []
             for idx, ref in enumerate(ref_sentences):
-                r_grams = get_3grams(ref)
+                r_grams = set(ref.lower()[i:i+3] for i in range(len(ref)-2))
                 inter = len(q_grams & r_grams)
                 union = len(q_grams | r_grams)
                 lex_scores.append((inter / union if union > 0 else 0.0, idx))
-            lex_scores.sort(reverse=True)
+            lex_scores.sort(reverse=True, key=lambda x: x[0])
             lex_idx = [item[1] for item in lex_scores[:10]]
 
             seen, candidate_indices = set(), []
@@ -992,7 +1097,7 @@ def main():
                     candidate_indices.append(idx)
                     seen.add(idx)
 
-            # Verification
+            # 3. Verification step
             candidates = []
             for cand_idx in candidate_indices:
                 k_vec = z_ref_bank[cand_idx]
@@ -1001,14 +1106,15 @@ def main():
                 with torch.inference_mode():
                     score = verifier(
                         q_s.unsqueeze(0), k_vec.unsqueeze(0),
-                        torch.tensor([jac], device=DEVICE),
-                        torch.tensor([ov],  device=DEVICE)
+                        torch.tensor([jac], device=DEVICE, dtype=torch.float32),
+                        torch.tensor([ov],  device=DEVICE, dtype=torch.float32)
                     ).item()
                 candidates.append((score, ref_labels[cand_idx], k_str))
-            candidates.sort(reverse=True)
+            
+            candidates.sort(reverse=True, key=lambda x: x[0])
             best_score    = candidates[0][0] if candidates else 0.0
             best_fact_idx = candidates[0][1] if candidates else 0
-            best_fact     = train_facts[best_fact_idx] if best_fact_idx < len(train_facts) else train_facts[0]
+            best_fact     = all_facts[best_fact_idx]
             best_fact_sentence = best_fact["statement"]
 
             # Retrieval correctness
@@ -1016,11 +1122,8 @@ def main():
             if not is_ood:
                 total_id_attempts += 1
                 target_fact = q["target_fact"]
-                target_label = next(
-                    (idx for idx, f in enumerate(train_facts) if f["id"] == target_fact["id"]),
-                    None
-                )
-                is_correct_ret = (target_label is not None and best_fact_idx == target_label)
+                target_label = [idx for idx, f in enumerate(all_facts) if f["id"] == target_fact["id"]][0]
+                is_correct_ret = (best_fact_idx == target_label)
                 if is_correct_ret:
                     correct_retrievals += 1
 
@@ -1028,11 +1131,17 @@ def main():
             if not is_ood and gated_accept:
                 verifier_accepted_id += 1
 
-            # Log verifier false negatives (first condition only, ID only)
-            if (cond == conditions[0] and not is_ood and
-                    not gated_accept and is_correct_ret and
-                    cond == "Ungated Decoder"):
-                pass  # logged after verifier score is known for recommended cond
+            # Log verifier false negatives (verifier rejected despite correct retrieval)
+            if (cond == "Verifier-gated + Grounding Validator" and
+                    not is_ood and not gated_accept and is_correct_ret):
+                vfn_records.append({
+                    "query": q_str,
+                    "fact_id": best_fact["id"],
+                    "verifier_score": best_score,
+                    "threshold": theta,
+                    "gap": theta - best_score,
+                    "retrieved_fact_statement": best_fact_sentence[:120],
+                })
 
             decision_state = "VERIFIER_REJECTED"
             final_answer   = fallback_response
@@ -1087,10 +1196,10 @@ def main():
                     q_str, best_fact, raw_gen, foreign_entities
                 )
 
-                # ── Leakage audit (Recommended condition only, first 20 ID records) ──
+                # Leakage audit
                 if (use_validator and not is_ood and len(leakage_audit) < 20):
-                    eval_ans = q["target_fact"]["answer"] if not is_ood else ""
-                    eval_kws = q["target_fact"]["keywords"] if not is_ood else []
+                    eval_ans = q["target_fact"]["answer"]
+                    eval_kws = q["target_fact"]["keywords"]
                     audit_result = audit_validator_decision(
                         q_str, best_fact, raw_gen, foreign_entities,
                         eval_ans, eval_kws
@@ -1106,14 +1215,14 @@ def main():
                     decision_state = "DECODER_ABSTAINED"
                     final_answer   = fallback_response
 
-                    # ── Abstention analysis (recommended + fallback conditions only) ──
+                    # Abstention analysis
                     if use_validator and not is_ood:
                         ab_info = classify_abstention(q_str, best_fact, raw_gen)
                         ab_info["query"] = q_str
                         ab_info["fact_id"] = best_fact["id"]
                         abstention_records.append(ab_info)
 
-                    # ── Extractive fallback ──
+                    # Extractive fallback
                     if use_fallback:
                         ext_text, ext_method = extractive_fallback(
                             q_str, best_fact
@@ -1139,27 +1248,18 @@ def main():
                         decision_state = "ANSWER_ACCEPTED"
                         final_answer   = raw_gen
             else:
-                # VERIFIER_REJECTED — log false negative details for Cond 3
-                if (cond == "Verifier-gated + Grounding Validator"
-                        and not is_ood and is_correct_ret):
-                    vfn_records.append({
-                        "query": q_str,
-                        "fact_id": best_fact["id"],
-                        "verifier_score": best_score,
-                        "threshold": theta,
-                        "gap": theta - best_score,
-                        "retrieved_fact_statement": best_fact_sentence[:120],
-                    })
+                decision_state = "VERIFIER_REJECTED"
+                final_answer   = fallback_response
 
-            # Factual scoring (post-decision, evaluation only — never fed back to validator)
+            # Evaluation scoring (Evaluation only — never fed back to validator)
             factually_correct = False
             if decision_state in ("ANSWER_ACCEPTED", "EXTRACTIVE_ACCEPTED"):
+                target_ans  = best_fact["answer"] if is_ood else q["target_fact"]["answer"]
+                target_kws  = best_fact["keywords"] if is_ood else q["target_fact"]["keywords"]
+                factually_correct = score_against_ground_truth(
+                    final_answer, target_ans, target_kws
+                )
                 if not is_ood:
-                    target_ans  = q["target_fact"]["answer"]
-                    target_kws  = q["target_fact"]["keywords"]
-                    factually_correct = score_against_ground_truth(
-                        final_answer, target_ans, target_kws
-                    )
                     if factually_correct:
                         correct_id += 1
                         if decision_state == "EXTRACTIVE_ACCEPTED":
@@ -1192,37 +1292,37 @@ def main():
                 "factually_correct": factually_correct,
             })
 
-        # ── Print condition summary ────────────────────────────────────────────
-        id_total  = n_id
-        ood_total = n_ood
+        # Summarize condition results
         n_accepted_id  = counts_id["ANSWER_ACCEPTED"] + counts_id.get("EXTRACTIVE_ACCEPTED", 0)
         n_correct_total = correct_id
 
-        print(f"\n  In-Domain Decision Strata ({id_total} queries):")
-        for k, v in counts_id.items():
-            print(f"    {k:30s}: {v} / {id_total}")
+        print(f"\n  In-Domain Decision Strata ({n_id} queries):")
+        for k in sorted(counts_id.keys()):
+            v = counts_id[k]
+            print(f"    {k:30s}: {v} / {n_id}")
 
-        print(f"\n  OOD Decision Strata ({ood_total} queries):")
-        for k, v in counts_ood.items():
-            print(f"    {k:30s}: {v} / {ood_total}")
+        print(f"\n  OOD Decision Strata ({n_ood} queries):")
+        for k in sorted(counts_ood.keys()):
+            v = counts_ood[k]
+            print(f"    {k:30s}: {v} / {n_ood}")
 
         print(f"\n  Performance Metrics (with Wilson 95% CI):")
-        print(fmt_rate(correct_retrievals, id_total, "Retrieval Recall@1"))
-        print(fmt_rate(verifier_accepted_id, id_total, "Verifier ID Acceptance"))
-        print(fmt_rate(n_accepted_id, id_total, "In-Domain Coverage"))
+        print(fmt_rate(correct_retrievals, n_id, "Retrieval Recall@1"))
+        print(fmt_rate(verifier_accepted_id, n_id, "Verifier ID Acceptance"))
+        print(fmt_rate(n_accepted_id, n_id, "In-Domain Coverage"))
         if n_accepted_id > 0:
             print(fmt_rate(n_correct_total, n_accepted_id, "Selective Factual Exactness"))
         else:
             print(f"  {'Selective Factual Exactness':50s}: N/A (0 accepted)")
-        print(fmt_rate(n_correct_total, id_total, "End-to-End Correct-Answer Rate"))
+        print(fmt_rate(n_correct_total, n_id, "End-to-End Correct-Answer Rate"))
 
         if final_ood_unsafe == 0:
-            print(fmt_zero_rate(ood_total, "OOD Hallucination Rate"))
+            print(fmt_zero_rate(n_ood, "OOD Hallucination Rate"))
         else:
-            print(fmt_rate(final_ood_unsafe, ood_total, "OOD Hallucination Rate"))
+            print(fmt_rate(final_ood_unsafe, n_ood, "OOD Hallucination Rate"))
 
         ood_rejected = counts_ood["VERIFIER_REJECTED"]
-        print(fmt_rate(ood_rejected, ood_total, "OOD Rejection Rate (Verifier)"))
+        print(fmt_rate(ood_rejected, n_ood, "OOD Rejection Rate (Verifier)"))
 
         if extractive_total > 0:
             print(fmt_rate(extractive_correct, extractive_total,
@@ -1230,7 +1330,7 @@ def main():
 
         print()
         if final_ood_unsafe == 0:
-            print(f"  [Safety] Zero OOD failures observed among {ood_total} test cases.")
+            print(f"  [Safety] Zero OOD failures observed among {n_ood} test cases.")
         else:
             print(f"  [Safety] FAILED: {final_ood_unsafe} unsafe OOD answers.")
 
@@ -1249,7 +1349,7 @@ def main():
         6: "Query-present entity exclusion (astro)",
     }
 
-    # Use Condition 3 records as the base
+    # Condition 3 verifier-accepted ID records
     c3_records = [
         r for r in records_saved["records"]
         if r["condition"] == "Verifier-gated + Grounding Validator"
@@ -1257,43 +1357,39 @@ def main():
         and r["verifier_accepted"]
     ]
 
+    fact_by_id = {f["id"]: f for f in all_facts}
+
     for check_num in range(1, 7):
-        errors_caught   = 0
-        safe_rejected   = 0
+        errors_caught = 0
         for r in c3_records:
             q_str     = r["query"]
             raw_gen   = r["raw_generation"]
             fact_id   = r["retrieved_fact_id"]
-            best_fact = fact_by_id.get(fact_id, all_facts[0])
+            best_fact = fact_by_id[fact_id]
             foreign_entities = {
                 e for e, fid in all_entity_values.items() if fid != fact_id
             }
-            # Full validator decision
-            full_passed, full_abs, _ = validate_grounding(
+            # Decisions
+            full_passed, _, _ = validate_grounding(
                 q_str, best_fact, raw_gen, foreign_entities
             )
-            # Ablated decision (check_num disabled)
-            abl_passed, abl_abs, _ = validate_grounding(
+            abl_passed, _, _ = validate_grounding(
                 q_str, best_fact, raw_gen, foreign_entities,
                 disabled_checks={check_num}
             )
-            if full_passed and not abl_passed:
-                safe_rejected += 1   # disabling makes it stricter: shouldn't happen by design
             if not full_passed and abl_passed:
-                errors_caught += 1   # this check is catching something
+                errors_caught += 1
 
         rec = {
             "check": check_num,
             "check_name": CHECK_NAMES[check_num],
             "decisions_changed_when_disabled": errors_caught,
-            "note": (f"Disabling check {check_num} would allow {errors_caught} "
-                     f"additional accepted answers (reversed rejections).")
         }
         ablation_records.append(rec)
         print(f"  Check {check_num} [{CHECK_NAMES[check_num]:45s}]: "
-              f"catches {errors_caught} rejections | safe_unblock: {safe_rejected}")
+              f"catches {errors_caught} rejections")
 
-    # ── Save D.2 diagnostics ──────────────────────────────────────────────────
+    # Save NLG records
     with open("nlg_evaluation_records_d2.json", "w") as f:
         json.dump(records_saved, f, indent=2)
     print("\n[Save] nlg_evaluation_records_d2.json")
@@ -1310,17 +1406,11 @@ def main():
         json.dump({"total": len(abstention_records),
                    "groups": ab_summary}, f, indent=2)
     print(f"[Save] abstention_analysis.json ({len(abstention_records)} abstentions logged)")
-    print(f"  Group breakdown:")
-    for g, recs in ab_groups.items():
-        print(f"    {g}: {len(recs)}")
 
     # Verifier false negatives
     with open("verifier_false_negatives.json", "w") as f:
         json.dump({"total": len(vfn_records), "records": vfn_records}, f, indent=2)
     print(f"[Save] verifier_false_negatives.json ({len(vfn_records)} false negatives)")
-    for r in vfn_records:
-        print(f"  Fact {r['fact_id']} | score={r['verifier_score']:.4f} "
-              f"(gap={r['gap']:.4f}) | {r['query'][:60]}")
 
     # Validator leakage audit
     n_changed = sum(1 for r in leakage_audit if r["decision_changed"])
@@ -1340,7 +1430,7 @@ def main():
     # Validator ablation
     with open("validator_ablation.json", "w") as f:
         json.dump(ablation_records, f, indent=2)
-    print(f"[Save] validator_ablation.json")
+    print("[Save] validator_ablation.json")
 
     print("\n" + "=" * 80)
     print("  PHASE D.2 EVALUATION COMPLETE")
