@@ -797,29 +797,56 @@ def main():
     )
     all_ver_pairs = pos_p + sem_p + gen_p
 
+    # Stack inputs and compute overlaps for batched training
+    train_q = torch.stack([x[2] for x in all_ver_pairs]).to(DEVICE)
+    train_k = torch.stack([x[3] for x in all_ver_pairs]).to(DEVICE)
+    
+    jacs, ovs = [], []
+    for q_s, k_s, _, _, _ in all_ver_pairs:
+        jac, ov = get_entity_overlap(q_s, k_s)
+        jacs.append(jac)
+        ovs.append(ov)
+        
+    train_jac = torch.tensor(jacs, dtype=torch.float32, device=DEVICE)
+    train_ov = torch.tensor(ovs, dtype=torch.float32, device=DEVICE)
+    train_y = torch.tensor([float(x[4]) for x in all_ver_pairs], dtype=torch.float32, device=DEVICE)
+
     verifier = RelationVerifier(input_dim=INPUT_DIM).to(DEVICE)
     opt_v = torch.optim.Adam(verifier.parameters(), lr=1e-3, weight_decay=1e-5)
+    criterion = nn.BCELoss(reduction='none')
+    
     verifier.train()
-    EPOCHS_VERIFIER = 40
+    N_v = len(train_y)
+    EPOCHS_VERIFIER = 120
     for ep in range(EPOCHS_VERIFIER):
-        random.shuffle(all_ver_pairs)
+        indices = list(range(N_v))
+        random.shuffle(indices)
         total_loss = 0.0
-        for q_s, k_s, z_q, z_k, label in all_ver_pairs:
-            jac, ov = get_entity_overlap(q_s, k_s)
-            zq_t = F.normalize(z_q.to(DEVICE).unsqueeze(0), dim=-1)
-            zk_t = F.normalize(z_k.to(DEVICE).unsqueeze(0), dim=-1)
-            score = verifier(
-                zq_t, zk_t,
-                torch.tensor([jac], device=DEVICE, dtype=torch.float32),
-                torch.tensor([ov],  device=DEVICE, dtype=torch.float32)
+        batches = 0
+        for idx in range(0, N_v, 64):
+            b_idx = indices[idx : idx + 64]
+            # Ensure we don't have batch size 1 at the end of the epoch
+            if len(b_idx) <= 1:
+                continue
+            
+            pred = verifier(
+                F.normalize(train_q[b_idx], dim=-1),
+                F.normalize(train_k[b_idx], dim=-1),
+                train_jac[b_idx],
+                train_ov[b_idx]
             )
-            loss = F.binary_cross_entropy(score, torch.tensor([float(label)], device=DEVICE))
+            loss_raw = criterion(pred, train_y[b_idx])
+            weight = torch.ones_like(train_y[b_idx])
+            weight[train_y[b_idx] == 1.0] = 4.0
+            loss = (loss_raw * weight).mean()
+            
             opt_v.zero_grad()
             loss.backward()
             opt_v.step()
             total_loss += loss.item()
-        if (ep + 1) % 10 == 0:
-            print(f"  Epoch {ep+1:2d}/{EPOCHS_VERIFIER} | Loss: {total_loss/max(1,len(all_ver_pairs)):.4f}")
+            batches += 1
+        if (ep + 1) % 30 == 0:
+            print(f"  Epoch {ep+1:3d}/{EPOCHS_VERIFIER} | Loss: {total_loss/max(1, batches):.4f}")
     verifier.eval()
     print("[Training] Relation Verifier: Done.")
 
