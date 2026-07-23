@@ -700,31 +700,52 @@ def classify_abstention(query, retrieved_fact, raw_gen):
 
 
 # ── Validator leakage audit ───────────────────────────────────────────────────
-def audit_validator_decision(query, retrieved_fact, generated_answer,
-                              foreign_entities, eval_answer, eval_keywords):
-    """
-    Re-run validate_grounding twice:
-    1. With full fact dict (normal runtime)
-    2. With eval answer/keywords STRIPPED from the fact dict
-    If both return the same decision, the validator is ground-truth isolated.
-    """
-    passed_normal, abs_normal, reasons_normal = validate_grounding(
-        query, retrieved_fact, generated_answer, foreign_entities
-    )
-    stripped_fact = {k: v for k, v in retrieved_fact.items()
-                     if k not in ("answer", "keywords", "qa")}
-    passed_stripped, abs_stripped, reasons_stripped = validate_grounding(
-        query, stripped_fact, generated_answer, foreign_entities
-    )
-    decision_changed = (passed_normal != passed_stripped or
-                        abs_normal != abs_stripped)
-    return {
-        "passed_normal": passed_normal,
-        "passed_stripped": passed_stripped,
-        "decision_changed": decision_changed,
-        "reasons_normal": reasons_normal,
-        "reasons_stripped": reasons_stripped,
+def run_audit_record(query, retrieved_fact, generated_answer, fallback_ran, ext_text, foreign_entities):
+    stripped_fact = {k: v for k, v in retrieved_fact.items() if k not in ("answer", "keywords", "qa")}
+    
+    val_passed_norm, abs_norm, reasons_norm = validate_grounding(query, retrieved_fact, generated_answer, foreign_entities)
+    val_passed_strip, abs_strip, reasons_strip = validate_grounding(query, stripped_fact, generated_answer, foreign_entities)
+    val_decision_changed = (val_passed_norm != val_passed_strip or abs_norm != abs_strip)
+    
+    ext_norm, ext_method_norm = extractive_fallback(query, retrieved_fact)
+    ext_strip, ext_method_strip = extractive_fallback(query, stripped_fact)
+    ext_changed = (ext_norm != ext_strip)
+    
+    # Hash runtime inputs (query, stripped fact, and generated/extracted answers)
+    runtime_data = {
+        "query": query,
+        "fact": stripped_fact,
+        "gen_ans": generated_answer,
+        "fallback_ran": fallback_ran,
+        "ext_text": ext_text
     }
+    serialized = json.dumps(runtime_data, sort_keys=True)
+    inputs_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    
+    return {
+        "query": query,
+        "retrieved_fact_id": retrieved_fact.get("id"),
+        "is_ood": retrieved_fact.get("id") is None,
+        "generated_answer_preview": (generated_answer or "")[:120],
+        "extracted_answer_preview": (ext_text or "")[:120],
+        "validator_decision": {
+            "passed_normal": val_passed_norm,
+            "passed_stripped": val_passed_strip,
+            "reasons_normal": reasons_norm,
+            "reasons_stripped": reasons_stripped,
+            "changed": val_decision_changed
+        },
+        "fallback_extraction": {
+            "extracted_normal": ext_norm,
+            "extracted_stripped": ext_strip,
+            "method_normal": ext_method_norm,
+            "method_stripped": ext_method_strip,
+            "changed": ext_changed
+        },
+        "decision_or_extraction_changed": (val_decision_changed or ext_changed),
+        "runtime_inputs_hash": inputs_hash
+    }
+
 
 
 # ── Dataset & splits initialization ──────────────────────────────────────────
@@ -1039,6 +1060,7 @@ def main():
         "Verifier-gated Decoder",
         "Verifier-gated + Grounding Validator",
         "Verifier-gated + Validator + Extractive Fallback",
+        "Query -> Retrieval -> Verifier -> Deterministic Extractor -> Validator",
     ]
 
     # Accumulators for D.2 diagnostics
@@ -1163,106 +1185,127 @@ def main():
             reasons        = []
             dec_abstain    = False
             extraction_method = None
+            ext_text       = None
 
             use_validator = cond in (
                 "Verifier-gated + Grounding Validator",
                 "Verifier-gated + Validator + Extractive Fallback",
+                "Query -> Retrieval -> Verifier -> Deterministic Extractor -> Validator"
             )
             use_fallback = (cond == "Verifier-gated + Validator + Extractive Fallback")
 
-            if cond == "Ungated Decoder" or gated_accept:
-                user_msg = (
-                    f"VERIFIED_FACT:\n{best_fact_sentence}\n\n"
-                    f"QUESTION:\n{q_str}\n\nANSWER:"
-                )
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_msg},
-                ]
-                formatted_prompt = tokenizer.apply_chat_template(
-                    messages, tokenize=False, add_generation_prompt=True
-                )
-                with torch.inference_mode():
-                    enc_prompt = tokenizer(
-                        formatted_prompt, return_tensors="pt"
-                    ).to(DEVICE)
-                    outputs = decoder.generate(
-                        input_ids=enc_prompt.input_ids,
-                        attention_mask=enc_prompt.attention_mask,
-                        max_new_tokens=48, num_beams=1,
-                        do_sample=False,
-                        pad_token_id=tokenizer.eos_token_id,
-                    )
-                gen_tokens = outputs[0, enc_prompt.input_ids.shape[1]:]
-                raw_gen    = tokenizer.decode(
-                    gen_tokens, skip_special_tokens=True
-                ).strip()
+            # Build per-query foreign entity set
+            foreign_entities = {
+                e for e, fid in all_entity_values.items()
+                if fid != best_fact["id"]
+            }
 
-                # Build per-query foreign entity set
-                foreign_entities = {
-                    e for e, fid in all_entity_values.items()
-                    if fid != best_fact["id"]
-                }
-
-                # Validator
-                val_passed, dec_abstain, reasons = validate_grounding(
-                    q_str, best_fact, raw_gen, foreign_entities
-                )
-
-                # Leakage audit
-                if (use_validator and not is_ood and len(leakage_audit) < 20):
-                    eval_ans = q["target_fact"]["answer"]
-                    eval_kws = q["target_fact"]["keywords"]
-                    audit_result = audit_validator_decision(
-                        q_str, best_fact, raw_gen, foreign_entities,
-                        eval_ans, eval_kws
-                    )
-                    audit_result.update({
-                        "query": q_str,
-                        "retrieved_fact_id": best_fact["id"],
-                        "generated_answer": raw_gen[:120],
-                    })
-                    leakage_audit.append(audit_result)
-
-                if dec_abstain:
-                    decision_state = "DECODER_ABSTAINED"
-                    final_answer   = fallback_response
-
-                    # Abstention analysis
-                    if use_validator and not is_ood:
-                        ab_info = classify_abstention(q_str, best_fact, raw_gen)
-                        ab_info["query"] = q_str
-                        ab_info["fact_id"] = best_fact["id"]
-                        abstention_records.append(ab_info)
-
-                    # Extractive fallback
-                    if use_fallback:
-                        ext_text, ext_method = extractive_fallback(
-                            q_str, best_fact
+            if cond == "Query -> Retrieval -> Verifier -> Deterministic Extractor -> Validator":
+                if gated_accept:
+                    ext_text, ext_method = extractive_fallback(q_str, best_fact)
+                    if ext_text:
+                        val_passed, dec_abstain, reasons = validate_grounding(
+                            q_str, best_fact, ext_text, foreign_entities
                         )
-                        if ext_text:
-                            ext_passed, _, ext_reasons = validate_grounding(
-                                q_str, best_fact, ext_text, foreign_entities
-                            )
-                            if ext_passed:
-                                decision_state    = "EXTRACTIVE_ACCEPTED"
-                                final_answer      = ext_text
-                                extraction_method = ext_method
-                                extractive_total += 1
-                else:
-                    if use_validator:
                         if val_passed:
+                            decision_state    = "EXTRACTIVE_ACCEPTED"
+                            final_answer      = ext_text
+                            extraction_method = ext_method
+                            extractive_total += 1
+                        elif dec_abstain:
+                            decision_state    = "DECODER_ABSTAINED"
+                            final_answer      = fallback_response
+                        else:
+                            decision_state    = "VALIDATOR_REJECTED"
+                            final_answer      = fallback_response
+                    else:
+                        decision_state    = "DECODER_ABSTAINED"
+                        final_answer      = fallback_response
+                else:
+                    decision_state = "VERIFIER_REJECTED"
+                    final_answer   = fallback_response
+            else:
+                if cond == "Ungated Decoder" or gated_accept:
+                    user_msg = (
+                        f"VERIFIED_FACT:\n{best_fact_sentence}\n\n"
+                        f"QUESTION:\n{q_str}\n\nANSWER:"
+                    )
+                    messages = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user",   "content": user_msg},
+                    ]
+                    formatted_prompt = tokenizer.apply_chat_template(
+                        messages, tokenize=False, add_generation_prompt=True
+                    )
+                    with torch.inference_mode():
+                        enc_prompt = tokenizer(
+                            formatted_prompt, return_tensors="pt"
+                        ).to(DEVICE)
+                        outputs = decoder.generate(
+                            input_ids=enc_prompt.input_ids,
+                            attention_mask=enc_prompt.attention_mask,
+                            max_new_tokens=48, num_beams=1,
+                            do_sample=False,
+                            pad_token_id=tokenizer.eos_token_id,
+                        )
+                    gen_tokens = outputs[0, enc_prompt.input_ids.shape[1]:]
+                    raw_gen    = tokenizer.decode(
+                        gen_tokens, skip_special_tokens=True
+                    ).strip()
+
+                    # Validator
+                    val_passed, dec_abstain, reasons = validate_grounding(
+                        q_str, best_fact, raw_gen, foreign_entities
+                    )
+
+                    if dec_abstain:
+                        decision_state = "DECODER_ABSTAINED"
+                        final_answer   = fallback_response
+
+                        # Abstention analysis
+                        if use_validator and not is_ood:
+                            ab_info = classify_abstention(q_str, best_fact, raw_gen)
+                            ab_info["query"] = q_str
+                            ab_info["fact_id"] = best_fact["id"]
+                            abstention_records.append(ab_info)
+
+                        # Extractive fallback
+                        if use_fallback:
+                            ext_text, ext_method = extractive_fallback(
+                                q_str, best_fact
+                            )
+                            if ext_text:
+                                ext_passed, _, ext_reasons = validate_grounding(
+                                    q_str, best_fact, ext_text, foreign_entities
+                                )
+                                if ext_passed:
+                                    decision_state    = "EXTRACTIVE_ACCEPTED"
+                                    final_answer      = ext_text
+                                    extraction_method = ext_method
+                                    extractive_total += 1
+                    else:
+                        if use_validator:
+                            if val_passed:
+                                decision_state = "ANSWER_ACCEPTED"
+                                final_answer   = raw_gen
+                            else:
+                                decision_state = "VALIDATOR_REJECTED"
+                                final_answer   = fallback_response
+                        else:
                             decision_state = "ANSWER_ACCEPTED"
                             final_answer   = raw_gen
-                        else:
-                            decision_state = "VALIDATOR_REJECTED"
-                            final_answer   = fallback_response
-                    else:
-                        decision_state = "ANSWER_ACCEPTED"
-                        final_answer   = raw_gen
-            else:
-                decision_state = "VERIFIER_REJECTED"
-                final_answer   = fallback_response
+                else:
+                    decision_state = "VERIFIER_REJECTED"
+                    final_answer   = fallback_response
+
+            # Leakage audit on all 120 test records in Condition 4
+            if cond == "Verifier-gated + Validator + Extractive Fallback":
+                fallback_ran = dec_abstain
+                ext_text_val = ext_text if fallback_ran else None
+                audit_result = run_audit_record(
+                    q_str, best_fact, raw_gen, fallback_ran, ext_text_val, foreign_entities
+                )
+                leakage_audit.append(audit_result)
 
             # Evaluation scoring (Evaluation only — never fed back to validator)
             factually_correct = False
@@ -1314,14 +1357,22 @@ def main():
             v = counts_id[k]
             print(f"    {k:30s}: {v} / {n_id}")
 
-        print(f"\n  OOD Decision Strata ({n_ood} queries):")
-        for k in sorted(counts_ood.keys()):
-            v = counts_ood[k]
-            print(f"    {k:30s}: {v} / {n_ood}")
+        print(f"\n  OOD Query Disposition ({n_ood} total):")
+        if cond == "Ungated Decoder":
+            print(f"    Verifier rejected             : N/A — verifier disabled")
+        else:
+            print(f"    Verifier rejected             : {counts_ood.get('VERIFIER_REJECTED', 0)} / {n_ood}")
+        print(f"    Decoder abstained             : {counts_ood.get('DECODER_ABSTAINED', 0)} / {n_ood}")
+        print(f"    Validator rejected            : {counts_ood.get('VALIDATOR_REJECTED', 0)} / {n_ood}")
+        print(f"    Answer accepted               : {counts_ood.get('ANSWER_ACCEPTED', 0) + counts_ood.get('EXTRACTIVE_ACCEPTED', 0)} / {n_ood}")
+        print(f"    Accepted and incorrect        : {final_ood_unsafe} / {n_ood}")
 
         print(f"\n  Performance Metrics (with Wilson 95% CI):")
         print(fmt_rate(correct_retrievals, n_id, "Retrieval Recall@1"))
-        print(fmt_rate(verifier_accepted_id, n_id, "Verifier ID Acceptance"))
+        if cond == "Ungated Decoder":
+            print(f"  {'Verifier ID Acceptance':50s}: N/A — verifier disabled")
+        else:
+            print(fmt_rate(verifier_accepted_id, n_id, "Verifier ID Acceptance"))
         print(fmt_rate(n_accepted_id, n_id, "In-Domain Coverage"))
         if n_accepted_id > 0:
             print(fmt_rate(n_correct_total, n_accepted_id, "Selective Factual Exactness"))
@@ -1334,8 +1385,11 @@ def main():
         else:
             print(fmt_rate(final_ood_unsafe, n_ood, "OOD Hallucination Rate"))
 
-        ood_rejected = counts_ood["VERIFIER_REJECTED"]
-        print(fmt_rate(ood_rejected, n_ood, "OOD Rejection Rate (Verifier)"))
+        if cond == "Ungated Decoder":
+            print(f"  {'OOD Rejection Rate (Verifier)':50s}: N/A — verifier disabled")
+        else:
+            ood_rejected = counts_ood["VERIFIER_REJECTED"]
+            print(fmt_rate(ood_rejected, n_ood, "OOD Rejection Rate (Verifier)"))
 
         if extractive_total > 0:
             print(fmt_rate(extractive_correct, extractive_total,
