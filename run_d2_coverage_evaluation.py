@@ -810,8 +810,23 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
 
     # Load or generate embedding cache
-    if not os.path.exists(CACHE_100_PATH) and not os.path.exists(CACHE_100_PATH.replace("../", "")):
-        print(f"[Cache] Embeddings cache not found at {CACHE_100_PATH}. Generating on-the-fly using SmolLM2...")
+    cache_needs_regeneration = True
+    CACHE_100_PATH_RESOLVED = CACHE_100_PATH
+    if os.path.exists(CACHE_100_PATH) or os.path.exists(CACHE_100_PATH.replace("../", "")):
+        resolved_path = CACHE_100_PATH if os.path.exists(CACHE_100_PATH) else CACHE_100_PATH.replace("../", "")
+        try:
+            cache_data = torch.load(resolved_path, map_location="cpu", weights_only=True)
+            if "train_x" in cache_data and cache_data["train_x"].shape[0] == len(all_facts) * 3:
+                cache_needs_regeneration = False
+                CACHE_100_PATH_RESOLVED = resolved_path
+                print(f"[Cache] Loaded valid embeddings cache from {resolved_path} (shape: {cache_data['train_x'].shape})")
+            else:
+                print(f"[Cache] Cache shape mismatch (expected {len(all_facts) * 3}, got {cache_data['train_x'].shape if 'train_x' in cache_data else 'none'}). Regenerating...")
+        except Exception as e:
+            print(f"[Cache] Existing cache file invalid: {e}")
+
+    if cache_needs_regeneration:
+        print(f"[Cache] Generating embeddings on-the-fly using SmolLM2...")
         _tmp_model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
         _tmp_model.eval()
 
@@ -832,7 +847,7 @@ def main():
         tr_s_tmp, _, val_s_tmp, _, te_s_tmp, _ = get_sentence_lists(all_facts, unique_probes)
         z_tr_tmp  = _encode_sentences(_tmp_model, tokenizer, tr_s_tmp)
         z_val_tmp = _encode_sentences(_tmp_model, tokenizer, val_s_tmp)
-        z_te_tmp  = _encode_sentences(_tmp_model, tokenizer, z_te_tmp)
+        z_te_tmp  = _encode_sentences(_tmp_model, tokenizer, te_s_tmp)
         cache_save_path = CACHE_100_PATH if "/" not in CACHE_100_PATH.lstrip("./") else "smollm2_embeddings_100slots.pt"
         torch.save({"train_x": z_tr_tmp, "val_x": z_val_tmp, "test_x": z_te_tmp}, cache_save_path)
         print(f"  [Cache] Saved to {cache_save_path}")
@@ -840,8 +855,6 @@ def main():
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         CACHE_100_PATH_RESOLVED = cache_save_path
-    else:
-        CACHE_100_PATH_RESOLVED = CACHE_100_PATH if os.path.exists(CACHE_100_PATH) else CACHE_100_PATH.replace("../", "")
 
     cache_data = torch.load(CACHE_100_PATH_RESOLVED, map_location=DEVICE)
     
