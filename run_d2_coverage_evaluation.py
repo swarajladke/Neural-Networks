@@ -489,18 +489,137 @@ def audit_validator_decision(query, retrieved_fact, generated_answer,
 
 # ── Dataset & split loading (verbatim from D.1) ───────────────────────────────
 def load_or_generate_dataset():
-    """Load agnis_scaling_dataset.json or regenerate if missing."""
-    if os.path.exists(DATASET_PATH):
-        with open(DATASET_PATH) as f:
-            data = json.load(f)
+    """Load agnis_scaling_dataset.json or auto-generate it if missing."""
+    if not os.path.exists(DATASET_PATH):
+        print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
+        if os.path.exists("generate_scaling_dataset.py"):
+            subprocess.run(["python", "generate_scaling_dataset.py"], check=True)
+            print(f"[Data] Auto-generated {DATASET_PATH}")
+        else:
+            # Inline fallback: generate a minimal 100-fact dataset
+            print("[Data] generate_scaling_dataset.py not found — generating inline fallback ...")
+            _generate_inline_dataset()
+
+    with open(DATASET_PATH) as f:
+        raw = json.load(f)
+
+    # Support both list-of-lists and {"blocks": [...]} formats
+    if isinstance(raw, list):
+        # Each element is either a block-list or a fact dict
         all_facts = []
-        for block in data.get("blocks", []):
-            all_facts.extend(block.get("facts", []))
-        print(f"[Data] Loaded {len(all_facts)} facts from {DATASET_PATH}")
-        return all_facts, data
-    # Minimal reconstruction is handled by generating the dataset on the fly
-    print("[Data] Scaling dataset not found. Please ensure agnis_scaling_dataset.json is present.")
-    raise FileNotFoundError(DATASET_PATH)
+        for item in raw:
+            if isinstance(item, list):
+                all_facts.extend(item)
+            elif isinstance(item, dict) and "id" in item:
+                all_facts.append(item)
+    elif isinstance(raw, dict):
+        all_facts = []
+        for block in raw.get("blocks", []):
+            if isinstance(block, dict):
+                all_facts.extend(block.get("facts", []))
+            elif isinstance(block, list):
+                all_facts.extend(block)
+    else:
+        raise ValueError(f"Unrecognised dataset format in {DATASET_PATH}")
+
+    print(f"[Data] Loaded {len(all_facts)} facts from {DATASET_PATH}")
+    return all_facts, raw
+
+
+def _generate_inline_dataset():
+    """Generate a minimal 100-fact scaling dataset inline and write to DATASET_PATH."""
+    geo_locs   = [f"Lumaria{i}" for i in range(34)]
+    geo_caps   = [f"VarekCity{i}" for i in range(34)]
+    sci_comps  = [f"Xenol-{chr(65+i)}" for i in range(33)]
+    sci_temps  = ["forty two", "eighty five", "one hundred", "two hundred",
+                  "three hundred", "five hundred", "eight hundred", "nine hundred",
+                  "seventy six", "sixty four", "fifty eight", "ninety one",
+                  "twenty three", "thirty seven", "sixty six",
+                  "forty eight", "ninety three", "twelve", "fifty one",
+                  "seventy nine", "eighty eight", "thirty three", "fifteen",
+                  "sixty two", "forty four", "nineteen", "thirty", "seventy",
+                  "sixteen", "fifty three", "eighty", "forty five", "sixty seven"]
+    ast_planets = [f"Kepler-{100+i}b" for i in range(33)]
+    ast_moons   = [f"Aria-{chr(65+i%26)}{i}" for i in range(33)]
+    ast_periods = ["forty seven days", "eighty eight days", "twelve days",
+                   "nineteen days", "thirty six days", "six days", "fifteen days",
+                   "twenty days", "fifty days", "nine days", "thirty days",
+                   "sixty days", "four days", "eleven days", "seven days",
+                   "forty days", "twenty five days", "eighteen days",
+                   "thirteen days", "eight days", "three days", "fourteen days",
+                   "twenty two days", "sixty five days", "five days",
+                   "thirty three days", "seventy days", "forty two days",
+                   "sixteen days", "fifty five days", "twenty eight days",
+                   "ten days", "forty five days"]
+
+    facts = []
+    for i in range(min(34, len(geo_locs))):
+        loc, cap = geo_locs[i], geo_caps[i]
+        facts.append({
+            "id": f"G{i+1:02d}", "category": "geography",
+            "location": loc, "capital": cap,
+            "statement": f"The official capital city of {loc} is {cap}.",
+            "probe": f"The official capital city of {loc} is",
+            "answer": cap, "keywords": [cap.split()[0]],
+            "train_paraphrases": [
+                f"Identify the capital city of {loc}.",
+                f"Which city serves as the capital of {loc}?",
+                f"The administrative capital of {loc} is located in",
+            ],
+            "eval_paraphrases": [
+                f"What is the official capital of the region of {loc}?",
+                f"Name the city that functions as {loc}'s capital.",
+                f"In the land of {loc}, the capital city is known as",
+            ],
+        })
+    for i in range(min(33, len(sci_comps))):
+        comp, temp = sci_comps[i], sci_temps[i % len(sci_temps)]
+        facts.append({
+            "id": f"S{i+1:02d}", "category": "science",
+            "comp": comp, "compound": comp, "temperature": temp,
+            "statement": f"The molecular compound {comp} liquefies at exactly {temp} degrees Celsius.",
+            "probe": f"The molecular compound {comp} liquefies at exactly",
+            "answer": temp, "keywords": [temp.split()[0]],
+            "train_paraphrases": [
+                f"Specify the melting temperature of {comp}.",
+                f"At how many degrees Celsius does {comp} melt?",
+                f"The compound {comp} transitions to liquid at exactly",
+            ],
+            "eval_paraphrases": [
+                f"What temperature causes {comp} to liquefy?",
+                f"How hot must it get for {comp} to melt?",
+                f"At what Celsius temperature does {comp} become liquid?",
+            ],
+        })
+    for i in range(min(33, len(ast_planets))):
+        planet, moon, period = ast_planets[i], ast_moons[i], ast_periods[i % len(ast_periods)]
+        facts.append({
+            "id": f"A{i+1:02d}", "category": "astronomy",
+            "planet": planet, "moon": moon, "period": period,
+            "statement": f"{moon} orbits {planet} in exactly {period}.",
+            "probe": f"{moon} orbits {planet} in exactly",
+            "answer": period, "keywords": [period.split()[0]],
+            "train_paraphrases": [
+                f"What is the orbital period of {moon} around {planet}?",
+                f"How long does {moon} take to orbit {planet}?",
+                f"The moon {moon} completes one orbit of {planet} in",
+            ],
+            "eval_paraphrases": [
+                f"State the orbital period of {moon} relative to {planet}.",
+                f"In how many days does {moon} circle {planet}?",
+                f"The orbital duration of {moon} around {planet} is",
+            ],
+        })
+
+    # Wrap as blocks format
+    block_size = 10
+    blocks = []
+    for i in range(0, len(facts), block_size):
+        blocks.append({"block_id": i // block_size, "facts": facts[i:i+block_size]})
+
+    with open(DATASET_PATH, "w") as f:
+        json.dump({"blocks": blocks}, f, indent=2)
+    print(f"[Data] Generated {DATASET_PATH} with {len(facts)} facts.")
 
 def load_split_manifest(all_facts):
     if os.path.exists(MANIFEST_PATH):
