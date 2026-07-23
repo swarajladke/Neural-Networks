@@ -732,7 +732,7 @@ def run_audit_record(query, retrieved_fact, generated_answer, fallback_ran, ext_
             "passed_normal": val_passed_norm,
             "passed_stripped": val_passed_strip,
             "reasons_normal": reasons_norm,
-            "reasons_stripped": reasons_stripped,
+            "reasons_stripped": reasons_strip,
             "changed": val_decision_changed
         },
         "fallback_extraction": {
