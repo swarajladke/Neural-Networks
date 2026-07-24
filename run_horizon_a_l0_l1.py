@@ -7,7 +7,7 @@ Rigorously addresses all peer-audit directives:
    - Train Split: train_paraphrases[:2] (20 queries per block)
    - Dev Split  : train_paraphrases[2] + eval_paraphrases[0] (20 queries per block)
    - Test Split : canonical probe + eval_paraphrases[1] (20 held-out test queries per block)
-3. Real Equal-Parameter Static Matched Baseline (StaticStudent with 10 experts, 7.21M parameters).
+3. Real Equal-Parameter Static Matched Baseline (StaticStudent with 10 experts, 7.18M parameters).
 4. Stage L1b Real Oracle Deployment with route_mode="oracle_eval" and live sigmoid amplitude a = sigma(s).
 5. Empirical Dev-Set Candidate Utility Evaluation for commitment/rollback.
 6. 10,000 Resample Paired Bootstrap Test H1 comparing Real Oracle AGNIS vs Real Static Matched Baseline.
@@ -320,7 +320,7 @@ class LifelongStudent(nn.Module):
 
 
 class StaticStudent(nn.Module):
-    """Real Equal-Parameter Static Matched Baseline Model (7,214,595 parameters)."""
+    """Real Equal-Parameter Static Matched Baseline Model (7,183,627 parameters)."""
     def __init__(self, base_encoder=None, num_experts=10, embed_dim=128, bottleneck_dim=64):
         super().__init__()
         self.base_encoder = base_encoder if base_encoder is not None else StudentEncoder()
@@ -533,10 +533,10 @@ def train_and_eval_l0_run(blocks, order, model_seed, all_facts, target_embedding
     
     for step_b, block_idx in enumerate(order):
         target_block = blocks[block_idx]
-        block_fact_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
+        block_target_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
         
         train_queries, train_sub_indices = get_block_queries(target_block, split="train")
-        train_targets = target_embeddings[[block_fact_indices[i] for i in train_sub_indices]]
+        train_targets = target_embeddings[[block_target_indices[i] for i in train_sub_indices]]
         
         student.train()
         for epoch in range(30):
@@ -617,10 +617,10 @@ def train_and_eval_static_matched_run(blocks, order, model_seed, all_facts, targ
     for step_b, block_idx in enumerate(order):
         target_block = blocks[block_idx]
         expert_id = f"expert_b{block_idx}"
-        block_fact_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
+        block_target_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
         
         train_queries, train_sub_indices = get_block_queries(target_block, split="train")
-        train_targets = target_embeddings[[block_fact_indices[i] for i in train_sub_indices]]
+        train_targets = target_embeddings[[block_target_indices[i] for i in train_sub_indices]]
         
         student.train()
         for epoch in range(30):
@@ -717,7 +717,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 
                 # Base student trains on new block step_b using TRAIN split queries
                 train_queries, train_sub_indices = get_block_queries(target_block, split="train")
-                train_targets = target_embeddings[[block_fact_indices[i] for i in train_sub_indices]]
+                train_targets = target_embeddings[[block_target_indices[i] for i in train_sub_indices]]
                 
                 student.train()
                 for epoch in range(30):
@@ -746,7 +746,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 exp_opt = torch.optim.AdamW(list(expert.parameters()) + [student.router.weight, student.router.bias], lr=5e-3)
                 
                 student.train()
-                t_target_tensor = torch.tensor([block_fact_indices[i] for i in train_sub_indices], device=DEVICE)
+                t_target_tensor = torch.tensor([block_target_indices[i] for i in train_sub_indices], device=DEVICE)
                 
                 for ep in range(50):
                     q_ids, q_mask = tokenize_texts(train_queries)
