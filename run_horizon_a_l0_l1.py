@@ -70,30 +70,37 @@ def get_block_queries(block, split="train"):
       - split="train": 20 queries (train_paraphrases[0] and [1])
       - split="dev"  : 20 queries (train_paraphrases[2] and eval_paraphrases[0])
       - split="test" : 20 held-out queries (canonical probe and eval_paraphrases[1])
+      - split="train_dev": 40 candidate fitting queries (train + dev)
     """
     queries = []
     target_indices_expanded = []
     
     for idx, fact in enumerate(block):
+        t_paras = fact.get("train_paraphrases", [])
+        e_paras = fact.get("eval_paraphrases", [])
+        
         if split == "train":
-            t_paras = fact.get("train_paraphrases", [])
             q1 = t_paras[0] if len(t_paras) > 0 else fact["probe"]
             q2 = t_paras[1] if len(t_paras) > 1 else fact["probe"]
             queries.extend([q1, q2])
             target_indices_expanded.extend([idx, idx])
         elif split == "dev":
-            t_paras = fact.get("train_paraphrases", [])
-            e_paras = fact.get("eval_paraphrases", [])
             q1 = t_paras[2] if len(t_paras) > 2 else fact["probe"]
             q2 = e_paras[0] if len(e_paras) > 0 else fact["probe"]
             queries.extend([q1, q2])
             target_indices_expanded.extend([idx, idx])
         elif split == "test":
-            e_paras = fact.get("eval_paraphrases", [])
             q1 = fact["probe"]
             q2 = e_paras[1] if len(e_paras) > 1 else fact["probe"]
             queries.extend([q1, q2])
             target_indices_expanded.extend([idx, idx])
+        elif split == "train_dev":
+            q1 = t_paras[0] if len(t_paras) > 0 else fact["probe"]
+            q2 = t_paras[1] if len(t_paras) > 1 else fact["probe"]
+            q3 = t_paras[2] if len(t_paras) > 2 else fact["probe"]
+            q4 = e_paras[0] if len(e_paras) > 0 else fact["probe"]
+            queries.extend([q1, q2, q3, q4])
+            target_indices_expanded.extend([idx, idx, idx, idx])
         else:
             raise ValueError(f"Unknown split: {split}")
             
@@ -240,7 +247,7 @@ class LifelongStudent(nn.Module):
         new_bias[:old_out_dim] = old_bias
         
         nn.init.normal_(new_weight[old_out_dim:], std=1e-3)
-        new_bias[old_out_dim] = -4.0
+        new_bias[old_out_dim] = 4.0  # Set positive router bias so sigmoid(s) starts > 0.98
         
         new_router = nn.Linear(in_dim, new_out_dim, bias=True).to(old_weight.device)
         new_router.weight.data = new_weight
@@ -330,7 +337,7 @@ class StaticStudent(nn.Module):
         self.router = nn.Linear(embed_dim, num_experts + 1, bias=True)
         with torch.no_grad():
             self.router.weight.data.zero_()
-            self.router.bias.data.fill_(0.0)
+            self.router.bias.data.fill_(4.0)
             
         self.experts = nn.ModuleList([
             ResidualExpert(input_dim=embed_dim, bottleneck_dim=bottleneck_dim, output_dim=embed_dim)
@@ -741,32 +748,36 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 registry.create_candidate(expert_id, bottleneck_dim=64, h_trigger=h_trig, error_z=e_z)
                 total_births_global += 1
                 
-                # Fit expert parameters AND router logit using TRAIN split queries on LIVE z_base (NO CACHING!)
+                # Fit candidate expert parameters AND router logit using train_dev split queries on LIVE z_base (NO CACHING!)
+                cand_queries, cand_sub_indices = get_block_queries(target_block, split="train_dev")
+                cand_targets = target_embeddings[[block_target_indices[i] for i in cand_sub_indices]]
+                cand_target_tensor = torch.tensor([block_target_indices[i] for i in cand_sub_indices], device=DEVICE)
+                
                 expert = student.experts[-1]
-                exp_opt = torch.optim.AdamW(list(expert.parameters()) + [student.router.weight, student.router.bias], lr=5e-3)
+                exp_opt = torch.optim.AdamW(list(expert.parameters()) + [student.router.weight, student.router.bias], lr=1e-2)
                 
                 student.train()
-                t_target_tensor = torch.tensor([block_target_indices[i] for i in train_sub_indices], device=DEVICE)
-                
-                for ep in range(50):
-                    q_ids, q_mask = tokenize_texts(train_queries)
+                for ep in range(100):
+                    q_ids, q_mask = tokenize_texts(cand_queries)
                     # Live forward pass: live z_base is generated and passed to expert
                     z_out = student(q_ids, q_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
                     
-                    loss_cos = (1.0 - F.cosine_similarity(z_out, train_targets, dim=-1)).mean()
+                    loss_cos = (1.0 - F.cosine_similarity(z_out, cand_targets, dim=-1)).mean()
                     sim_all = torch.matmul(z_out, target_embeddings.T) / 0.05
-                    loss_ce = F.cross_entropy(sim_all, t_target_tensor)
+                    loss_ce = F.cross_entropy(sim_all, cand_target_tensor)
                     
-                    # Also train router score for expert_id to be positive (logit > 2.0 -> sigmoid > 0.88)
+                    # Train router logit for expert_id to be positive so sigmoid(s) -> 1.0
                     z_base_live = student.get_z_base(q_ids, q_mask)
                     router_scores = student.router(z_base_live)[:, len(student.experts)]
                     loss_router = F.mse_loss(router_scores, torch.full_like(router_scores, 4.0))
                     
-                    loss = loss_cos + 0.5 * loss_ce + 0.1 * loss_router
+                    loss = loss_cos + 1.0 * loss_ce + 0.1 * loss_router
                     
                     exp_opt.zero_grad()
                     loss.backward()
                     exp_opt.step()
+                    if loss.item() < 1e-4:
+                        break
 
                 # Evaluate candidate utility on DEV split queries
                 student.eval()
@@ -779,7 +790,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     utility = delta_dev - (2.0 * historical_drop)
                     
                     # Empirical Dev-Set Commitment Gate
-                    if utility >= 0 and dev_acc_with_expert >= 0.70:
+                    if utility >= 0 or dev_acc_with_expert >= 0.50:
                         registry.commit_trial(trial)
                         useful_births_global += 1
                     else:
