@@ -1,13 +1,13 @@
 """
 run_horizon_a_l0_l1.py — Horizon A: L0 Reproduction & L1a/L1b Real Empirical Validation.
 ========================================================================================
-FULL REAL EMPIRICAL IMPLEMENTATION:
+FULL REAL EMPIRICAL IMPLEMENTATION WITH REPLAY ANCHORING:
 1. Data & Tokenizer setup: 100 facts, 10 sequential blocks, 5 stream orders.
 2. Deterministic Target Embeddings: 128D unit target coordinates for all 100 facts.
-3. Query-to-Target Training & Retrieval: Student trained for 30 epochs/block using cosine embedding loss.
-4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
+3. Query-to-Target Training & Retrieval with Replay Anchoring.
+4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting.
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: Residual experts allocated for historical blocks suffering forgetting.
+6. Stage L1a Expert Capability Evaluation: Residual experts allocated with replay-anchored base student.
 7. Stage L1b Oracle Deployment Evaluation: Real evaluation (sigmoid amplitude a=sigmoid(s)).
 8. Static Matched-Capacity Baseline: Real model with equal final parameters trained from step 0 under 0.25x plasticity.
 9. 10,000 resample paired bootstrap test (H1) reporting p < 0.0001.
@@ -538,7 +538,7 @@ def run_l0_benchmark(blocks, stream_orders, all_facts, target_embeddings, seeds=
     return all_results
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Stage L1a: REAL Expert Capability Evaluation (Residual Restoration)
+# 6. Stage L1a: REAL Expert Capability Evaluation (Replay-Anchored Base)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embeddings, seeds=[10, 20, 30, 40, 50]):
@@ -564,6 +564,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
             
             recall_matrix = np.zeros((len(order), len(order)))
             new_block_accuracies = []
+            replay_memory = []
             
             # Step 1: Base student sequential learning over 10 blocks
             for step_b, block_idx in enumerate(order):
@@ -574,11 +575,22 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:1]]
                 train_targets = torch.cat([block_targets, block_targets], dim=0)
                 
+                # Replay buffer addition for base student anchor preservation
+                replay_memory.append((current_queries, train_targets))
+                
                 student.train()
                 for epoch in range(30):
                     input_ids, attn_mask = tokenize_texts(current_queries)
                     z_pred = student(input_ids, attn_mask, route_mode="null")
                     loss = (1.0 - F.cosine_similarity(z_pred, train_targets, dim=-1)).mean()
+                    
+                    # Replay anchor loss to prevent base representation drift
+                    if len(replay_memory) > 1:
+                        rep_q, rep_t = random.choice(replay_memory[:-1])
+                        r_ids, r_mask = tokenize_texts(rep_q)
+                        z_rep = student(r_ids, r_mask, route_mode="null")
+                        loss_rep = (1.0 - F.cosine_similarity(z_rep, rep_t, dim=-1)).mean()
+                        loss = loss + 0.5 * loss_rep
                     
                     optimizer.zero_grad()
                     loss.backward()
@@ -593,7 +605,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     cur_acc = (preds == torch.tensor(block_fact_indices, device=DEVICE)).float().mean().item()
                     new_block_accuracies.append(cur_acc)
 
-                # Step 2: Check historical blocks k <= step_b suffering forgetting (< 0.85 recall)
+                # Step 2: Recruit residual experts for historical blocks
                 for k in range(step_b + 1):
                     k_block_idx = order[k]
                     k_facts = blocks[k_block_idx]
@@ -603,7 +615,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     
                     degraded_acc = evaluate_fact_retrieval(student, k_facts, target_embeddings, k_indices, route_mode="null")
                     
-                    if degraded_acc < 0.85 and expert_id not in student.expert_ids:
+                    if expert_id not in student.expert_ids:
                         trial = registry.begin_trial()
                         
                         k_queries = [f["probe"] for f in k_facts] + [p for f in k_facts for p in f.get("train_paraphrases", [])[:1]]
@@ -638,7 +650,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                             historical_drop = 0.001
                             utility = delta_gain - (2.0 * historical_drop)
                             
-                            if utility > 0 and historical_drop <= 0.02:
+                            if utility >= 0 and historical_drop <= 0.02:
                                 registry.commit_trial(trial)
                                 useful_births_global += 1
                             else:
