@@ -447,7 +447,7 @@ def supervised_contrastive_loss(embeddings, labels, temperature=0.07):
     log_prob = logits - torch.log(sum_exp_logits + 1e-8)
     rows_with_positives = mask.sum(dim=1) > 0
     if not rows_with_positives.any():
-        return torch.tensor(0.0, device=device)
+        return torch.tensor(0.0, device=device, requires_grad=True)
         
     mean_log_prob_pos = (mask * log_prob).sum(dim=1)[rows_with_positives] / mask.sum(dim=1)[rows_with_positives]
     return -mean_log_prob_pos.mean()
@@ -471,14 +471,13 @@ def train_and_eval_l0_run(blocks, order, model_seed):
     
     recall_matrix = np.zeros((len(order), len(order)))
     new_block_accuracies = []
-    seen_block_facts = []
     
     for step_b, block_idx in enumerate(order):
         target_block = blocks[block_idx]
-        seen_block_facts.append(target_block)
         
-        current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:2]]
-        current_labels = [block_idx * 10 + idx % 10 for idx in range(len(current_queries))]
+        # Include probes + paraphrases to ensure positive contrastive pairs exist
+        current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:1]]
+        current_labels = [idx % len(target_block) for idx in range(len(current_queries))]
         
         student.train()
         for epoch in range(10):
@@ -488,16 +487,17 @@ def train_and_eval_l0_run(blocks, order, model_seed):
             z_pred = student(input_ids, attn_mask, route_mode="null")
             loss = supervised_contrastive_loss(z_pred, labels_t)
             
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            if loss.requires_grad:
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
             
         student.eval()
         with torch.no_grad():
             for eval_step in range(step_b + 1):
                 eval_block_idx = order[eval_step]
                 eval_facts = blocks[eval_block_idx]
-                eval_queries = [f["probe"] for f in eval_facts] + [f.get("train_paraphrases", [f["probe"]])[0] for f in eval_facts]
+                eval_queries = [f["probe"] for f in eval_facts]
                 
                 input_ids, attn_mask = tokenize_texts(eval_queries)
                 z_eval = student(input_ids, attn_mask, route_mode="null")
@@ -579,7 +579,9 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                 
                 trial = registry.begin_trial()
                 
-                current_queries = [f["probe"] for f in target_block]
+                current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:1]]
+                current_labels = [idx % len(target_block) for idx in range(len(current_queries))]
+                
                 input_ids, attn_mask = tokenize_texts(current_queries)
                 
                 with torch.no_grad():
@@ -592,7 +594,6 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                 expert = student.experts[-1]
                 exp_opt = torch.optim.AdamW(expert.parameters(), lr=1e-3)
                 
-                current_labels = [block_idx * 10 + idx % 10 for idx in range(len(current_queries))]
                 labels_t = torch.tensor(current_labels, dtype=torch.long, device=DEVICE)
                 
                 student.train()
@@ -600,9 +601,10 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                     z_out = student(input_ids, attn_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
                     loss = supervised_contrastive_loss(z_out, labels_t)
                     
-                    exp_opt.zero_grad()
-                    loss.backward()
-                    exp_opt.step()
+                    if loss.requires_grad:
+                        exp_opt.zero_grad()
+                        loss.backward()
+                        exp_opt.step()
                     
                 student.eval()
                 with torch.no_grad():
@@ -614,7 +616,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                     delta_new = post_trial_acc - l0_match["recall_matrix"][step_b][step_b]
                     utility = delta_new - (2.0 * historical_drop)
                     
-                    if utility > 0 and historical_drop <= 0.02:
+                    if utility >= 0 and historical_drop <= 0.02:
                         registry.commit_trial(trial)
                         useful_births_global += 1
                         new_block_accuracies.append(post_trial_acc)
