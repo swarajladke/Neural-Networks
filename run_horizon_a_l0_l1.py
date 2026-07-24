@@ -247,7 +247,7 @@ class LifelongStudent(nn.Module):
         new_bias[:old_out_dim] = old_bias
         
         nn.init.normal_(new_weight[old_out_dim:], std=1e-3)
-        new_bias[old_out_dim] = 4.0  # Set positive router bias so sigmoid(s) starts > 0.98
+        new_bias[old_out_dim] = -4.0  # Silent start bias (-4.0) so untrained birth drift is < 0.05
         
         new_router = nn.Linear(in_dim, new_out_dim, bias=True).to(old_weight.device)
         new_router.weight.data = new_weight
@@ -337,7 +337,7 @@ class StaticStudent(nn.Module):
         self.router = nn.Linear(embed_dim, num_experts + 1, bias=True)
         with torch.no_grad():
             self.router.weight.data.zero_()
-            self.router.bias.data.fill_(4.0)
+            self.router.bias.data.fill_(-4.0)
             
         self.experts = nn.ModuleList([
             ResidualExpert(input_dim=embed_dim, bottleneck_dim=bottleneck_dim, output_dim=embed_dim)
