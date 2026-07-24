@@ -589,7 +589,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     z_eval = student(input_ids, attn_mask, route_mode="null")
                     sim_matrix = torch.matmul(z_eval, target_embeddings.T)
                     preds = sim_matrix.argmax(dim=-1)
-                    cur_acc = (preds == torch.tensor(block_fact_indices, device=DEVICE)).float().mean().item()
+                    cur_acc = (preds == torch.tensor(block_target_indices, device=DEVICE)).float().mean().item()
                     new_block_accuracies.append(cur_acc)
 
                 # Allocate residual expert E_k for block_idx
