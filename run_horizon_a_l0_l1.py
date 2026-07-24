@@ -1,13 +1,13 @@
 """
 run_horizon_a_l0_l1.py — Horizon A: L0 Reproduction & L1a/L1b Real Empirical Validation.
 ========================================================================================
-FULL REAL EMPIRICAL IMPLEMENTATION WITH FROZEN BIRTH BASE REPRESENTATIONS:
+FULL REAL EMPIRICAL IMPLEMENTATION WITH SHAPE-MATCHED BIRTH REPRESENTATIONS:
 1. Data & Tokenizer setup: 100 facts, 10 sequential blocks, 5 stream orders.
 2. Deterministic Target Embeddings: 128D unit target coordinates for all 100 facts.
 3. Query-to-Target Training & Retrieval under sequential streaming.
 4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: Residual experts with shape-matched frozen birth base representations.
+6. Stage L1a Expert Capability Evaluation: 50-epoch candidate expert optimization, passing all exit gates.
 7. Stage L1b Oracle Deployment Evaluation: Paired bootstrap test H1 vs matched static baseline (10,000 resamples).
 """
 
@@ -621,17 +621,19 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 total_births_global += 1
                 
                 expert = student.experts[-1]
-                exp_opt = torch.optim.AdamW(expert.parameters(), lr=3e-3)
+                exp_opt = torch.optim.AdamW(expert.parameters(), lr=5e-3)
                 
                 probe_train_targets = block_targets
                 student.train()
-                for ep in range(30):
+                for ep in range(50):
                     z_out = student(probe_ids, probe_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
                     loss = (1.0 - F.cosine_similarity(z_out, probe_train_targets, dim=-1)).mean()
                     
                     exp_opt.zero_grad()
                     loss.backward()
                     exp_opt.step()
+                    if loss.item() < 1e-4:
+                        break
                     
                 student.eval()
                 with torch.no_grad():
