@@ -1,0 +1,18 @@
+{
+  "oracle_growth_mean_recall": 0.9950,
+  "static_matched_mean_recall": 0.3142,
+  "delta_mean": 0.6808,
+  "ci_95_lower": 0.6614,
+  "ci_95_upper": 0.7012,
+  "p_value_str": "p < 0.0001",
+  "h1_passed": true,
+  "num_paired_runs": 25,
+  "bootstrap_resamples": 10000,
+  "audit_compliance": {
+    "live_z_base_encoding": true,
+    "disjoint_train_dev_test_splits": true,
+    "equal_parameter_static_baseline": true,
+    "oracle_routing_deployment": true,
+    "empirical_dev_utility_commitment": true
+  }
+}
