@@ -10,8 +10,9 @@ Rigorously addresses all peer-audit directives:
 3. Real Equal-Parameter Static Matched Baseline (StaticStudent with 10 experts, 7.18M parameters).
 4. Stage L1b Real Oracle Deployment with live z_base query encoding and oracle expert routing.
 5. Empirical Dev-Set Candidate Utility Evaluation for commitment/rollback.
-6. 10,000 Resample Paired Bootstrap Test H1 comparing Real Oracle AGNIS vs Real Static Matched Baseline.
-7. Saves and commits all output JSON artifacts into GitHub repository.
+6. Stable Base Encoder Optimization during L1a growth to prevent representation drift across stream steps.
+7. 10,000 Resample Paired Bootstrap Test H1 comparing Real Oracle AGNIS vs Real Static Matched Baseline.
+8. Saves and commits all output JSON artifacts into GitHub repository.
 """
 
 import os
@@ -706,19 +707,23 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 expert_id = f"expert_b{block_idx}"
                 block_target_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
                 
-                # Base student trains on new block step_b using TRAIN split queries
+                # Base student trains on block step_b (step 0 forms shared base representation space)
                 train_queries, train_sub_indices = get_block_queries(target_block, split="train")
                 train_targets = target_embeddings[[block_target_indices[i] for i in train_sub_indices]]
                 
                 student.train()
+                # On step 0, train shared base encoder; on steps > 0, keep base encoder stable (lr=1e-6)
+                base_lr = 1e-4 if step_b == 0 else 1e-6
+                base_opt = torch.optim.AdamW(student.base_encoder.parameters(), lr=base_lr)
+                
                 for epoch in range(30):
                     input_ids, attn_mask = tokenize_texts(train_queries)
                     z_pred = student(input_ids, attn_mask, route_mode="null")
                     loss = (1.0 - F.cosine_similarity(z_pred, train_targets, dim=-1)).mean()
                     
-                    optimizer.zero_grad()
+                    base_opt.zero_grad()
                     loss.backward()
-                    optimizer.step()
+                    base_opt.step()
 
                 # Allocate candidate expert E_k for block_idx
                 trial = registry.begin_trial()
