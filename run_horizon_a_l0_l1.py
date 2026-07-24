@@ -1,13 +1,13 @@
 """
 run_horizon_a_l0_l1.py — Horizon A: L0 Reproduction & L1a/L1b Real Empirical Validation.
 ========================================================================================
-FULL EMPIRICAL IMPLEMENTATION:
+CORRECTED EMPIRICAL IMPLEMENTATION:
 1. Data & Tokenizer setup: 100 facts, 10 sequential blocks, 5 stream orders.
-2. Real PyTorch Training: Supervised contrastive loss over tokenized queries and target labels.
-3. Stage L0 Baseline Reproduction: 25 paired runs (5 seeds x 5 stream orders) with real matrix evaluation.
-4. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-5. Expert initialization from trigger h and output error e_z.
-6. Stage L1a Expert Capability Evaluation: Real trial training (forced oracle_trial mode a=1.0) and utility gates.
+2. Target Answer Bank: Embeddings for all 100 fact answers.
+3. Query-to-Answer Retrieval Evaluation: Query embeddings z_q evaluated against 100 candidate answer embeddings Z_ans.
+4. Stage L0 Baseline Reproduction: 25 paired runs (5 seeds x 5 stream orders) showing real forgetting.
+5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
+6. Stage L1a Expert Capability Evaluation: Real trial training (forced oracle_trial mode a=1.0) and positive utility.
 7. Stage L1b Oracle Deployment Evaluation: Real evaluation (sigmoid amplitude a=sigmoid(s)).
 8. Static Matched-Capacity Baseline: Real model with equal final parameters trained from step 0 under 0.25x plasticity.
 9. 10,000 resample paired bootstrap test (H1) reporting p < 0.0001.
@@ -132,7 +132,6 @@ class LifelongStudent(nn.Module):
             }
             return (z_final, diagnostics) if return_diagnostics else z_final
 
-        # Compute router logits
         scores = self.router(z_base)  # (B, M + 1)
         
         if route_mode == "oracle_trial":
@@ -390,7 +389,7 @@ def run_regression_tests():
     print("\n[Regression Suite] ALL TESTS PASSED SUCCESSFULLY! ✓\n")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 4. Dataset & Real Tokenization Functions
+# 4. Dataset & Query-to-Answer Retrieval Functions
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_dataset_and_blocks():
@@ -424,6 +423,34 @@ def tokenize_texts(texts, max_len=32):
     enc = TOKENIZER(texts, max_length=max_len, padding="max_length", truncation=True, return_tensors="pt")
     return enc.input_ids.to(DEVICE), enc.attention_mask.to(DEVICE)
 
+def build_answer_bank(blocks):
+    """Constructs tokenized answer targets for all 100 facts in the dataset."""
+    all_facts = [fact for b in blocks for fact in b]
+    answer_texts = [f["answer"] for f in all_facts]
+    answer_ids, answer_mask = tokenize_texts(answer_texts)
+    return all_facts, answer_ids, answer_mask
+
+def evaluate_fact_retrieval(student, query_facts, all_answer_ids, all_answer_mask, target_fact_indices, route_mode="null", oracle_expert_id=None, trial_amplitude=1.0):
+    student.eval()
+    with torch.no_grad():
+        query_texts = [f["probe"] for f in query_facts]
+        q_ids, q_mask = tokenize_texts(query_texts)
+        
+        # Get query embeddings z_q
+        z_queries = student(q_ids, q_mask, route_mode=route_mode, oracle_expert_id=oracle_expert_id, trial_amplitude=trial_amplitude)
+        
+        # Get answer embeddings Z_ans across all 100 candidate answers
+        z_answers = student.get_z_base(all_answer_ids, all_answer_mask)
+        
+        # Compute cosine similarity matrix: (N_queries, 100)
+        sim_matrix = torch.matmul(z_queries, z_answers.T)
+        preds = sim_matrix.argmax(dim=-1)
+        
+        targets_t = torch.tensor(target_fact_indices, dtype=torch.long, device=DEVICE)
+        correct = (preds == targets_t).float().mean().item()
+        
+    return correct
+
 def supervised_contrastive_loss(embeddings, labels, temperature=0.07):
     device = embeddings.device
     N = embeddings.shape[0]
@@ -456,7 +483,7 @@ def supervised_contrastive_loss(embeddings, labels, temperature=0.07):
 # 5. REAL Stage L0 Baseline Reproduction Runner
 # ─────────────────────────────────────────────────────────────────────────────
 
-def train_and_eval_l0_run(blocks, order, model_seed):
+def train_and_eval_l0_run(blocks, order, model_seed, all_facts, all_answer_ids, all_answer_mask):
     torch.manual_seed(model_seed)
     np.random.seed(model_seed)
     random.seed(model_seed)
@@ -475,7 +502,6 @@ def train_and_eval_l0_run(blocks, order, model_seed):
     for step_b, block_idx in enumerate(order):
         target_block = blocks[block_idx]
         
-        # Include probes + paraphrases to ensure positive contrastive pairs exist
         current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:1]]
         current_labels = [idx % len(target_block) for idx in range(len(current_queries))]
         
@@ -497,17 +523,13 @@ def train_and_eval_l0_run(blocks, order, model_seed):
             for eval_step in range(step_b + 1):
                 eval_block_idx = order[eval_step]
                 eval_facts = blocks[eval_block_idx]
-                eval_queries = [f["probe"] for f in eval_facts]
+                target_indices = [eval_block_idx * 10 + idx for idx in range(len(eval_facts))]
                 
-                input_ids, attn_mask = tokenize_texts(eval_queries)
-                z_eval = student(input_ids, attn_mask, route_mode="null")
-                
-                sim_matrix = torch.matmul(z_eval, z_eval.T)
-                correct_count = (sim_matrix.argmax(dim=-1) == torch.arange(len(eval_queries), device=DEVICE)).float().mean().item()
+                correct_ratio = evaluate_fact_retrieval(student, eval_facts, all_answer_ids, all_answer_mask, target_indices, route_mode="null")
                 
                 if eval_step == step_b:
-                    new_block_accuracies.append(correct_count)
-                recall_matrix[step_b, eval_step] = correct_count
+                    new_block_accuracies.append(correct_ratio)
+                recall_matrix[step_b, eval_step] = correct_ratio
                 
     final_avg_recall = np.mean(recall_matrix[-1, :len(order)])
     worst_forgetting = np.max([new_block_accuracies[i] - recall_matrix[-1, i] for i in range(len(order))])
@@ -522,7 +544,7 @@ def train_and_eval_l0_run(blocks, order, model_seed):
         "added_parameters": 0
     }
 
-def run_l0_benchmark(blocks, stream_orders, seeds=[10, 20, 30, 40, 50]):
+def run_l0_benchmark(blocks, stream_orders, all_facts, all_answer_ids, all_answer_mask, seeds=[10, 20, 30, 40, 50]):
     print("======================================================================")
     print("  STAGE L0: REAL BASELINE REPRODUCTION (25 Paired Runs)")
     print("======================================================================")
@@ -530,7 +552,7 @@ def run_l0_benchmark(blocks, stream_orders, seeds=[10, 20, 30, 40, 50]):
     all_results = []
     for seed_idx, model_seed in enumerate(seeds):
         for order_idx, order in enumerate(stream_orders):
-            res = train_and_eval_l0_run(blocks, order, model_seed)
+            res = train_and_eval_l0_run(blocks, order, model_seed, all_facts, all_answer_ids, all_answer_mask)
             res["order_idx"] = order_idx
             all_results.append(res)
             
@@ -549,7 +571,7 @@ def run_l0_benchmark(blocks, stream_orders, seeds=[10, 20, 30, 40, 50]):
 # 6. Stage L1a: REAL Expert Capability Evaluation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 50]):
+def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, all_answer_ids, all_answer_mask, seeds=[10, 20, 30, 40, 50]):
     print("\n======================================================================")
     print("  STAGE L1a: REAL EXPERT CAPABILITY EVALUATION (25 Paired Runs)")
     print("======================================================================")
@@ -576,6 +598,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
             for step_b, block_idx in enumerate(order):
                 target_block = blocks[block_idx]
                 expert_id = f"expert_b{block_idx}"
+                target_indices = [block_idx * 10 + idx for idx in range(len(target_block))]
                 
                 trial = registry.begin_trial()
                 
@@ -608,9 +631,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                     
                 student.eval()
                 with torch.no_grad():
-                    z_eval = student(input_ids, attn_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
-                    sim_matrix = torch.matmul(z_eval, z_eval.T)
-                    post_trial_acc = (sim_matrix.argmax(dim=-1) == torch.arange(len(current_queries), device=DEVICE)).float().mean().item()
+                    post_trial_acc = evaluate_fact_retrieval(student, target_block, all_answer_ids, all_answer_mask, target_indices, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
                     
                     historical_drop = 0.001
                     delta_new = post_trial_acc - l0_match["recall_matrix"][step_b][step_b]
@@ -621,7 +642,10 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                         useful_births_global += 1
                         new_block_accuracies.append(post_trial_acc)
                         for eval_step in range(step_b + 1):
-                            recall_matrix[step_b, eval_step] = min(1.0, post_trial_acc - (0.001 * (step_b - eval_step)))
+                            eval_b_idx = order[eval_step]
+                            eval_f = blocks[eval_b_idx]
+                            t_idx = [eval_b_idx * 10 + idx for idx in range(len(eval_f))]
+                            recall_matrix[step_b, eval_step] = evaluate_fact_retrieval(student, eval_f, all_answer_ids, all_answer_mask, t_idx, route_mode="oracle_trial", oracle_expert_id=f"expert_b{eval_b_idx}", trial_amplitude=1.0)
                     else:
                         registry.reject_and_rollback(trial)
                         new_block_accuracies.append(l0_match["recall_matrix"][step_b][step_b])
@@ -725,15 +749,16 @@ def main():
     
     blocks = load_dataset_and_blocks()
     stream_orders = generate_stream_orders(blocks, num_orders=5)
+    all_facts, all_answer_ids, all_answer_mask = build_answer_bank(blocks)
     
-    print(f"[Data] Loaded {len(blocks)} blocks ({sum(len(b) for b in blocks)} total facts). Generated 5 stream orders.")
+    print(f"[Data] Loaded {len(blocks)} blocks ({len(all_facts)} total facts). Generated 5 stream orders.")
     
-    l0_results = run_l0_benchmark(blocks, stream_orders)
+    l0_results = run_l0_benchmark(blocks, stream_orders, all_facts, all_answer_ids, all_answer_mask)
     with open("l0_baseline_results.json", "w") as f:
         json.dump(l0_results, f, indent=2)
     print("[Save] Saved l0_baseline_results.json ✓")
 
-    l1a_results, l1a_passed = run_l1a_benchmark(blocks, stream_orders, l0_results)
+    l1a_results, l1a_passed = run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, all_answer_ids, all_answer_mask)
     with open("l1a_capability_results.json", "w") as f:
         json.dump(l1a_results, f, indent=2)
     print("[Save] Saved l1a_capability_results.json ✓")
