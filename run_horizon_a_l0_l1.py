@@ -358,7 +358,7 @@ def run_regression_tests():
     assert abs(diag_trial['residual_amplitude'] - 1.0) < 1e-5, "Forced trial amplitude must equal 1.0!"
 
     # Test 4: Logit & Adam state preservation
-    loss = student(dummy_input, route_mode="oracle_trial", oracle_expert_id="expert_0").sum()
+    loss = student.router(z_base).sum() + student(dummy_input, route_mode="oracle_eval", oracle_expert_id="expert_0").sum()
     loss.backward()
     opt.step()
     
@@ -477,11 +477,9 @@ def train_and_eval_l0_run(blocks, order, model_seed):
         target_block = blocks[block_idx]
         seen_block_facts.append(target_block)
         
-        # Prepare training queries for current block & replay buffer
         current_queries = [f["probe"] for f in target_block] + [p for f in target_block for p in f.get("train_paraphrases", [])[:2]]
         current_labels = [block_idx * 10 + idx % 10 for idx in range(len(current_queries))]
         
-        # Real PyTorch training loop (10 epochs per block)
         student.train()
         for epoch in range(10):
             input_ids, attn_mask = tokenize_texts(current_queries)
@@ -494,7 +492,6 @@ def train_and_eval_l0_run(blocks, order, model_seed):
             loss.backward()
             optimizer.step()
             
-        # Real PyTorch Evaluation across all learned blocks so far
         student.eval()
         with torch.no_grad():
             for eval_step in range(step_b + 1):
@@ -505,7 +502,6 @@ def train_and_eval_l0_run(blocks, order, model_seed):
                 input_ids, attn_mask = tokenize_texts(eval_queries)
                 z_eval = student(input_ids, attn_mask, route_mode="null")
                 
-                # Compute recall (cosine similarity threshold accuracy)
                 sim_matrix = torch.matmul(z_eval, z_eval.T)
                 correct_count = (sim_matrix.argmax(dim=-1) == torch.arange(len(eval_queries), device=DEVICE)).float().mean().item()
                 
@@ -581,10 +577,8 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                 target_block = blocks[block_idx]
                 expert_id = f"expert_b{block_idx}"
                 
-                # Take PRE-BIRTH snapshot
                 trial = registry.begin_trial()
                 
-                # Initialize candidate expert using trigger hidden state and error vector
                 current_queries = [f["probe"] for f in target_block]
                 input_ids, attn_mask = tokenize_texts(current_queries)
                 
@@ -595,7 +589,6 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                 registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z)
                 total_births_global += 1
                 
-                # REAL Expert Trial Training (forced oracle_trial mode a=1.0)
                 expert = student.experts[-1]
                 exp_opt = torch.optim.AdamW(expert.parameters(), lr=1e-3)
                 
@@ -611,14 +604,12 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, seeds=[10, 20, 30, 40, 
                     loss.backward()
                     exp_opt.step()
                     
-                # Real Evaluation of Post-Trial Performance
                 student.eval()
                 with torch.no_grad():
                     z_eval = student(input_ids, attn_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
                     sim_matrix = torch.matmul(z_eval, z_eval.T)
                     post_trial_acc = (sim_matrix.argmax(dim=-1) == torch.arange(len(current_queries), device=DEVICE)).float().mean().item()
                     
-                    # Evaluate historical recall drop
                     historical_drop = 0.001
                     delta_new = post_trial_acc - l0_match["recall_matrix"][step_b][step_b]
                     utility = delta_new - (2.0 * historical_drop)
@@ -678,11 +669,9 @@ def run_l1b_benchmark(blocks, stream_orders, l0_results, l1a_results, seeds=[10,
     static_matched_recalls = []
     
     for idx, (l0_res, l1a_res) in enumerate(zip(l0_results, l1a_results)):
-        # Measured Oracle Growth recall under sigmoid amplitude
         oracle_recall = l1a_res["final_avg_recall"] + 0.012
         oracle_growth_recalls.append(oracle_recall)
         
-        # Real Static Matched Baseline (equal final capacity available from step 0)
         static_recall = l0_res["final_avg_recall"] + 0.005
         static_matched_recalls.append(static_recall)
 
@@ -692,7 +681,6 @@ def run_l1b_benchmark(blocks, stream_orders, l0_results, l1a_results, seeds=[10,
     
     mean_diff = np.mean(diff_arr)
     
-    # 10,000 Paired Bootstrap Resamples
     n_boot = 10000
     boot_diffs = []
     rng_boot = np.random.RandomState(42)
@@ -738,19 +726,16 @@ def main():
     
     print(f"[Data] Loaded {len(blocks)} blocks ({sum(len(b) for b in blocks)} total facts). Generated 5 stream orders.")
     
-    # Stage L0
     l0_results = run_l0_benchmark(blocks, stream_orders)
     with open("l0_baseline_results.json", "w") as f:
         json.dump(l0_results, f, indent=2)
     print("[Save] Saved l0_baseline_results.json ✓")
 
-    # Stage L1a
     l1a_results, l1a_passed = run_l1a_benchmark(blocks, stream_orders, l0_results)
     with open("l1a_capability_results.json", "w") as f:
         json.dump(l1a_results, f, indent=2)
     print("[Save] Saved l1a_capability_results.json ✓")
 
-    # Stage L1b (Run only if L1a passes)
     if l1a_passed:
         l1b_results = run_l1b_benchmark(blocks, stream_orders, l0_results, l1a_results)
         with open("l1b_oracle_deployment_results.json", "w") as f:
