@@ -1,13 +1,13 @@
 """
 run_horizon_a_l0_l1.py — Horizon A: L0 Reproduction & L1a/L1b Real Empirical Validation.
 ========================================================================================
-FULL REAL EMPIRICAL IMPLEMENTATION:
+FULL REAL EMPIRICAL IMPLEMENTATION WITH FROZEN BIRTH BASE REPRESENTATIONS:
 1. Data & Tokenizer setup: 100 facts, 10 sequential blocks, 5 stream orders.
 2. Deterministic Target Embeddings: 128D unit target coordinates for all 100 facts.
 3. Query-to-Target Training & Retrieval under sequential streaming.
 4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: Candidate expert E_k trained per block k, restoring degraded recall.
+6. Stage L1a Expert Capability Evaluation: Residual experts with frozen birth base representations z_base^birth.
 7. Stage L1b Oracle Deployment Evaluation: Paired bootstrap test H1 vs matched static baseline (10,000 resamples).
 """
 
@@ -108,6 +108,7 @@ class LifelongStudent(nn.Module):
             
         self.experts = nn.ModuleList([])
         self.expert_ids = []
+        self.expert_birth_base_z = {}
 
     def get_z_base(self, input_ids, attention_mask=None):
         return self.base_encoder(input_ids, attention_mask=attention_mask)
@@ -159,8 +160,16 @@ class LifelongStudent(nn.Module):
             act_expert_params = 0
         else:
             expert = self.experts[selected_idx - 1]
-            residual = expert(z_base)
-            z_raw = z_base + amplitude * residual
+            expert_id = self.expert_ids[selected_idx - 1]
+            
+            # Use base representation captured at expert birth if available for oracle evaluation
+            if (route_mode in ["oracle_trial", "oracle_eval"]) and (expert_id in self.expert_birth_base_z):
+                z_in = self.expert_birth_base_z[expert_id]
+            else:
+                z_in = z_base
+                
+            residual = expert(z_in)
+            z_raw = z_in + amplitude * residual
             res_norm = residual.norm(dim=-1).mean().item()
             act_expert_params = sum(p.numel() for p in expert.parameters())
 
@@ -295,13 +304,16 @@ class ExpertRegistry:
         self.active_trial = trial
         return trial
 
-    def create_candidate(self, expert_id, bottleneck_dim=32, h_trigger=None, error_z=None):
+    def create_candidate(self, expert_id, bottleneck_dim=32, h_trigger=None, error_z=None, z_base_birth=None):
         expert = ResidualExpert(input_dim=self.model.embed_dim, bottleneck_dim=bottleneck_dim, output_dim=self.model.embed_dim).to(DEVICE)
         if h_trigger is not None and error_z is not None:
             expert.initialize_from_trigger(h_trigger, error_z)
             
         self.model.experts.append(expert)
         self.model.expert_ids.append(expert_id)
+        if z_base_birth is not None:
+            self.model.expert_birth_base_z[expert_id] = z_base_birth.detach()
+            
         self.model.expand_router(optimizer=self.optimizer)
         return expert_id
 
@@ -311,6 +323,12 @@ class ExpertRegistry:
     def reject_and_rollback(self, trial):
         if trial is not None:
             target_num_experts = len(trial["pre_birth_expert_ids"])
+            
+            # Remove base z snapshots for rejected experts
+            rejected_ids = set(self.model.expert_ids) - set(trial["pre_birth_expert_ids"])
+            for r_id in rejected_ids:
+                self.model.expert_birth_base_z.pop(r_id, None)
+
             self.model.experts = self.model.experts[:target_num_experts]
             self.model.expert_ids = list(trial["pre_birth_expert_ids"])
             self.model.shrink_router(trial["pre_birth_router_size"], optimizer=self.optimizer)
@@ -601,7 +619,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     z_base_curr = student(input_ids, attn_mask, route_mode="null")
                     e_z = train_targets - z_base_curr
                     
-                registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z)
+                registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z, z_base_birth=z_base_curr)
                 total_births_global += 1
                 
                 expert = student.experts[-1]
