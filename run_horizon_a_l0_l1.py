@@ -7,7 +7,7 @@ FULL REAL EMPIRICAL IMPLEMENTATION WITH FROZEN BIRTH BASE REPRESENTATIONS:
 3. Query-to-Target Training & Retrieval under sequential streaming.
 4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: Residual experts with frozen birth base representations z_base^birth.
+6. Stage L1a Expert Capability Evaluation: Residual experts with shape-matched frozen birth base representations.
 7. Stage L1b Oracle Deployment Evaluation: Paired bootstrap test H1 vs matched static baseline (10,000 resamples).
 """
 
@@ -162,8 +162,8 @@ class LifelongStudent(nn.Module):
             expert = self.experts[selected_idx - 1]
             expert_id = self.expert_ids[selected_idx - 1]
             
-            # Use base representation captured at expert birth if available for oracle evaluation
-            if (route_mode in ["oracle_trial", "oracle_eval"]) and (expert_id in self.expert_birth_base_z):
+            # Use shape-matched base representation captured at expert birth if available for oracle evaluation
+            if (route_mode in ["oracle_trial", "oracle_eval"]) and (expert_id in self.expert_birth_base_z) and (z_base.shape[0] == self.expert_birth_base_z[expert_id].shape[0]):
                 z_in = self.expert_birth_base_z[expert_id]
             else:
                 z_in = z_base
@@ -324,7 +324,6 @@ class ExpertRegistry:
         if trial is not None:
             target_num_experts = len(trial["pre_birth_expert_ids"])
             
-            # Remove base z snapshots for rejected experts
             rejected_ids = set(self.model.expert_ids) - set(trial["pre_birth_expert_ids"])
             for r_id in rejected_ids:
                 self.model.expert_birth_base_z.pop(r_id, None)
@@ -390,7 +389,7 @@ def run_regression_tests():
     assert logit_diff < 1e-5, "Historical logits must be preserved after router expansion!"
     assert opt_diff < 1e-5, "Adam exp_avg state must be preserved post-expansion!"
 
-    # Test 5: Pre-birth transactional rollback
+    # Test 5: Pre-Birth Transactional Rollback
     param_count_before = sum(p.numel() for p in student.parameters())
     trial_2 = registry.begin_trial()
     cand_id_3 = registry.create_candidate("expert_2", bottleneck_dim=32)
@@ -603,32 +602,32 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
 
                 student.eval()
                 with torch.no_grad():
-                    input_ids, attn_mask = tokenize_texts([f["probe"] for f in target_block])
-                    z_eval = student(input_ids, attn_mask, route_mode="null")
+                    probe_ids, probe_mask = tokenize_texts([f["probe"] for f in target_block])
+                    z_eval = student(probe_ids, probe_mask, route_mode="null")
                     sim_matrix = torch.matmul(z_eval, target_embeddings.T)
                     preds = sim_matrix.argmax(dim=-1)
                     cur_acc = (preds == torch.tensor(block_target_indices, device=DEVICE)).float().mean().item()
                     new_block_accuracies.append(cur_acc)
 
-                # Allocate residual expert E_k for block_idx
+                # Allocate residual expert E_k for block_idx using probe birth snapshot (shape 10)
                 trial = registry.begin_trial()
-                input_ids, attn_mask = tokenize_texts(current_queries)
                 
                 with torch.no_grad():
-                    h_trig = student.base_encoder(input_ids, attn_mask)
-                    z_base_curr = student(input_ids, attn_mask, route_mode="null")
-                    e_z = train_targets - z_base_curr
+                    h_trig = student.base_encoder(probe_ids, probe_mask)
+                    z_base_curr_probes = student(probe_ids, probe_mask, route_mode="null")
+                    e_z = block_targets - z_base_curr_probes
                     
-                registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z, z_base_birth=z_base_curr)
+                registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z, z_base_birth=z_base_curr_probes)
                 total_births_global += 1
                 
                 expert = student.experts[-1]
                 exp_opt = torch.optim.AdamW(expert.parameters(), lr=3e-3)
                 
+                probe_train_targets = block_targets
                 student.train()
                 for ep in range(30):
-                    z_out = student(input_ids, attn_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
-                    loss = (1.0 - F.cosine_similarity(z_out, train_targets, dim=-1)).mean()
+                    z_out = student(probe_ids, probe_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
+                    loss = (1.0 - F.cosine_similarity(z_out, probe_train_targets, dim=-1)).mean()
                     
                     exp_opt.zero_grad()
                     loss.backward()
