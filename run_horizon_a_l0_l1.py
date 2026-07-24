@@ -1,13 +1,13 @@
 """
 run_horizon_a_l0_l1.py — Horizon A: L0 Reproduction & L1a/L1b Real Empirical Validation.
 ========================================================================================
-FULL REAL EMPIRICAL IMPLEMENTATION WITH SHAPE-MATCHED BIRTH REPRESENTATIONS:
+FULL REAL EMPIRICAL IMPLEMENTATION:
 1. Data & Tokenizer setup: 100 facts, 10 sequential blocks, 5 stream orders.
 2. Deterministic Target Embeddings: 128D unit target coordinates for all 100 facts.
 3. Query-to-Target Training & Retrieval under sequential streaming.
 4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: 50-epoch candidate expert optimization, passing all exit gates.
+6. Stage L1a Expert Capability Evaluation: 64-dim bottleneck residual experts trained with distractor cross-entropy.
 7. Stage L1b Oracle Deployment Evaluation: Paired bootstrap test H1 vs matched static baseline (10,000 resamples).
 """
 
@@ -62,7 +62,7 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ResidualExpert(nn.Module):
-    def __init__(self, input_dim=128, bottleneck_dim=32, output_dim=128):
+    def __init__(self, input_dim=128, bottleneck_dim=64, output_dim=128):
         super().__init__()
         self.input_dim = input_dim
         self.bottleneck_dim = bottleneck_dim
@@ -94,7 +94,7 @@ class ResidualExpert(nn.Module):
 
 
 class LifelongStudent(nn.Module):
-    def __init__(self, base_encoder=None, embed_dim=128, bottleneck_dim=32):
+    def __init__(self, base_encoder=None, embed_dim=128, bottleneck_dim=64):
         super().__init__()
         self.base_encoder = base_encoder if base_encoder is not None else StudentEncoder()
         self.embed_dim = embed_dim
@@ -304,7 +304,7 @@ class ExpertRegistry:
         self.active_trial = trial
         return trial
 
-    def create_candidate(self, expert_id, bottleneck_dim=32, h_trigger=None, error_z=None, z_base_birth=None):
+    def create_candidate(self, expert_id, bottleneck_dim=64, h_trigger=None, error_z=None, z_base_birth=None):
         expert = ResidualExpert(input_dim=self.model.embed_dim, bottleneck_dim=bottleneck_dim, output_dim=self.model.embed_dim).to(DEVICE)
         if h_trigger is not None and error_z is not None:
             expert.initialize_from_trigger(h_trigger, error_z)
@@ -360,7 +360,7 @@ def run_regression_tests():
     registry = ExpertRegistry(student, optimizer=opt)
     
     trial_0 = registry.begin_trial()
-    cand_id = registry.create_candidate("expert_0", bottleneck_dim=32)
+    cand_id = registry.create_candidate("expert_0", bottleneck_dim=64)
     z_eval, diag_eval = student(dummy_input, route_mode="oracle_eval", oracle_expert_id="expert_0", return_diagnostics=True)
     birth_drift = (1.0 - F.cosine_similarity(z_base, z_eval, dim=-1)).mean().item()
     print(f"[Test 2] Untrained Birth-Drift Check: Mean 1-Cos = {birth_drift:.8f}")
@@ -379,7 +379,7 @@ def run_regression_tests():
     old_logits = student.router(z_base).detach()
     old_w_st = copy.deepcopy(opt.state[student.router.weight]["exp_avg"])
     
-    cand_id_2 = registry.create_candidate("expert_1", bottleneck_dim=32)
+    cand_id_2 = registry.create_candidate("expert_1", bottleneck_dim=64)
     new_logits = student.router(z_base).detach()
     new_w_st = opt.state[student.router.weight]["exp_avg"]
     
@@ -392,7 +392,7 @@ def run_regression_tests():
     # Test 5: Pre-Birth Transactional Rollback
     param_count_before = sum(p.numel() for p in student.parameters())
     trial_2 = registry.begin_trial()
-    cand_id_3 = registry.create_candidate("expert_2", bottleneck_dim=32)
+    cand_id_3 = registry.create_candidate("expert_2", bottleneck_dim=64)
     param_count_after = sum(p.numel() for p in student.parameters())
     
     registry.reject_and_rollback(trial_2)
@@ -617,17 +617,24 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     z_base_curr_probes = student(probe_ids, probe_mask, route_mode="null")
                     e_z = block_targets - z_base_curr_probes
                     
-                registry.create_candidate(expert_id, bottleneck_dim=32, h_trigger=h_trig, error_z=e_z, z_base_birth=z_base_curr_probes)
+                registry.create_candidate(expert_id, bottleneck_dim=64, h_trigger=h_trig, error_z=e_z, z_base_birth=z_base_curr_probes)
                 total_births_global += 1
                 
                 expert = student.experts[-1]
                 exp_opt = torch.optim.AdamW(expert.parameters(), lr=5e-3)
                 
                 probe_train_targets = block_targets
+                targets_t_tensor = torch.tensor(block_target_indices, device=DEVICE)
+                
                 student.train()
                 for ep in range(50):
                     z_out = student(probe_ids, probe_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
-                    loss = (1.0 - F.cosine_similarity(z_out, probe_train_targets, dim=-1)).mean()
+                    
+                    # Cosine loss + cross-entropy over all 100 candidate target answers
+                    loss_cos = (1.0 - F.cosine_similarity(z_out, probe_train_targets, dim=-1)).mean()
+                    sim_all = torch.matmul(z_out, target_embeddings.T) / 0.07
+                    loss_ce = F.cross_entropy(sim_all, targets_t_tensor)
+                    loss = loss_cos + 0.5 * loss_ce
                     
                     exp_opt.zero_grad()
                     loss.backward()
@@ -676,7 +683,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 "worst_forgetting": float(worst_forgetting),
                 "plasticity": float(avg_plasticity),
                 "committed_experts": len(student.experts),
-                "added_parameters": len(student.experts) * 8513
+                "added_parameters": len(student.experts) * 16512
             }
             all_l1a_results.append(res)
             
