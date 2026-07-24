@@ -1,18 +1,17 @@
 """
 run_horizon_a_l0_l1.py — Rigorous Empirical Horizon A Evaluation (L0, Static Matched, L1a, & L1b)
 ===================================================================================================
-Rigorously addresses all peer-audit directives:
-1. No cached birth representations (z_in = z_base live from StudentEncoder).
-2. Strict Disjoint Query Splits:
+Strict peer-audit compliance:
+1. NO cached birth representations (residual = expert(z_base) live from StudentEncoder).
+2. Strict 3-Way Disjoint Query Splits:
    - Train Split: train_paraphrases[:2] (20 queries per block)
    - Dev Split  : train_paraphrases[2] + eval_paraphrases[0] (20 queries per block)
    - Test Split : canonical probe + eval_paraphrases[1] (20 held-out test queries per block)
 3. Real Equal-Parameter Static Matched Baseline (StaticStudent with 10 experts, 7.18M parameters).
-4. Stage L1b Real Oracle Deployment with live z_base query encoding and oracle expert routing.
+4. Stage L1b Real Oracle Deployment with route_mode="oracle_eval" and live sigmoid amplitude a = sigma(s).
 5. Empirical Dev-Set Candidate Utility Evaluation for commitment/rollback.
-6. Stable Base Encoder Optimization during L1a growth to prevent representation drift across stream steps.
-7. 10,000 Resample Paired Bootstrap Test H1 comparing Real Oracle AGNIS vs Real Static Matched Baseline.
-8. Saves and commits all output JSON artifacts into GitHub repository.
+6. 10,000 Resample Paired Bootstrap Test H1 comparing Real Oracle AGNIS vs Real Static Matched Baseline.
+7. Saves and commits all output JSON artifacts into GitHub repository.
 """
 
 import os
@@ -203,13 +202,21 @@ class LifelongStudent(nn.Module):
 
         scores = self.router(z_base)  # (B, M + 1)
         
-        if route_mode in ["oracle_trial", "oracle_eval"]:
+        if route_mode == "oracle_trial":
             if oracle_expert_id is None or oracle_expert_id not in self.expert_ids:
                 selected_idx = 0
                 amplitude = 0.0
             else:
                 selected_idx = self.expert_ids.index(oracle_expert_id) + 1
                 amplitude = trial_amplitude
+        elif route_mode == "oracle_eval":
+            if oracle_expert_id is None or oracle_expert_id not in self.expert_ids:
+                selected_idx = 0
+                amplitude = 0.0
+            else:
+                selected_idx = self.expert_ids.index(oracle_expert_id) + 1
+                selected_score = scores[:, selected_idx]
+                amplitude = torch.sigmoid(selected_score).unsqueeze(-1)
         else:  # "routed"
             selected_idx_tensor = scores.argmax(dim=-1)
             selected_idx = selected_idx_tensor[0].item()
@@ -349,13 +356,21 @@ class StaticStudent(nn.Module):
 
         scores = self.router(z_base)  # (B, 11)
         
-        if route_mode in ["oracle_trial", "oracle_eval"]:
+        if route_mode == "oracle_trial":
             if oracle_expert_id is None or oracle_expert_id not in self.expert_ids:
                 selected_idx = 0
                 amplitude = 0.0
             else:
                 selected_idx = self.expert_ids.index(oracle_expert_id) + 1
                 amplitude = trial_amplitude
+        elif route_mode == "oracle_eval":
+            if oracle_expert_id is None or oracle_expert_id not in self.expert_ids:
+                selected_idx = 0
+                amplitude = 0.0
+            else:
+                selected_idx = self.expert_ids.index(oracle_expert_id) + 1
+                selected_score = scores[:, selected_idx]
+                amplitude = torch.sigmoid(selected_score).unsqueeze(-1)
         else:
             selected_idx_tensor = scores.argmax(dim=-1)
             selected_idx = selected_idx_tensor[0].item()
@@ -442,7 +457,7 @@ def run_regression_tests():
     
     trial_0 = registry.begin_trial()
     cand_id = registry.create_candidate("expert_0", bottleneck_dim=64)
-    z_eval = student(dummy_input, route_mode="oracle_eval", oracle_expert_id="expert_0", trial_amplitude=0.01)
+    z_eval = student(dummy_input, route_mode="oracle_eval", oracle_expert_id="expert_0")
     birth_drift = (1.0 - F.cosine_similarity(z_base, z_eval, dim=-1)).mean().item()
     print(f"[Test 2] Untrained Birth-Drift Check: Mean 1-Cos = {birth_drift:.8f}")
     assert birth_drift < 0.05, "Untrained birth drift must be < 0.05!"
@@ -632,7 +647,7 @@ def train_and_eval_static_matched_run(blocks, order, model_seed, all_facts, targ
                 eval_target_indices = [eval_block_idx * 10 + idx for idx in range(len(eval_facts))]
                 e_id = f"expert_b{eval_block_idx}"
                 
-                # Evaluated on HELD-OUT TEST split queries with oracle_eval
+                # Evaluated on HELD-OUT TEST split queries with oracle_eval (a = sigma(s))
                 correct_ratio = evaluate_fact_retrieval(student, eval_facts, target_embeddings, eval_target_indices, split="test", route_mode="oracle_eval", oracle_expert_id=e_id)
                 
                 if eval_step == step_b:
@@ -712,7 +727,6 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 train_targets = target_embeddings[[block_target_indices[i] for i in train_sub_indices]]
                 
                 student.train()
-                # On step 0, train shared base encoder; on steps > 0, keep base encoder stable (lr=1e-6)
                 base_lr = 1e-4 if step_b == 0 else 1e-6
                 base_opt = torch.optim.AdamW(student.base_encoder.parameters(), lr=base_lr)
                 
@@ -737,19 +751,20 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                 registry.create_candidate(expert_id, bottleneck_dim=64, h_trigger=h_trig, error_z=e_z)
                 total_births_global += 1
                 
-                # Fit candidate expert parameters using train_dev split queries on LIVE z_base (NO CACHING!)
+                # Fit candidate expert AND router logit together under oracle_eval (a = sigma(s)) using train_dev split queries
                 cand_queries, cand_sub_indices = get_block_queries(target_block, split="train_dev")
                 cand_targets = target_embeddings[[block_target_indices[i] for i in cand_sub_indices]]
                 cand_target_tensor = torch.tensor([block_target_indices[i] for i in cand_sub_indices], device=DEVICE)
                 
                 expert = student.experts[-1]
-                exp_opt = torch.optim.AdamW(expert.parameters(), lr=1e-2)
+                # Train expert AND router score together so sigma(s) -> 1.0 under oracle_eval
+                exp_opt = torch.optim.AdamW(list(expert.parameters()) + [student.router.weight, student.router.bias], lr=1e-2)
                 
                 student.train()
                 for ep in range(100):
                     q_ids, q_mask = tokenize_texts(cand_queries)
-                    # Live forward pass: live z_base is generated and passed to expert
-                    z_out = student(q_ids, q_mask, route_mode="oracle_trial", oracle_expert_id=expert_id, trial_amplitude=1.0)
+                    # Forward pass in oracle_eval mode uses LIVE z_base and LIVE sigmoid amplitude a = sigma(s)
+                    z_out = student(q_ids, q_mask, route_mode="oracle_eval", oracle_expert_id=expert_id)
                     
                     loss_cos = (1.0 - F.cosine_similarity(z_out, cand_targets, dim=-1)).mean()
                     sim_all = torch.matmul(z_out, target_embeddings.T) / 0.05
@@ -763,7 +778,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     if loss.item() < 1e-4:
                         break
 
-                # Evaluate candidate utility on DEV split queries
+                # Evaluate candidate utility on DEV split queries under oracle_eval (a = sigma(s))
                 student.eval()
                 with torch.no_grad():
                     dev_acc_with_expert = evaluate_fact_retrieval(student, target_block, target_embeddings, block_target_indices, split="dev", route_mode="oracle_eval", oracle_expert_id=expert_id)
@@ -780,7 +795,7 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     else:
                         registry.reject_and_rollback(trial)
 
-                # Record recall matrix at end of step_b on HELD-OUT TEST split queries
+                # Record recall matrix at end of step_b on HELD-OUT TEST split queries under oracle_eval (a = sigma(s))
                 student.eval()
                 with torch.no_grad():
                     for eval_step in range(step_b + 1):
