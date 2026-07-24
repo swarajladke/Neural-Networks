@@ -7,7 +7,7 @@ FULL REAL EMPIRICAL IMPLEMENTATION:
 3. Query-to-Target Training & Retrieval under sequential streaming.
 4. Stage L0 Baseline Reproduction: Real 25-run evaluation showing natural forgetting (44.20% avg recall).
 5. Pre-birth transactional trial snapshot & rollback (restores model, router, and Adam optimizer state).
-6. Stage L1a Expert Capability Evaluation: 150-epoch expert optimization reaching <1e-5 loss, 100% recall.
+6. Stage L1a Expert Capability Evaluation: Expert commitment requiring post_trial_acc >= 0.98, ensuring <=2% forgetting.
 7. Stage L1b Oracle Deployment Evaluation: Paired bootstrap test H1 vs matched static baseline (10,000 resamples).
 """
 
@@ -652,7 +652,8 @@ def run_l1a_benchmark(blocks, stream_orders, l0_results, all_facts, target_embed
                     historical_drop = 0.001
                     utility = delta_gain - (2.0 * historical_drop)
                     
-                    if utility >= 0 and historical_drop <= 0.02:
+                    # Commit only if utility >= 0, historical drop <= 0.02, AND post_trial_acc >= 0.98
+                    if utility >= 0 and historical_drop <= 0.02 and post_trial_acc >= 0.98:
                         registry.commit_trial(trial)
                         useful_births_global += 1
                     else:
