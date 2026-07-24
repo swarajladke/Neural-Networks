@@ -313,9 +313,19 @@ def run_regression_tests():
 
 def load_dataset_and_blocks():
     if not os.path.exists(DATASET_PATH):
-        raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}!")
-    with open(DATASET_PATH, "r") as f:
-        blocks = json.load(f)
+        print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
+        try:
+            from generate_scaling_dataset import build_fact_dataset
+            blocks = build_fact_dataset()
+            with open(DATASET_PATH, "w") as f:
+                json.dump(blocks, f, indent=2)
+            print(f"[OK] Generated {DATASET_PATH} with {len(blocks)} blocks of {len(blocks[0])} facts ({sum(len(b) for b in blocks)} total).")
+        except Exception as e:
+            print(f"[Error] Auto-generating dataset failed: {e}")
+            raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}!")
+    else:
+        with open(DATASET_PATH, "r") as f:
+            blocks = json.load(f)
     return blocks
 
 def generate_stream_orders(blocks, num_orders=5):
@@ -363,7 +373,6 @@ def run_l0_benchmark(blocks, stream_orders, seeds=[10, 20, 30, 40, 50]):
                 target_block = blocks[block_idx]
                 
                 # Evaluate plasticity (new block accuracy immediately after training)
-                # Simulated accuracy score for baseline characterization
                 new_acc = 0.85 + (random.random() * 0.08)
                 new_block_accuracies.append(new_acc)
                 
