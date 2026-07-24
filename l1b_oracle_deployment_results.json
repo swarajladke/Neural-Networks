@@ -1,19 +1,29 @@
 {
   "oracle_growth_mean_recall": 0.9182,
-  "static_matched_mean_recall": 0.2840,
-  "delta_mean": 0.6342,
-  "ci_95_lower": 0.6110,
-  "ci_95_upper": 0.6568,
-  "p_value_str": "p < 0.0001",
-  "h1_passed": true,
+  "static_matched_mean_recall": 0.9420,
+  "delta_mean": -0.0238,
+  "ci_95_lower": -0.0302,
+  "ci_95_upper": -0.0174,
+  "permutation_p_value_str": "p < 0.0001",
+  "h1_passed": false,
   "num_paired_runs": 25,
   "bootstrap_resamples": 10000,
-  "audit_compliance": {
-    "live_z_base_encoding": true,
-    "live_sigmoid_amplitude_a_sigma_s": true,
-    "disjoint_train_dev_test_splits": true,
-    "equal_parameter_static_baseline": true,
-    "oracle_routing_deployment": true,
-    "empirical_dev_utility_commitment": true
-  }
+  "expert_commitment_rate": 1.0,
+  "empirical_birth_precision_p_birth": 1.0,
+  "mean_sigmoid_amplitude_static": 0.1998,
+  "mean_sigmoid_amplitude_dynamic": 0.1772,
+  "compute_metrics": {
+    "forward_passes_per_run": 46000,
+    "backward_passes_per_run": 46000,
+    "optimizer_steps_per_run": 1300,
+    "tokens_processed_per_run": 1664000,
+    "training_compute_matched": true,
+    "base_lr_policy_matched": true,
+    "router_training_matched": true
+  },
+  "paired_differences": [
+    -0.045, -0.040, -0.040, -0.045, -0.010, 0.0, -0.055, -0.005, -0.030, -0.010,
+    -0.025, -0.010, -0.020, -0.020, -0.020, -0.045, -0.025, -0.030, -0.030, -0.035,
+    -0.030, 0.015, -0.020, -0.005, -0.015
+  ]
 }
