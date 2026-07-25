@@ -19,15 +19,15 @@ class DeltaSoftmaxReadout:
     Uses L2-normalized hidden states h_norm for numerical stability.
     No gradients are backpropagated through the AGNIS core.
     """
-    def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.01, kappa: float = 0.1):
+    def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.15, kappa: float = 1.0):
         self.d_hidden = d_hidden
         self.vocab_size = vocab_size
         self.device = device
         self.eta = eta
         self.kappa = kappa
         
-        # Small Gaussian initialization to break symmetry
-        self.W = torch.randn(d_hidden, vocab_size, device=device) * 0.01
+        # Gaussian initialization to break symmetry and drive dynamic predictions
+        self.W = torch.randn(d_hidden, vocab_size, device=device) * 0.1
         self.b = torch.zeros(vocab_size, device=device)
 
     def normalize_h(self, h: torch.Tensor) -> torch.Tensor:
@@ -45,8 +45,9 @@ class DeltaSoftmaxReadout:
         p = torch.softmax(self.logits(h), dim=-1)
         err = y_onehot - p
         
+        # Update weight matrix W dynamically; scale bias update down to prevent static mode collapse
         self.W += self.eta * (h_norm.t() @ err) / h_norm.shape[0]
-        self.b += self.eta * err.mean(dim=0)
+        self.b += 0.01 * self.eta * err.mean(dim=0)
         return err
 
     def teaching_signal(self, h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
