@@ -2,9 +2,9 @@
 agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout
 ======================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Concatenates sensory input tokens with hierarchy layer states:
-h_concat = [sensory_input, layer_0.x, layer_1.x] to combine orthogonal sensory
-character identity features with temporal context representations.
+Separately normalizes sensory input (110-dim) and hierarchy states (1024-dim)
+so orthogonal character identity features maintain equal 1.0 weight alongside
+temporal context representations.
 
 Update rule: dW = eta * h_norm^T (y - p)
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
@@ -20,52 +20,57 @@ class DeltaSoftmaxReadout:
     Combines orthogonal sensory features with temporal context states for dynamic prediction.
     No gradients are backpropagated through the AGNIS core.
     """
-    def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.2, kappa: float = 1.0):
-        self.d_hidden = d_hidden
+    def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 1.0, kappa: float = 1.0):
+        self.d_sensory = d_sensory
+        self.d_hierarchy = d_hierarchy
+        self.d_total = d_sensory + d_hierarchy
         self.vocab_size = vocab_size
         self.device = device
         self.eta = eta
         self.kappa = kappa
         
-        # Initialize W (d_hidden x vocab_size) to produce dynamic logit scale
-        self.W = torch.randn(d_hidden, vocab_size, device=device) * 0.1
+        # Initialize W (d_total x vocab_size) to produce dynamic logit scale
+        self.W = torch.randn(self.d_total, vocab_size, device=device) * 0.1
 
-    def normalize_h(self, h: torch.Tensor) -> torch.Tensor:
-        return F.normalize(h, dim=-1, eps=1e-8)
+    def combine_and_normalize(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
+        # Normalize sensory input and hierarchy states separately so sensory identity maintains 1.0 weight
+        s_norm = F.normalize(sensory_input, dim=-1, eps=1e-8)
+        h_norm = F.normalize(h_hierarchy, dim=-1, eps=1e-8)
+        return torch.cat([s_norm, h_norm], dim=-1)
 
-    def logits(self, h: torch.Tensor) -> torch.Tensor:
-        h_norm = self.normalize_h(h)
-        raw_logits = h_norm @ self.W
+    def logits(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
+        feat = self.combine_and_normalize(sensory_input, h_hierarchy)
+        raw_logits = feat @ self.W
         return raw_logits - raw_logits.mean(dim=-1, keepdim=True)
 
-    def log_probs(self, h: torch.Tensor) -> torch.Tensor:
-        return torch.log_softmax(self.logits(h), dim=-1)
+    def log_probs(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
+        return torch.log_softmax(self.logits(sensory_input, h_hierarchy), dim=-1)
 
-    def update(self, h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
-        h_norm = self.normalize_h(h)
-        p = torch.softmax(self.logits(h), dim=-1)
+    def update(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
+        feat = self.combine_and_normalize(sensory_input, h_hierarchy)
+        p = torch.softmax(self.logits(sensory_input, h_hierarchy), dim=-1)
         err = y_onehot - p
         
         # Dynamic weight matrix update
-        self.W += self.eta * (h_norm.t() @ err) / h_norm.shape[0]
+        self.W += self.eta * (feat.t() @ err) / feat.shape[0]
         self.W -= self.W.mean(dim=-1, keepdim=True)
         return err
 
-    def teaching_signal(self, h_concat: torch.Tensor, top_h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
+    def teaching_signal(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor, top_h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
         """
         Target for the hierarchy's top layer: top_h nudged along the readout error.
         One matmul back through top readout weights -- single layer, strictly local.
         """
-        p = torch.softmax(self.logits(h_concat), dim=-1)
+        p = torch.softmax(self.logits(sensory_input, h_hierarchy), dim=-1)
         err = y_onehot - p
         d_top = top_h.shape[1]
         W_top = self.W[-d_top:, :]  # Use corresponding top-layer readout weights
         return top_h + self.kappa * (err @ W_top.t())
 
 
-def get_hierarchy_state(hierarchy, sensory_input: torch.Tensor) -> torch.Tensor:
-    """Concatenates sensory input and all layer states [sensory_input, layer_0.x, layer_1.x]."""
-    states = [sensory_input] + [col.x for col in hierarchy.layers]
+def get_hierarchy_state(hierarchy) -> torch.Tensor:
+    """Concatenates all layer states [layer_0.x, layer_1.x]."""
+    states = [col.x for col in hierarchy.layers]
     return torch.cat(states, dim=-1)
 
 

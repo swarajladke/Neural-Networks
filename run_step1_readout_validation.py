@@ -1,9 +1,9 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with orthogonal sensory input readout features:
+Implements Opus 5's Step 1 blueprint with separate sensory/hierarchy state normalization:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
-2. Uses concatenated state [sensory_input, layer_0.x, layer_1.x] (1134-dim) for dynamic character predictions.
+2. Separately normalizes sensory input (110-dim) and hierarchy states (1024-dim) for equal feature weighting.
 3. Clamps recurrent matrix R to [-0.95, 0.95] to prevent spectral explosion from overriding sensory input.
 4. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 5. Programmatically checks Opus 5's Acceptance Gates:
@@ -67,8 +67,8 @@ def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps
         x = one_hot([tokens[i]], vocab_size, DEVICE)
         # update_temporal=True advances temporal state during evaluation!
         _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=True)
-        h = get_hierarchy_state(hierarchy, x)
-        log_p = readout.log_probs(h)
+        h = get_hierarchy_state(hierarchy)
+        log_p = readout.log_probs(x, h)
         
         target_id = tokens[i + 1]
         nll_sum += -log_p[0, target_id].item()
@@ -114,10 +114,11 @@ def main():
     print(f"[Baseline] Uniform Perplexity  : {uniform_ppl:.2f}")
     print(f"[Baseline] Unigram Perplexity  : {unigram_ppl:.2f}")
     
-    # Readout Dimension = vocab_size (110) + layer_0 (512) + layer_1 (512) = 1134
-    d_concat = vocab_size + 512 + 512
+    # Hierarchy [V, 512, 512] -> d_sensory = vocab_size (110), d_hierarchy = 512 + 512 = 1024
+    d_sensory = vocab_size
+    d_hierarchy = 512 + 512
     hierarchy = PredictiveHierarchy([vocab_size, 512, 512], device=DEVICE)
-    readout = DeltaSoftmaxReadout(d_concat, vocab_size, device=DEVICE, eta=0.2, kappa=1.0)
+    readout = DeltaSoftmaxReadout(d_sensory, d_hierarchy, vocab_size, device=DEVICE, eta=1.0, kappa=1.0)
     
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
@@ -133,11 +134,11 @@ def main():
             
             # Step A: Settle hierarchy to read current state
             _ = hierarchy.forward(x, max_steps=15, update_temporal=False)
-            h = get_hierarchy_state(hierarchy, x)
+            h = get_hierarchy_state(hierarchy)
             top_h = hierarchy.layers[-1].x.detach()
             
             # Step B: Local teaching signal back through W to top layer
-            tgt = readout.teaching_signal(h, top_h, y)
+            tgt = readout.teaching_signal(x, h, top_h, y)
             
             # Step C: Learn hierarchy with warm_start=True (preserves x_temporal history!)
             hierarchy.infer_and_learn(
@@ -150,7 +151,7 @@ def main():
                 col.R.data.clamp_(-0.95, 0.95)
             
             # Step D: Local delta-rule update on readout head using concatenated state h.detach()!
-            readout.update(h.detach(), y)
+            readout.update(x, h.detach(), y)
             
         train_ppl, _, _, u_tr = evaluate_ppl_and_histogram(hierarchy, readout, train_tokens, vocab_size, max_steps=15)
         val_ppl, val_hist, val_entropy, u_val = evaluate_ppl_and_histogram(hierarchy, readout, val_tokens, vocab_size, max_steps=15)
@@ -174,7 +175,7 @@ def main():
     print(f"4. ||R||_F Norm Shift ({R_shift:.6f}) > 0.0001              : {'PASSED ✓' if gate_4 else 'FAILED ✗'}")
     
     all_passed = gate_1 and gate_2 and gate_3 and gate_4
-    print(f"\nOverall Step 1 Status: {'PASSED ALL GATES ✓' if all_passed else 'FAILED ✗'}")
+    print(f"\nOverall Step 1 Status: {'PASSED ALL GATES ✓' if all_passed else 'FAILED xhtml' if not all_passed else 'PASSED ✓'}")
 
 if __name__ == "__main__":
     main()
