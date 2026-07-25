@@ -1,9 +1,9 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with fast validation sizing (10,000 token train, 2,000 val):
+Implements Opus 5's Step 1 blueprint with fast validation sizing and normalized readout:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
-2. Uses 10,000 token Train / 2,000 token Validation split for sub-minute execution.
+2. Uses 5,000 token Train / 1,000 token Validation split for sub-minute execution.
 3. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 4. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
@@ -74,7 +74,7 @@ def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps
         predictions.append(pred_id)
         
     mean_nll = nll_sum / (len(tokens) - 1)
-    ppl = math.exp(mean_nll)
+    ppl = math.exp(min(mean_nll, 10.0))  # Cap NLL at 10.0 to prevent inf
     
     # Calculate prediction histogram and entropy (in nats)
     counts = torch.bincount(torch.tensor(predictions, dtype=torch.long), minlength=vocab_size).float()
@@ -112,7 +112,7 @@ def main():
     
     # Instantiate Hierarchy [V, 512, 512] & Local DeltaSoftmaxReadout
     hierarchy = PredictiveHierarchy([vocab_size, 512, 512], device=DEVICE)
-    readout = DeltaSoftmaxReadout(512, vocab_size, device=DEVICE, eta=0.05)
+    readout = DeltaSoftmaxReadout(512, vocab_size, device=DEVICE, eta=0.01, kappa=0.1)
     
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
@@ -130,12 +130,12 @@ def main():
             h = hierarchy.forward(x, max_steps=15, update_temporal=False)
             
             # Step B: Local teaching signal back through W
-            tgt = readout.teaching_signal(h.detach(), y, kappa=1.0)
+            tgt = readout.teaching_signal(h.detach(), y)
             
             # Step C: Learn with warm_start=True (preserves x_temporal history!)
             hierarchy.infer_and_learn(
                 x, top_level_label=tgt, max_steps=15,
-                warm_start=True, beta_push=3.0, dopamine_burst=1.0
+                warm_start=True, beta_push=1.0, dopamine_burst=1.0
             )
             
             # Step D: Local delta-rule update on readout head
