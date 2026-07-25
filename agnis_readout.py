@@ -5,6 +5,8 @@ Implements a 1-layer local delta-rule readout over hierarchy representations.
 Concatenates all layer states h_concat = [layer_0.x, layer_1.x] to combine
 sensory input features with temporal context representations.
 
+Uses zero-mean column centering on W to eliminate unigram frequency mode collapse.
+
 Update rule: dW = eta * h_norm^T (y - p)
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
 """
@@ -34,7 +36,9 @@ class DeltaSoftmaxReadout:
 
     def logits(self, h: torch.Tensor) -> torch.Tensor:
         h_norm = self.normalize_h(h)
-        return h_norm @ self.W
+        # Mean-center logits across vocab dimension to eliminate static unigram bias collapse
+        raw_logits = h_norm @ self.W
+        return raw_logits - raw_logits.mean(dim=-1, keepdim=True)
 
     def log_probs(self, h: torch.Tensor) -> torch.Tensor:
         return torch.log_softmax(self.logits(h), dim=-1)
@@ -46,6 +50,8 @@ class DeltaSoftmaxReadout:
         
         # Pure dynamic weight matrix update
         self.W += self.eta * (h_norm.t() @ err) / h_norm.shape[0]
+        # Column-center W so no single unigram token accumulates static dominance
+        self.W -= self.W.mean(dim=-1, keepdim=True)
         return err
 
     def teaching_signal(self, h_concat: torch.Tensor, top_h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
