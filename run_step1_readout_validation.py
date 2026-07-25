@@ -119,7 +119,7 @@ def main():
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
     
-    # Training Loop (5 Epochs over 5,000 tokens)
+    # Fast Training Loop (5 Epochs over 5,000 tokens)
     print("\n[Training] Fast Training AGNIS Core + DeltaSoftmaxReadout (5 Epochs)...")
     for epoch in range(5):
         hierarchy.reset_states(batch_size=1)  # Once per document sequence, NOT per token!
@@ -131,10 +131,10 @@ def main():
             # Step A: Settle hierarchy to read current state
             _ = hierarchy.forward(x, max_steps=15, update_temporal=False)
             h = get_hierarchy_state(hierarchy)
+            top_h = hierarchy.layers[-1].x.detach()
             
             # Step B: Local teaching signal back through W to top layer
-            top_h = hierarchy.layers[-1].x.detach()
-            tgt = readout.teaching_signal(top_h, y)
+            tgt = readout.teaching_signal(h, top_h, y)
             
             # Step C: Learn hierarchy with warm_start=True (preserves x_temporal history!)
             hierarchy.infer_and_learn(
