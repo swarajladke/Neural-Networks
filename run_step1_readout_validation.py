@@ -1,11 +1,12 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with concatenated hierarchy state features:
+Implements Opus 5's Step 1 blueprint with spectral-clamped recurrence dynamics:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
 2. Uses concatenated hierarchy state [layer_0.x, layer_1.x] (1024-dim) for dynamic character predictions.
-3. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
-4. Programmatically checks Opus 5's Acceptance Gates:
+3. Clamps recurrent matrix R to [-0.95, 0.95] to prevent norm explosion (norm ~20.0) from overriding sensory input.
+4. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
+5. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
    - Val PPL < Unigram Baseline PPL
    - Argmax Prediction Histogram Entropy > 1.0 nat (verifies no constant-output collapse)
@@ -16,6 +17,7 @@ import os
 import math
 import torch
 import numpy as np
+import torch.nn.functional as F
 from agnis_v4_core import PredictiveHierarchy
 from agnis_readout import DeltaSoftmaxReadout, get_hierarchy_state, one_hot
 
@@ -141,6 +143,10 @@ def main():
                 x, top_level_label=tgt, max_steps=15,
                 warm_start=True, beta_push=2.0, dopamine_burst=1.0
             )
+            
+            # Clamp recurrent matrix R to prevent spectral explosion overriding sensory input
+            for col in hierarchy.layers:
+                col.R.data.clamp_(-0.95, 0.95)
             
             # Step D: Local delta-rule update on readout head using concatenated state h.detach()!
             readout.update(h.detach(), y)
