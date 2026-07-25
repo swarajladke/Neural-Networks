@@ -1,16 +1,16 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with spectral-clamped recurrence dynamics:
+Implements Opus 5's Step 1 blueprint with full prediction histogram logging:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
 2. Uses concatenated hierarchy state [layer_0.x, layer_1.x] (1024-dim) for dynamic character predictions.
-3. Clamps recurrent matrix R to [-0.95, 0.95] to prevent norm explosion (norm ~20.0) from overriding sensory input.
+3. Clamps recurrent matrix R to [-0.95, 0.95] to prevent spectral explosion from overriding sensory input.
 4. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 5. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
    - Val PPL < Unigram Baseline PPL
    - Argmax Prediction Histogram Entropy > 1.0 nat (verifies no constant-output collapse)
-   - ||R||_F Frobenius Norm Shift > 0 (proves temporal matrix R is active and learning)
+   - ||R||_F Norm Shift > 0 (proves temporal matrix R is active and learning)
 """
 
 import os
@@ -85,7 +85,8 @@ def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps
     probs_nonzero = probs[probs > 0]
     entropy = -torch.sum(probs_nonzero * torch.log(probs_nonzero)).item()
     
-    return ppl, counts.numpy(), entropy
+    unique_preds = len(probs_nonzero)
+    return ppl, counts.numpy(), entropy, unique_preds
 
 def main():
     print("======================================================================")
@@ -116,7 +117,7 @@ def main():
     # Hierarchy [V, 512, 512] -> Concatenated Readout Dimension = 512 + 512 = 1024
     d_concat = 512 + 512
     hierarchy = PredictiveHierarchy([vocab_size, 512, 512], device=DEVICE)
-    readout = DeltaSoftmaxReadout(d_concat, vocab_size, device=DEVICE, eta=0.2, kappa=1.0)
+    readout = DeltaSoftmaxReadout(d_concat, vocab_size, device=DEVICE, eta=0.5, kappa=1.0)
     
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
@@ -151,9 +152,9 @@ def main():
             # Step D: Local delta-rule update on readout head using concatenated state h.detach()!
             readout.update(h.detach(), y)
             
-        train_ppl, _, _ = evaluate_ppl_and_histogram(hierarchy, readout, train_tokens, vocab_size, max_steps=15)
-        val_ppl, val_hist, val_entropy = evaluate_ppl_and_histogram(hierarchy, readout, val_tokens, vocab_size, max_steps=15)
-        print(f"  Epoch {epoch + 1}: Train PPL = {train_ppl:.2f} | Val PPL = {val_ppl:.2f} | Val Entropy = {val_entropy:.2f} nats")
+        train_ppl, _, _, u_tr = evaluate_ppl_and_histogram(hierarchy, readout, train_tokens, vocab_size, max_steps=15)
+        val_ppl, val_hist, val_entropy, u_val = evaluate_ppl_and_histogram(hierarchy, readout, val_tokens, vocab_size, max_steps=15)
+        print(f"  Epoch {epoch + 1}: Train PPL = {train_ppl:.2f} | Val PPL = {val_ppl:.2f} | Val Entropy = {val_entropy:.2f} nats (Unique Tokens = {u_val})")
 
     final_R_norm = hierarchy.layers[0].R.data.norm().item()
     R_shift = abs(final_R_norm - initial_R_norm)
@@ -169,7 +170,7 @@ def main():
     
     print(f"1. Val PPL ({val_ppl:.2f}) < Uniform PPL ({uniform_ppl:.2f})    : {'PASSED ✓' if gate_1 else 'FAILED ✗'}")
     print(f"2. Val PPL ({val_ppl:.2f}) < Unigram PPL ({unigram_ppl:.2f})    : {'PASSED ✓' if gate_2 else 'FAILED ✗'}")
-    print(f"3. Histogram Entropy ({val_entropy:.2f} nats) > 1.0 nats      : {'PASSED ✓' if gate_3 else 'FAILED ✗'}")
+    print(f"3. Histogram Entropy ({val_entropy:.2f} nats, {u_val} unique) > 1.0 nats : {'PASSED ✓' if gate_3 else 'FAILED ✗'}")
     print(f"4. ||R||_F Norm Shift ({R_shift:.6f}) > 0.0001              : {'PASSED ✓' if gate_4 else 'FAILED ✗'}")
     
     all_passed = gate_1 and gate_2 and gate_3 and gate_4
