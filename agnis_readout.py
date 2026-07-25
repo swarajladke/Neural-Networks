@@ -2,10 +2,9 @@
 agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout
 ======================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Concatenates all layer states h_concat = [layer_0.x, layer_1.x] to combine
-sensory input features with temporal context representations.
-
-Uses zero-mean column centering on W to eliminate unigram frequency mode collapse.
+Concatenates sensory input tokens with hierarchy layer states:
+h_concat = [sensory_input, layer_0.x, layer_1.x] to combine orthogonal sensory
+character identity features with temporal context representations.
 
 Update rule: dW = eta * h_norm^T (y - p)
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
@@ -18,7 +17,7 @@ import torch.nn.functional as F
 class DeltaSoftmaxReadout:
     """
     Local, backprop-free softmax readout over hierarchy state representations.
-    Combines sensory input states and temporal context states for dynamic prediction.
+    Combines orthogonal sensory features with temporal context states for dynamic prediction.
     No gradients are backpropagated through the AGNIS core.
     """
     def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.2, kappa: float = 1.0):
@@ -36,7 +35,6 @@ class DeltaSoftmaxReadout:
 
     def logits(self, h: torch.Tensor) -> torch.Tensor:
         h_norm = self.normalize_h(h)
-        # Mean-center logits across vocab dimension to eliminate static unigram bias collapse
         raw_logits = h_norm @ self.W
         return raw_logits - raw_logits.mean(dim=-1, keepdim=True)
 
@@ -48,9 +46,8 @@ class DeltaSoftmaxReadout:
         p = torch.softmax(self.logits(h), dim=-1)
         err = y_onehot - p
         
-        # Pure dynamic weight matrix update
+        # Dynamic weight matrix update
         self.W += self.eta * (h_norm.t() @ err) / h_norm.shape[0]
-        # Column-center W so no single unigram token accumulates static dominance
         self.W -= self.W.mean(dim=-1, keepdim=True)
         return err
 
@@ -66,9 +63,9 @@ class DeltaSoftmaxReadout:
         return top_h + self.kappa * (err @ W_top.t())
 
 
-def get_hierarchy_state(hierarchy) -> torch.Tensor:
-    """Concatenates all layer states [layer_0.x, layer_1.x] into a single feature vector."""
-    states = [col.x for col in hierarchy.layers]
+def get_hierarchy_state(hierarchy, sensory_input: torch.Tensor) -> torch.Tensor:
+    """Concatenates sensory input and all layer states [sensory_input, layer_0.x, layer_1.x]."""
+    states = [sensory_input] + [col.x for col in hierarchy.layers]
     return torch.cat(states, dim=-1)
 
 

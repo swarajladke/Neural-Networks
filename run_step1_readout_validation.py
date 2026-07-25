@@ -1,16 +1,16 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with full prediction histogram logging:
+Implements Opus 5's Step 1 blueprint with orthogonal sensory input readout features:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
-2. Uses concatenated hierarchy state [layer_0.x, layer_1.x] (1024-dim) for dynamic character predictions.
+2. Uses concatenated state [sensory_input, layer_0.x, layer_1.x] (1134-dim) for dynamic character predictions.
 3. Clamps recurrent matrix R to [-0.95, 0.95] to prevent spectral explosion from overriding sensory input.
 4. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 5. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
    - Val PPL < Unigram Baseline PPL
    - Argmax Prediction Histogram Entropy > 1.0 nat (verifies no constant-output collapse)
-   - ||R||_F Norm Shift > 0 (proves temporal matrix R is active and learning)
+   - ||R||_F Frobenius Norm Shift > 0 (proves temporal matrix R is active and learning)
 """
 
 import os
@@ -67,7 +67,7 @@ def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps
         x = one_hot([tokens[i]], vocab_size, DEVICE)
         # update_temporal=True advances temporal state during evaluation!
         _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=True)
-        h = get_hierarchy_state(hierarchy)
+        h = get_hierarchy_state(hierarchy, x)
         log_p = readout.log_probs(h)
         
         target_id = tokens[i + 1]
@@ -114,10 +114,10 @@ def main():
     print(f"[Baseline] Uniform Perplexity  : {uniform_ppl:.2f}")
     print(f"[Baseline] Unigram Perplexity  : {unigram_ppl:.2f}")
     
-    # Hierarchy [V, 512, 512] -> Concatenated Readout Dimension = 512 + 512 = 1024
-    d_concat = 512 + 512
+    # Readout Dimension = vocab_size (110) + layer_0 (512) + layer_1 (512) = 1134
+    d_concat = vocab_size + 512 + 512
     hierarchy = PredictiveHierarchy([vocab_size, 512, 512], device=DEVICE)
-    readout = DeltaSoftmaxReadout(d_concat, vocab_size, device=DEVICE, eta=0.5, kappa=1.0)
+    readout = DeltaSoftmaxReadout(d_concat, vocab_size, device=DEVICE, eta=0.2, kappa=1.0)
     
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
@@ -133,7 +133,7 @@ def main():
             
             # Step A: Settle hierarchy to read current state
             _ = hierarchy.forward(x, max_steps=15, update_temporal=False)
-            h = get_hierarchy_state(hierarchy)
+            h = get_hierarchy_state(hierarchy, x)
             top_h = hierarchy.layers[-1].x.detach()
             
             # Step B: Local teaching signal back through W to top layer
