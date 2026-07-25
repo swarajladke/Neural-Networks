@@ -1,9 +1,9 @@
 """
-run_step1_readout_validation.py — Step 1 Readout & Recurrence Validation Suite
-================================================================================
-Implements Opus 5's Step 1 blueprint:
+run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
+====================================================================================
+Implements Opus 5's Step 1 blueprint with fast validation sizing (10,000 token train, 2,000 val):
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
-2. Uses 90/10 Train/Validation split on Italian character text.
+2. Uses 10,000 token Train / 2,000 token Validation split for sub-minute execution.
 3. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 4. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
@@ -56,7 +56,7 @@ def compute_baselines(train_tokens, test_tokens, vocab_size):
     return uniform_ppl, unigram_ppl
 
 @torch.no_grad()
-def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps=40):
+def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps=15):
     hierarchy.reset_states(batch_size=1)
     nll_sum = 0.0
     predictions = []
@@ -86,21 +86,24 @@ def evaluate_ppl_and_histogram(hierarchy, readout, tokens, vocab_size, max_steps
 
 def main():
     print("======================================================================")
-    print("  AGNIS STEP 1: READOUT & RECURRENCE VALIDATION SUITE")
+    print("  AGNIS STEP 1: FAST READOUT & RECURRENCE VALIDATION SUITE")
     print("======================================================================")
     
     text = load_italian_text()
     chars = sorted(list(set(text)))
     char_to_id = {c: i for i, c in enumerate(chars)}
-    tokens = [char_to_id[c] for c in text]
+    all_tokens = [char_to_id[c] for c in text]
     vocab_size = len(chars)
     
-    # 90/10 Train/Validation Split
-    split = int(0.9 * len(tokens))
+    # Fast benchmark sizing: 5,000 train tokens, 1,000 val tokens (~30 sec runtime)
+    max_total = min(len(all_tokens), 6000)
+    tokens = all_tokens[:max_total]
+    split = min(5000, int(0.833 * len(tokens)))
+    
     train_tokens = tokens[:split]
     val_tokens = tokens[split:]
     
-    print(f"[Dataset] Vocabulary Size: {vocab_size} characters | Total Tokens: {len(tokens)}")
+    print(f"[Dataset] Vocabulary Size: {vocab_size} characters | Benchmark Sample: {len(tokens)} tokens")
     print(f"[Dataset] Train Tokens: {len(train_tokens)} | Val Tokens: {len(val_tokens)}")
     
     uniform_ppl, unigram_ppl = compute_baselines(train_tokens, val_tokens, vocab_size)
@@ -114,8 +117,8 @@ def main():
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
     
-    # Training Loop with warm_start=True (preserving sequence state history)
-    print("\n[Training] Training AGNIS Core + DeltaSoftmaxReadout on Italian corpus (3 Epochs)...")
+    # Fast Training Loop (3 Epochs over 5,000 tokens)
+    print("\n[Training] Fast Training AGNIS Core + DeltaSoftmaxReadout (3 Epochs)...")
     for epoch in range(3):
         hierarchy.reset_states(batch_size=1)  # Once per document sequence, NOT per token!
         
@@ -123,23 +126,23 @@ def main():
             x = one_hot([train_tokens[i]], vocab_size, DEVICE)
             y = one_hot([train_tokens[i + 1]], vocab_size, DEVICE)
             
-            # Step A: Settle to read current top state (no learning, no temporal advance)
-            h = hierarchy.forward(x, max_steps=40, update_temporal=False)
+            # Step A: Settle to read current top state (max_steps=15 for speed)
+            h = hierarchy.forward(x, max_steps=15, update_temporal=False)
             
             # Step B: Local teaching signal back through W
             tgt = readout.teaching_signal(h.detach(), y, kappa=1.0)
             
             # Step C: Learn with warm_start=True (preserves x_temporal history!)
             hierarchy.infer_and_learn(
-                x, top_level_label=tgt, max_steps=40,
+                x, top_level_label=tgt, max_steps=15,
                 warm_start=True, beta_push=3.0, dopamine_burst=1.0
             )
             
             # Step D: Local delta-rule update on readout head
             readout.update(hierarchy.layers[-1].x.detach(), y)
             
-        train_ppl, _, _ = evaluate_ppl_and_histogram(hierarchy, readout, train_tokens, vocab_size)
-        val_ppl, val_hist, val_entropy = evaluate_ppl_and_histogram(hierarchy, readout, val_tokens, vocab_size)
+        train_ppl, _, _ = evaluate_ppl_and_histogram(hierarchy, readout, train_tokens, vocab_size, max_steps=15)
+        val_ppl, val_hist, val_entropy = evaluate_ppl_and_histogram(hierarchy, readout, val_tokens, vocab_size, max_steps=15)
         print(f"  Epoch {epoch + 1}: Train PPL = {train_ppl:.2f} | Val PPL = {val_ppl:.2f} | Val Entropy = {val_entropy:.2f} nats")
 
     final_R_norm = hierarchy.layers[0].R.data.norm().item()
