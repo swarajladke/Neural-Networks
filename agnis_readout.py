@@ -1,9 +1,8 @@
 """
-agnis_readout.py — Local, Backprop-Free Normalized Delta-Softmax Readout
-=========================================================================
+agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout
+======================================================================
 Implements a 1-layer local delta-rule readout over the top PredictiveHierarchy state.
-Uses L2-normalized top hidden states h_norm to prevent magnitude explosion during
-iterative settlement.
+Uses L2-normalized top hidden states h_norm without static bias to prevent mode collapse.
 
 Update rule: dW = eta * h_norm^T (y - p)
 Teaching signal: target_h = h + kappa * (y - p) @ W.T
@@ -16,26 +15,26 @@ import torch.nn.functional as F
 class DeltaSoftmaxReadout:
     """
     Local, backprop-free softmax readout over the top hierarchy state.
-    Uses L2-normalized hidden states h_norm for numerical stability.
+    Uses L2-normalized hidden states h_norm without static bias, ensuring
+    all predictions depend dynamically on hierarchy representations.
     No gradients are backpropagated through the AGNIS core.
     """
-    def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.15, kappa: float = 1.0):
+    def __init__(self, d_hidden: int, vocab_size: int, device: torch.device, eta: float = 0.5, kappa: float = 1.0):
         self.d_hidden = d_hidden
         self.vocab_size = vocab_size
         self.device = device
         self.eta = eta
         self.kappa = kappa
         
-        # Gaussian initialization to break symmetry and drive dynamic predictions
-        self.W = torch.randn(d_hidden, vocab_size, device=device) * 0.1
-        self.b = torch.zeros(vocab_size, device=device)
+        # Initialize W to produce dynamic logit scale
+        self.W = torch.randn(d_hidden, vocab_size, device=device) * 0.5
 
     def normalize_h(self, h: torch.Tensor) -> torch.Tensor:
         return F.normalize(h, dim=-1, eps=1e-8)
 
     def logits(self, h: torch.Tensor) -> torch.Tensor:
         h_norm = self.normalize_h(h)
-        return h_norm @ self.W + self.b
+        return h_norm @ self.W
 
     def log_probs(self, h: torch.Tensor) -> torch.Tensor:
         return torch.log_softmax(self.logits(h), dim=-1)
@@ -45,9 +44,8 @@ class DeltaSoftmaxReadout:
         p = torch.softmax(self.logits(h), dim=-1)
         err = y_onehot - p
         
-        # Update weight matrix W dynamically; scale bias update down to prevent static mode collapse
+        # Pure dynamic weight matrix update (no static bias to collapse mode)
         self.W += self.eta * (h_norm.t() @ err) / h_norm.shape[0]
-        self.b += 0.01 * self.eta * err.mean(dim=0)
         return err
 
     def teaching_signal(self, h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:

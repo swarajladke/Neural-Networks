@@ -1,9 +1,9 @@
 """
 run_step1_readout_validation.py — Fast Step 1 Readout & Recurrence Validation Suite
 ====================================================================================
-Implements Opus 5's Step 1 blueprint with exact unpushed state readout coupling:
+Implements Opus 5's Step 1 blueprint with purely dynamic readout:
 1. Replaces 1-D scalar regression with standard vocab logits + DeltaSoftmaxReadout.
-2. Trains readout head on unpushed settled state h.detach() matching evaluation forward() distribution.
+2. Eliminates static bias vector b so logits = h_norm @ W depend 100% on dynamic states.
 3. Fixes dead recurrence using warm_start=True (preserving state history) and update_temporal=True.
 4. Programmatically checks Opus 5's Acceptance Gates:
    - Val PPL < Uniform PPL (V)
@@ -110,9 +110,9 @@ def main():
     print(f"[Baseline] Uniform Perplexity  : {uniform_ppl:.2f}")
     print(f"[Baseline] Unigram Perplexity  : {unigram_ppl:.2f}")
     
-    # Instantiate Hierarchy [V, 512, 512] & Local DeltaSoftmaxReadout (eta=0.15, kappa=1.0)
+    # Instantiate Hierarchy [V, 512, 512] & Local DeltaSoftmaxReadout (eta=0.5, kappa=1.0)
     hierarchy = PredictiveHierarchy([vocab_size, 512, 512], device=DEVICE)
-    readout = DeltaSoftmaxReadout(512, vocab_size, device=DEVICE, eta=0.15, kappa=1.0)
+    readout = DeltaSoftmaxReadout(512, vocab_size, device=DEVICE, eta=0.5, kappa=1.0)
     
     # Track initial Frobenius norm of Recurrent Matrix R in Layer 0
     initial_R_norm = hierarchy.layers[0].R.data.norm().item()
