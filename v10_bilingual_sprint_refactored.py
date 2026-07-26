@@ -3,9 +3,10 @@ v10_bilingual_sprint_refactored.py — Refactored Bilingual Continual Learning B
 ========================================================================================
 Implements Opus 5's Step 2 blueprint:
 1. Replaces vacuous `freeze_experts()` no-op loop with `force_recruit_language_sliver(n=32, language="russian")`.
-2. Integrates Step 1's validated DeltaSoftmaxReadout and active temporal recurrence (warm_start=True).
-3. Evaluates on held-out 90/10 validation splits for both Italian and Russian.
-4. Computes and logs the full Continual Learning Performance Matrix (R_{i,j}):
+2. Expands readout capacity via `readout.expand_capacity(n_new=32)` to preserve Italian weights while adding Russian capacity.
+3. Integrates Step 1's validated DeltaSoftmaxReadout and active temporal recurrence (warm_start=True).
+4. Evaluates on held-out 90/10 validation splits for both Italian and Russian.
+5. Computes and logs the full Continual Learning Performance Matrix (R_{i,j}):
    - R_{1,1}: Italian Val PPL after Phase 1 (Italian Training)
    - R_{1,2}: Russian Val PPL after Phase 2 (Russian Acquisition)
    - R_{2,1}: Italian Val PPL after Phase 2 (Italian Retention after Russian Training)
@@ -149,13 +150,14 @@ def main():
     # ------------------------------------------------------------------
     print("\n[Shield Protocol] Executing `force_recruit_language_sliver(n=32, language='russian')`...")
     hierarchy.force_recruit_language_sliver(n=32, language="russian")
+    readout.expand_capacity(n_new=32)
     
     train_phase(hierarchy, readout, train_ru, vocab_size, epochs=3, phase_name="Phase 2: Russian Training")
     
     r1_2 = evaluate_ppl(hierarchy, readout, val_ru, vocab_size)
     r2_1 = evaluate_ppl(hierarchy, readout, val_it, vocab_size)
     
-    print(f"[Matrix Entry R_{{1,2}}] Russian Val PPL (Acquisition after Task 2): {r1_2:.2f}")
+    print(f"\n[Matrix Entry R_{{1,2}}] Russian Val PPL (Acquisition after Task 2): {r1_2:.2f}")
     print(f"[Matrix Entry R_{{2,1}}] Italian Val PPL (Retention after Task 2)  : {r2_1:.2f}")
     
     # ------------------------------------------------------------------

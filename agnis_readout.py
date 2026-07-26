@@ -2,9 +2,8 @@
 agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout
 ======================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Separately normalizes sensory input (110-dim) and hierarchy states (1024-dim)
-so orthogonal character identity features maintain equal 1.0 weight alongside
-temporal context representations.
+Supports dynamic capacity expansion via expand_capacity(n_new) to match
+pathway sliver recruitment in continual learning.
 
 Update rule: dW = eta * h_norm^T (y - p)
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
@@ -31,6 +30,15 @@ class DeltaSoftmaxReadout:
         
         # Initialize W (d_total x vocab_size) to produce dynamic logit scale
         self.W = torch.randn(self.d_total, vocab_size, device=device) * 0.1
+
+    def expand_capacity(self, n_new: int):
+        """Expands readout weight matrix W to match newly recruited hierarchy capacity."""
+        new_W = torch.randn(self.d_total + n_new, self.vocab_size, device=self.device) * 0.1
+        new_W[:self.d_total, :] = self.W.data
+        self.W = new_W
+        self.d_hierarchy += n_new
+        self.d_total += n_new
+        print(f"    [Readout] Expanded capacity: W shape {self.W.shape}")
 
     def combine_and_normalize(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
         # Normalize sensory input and hierarchy states separately so sensory identity maintains 1.0 weight
