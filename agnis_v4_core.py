@@ -403,8 +403,8 @@ class PredictiveColumn(nn.Module):
             delta_h_masked = delta_h * d_mask
             dV_avg = torch.matmul(self.last_input.t(), delta_h_masked) / self.last_input.shape[0]
             
-            self.V.data += self.eta_V * dopamine_burst * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
-            self.b_in.data += self.eta_V * dopamine_burst * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
+            self.V.data += self.eta_V * _clip_update(dV_avg, max_norm=5.0) * self.V_mask
+            self.b_in.data += self.eta_V * (delta_h * d_mask).mean(dim=0) * self.b_in_mask
 
             # 4. Vectorized Generative (W) Update
             # phi_h: [batch, out]. error: [batch, in]
@@ -450,7 +450,7 @@ class PredictiveColumn(nn.Module):
                     u = trainable_R @ v
                     sigma = u.norm()
                     self._pi_u = u / (sigma + 1e-8)
-                max_sigma = 1.25  # spectral-radius bound for stable temporal dynamics
+                max_sigma = 0.98  # Reconciled spectral-radius bound for stable temporal dynamics (Opus 5 Fix)
                 if sigma > max_sigma:
                     self.R.data = torch.where(self.R_mask == 0.0, self.R.data,
                                               trainable_R * (max_sigma / sigma))
