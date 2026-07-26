@@ -1,15 +1,16 @@
 """
-run_control_battery.py — Priority 0 Control Battery & Rigorous Scientific Verification
+run_control_battery.py — Priority 0 Control Battery & Rigorous Verification
 ========================================================================================
-Implements Opus 5's Priority 0 Control Battery:
+Implements Opus 5's Priority 0 Control Battery with Functional Recurrence Learning:
 1. N-Gram Baselines (Bigram n=2, Trigram n=3) with add-alpha smoothing.
-2. NLL-based (nats) BWT and Headroom Retention Ratio.
-3. 95% Bootstrap Confidence Intervals on NLL.
-4. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
-5. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
-6. Control C: Multitask Joint Training (Italian + Russian).
-7. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
-8. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark).
+2. Direct Delta Recurrence Update: dR = eta_R * h_{t-1}^T (h_t - R @ h_{t-1}).
+3. NLL-based (nats) BWT and Headroom Retention Ratio.
+4. 95% Bootstrap Confidence Intervals on NLL.
+5. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
+6. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
+7. Control C: Multitask Joint Training (Italian + Russian).
+8. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
+9. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark).
 """
 
 import os
@@ -131,16 +132,27 @@ def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
 def train_phase(hierarchy, readout, train_tokens, V, epochs=3, max_steps=15):
     for epoch in range(epochs):
         hierarchy.reset_states(batch_size=1)
+        prev_h = None
+        
         for i in range(len(train_tokens) - 1):
             x = one_hot([train_tokens[i]], V, DEVICE)
             y = one_hot([train_tokens[i + 1]], V, DEVICE)
+            
             _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=False)
             h = get_hierarchy_state(hierarchy)
             top_h = hierarchy.layers[-1].x.detach()
+            
             tgt = readout.teaching_signal(x, h, top_h, y)
             hierarchy.infer_and_learn(x, top_level_label=tgt, max_steps=max_steps, warm_start=True, beta_push=2.0, dopamine_burst=1.0)
-            for col in hierarchy.layers:
-                col.R.data.clamp_(-0.95, 0.95)
+            
+            # Functional Recurrence Update: dR = eta_R * prev_h^T (current_h - R @ prev_h)
+            if prev_h is not None:
+                for col in hierarchy.layers:
+                    err_r = col.x.detach() - torch.matmul(prev_h[:, :col.output_dim], col.R.data)
+                    col.R.data += 0.05 * torch.matmul(prev_h[:, :col.output_dim].t(), err_r)
+                    col.R.data.clamp_(-0.95, 0.95)
+            prev_h = hierarchy.layers[0].x.detach()
+            
             readout.update(x, h.detach(), y)
 
 def main():
@@ -218,7 +230,6 @@ def main():
     train_phase(h_ctrlA, r_ctrlA, tr_it, V, epochs=3)
     eval_ctrlA_it1 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
     
-    # Naive fine-tuning on Russian without Shield
     train_phase(h_ctrlA, r_ctrlA, tr_ru, V, epochs=3)
     eval_ctrlA_it2 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
     
@@ -250,7 +261,6 @@ def main():
     train_phase(h_ctrlE, r_ctrlE, tr_it, V, epochs=3)
     eval_ctrlE_it1 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
     
-    # Execute Shield Sliver Expansion for Spanish
     h_ctrlE.force_recruit_language_sliver(n=32, language="spanish")
     r_ctrlE.expand_capacity(n_new=32)
     
