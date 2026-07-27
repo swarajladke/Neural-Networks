@@ -285,9 +285,8 @@ class PredictiveColumn(nn.Module):
                 self._current_x_context = full_context
             else:
                 self._current_x_context = x_context_active
-            direct_input_drive = (forward_drive - x_active) * (0.5 * recognition_weight)
 
-            state_grad = feedback_drive + recognition_drive + top_down_drive + direct_input_drive
+            state_grad = feedback_drive + recognition_drive + top_down_drive
             state_grad += (recurrent_drive - x_active)
             state_grad += (1.0 * recognition_weight) * lateral_drive
             state_grad -= self.lambda_act * torch.sign(x_active)
@@ -389,8 +388,7 @@ class PredictiveColumn(nn.Module):
             
             # 1. State innovation (for V learning)
             forward = torch.matmul(self.last_input, self.V) + self.b_in
-            mask = self._k_wta_mask(self.x)
-            delta_h = (self.x - forward) * mask
+            delta_h = (self.x - forward)
             phi_h = self._phi(self.x)
             
             # 2. Vectorized Dopamine Masking
