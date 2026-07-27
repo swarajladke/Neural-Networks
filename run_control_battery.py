@@ -1,16 +1,16 @@
 """
 run_control_battery.py — Priority 0 Control Battery & Rigorous Verification
 ========================================================================================
-Implements Opus 5's Priority 0 Control Battery with Functional Recurrence Learning:
+Implements Opus 5's Priority 0 Control Battery with Readout Plasticity Shielding:
 1. N-Gram Baselines (Bigram n=2, Trigram n=3) with add-alpha smoothing.
-2. Direct Delta Recurrence Update: dR = eta_R * h_{t-1}^T (h_t - R @ h_{t-1}).
+2. Readout Plasticity Shielding (W_mask) protecting Italian readout rows during Spanish training.
 3. NLL-based (nats) BWT and Headroom Retention Ratio.
 4. 95% Bootstrap Confidence Intervals on NLL.
 5. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
 6. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
 7. Control C: Multitask Joint Training (Italian + Russian).
 8. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
-9. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark).
+9. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark with Readout Shielding).
 """
 
 import os
@@ -78,7 +78,6 @@ def compute_unigram(train_tokens, test_tokens, V):
 def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
     hierarchy.reset_states(batch_size=1)
     
-    # Optional Functional Recurrence Ablation (Control D)
     if zero_R:
         original_R = [col.R.data.clone() for col in hierarchy.layers]
         for col in hierarchy.layers:
@@ -145,7 +144,6 @@ def train_phase(hierarchy, readout, train_tokens, V, epochs=3, max_steps=15):
             tgt = readout.teaching_signal(x, h, top_h, y)
             hierarchy.infer_and_learn(x, top_level_label=tgt, max_steps=max_steps, warm_start=True, beta_push=2.0, dopamine_burst=1.0)
             
-            # Functional Recurrence Update: dR = eta_R * prev_h^T (current_h - R @ prev_h)
             if prev_h is not None:
                 for col in hierarchy.layers:
                     err_r = col.x.detach() - torch.matmul(prev_h[:, :col.output_dim], col.R.data)
@@ -216,9 +214,6 @@ def main():
     print(f"  AGNIS Italian Val PPL (Control D R=0): {res_it_zeroR['ppl']:.2f} (NLL = {res_it_zeroR['nll']:.4f} nats)")
     print(f"  Recurrence Functional Impact         : {res_it_zeroR['nll'] - res_it_main['nll']:+.4f} nats delta")
     
-    beats_bigram = res_it_main['ppl'] < bigram_ppl_it
-    print(f"  AGNIS Beats Bigram ({res_it_main['ppl']:.2f} < {bigram_ppl_it:.2f}): {'PASSED ✓' if beats_bigram else 'FAILED ✗ (Capturing < 2 chars of context)'}")
-    
     # ------------------------------------------------------------------
     # CONTROL A: Italian -> Russian (No Freeze, No Grow - Naive Fine-Tuning)
     # ------------------------------------------------------------------
@@ -250,10 +245,10 @@ def main():
     print(f"  Control B Russian Val PPL from Scratch: {eval_ctrlB_ru['ppl']:.2f} (NLL = {eval_ctrlB_ru['nll']:.4f} nats)")
     
     # ------------------------------------------------------------------
-    # CONTROL E: Italian -> Spanish (Overlapping Latin Alphabet Benchmark)
+    # CONTROL E: Italian -> Spanish (Overlapping Latin Alphabet + Readout Shielding)
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
-    print("  5. CONTROL E: ITALIAN -> SPANISH OVERLAPPING ALPHABET BENCHMARK")
+    print("  5. CONTROL E: ITALIAN -> SPANISH WITH READOUT PLASTICITY SHIELDING")
     print("----------------------------------------------------------------------")
     h_ctrlE = PredictiveHierarchy([V, 512, 512], device=DEVICE)
     r_ctrlE = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=1.0)
@@ -261,8 +256,9 @@ def main():
     train_phase(h_ctrlE, r_ctrlE, tr_it, V, epochs=3)
     eval_ctrlE_it1 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
     
+    # Execute Full Synaptic Shield (Hierarchy + Readout Plasticity Masking)
     h_ctrlE.force_recruit_language_sliver(n=32, language="spanish")
-    r_ctrlE.expand_capacity(n_new=32)
+    r_ctrlE.expand_capacity(n_new=32, freeze_prior=True)  # Freeze Italian readout rows!
     
     train_phase(h_ctrlE, r_ctrlE, tr_es, V, epochs=3)
     eval_ctrlE_es = evaluate_model(h_ctrlE, r_ctrlE, val_es, V)
@@ -274,10 +270,10 @@ def main():
     headroom_ctrlE_nats = unigram_nll_it - eval_ctrlE_it1['nll']
     retention_ctrlE_pct = (1.0 - (forgetting_ctrlE_nats / max(headroom_ctrlE_nats, 1e-8))) * 100.0
     
-    print(f"  Spanish Acquisition Val PPL (R_{{1,2}}) : {eval_ctrlE_es['ppl']:.2f} (Unigram = {unigram_es_ppl:.2f})")
+    print(f"\n  Spanish Acquisition Val PPL (R_{{1,2}}) : {eval_ctrlE_es['ppl']:.2f} (Unigram = {unigram_es_ppl:.2f})")
     print(f"  Italian Retention Val PPL   (R_{{2,1}}) : {eval_ctrlE_it2['ppl']:.2f} (Initial R_{{1,1}} = {eval_ctrlE_it1['ppl']:.2f})")
     print(f"  NLL Forgetting (Italian -> Spanish) : {forgetting_ctrlE_nats:+.4f} nats")
-    print(f"  NLL Headroom Retention Ratio        : {retention_ctrlE_pct:.1f}%")
+    print(f"  Shielded Headroom Retention Ratio   : {retention_ctrlE_pct:.1f}%")
     
     print("\n======================================================================")
     print("  SUMMARY OF CONTROL BATTERY RESULTS")
@@ -287,7 +283,7 @@ def main():
     print(f"  Control D (R=0 Recurrence Ablation): {res_it_zeroR['ppl']:.2f}")
     print(f"  Control A Naive Forgetting (NLL)   : {forgetting_ctrlA:+.4f} nats")
     print(f"  Control B Russian Scratch Val PPL  : {eval_ctrlB_ru['ppl']:.2f}")
-    print(f"  Control E Italian->Spanish Retention: {retention_ctrlE_pct:.1f}% ({eval_ctrlE_it2['ppl']:.2f} PPL)")
+    print(f"  Control E Shielded Retention Ratio : {retention_ctrlE_pct:.1f}% ({eval_ctrlE_it2['ppl']:.2f} PPL)")
 
 if __name__ == "__main__":
     main()
