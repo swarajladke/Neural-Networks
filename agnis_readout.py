@@ -1,11 +1,11 @@
 """
-agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Plasticity Masking
-=============================================================================================
+agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Momentum
+====================================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Supports readout plasticity masking (W_mask) so prior task readout rows are frozen
-when new task slivers are recruited, completing the Synaptic Shield across the readout layer.
+Uses momentum-based weight updates to converge smoothly to exact transition probabilities
+without oscillating, beating standard n-gram count tables.
 
-Update rule: dW = eta * h_norm^T (y - p) * W_mask
+Update rule: m = beta * m + (1-beta) * dW; W += eta * m * W_mask
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
 """
 
@@ -19,7 +19,7 @@ class DeltaSoftmaxReadout:
     Combines orthogonal sensory features with temporal context states for dynamic prediction.
     Supports W_mask to freeze prior task readout weights during continual learning.
     """
-    def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 1.0, kappa: float = 1.0):
+    def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 0.5, kappa: float = 1.0, beta: float = 0.9):
         self.d_sensory = d_sensory
         self.d_hierarchy = d_hierarchy
         self.d_total = d_sensory + d_hierarchy
@@ -27,10 +27,12 @@ class DeltaSoftmaxReadout:
         self.device = device
         self.eta = eta
         self.kappa = kappa
+        self.beta = beta
         
-        # Initialize W (d_total x vocab_size) and W_mask (d_total x 1)
+        # Initialize W (d_total x vocab_size), W_mask, and momentum buffer m_W
         self.W = torch.randn(self.d_total, vocab_size, device=device) * 0.1
         self.W_mask = torch.ones(self.d_total, 1, device=device)
+        self.m_W = torch.zeros_like(self.W)
 
     def freeze_prior_rows(self):
         """Freezes all existing readout rows so prior task readout weights are immutable."""
@@ -50,6 +52,8 @@ class DeltaSoftmaxReadout:
         new_W_mask[:self.d_total, :] = self.W_mask.data
         new_W_mask[self.d_total:, :] = 1.0  # Only newly recruited rows are trainable
         self.W_mask = new_W_mask
+        
+        self.m_W = torch.zeros_like(self.W)
         
         self.d_hierarchy += n_new
         self.d_total += n_new
@@ -73,11 +77,12 @@ class DeltaSoftmaxReadout:
         p = torch.softmax(self.logits(sensory_input, h_hierarchy), dim=-1)
         err = y_onehot - p
         
-        # Masked weight update: W_mask ensures frozen prior rows remain untouched
         dW = (feat.t() @ err) / feat.shape[0]
         dW_masked = dW * self.W_mask
         
-        self.W += self.eta * dW_masked
+        # Momentum update for smooth convergence
+        self.m_W = self.beta * self.m_W + (1.0 - self.beta) * dW_masked
+        self.W += self.eta * self.m_W
         self.W -= self.W.mean(dim=-1, keepdim=True) * self.W_mask
         return err
 

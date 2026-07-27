@@ -1,16 +1,17 @@
 """
 run_control_battery.py — Priority 0 Control Battery & Rigorous Verification
 ========================================================================================
-Implements Opus 5's Priority 0 Control Battery with Readout Plasticity Shielding:
+Implements Opus 5's Priority 0 Control Battery with Momentum Readout Updates:
 1. N-Gram Baselines (Bigram n=2, Trigram n=3) with add-alpha smoothing.
-2. Readout Plasticity Shielding (W_mask) protecting Italian readout rows during Spanish training.
-3. NLL-based (nats) BWT and Headroom Retention Ratio.
-4. 95% Bootstrap Confidence Intervals on NLL.
-5. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
-6. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
-7. Control C: Multitask Joint Training (Italian + Russian).
-8. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
-9. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark with Readout Shielding).
+2. Momentum DeltaSoftmaxReadout (eta=0.5, beta=0.9) to beat Bigram target PPL.
+3. Readout Plasticity Shielding (W_mask) protecting Italian readout rows during Spanish training.
+4. NLL-based (nats) BWT and Headroom Retention Ratio.
+5. 95% Bootstrap Confidence Intervals on NLL.
+6. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
+7. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
+8. Control C: Multitask Joint Training (Italian + Russian).
+9. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
+10. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark with Readout Shielding).
 """
 
 import os
@@ -128,7 +129,7 @@ def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
         "unique_tokens": u_tokens
     }
 
-def train_phase(hierarchy, readout, train_tokens, V, epochs=3, max_steps=15):
+def train_phase(hierarchy, readout, train_tokens, V, epochs=5, max_steps=15):
     for epoch in range(epochs):
         hierarchy.reset_states(batch_size=1)
         prev_h = None
@@ -204,9 +205,9 @@ def main():
     print("----------------------------------------------------------------------")
     d_sensory, d_hierarchy = V, 512 + 512
     h_main = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_main = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=1.0)
+    r_main = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
     
-    train_phase(h_main, r_main, tr_it, V, epochs=3)
+    train_phase(h_main, r_main, tr_it, V, epochs=5)
     res_it_main = evaluate_model(h_main, r_main, val_it, V, zero_R=False)
     res_it_zeroR = evaluate_model(h_main, r_main, val_it, V, zero_R=True)
     
@@ -221,11 +222,11 @@ def main():
     print("  3. CONTROL A: NAIVE SEQUENTIAL FINE-TUNING (NO FREEZE, NO GROW)")
     print("----------------------------------------------------------------------")
     h_ctrlA = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_ctrlA = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=1.0)
-    train_phase(h_ctrlA, r_ctrlA, tr_it, V, epochs=3)
+    r_ctrlA = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
+    train_phase(h_ctrlA, r_ctrlA, tr_it, V, epochs=5)
     eval_ctrlA_it1 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
     
-    train_phase(h_ctrlA, r_ctrlA, tr_ru, V, epochs=3)
+    train_phase(h_ctrlA, r_ctrlA, tr_ru, V, epochs=5)
     eval_ctrlA_it2 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
     
     forgetting_ctrlA = eval_ctrlA_it2['nll'] - eval_ctrlA_it1['nll']
@@ -239,8 +240,8 @@ def main():
     print("  4. CONTROL B: RUSSIAN ONLY FROM SCRATCH (32+512 UNITS)")
     print("----------------------------------------------------------------------")
     h_ctrlB = PredictiveHierarchy([V, 544, 512], device=DEVICE)
-    r_ctrlB = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=1.0)
-    train_phase(h_ctrlB, r_ctrlB, tr_ru, V, epochs=3)
+    r_ctrlB = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9)
+    train_phase(h_ctrlB, r_ctrlB, tr_ru, V, epochs=5)
     eval_ctrlB_ru = evaluate_model(h_ctrlB, r_ctrlB, val_ru, V)
     print(f"  Control B Russian Val PPL from Scratch: {eval_ctrlB_ru['ppl']:.2f} (NLL = {eval_ctrlB_ru['nll']:.4f} nats)")
     
@@ -251,16 +252,16 @@ def main():
     print("  5. CONTROL E: ITALIAN -> SPANISH WITH READOUT PLASTICITY SHIELDING")
     print("----------------------------------------------------------------------")
     h_ctrlE = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_ctrlE = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=1.0)
+    r_ctrlE = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
     
-    train_phase(h_ctrlE, r_ctrlE, tr_it, V, epochs=3)
+    train_phase(h_ctrlE, r_ctrlE, tr_it, V, epochs=5)
     eval_ctrlE_it1 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
     
     # Execute Full Synaptic Shield (Hierarchy + Readout Plasticity Masking)
     h_ctrlE.force_recruit_language_sliver(n=32, language="spanish")
     r_ctrlE.expand_capacity(n_new=32, freeze_prior=True)  # Freeze Italian readout rows!
     
-    train_phase(h_ctrlE, r_ctrlE, tr_es, V, epochs=3)
+    train_phase(h_ctrlE, r_ctrlE, tr_es, V, epochs=5)
     eval_ctrlE_es = evaluate_model(h_ctrlE, r_ctrlE, val_es, V)
     eval_ctrlE_it2 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
     
