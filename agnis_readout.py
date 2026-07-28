@@ -1,9 +1,9 @@
 """
-agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Momentum
-====================================================================================
+agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Isolated Masking
+=============================================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Uses momentum-based weight updates to converge smoothly to exact transition probabilities
-without oscillating, beating standard n-gram count tables.
+Performs row-isolated column-centering so prior task readout rows remain perfectly centered
+and frozen, preventing cross-layer logit drift during continual learning.
 
 Update rule: m = beta * m + (1-beta) * dW; W += eta * m * W_mask
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
@@ -31,11 +31,14 @@ class DeltaSoftmaxReadout:
         
         # Initialize W (d_total x vocab_size), W_mask, and momentum buffer m_W
         self.W = torch.randn(self.d_total, vocab_size, device=device) * 0.1
+        self.W -= self.W.mean(dim=-1, keepdim=True)
         self.W_mask = torch.ones(self.d_total, 1, device=device)
         self.m_W = torch.zeros_like(self.W)
 
     def freeze_prior_rows(self):
         """Freezes all existing readout rows so prior task readout weights are immutable."""
+        # Ensure pre-existing rows are centered before freezing
+        self.W -= self.W.mean(dim=-1, keepdim=True)
         self.W_mask.zero_()
         print(f"    [Readout Shield] Frozen prior {self.d_total} readout rows.")
 
@@ -46,6 +49,7 @@ class DeltaSoftmaxReadout:
             
         new_W = torch.randn(self.d_total + n_new, self.vocab_size, device=self.device) * 0.1
         new_W[:self.d_total, :] = self.W.data
+        new_W[self.d_total:, :] -= new_W[self.d_total:, :].mean(dim=-1, keepdim=True)
         self.W = new_W
         
         new_W_mask = torch.zeros(self.d_total + n_new, 1, device=self.device)
@@ -83,7 +87,12 @@ class DeltaSoftmaxReadout:
         # Momentum update for smooth convergence
         self.m_W = self.beta * self.m_W + (1.0 - self.beta) * dW_masked
         self.W += self.eta * self.m_W
-        self.W -= self.W.mean(dim=-1, keepdim=True) * self.W_mask
+        
+        # Isolated row-wise centering: center ONLY the active trainable rows
+        active_indices = (self.W_mask.squeeze(-1) > 0.0)
+        if active_indices.any():
+            self.W[active_indices, :] -= self.W[active_indices, :].mean(dim=-1, keepdim=True)
+            
         return err
 
     def teaching_signal(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor, top_h: torch.Tensor, y_onehot: torch.Tensor) -> torch.Tensor:
