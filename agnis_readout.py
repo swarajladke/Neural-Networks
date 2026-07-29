@@ -1,9 +1,9 @@
 """
-agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Isolated Masking
-=============================================================================================
+agnis_readout.py — Local, Backprop-Free Dynamic Delta-Softmax Readout with Scale-Balanced Slivers
+===================================================================================================
 Implements a 1-layer local delta-rule readout over hierarchy representations.
-Performs row-isolated column-centering so prior task readout rows remain perfectly centered
-and frozen, preventing cross-layer logit drift during continual learning.
+Normalizes sensory and hierarchy features by slice dimension (1/sqrt(dim)) so newly recruited
+slivers (e.g. 32 neurons) exert equal per-neuron logit pressure alongside large base layers (1024 neurons).
 
 Update rule: m = beta * m + (1-beta) * dW; W += eta * m * W_mask
 Teaching signal: target_h = top_h + kappa * (y - p) @ W_top.T
@@ -16,12 +16,12 @@ import torch.nn.functional as F
 class DeltaSoftmaxReadout:
     """
     Local, backprop-free softmax readout over hierarchy state representations.
-    Combines orthogonal sensory features with temporal context states for dynamic prediction.
-    Supports W_mask to freeze prior task readout weights during continual learning.
+    Normalizes features by slice dimension to prevent large base layers from crushing newly recruited slivers.
     """
     def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 0.5, kappa: float = 1.0, beta: float = 0.9):
         self.d_sensory = d_sensory
-        self.d_hierarchy = d_hierarchy
+        self.d_hierarchy_base = d_hierarchy
+        self.sliver_dims = [d_hierarchy]  # List of slice dimensions
         self.d_total = d_sensory + d_hierarchy
         self.vocab_size = vocab_size
         self.device = device
@@ -37,7 +37,6 @@ class DeltaSoftmaxReadout:
 
     def freeze_prior_rows(self):
         """Freezes all existing readout rows so prior task readout weights are immutable."""
-        # Ensure pre-existing rows are centered before freezing
         self.W -= self.W.mean(dim=-1, keepdim=True)
         self.W_mask.zero_()
         print(f"    [Readout Shield] Frozen prior {self.d_total} readout rows.")
@@ -58,15 +57,23 @@ class DeltaSoftmaxReadout:
         self.W_mask = new_W_mask
         
         self.m_W = torch.zeros_like(self.W)
-        
-        self.d_hierarchy += n_new
+        self.sliver_dims.append(n_new)
         self.d_total += n_new
-        print(f"    [Readout] Expanded capacity: W shape {self.W.shape} (Trainable rows = {n_new})")
+        print(f"    [Readout] Expanded capacity: W shape {self.W.shape} (Sliver dims: {self.sliver_dims})")
 
     def combine_and_normalize(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
+        # Scale-balanced normalization: sensory input normalized, each hierarchy sliver normalized independently
         s_norm = F.normalize(sensory_input, dim=-1, eps=1e-8)
-        h_norm = F.normalize(h_hierarchy, dim=-1, eps=1e-8)
-        return torch.cat([s_norm, h_norm], dim=-1)
+        
+        h_slices = []
+        curr_idx = 0
+        for dim_i in self.sliver_dims:
+            slice_i = h_hierarchy[:, curr_idx:curr_idx + dim_i]
+            slice_norm = F.normalize(slice_i, dim=-1, eps=1e-8) / math.sqrt(len(self.sliver_dims))
+            h_slices.append(slice_norm)
+            curr_idx += dim_i
+            
+        return torch.cat([s_norm] + h_slices, dim=-1)
 
     def logits(self, sensory_input: torch.Tensor, h_hierarchy: torch.Tensor) -> torch.Tensor:
         feat = self.combine_and_normalize(sensory_input, h_hierarchy)
@@ -84,11 +91,9 @@ class DeltaSoftmaxReadout:
         dW = (feat.t() @ err) / feat.shape[0]
         dW_masked = dW * self.W_mask
         
-        # Momentum update for smooth convergence
         self.m_W = self.beta * self.m_W + (1.0 - self.beta) * dW_masked
         self.W += self.eta * self.m_W
         
-        # Isolated row-wise centering: center ONLY the active trainable rows
         active_indices = (self.W_mask.squeeze(-1) > 0.0)
         if active_indices.any():
             self.W[active_indices, :] -= self.W[active_indices, :].mean(dim=-1, keepdim=True)
