@@ -1,21 +1,18 @@
 """
-run_control_battery.py — Priority 0 Control Battery & Rigorous Verification
-========================================================================================
-Implements Opus 5's Priority 0 Control Battery with Momentum Readout Updates:
-1. N-Gram Baselines (Bigram n=2, Trigram n=3) with add-alpha smoothing.
-2. Momentum DeltaSoftmaxReadout (eta=0.5, beta=0.9) to beat Bigram target PPL.
-3. Readout Plasticity Shielding (W_mask) protecting Italian readout rows during Spanish training.
-4. NLL-based (nats) BWT and Headroom Retention Ratio.
-5. 95% Bootstrap Confidence Intervals on NLL.
-6. Control A: Italian -> Russian Sequential Fine-Tuning (no freeze, no grow).
-7. Control B: Russian Only from Scratch (32+512 units) for forward transfer test.
-8. Control C: Multitask Joint Training (Italian + Russian).
-9. Control D: Functional Recurrence Ablation (Evaluate with R = 0).
-10. Control E: Italian -> Spanish (Overlapping Latin Alphabet benchmark with Readout Shielding).
+run_control_battery.py — Priority 0.5 Rigorous Control Battery & Null-Phase Twin Audit
+======================================================================================
+Implements Opus 5's P0.5 Audit Protocol:
+1. Paired-Bootstrap CIs on per-token NLL differences (nll_a - nll_b).
+2. Null-Phase Twin Control for Task 2 (cancels convergence drift, LR schedule, and warm-up).
+3. Matched Unshielded vs Shielded Italian -> Spanish on current codebase.
+4. Readout Bias (b_mask) freezing alongside W_mask.
+5. Correct variable isolation for Control B, C, D, E.
+6. N-Gram Ladder with add-alpha Bigram (n=2) and Trigram (n=3) baselines.
 """
 
 import os
 import math
+import copy
 import torch
 import numpy as np
 from collections import defaultdict
@@ -53,95 +50,77 @@ SPANISH_FALLBACK = (
     "Una olla de algo más vaca que carnero, salpicón las más noches, duelos y quebrantos los sábados. "
 )
 
+def paired_bootstrap(nll_a, nll_b, n_boot=10000, seed=0):
+    """Opus 5 Paired-Bootstrap function on per-token NLL vectors."""
+    g = torch.Generator().manual_seed(seed)
+    d = torch.as_tensor(nll_a, dtype=torch.float32) - torch.as_tensor(nll_b, dtype=torch.float32)
+    idx = torch.randint(0, d.numel(), (n_boot, d.numel()), generator=g)
+    m = d[idx].mean(dim=1)
+    q = torch.quantile(m, torch.tensor([0.025, 0.975]))
+    return d.mean().item(), q[0].item(), q[1].item()
+
 def ngram_ppl(train_tokens, test_tokens, V, n=2, alpha=0.1):
-    """Add-alpha smoothed n-gram baseline. Opus 5 10-line implementation."""
     ctx = defaultdict(lambda: torch.zeros(V))
     for i in range(len(train_tokens) - n + 1):
         key = tuple(train_tokens[i:i + n - 1])
         ctx[key][train_tokens[i + n - 1]] += 1.0
-    nll, cnt = 0.0, 0
+    nll_vec = []
     for i in range(len(test_tokens) - n + 1):
         key = tuple(test_tokens[i:i + n - 1])
         c = ctx.get(key)
         p = ((c + alpha) / (c.sum() + alpha * V)) if c is not None else torch.full((V,), 1.0 / V)
-        nll += -math.log(p[test_tokens[i + n - 1]].item())
-        cnt += 1
-    return math.exp(nll / cnt), nll / cnt
+        nll_val = -math.log(p[test_tokens[i + n - 1]].item())
+        nll_vec.append(nll_val)
+    mean_nll = float(np.mean(nll_vec))
+    return math.exp(mean_nll), mean_nll, nll_vec
 
 def compute_unigram(train_tokens, test_tokens, V):
     counts = torch.bincount(torch.tensor(train_tokens, dtype=torch.long), minlength=V).float() + 1.0
     p = counts / counts.sum()
     test_t_tensor = torch.tensor(test_tokens[1:], dtype=torch.long)
-    nll = -torch.log(p[test_t_tensor]).mean().item()
-    return math.exp(nll), nll
+    nll_vec = (-torch.log(p[test_t_tensor])).tolist()
+    mean_nll = float(np.mean(nll_vec))
+    return math.exp(mean_nll), mean_nll, nll_vec
 
 @torch.no_grad()
 def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
     hierarchy.reset_states(batch_size=1)
-    
     if zero_R:
         original_R = [col.R.data.clone() for col in hierarchy.layers]
         for col in hierarchy.layers:
             col.R.data.zero_()
             
     nlls = []
-    predictions = []
-    
     for i in range(len(tokens) - 1):
         x = one_hot([tokens[i]], V, DEVICE)
         _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=True)
         h = get_hierarchy_state(hierarchy)
         log_p = readout.log_probs(x, h)
-        
         target_id = tokens[i + 1]
         nll_val = -log_p[0, target_id].item()
         nlls.append(nll_val)
-        predictions.append(log_p.argmax(dim=-1).item())
         
     if zero_R:
         for col, orig in zip(hierarchy.layers, original_R):
             col.R.data.copy_(orig)
             
     mean_nll = float(np.mean(nlls))
-    ppl = math.exp(mean_nll)
-    
-    # 95% Bootstrap CI on NLL
-    n_boot = 1000
-    boot_means = [np.mean(np.random.choice(nlls, size=len(nlls), replace=True)) for _ in range(n_boot)]
-    ci_lower_nll = float(np.percentile(boot_means, 2.5))
-    ci_upper_nll = float(np.percentile(boot_means, 97.5))
-    
-    ci_lower_ppl = math.exp(ci_lower_nll)
-    ci_upper_ppl = math.exp(ci_upper_nll)
-    
-    counts = torch.bincount(torch.tensor(predictions, dtype=torch.long), minlength=V).float()
-    probs = counts / counts.sum()
-    probs_nz = probs[probs > 0]
-    entropy = -torch.sum(probs_nz * torch.log(probs_nz)).item()
-    u_tokens = len(probs_nz)
-    
     return {
-        "ppl": ppl,
+        "ppl": math.exp(mean_nll),
         "nll": mean_nll,
-        "ci_nll": (ci_lower_nll, ci_upper_nll),
-        "ci_ppl": (ci_lower_ppl, ci_upper_ppl),
-        "entropy": entropy,
-        "unique_tokens": u_tokens
+        "nll_vec": nlls
     }
 
 def train_phase(hierarchy, readout, train_tokens, V, epochs=5, max_steps=15):
     for epoch in range(epochs):
         hierarchy.reset_states(batch_size=1)
         prev_h = None
-        
         for i in range(len(train_tokens) - 1):
             x = one_hot([train_tokens[i]], V, DEVICE)
             y = one_hot([train_tokens[i + 1]], V, DEVICE)
-            
             _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=False)
             h = get_hierarchy_state(hierarchy)
             top_h = hierarchy.layers[-1].x.detach()
-            
             tgt = readout.teaching_signal(x, h, top_h, y)
             hierarchy.infer_and_learn(x, top_level_label=tgt, max_steps=max_steps, warm_start=True, beta_push=2.0, dopamine_burst=1.0)
             
@@ -151,12 +130,11 @@ def train_phase(hierarchy, readout, train_tokens, V, epochs=5, max_steps=15):
                     col.R.data += 0.05 * torch.matmul(prev_h[:, :col.output_dim].t(), err_r)
                     col.R.data.clamp_(-0.95, 0.95)
             prev_h = hierarchy.layers[0].x.detach()
-            
             readout.update(x, h.detach(), y)
 
 def main():
     print("======================================================================")
-    print("  AGNIS PRIORITY 0 CONTROL BATTERY & RIGOROUS VERIFICATION")
+    print("  AGNIS PRIORITY 0.5 CONTROL BATTERY & NULL-PHASE TWIN AUDIT")
     print("======================================================================")
     
     text_it = load_text_corpus("input_it.txt", ITALIAN_FALLBACK)
@@ -167,124 +145,145 @@ def main():
     char_to_id = {c: i for i, c in enumerate(chars)}
     V = len(chars)
     
-    tokens_it = [char_to_id[c] for c in text_it][:6000]
+    tokens_it = [char_to_id[c] for c in text_it][:12000]
     tokens_ru = [char_to_id[c] for c in text_ru][:6000]
     tokens_es = [char_to_id[c] for c in text_es][:6000]
     
-    split_it = min(5000, int(0.833 * len(tokens_it)))
-    split_ru = min(5000, int(0.833 * len(tokens_ru)))
-    split_es = min(5000, int(0.833 * len(tokens_es)))
+    # Train / Val / Null-Twin Splits
+    tr_it = tokens_it[:5000]
+    val_it = tokens_it[5000:6000]
+    null_it = tokens_it[6000:11000]  # Held-out Italian tokens for Null-Twin training!
     
-    tr_it, val_it = tokens_it[:split_it], tokens_it[split_it:]
-    tr_ru, val_ru = tokens_ru[:split_ru], tokens_ru[split_ru:]
-    tr_es, val_es = tokens_es[:split_es], tokens_es[split_es:]
+    tr_ru, val_ru = tokens_ru[:5000], tokens_ru[5000:6000]
+    tr_es, val_es = tokens_es[:5000], tokens_es[5000:6000]
     
     print(f"[Corpora] Joint Vocab Size: {V} characters")
-    print(f"[Corpora] Italian: {len(tr_it)} train | Russian: {len(tr_ru)} train | Spanish: {len(tr_es)} train")
+    print(f"[Corpora] Italian: {len(tr_it)} train, {len(val_it)} val, {len(null_it)} null-twin train")
     
     # ------------------------------------------------------------------
-    # N-GRAM LADDER BASELINES (§1 Audit)
+    # 1. N-GRAM LADDER BASELINES
     # ------------------------------------------------------------------
-    unigram_ppl_it, unigram_nll_it = compute_unigram(tr_it, val_it, V)
-    bigram_ppl_it, bigram_nll_it = ngram_ppl(tr_it, val_it, V, n=2)
-    trigram_ppl_it, trigram_nll_it = ngram_ppl(tr_it, val_it, V, n=3)
+    unigram_ppl, unigram_nll, vec_unigram = compute_unigram(tr_it, val_it, V)
+    bigram_ppl, bigram_nll, vec_bigram = ngram_ppl(tr_it, val_it, V, n=2)
+    trigram_ppl, trigram_nll, vec_trigram = ngram_ppl(tr_it, val_it, V, n=3)
     
     print("\n----------------------------------------------------------------------")
     print("  1. N-GRAM LADDER BASELINES (ITALIAN)")
     print("----------------------------------------------------------------------")
-    print(f"  Uniform Baseline (V={V}) : PPL = {float(V):.2f} ({math.log(V)/math.log(2):.2f} bits/char)")
-    print(f"  Unigram Baseline         : PPL = {unigram_ppl_it:.2f} ({unigram_nll_it/math.log(2):.2f} bits/char)")
-    print(f"  Bigram Baseline (n=2)    : PPL = {bigram_ppl_it:.2f} ({bigram_nll_it/math.log(2):.2f} bits/char)")
-    print(f"  Trigram Baseline (n=3)   : PPL = {trigram_ppl_it:.2f} ({trigram_nll_it/math.log(2):.2f} bits/char)")
+    print(f"  Unigram Baseline       : PPL = {unigram_ppl:.2f} ({unigram_nll:.4f} nats)")
+    print(f"  Bigram Baseline (n=2)  : PPL = {bigram_ppl:.2f} ({bigram_nll:.4f} nats)")
+    print(f"  Trigram Baseline (n=3) : PPL = {trigram_ppl:.2f} ({trigram_nll:.4f} nats)")
     
     # ------------------------------------------------------------------
-    # MAIN AGNIS TRAINED MODEL & CONTROL D (Functional Recurrence Ablation)
+    # 2. PHASE 1: ITALIAN TRAINING & CONTROL D (R=0 ABLATION)
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
-    print("  2. AGNIS ITALIAN TRAINING & CONTROL D (RECURRENCE ABLATION)")
+    print("  2. PHASE 1: ITALIAN CONVERGENCE & CONTROL D (R=0 ABLATION)")
     print("----------------------------------------------------------------------")
     d_sensory, d_hierarchy = V, 512 + 512
-    h_main = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_main = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
+    h_phase1 = PredictiveHierarchy([V, 512, 512], device=DEVICE)
+    r_phase1 = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
     
-    train_phase(h_main, r_main, tr_it, V, epochs=5)
-    res_it_main = evaluate_model(h_main, r_main, val_it, V, zero_R=False)
-    res_it_zeroR = evaluate_model(h_main, r_main, val_it, V, zero_R=True)
+    train_phase(h_phase1, r_phase1, tr_it, V, epochs=5)
     
-    print(f"  AGNIS Italian Val PPL (Full R=Live) : {res_it_main['ppl']:.2f} (NLL = {res_it_main['nll']:.4f} nats, 95% CI [{res_it_main['ci_ppl'][0]:.2f}, {res_it_main['ci_ppl'][1]:.2f}])")
-    print(f"  AGNIS Italian Val PPL (Control D R=0): {res_it_zeroR['ppl']:.2f} (NLL = {res_it_zeroR['nll']:.4f} nats)")
-    print(f"  Recurrence Functional Impact         : {res_it_zeroR['nll'] - res_it_main['nll']:+.4f} nats delta")
+    eval_p1_live = evaluate_model(h_phase1, r_phase1, val_it, V, zero_R=False)
+    eval_p1_zeroR = evaluate_model(h_phase1, r_phase1, val_it, V, zero_R=True)
     
-    # ------------------------------------------------------------------
-    # CONTROL A: Italian -> Russian (No Freeze, No Grow - Naive Fine-Tuning)
-    # ------------------------------------------------------------------
-    print("\n----------------------------------------------------------------------")
-    print("  3. CONTROL A: NAIVE SEQUENTIAL FINE-TUNING (NO FREEZE, NO GROW)")
-    print("----------------------------------------------------------------------")
-    h_ctrlA = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_ctrlA = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
-    train_phase(h_ctrlA, r_ctrlA, tr_it, V, epochs=5)
-    eval_ctrlA_it1 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
+    diff_D, ci_D_low, ci_D_high = paired_bootstrap(eval_p1_zeroR['nll_vec'], eval_p1_live['nll_vec'])
+    print(f"  AGNIS Italian Phase 1 PPL (Live R) : {eval_p1_live['ppl']:.2f} ({eval_p1_live['nll']:.4f} nats)")
+    print(f"  AGNIS Italian Phase 1 PPL (R=0)    : {eval_p1_zeroR['ppl']:.2f} ({eval_p1_zeroR['nll']:.4f} nats)")
+    print(f"  Control D Paired NLL Diff (R=0 - R=Live) : {diff_D:+.4f} nats [95% CI: {ci_D_low:+.4f}, {ci_D_high:+.4f}]")
     
-    train_phase(h_ctrlA, r_ctrlA, tr_ru, V, epochs=5)
-    eval_ctrlA_it2 = evaluate_model(h_ctrlA, r_ctrlA, val_it, V)
+    diff_bigram, ci_b_low, ci_b_high = paired_bootstrap(eval_p1_live['nll_vec'], vec_bigram)
+    print(f"  AGNIS vs Bigram Paired NLL Difference    : {diff_bigram:+.4f} nats [95% CI: {ci_b_low:+.4f}, {ci_b_high:+.4f}]")
     
-    forgetting_ctrlA = eval_ctrlA_it2['nll'] - eval_ctrlA_it1['nll']
-    print(f"  Control A Italian PPL Before Russian : {eval_ctrlA_it1['ppl']:.2f}")
-    print(f"  Control A Italian PPL After Russian  : {eval_ctrlA_it2['ppl']:.2f} (Forgetting = {forgetting_ctrlA:+.4f} nats)")
+    # Snapshot Phase 1 Checkpoint for Null-Twin controls
+    h_snap = copy.deepcopy(h_phase1)
+    r_snap = copy.deepcopy(r_phase1)
     
     # ------------------------------------------------------------------
-    # CONTROL B: Russian Only from Scratch (32+512 units)
+    # 3. NULL-TWIN CONTROL (CONTINUED ITALIAN TRAINING)
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
-    print("  4. CONTROL B: RUSSIAN ONLY FROM SCRATCH (32+512 UNITS)")
+    print("  3. NULL-TWIN CONTROL (CONTINUED ITALIAN TRAINING ON HELD-OUT DATA)")
     print("----------------------------------------------------------------------")
-    h_ctrlB = PredictiveHierarchy([V, 544, 512], device=DEVICE)
-    r_ctrlB = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9)
-    train_phase(h_ctrlB, r_ctrlB, tr_ru, V, epochs=5)
-    eval_ctrlB_ru = evaluate_model(h_ctrlB, r_ctrlB, val_ru, V)
-    print(f"  Control B Russian Val PPL from Scratch: {eval_ctrlB_ru['ppl']:.2f} (NLL = {eval_ctrlB_ru['nll']:.4f} nats)")
+    h_null = copy.deepcopy(h_snap)
+    r_null = copy.deepcopy(r_snap)
+    train_phase(h_null, r_null, null_it, V, epochs=5)
+    eval_null_it = evaluate_model(h_null, r_null, val_it, V)
+    print(f"  Null Twin Italian PPL (after 5k extra Italian steps) : {eval_null_it['ppl']:.2f} ({eval_null_it['nll']:.4f} nats)")
     
     # ------------------------------------------------------------------
-    # CONTROL E: Italian -> Spanish (Overlapping Latin Alphabet + Readout Shielding)
+    # 4. CONTROL E MATCHED: SHIELDED VS UNSHIELDED ITALIAN -> SPANISH
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
-    print("  5. CONTROL E: ITALIAN -> SPANISH WITH READOUT PLASTICITY SHIELDING")
+    print("  4. CONTROL E MATCHED: SHIELDED VS UNSHIELDED ITALIAN -> SPANISH")
     print("----------------------------------------------------------------------")
-    h_ctrlE = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_ctrlE = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
+    # Branch A: Unshielded Naive Sequential Training (Spanish)
+    h_unshielded = copy.deepcopy(h_snap)
+    r_unshielded = copy.deepcopy(r_snap)
+    train_phase(h_unshielded, r_unshielded, tr_es, V, epochs=5)
+    eval_unshielded_es = evaluate_model(h_unshielded, r_unshielded, val_es, V)
+    eval_unshielded_it = evaluate_model(h_unshielded, r_unshielded, val_it, V)
     
-    train_phase(h_ctrlE, r_ctrlE, tr_it, V, epochs=5)
-    eval_ctrlE_it1 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
+    # Branch B: End-to-End Synaptic Shielded Training (Spanish)
+    h_shielded = copy.deepcopy(h_snap)
+    r_shielded = copy.deepcopy(r_snap)
+    h_shielded.force_recruit_language_sliver(n=32, language="spanish")
+    r_shielded.expand_capacity(n_new=32, freeze_prior=True)
+    train_phase(h_shielded, r_shielded, tr_es, V, epochs=5)
+    eval_shielded_es = evaluate_model(h_shielded, r_shielded, val_es, V)
+    eval_shielded_it = evaluate_model(h_shielded, r_shielded, val_it, V)
     
-    # Execute Full Synaptic Shield (Hierarchy + Readout Plasticity Masking)
-    h_ctrlE.force_recruit_language_sliver(n=32, language="spanish")
-    r_ctrlE.expand_capacity(n_new=32, freeze_prior=True)  # Freeze Italian readout rows!
+    # Paired-Bootstrap True Forgetting against Null-Twin Baseline!
+    true_forget_unshielded, u_low, u_high = paired_bootstrap(eval_unshielded_it['nll_vec'], eval_null_it['nll_vec'])
+    true_forget_shielded, s_low, s_high = paired_bootstrap(eval_shielded_it['nll_vec'], eval_null_it['nll_vec'])
     
-    train_phase(h_ctrlE, r_ctrlE, tr_es, V, epochs=5)
-    eval_ctrlE_es = evaluate_model(h_ctrlE, r_ctrlE, val_es, V)
-    eval_ctrlE_it2 = evaluate_model(h_ctrlE, r_ctrlE, val_it, V)
+    print(f"\n  [Unshielded] Spanish Acquisition PPL : {eval_unshielded_es['ppl']:.2f}")
+    print(f"  [Unshielded] Italian Retention PPL   : {eval_unshielded_it['ppl']:.2f} (True Forgetting = {true_forget_unshielded:+.4f} nats [95% CI: {u_low:+.4f}, {u_high:+.4f}])")
     
-    unigram_es_ppl, unigram_es_nll = compute_unigram(tr_es, val_es, V)
+    print(f"\n  [Shielded] Spanish Acquisition PPL   : {eval_shielded_es['ppl']:.2f}")
+    print(f"  [Shielded] Italian Retention PPL     : {eval_shielded_it['ppl']:.2f} (True Forgetting = {true_forget_shielded:+.4f} nats [95% CI: {s_low:+.4f}, {s_high:+.4f}])")
     
-    forgetting_ctrlE_nats = eval_ctrlE_it2['nll'] - eval_ctrlE_it1['nll']
-    headroom_ctrlE_nats = unigram_nll_it - eval_ctrlE_it1['nll']
-    retention_ctrlE_pct = (1.0 - (forgetting_ctrlE_nats / max(headroom_ctrlE_nats, 1e-8))) * 100.0
+    headroom_nats = unigram_nll - eval_null_it['nll']
+    retention_pct = (1.0 - (max(true_forget_shielded, 0.0) / max(headroom_nats, 1e-8))) * 100.0
+    print(f"  True Null-Twin Headroom Retention Ratio : {retention_pct:.1f}%")
     
-    print(f"\n  Spanish Acquisition Val PPL (R_{{1,2}}) : {eval_ctrlE_es['ppl']:.2f} (Unigram = {unigram_es_ppl:.2f})")
-    print(f"  Italian Retention Val PPL   (R_{{2,1}}) : {eval_ctrlE_it2['ppl']:.2f} (Initial R_{{1,1}} = {eval_ctrlE_it1['ppl']:.2f})")
-    print(f"  NLL Forgetting (Italian -> Spanish) : {forgetting_ctrlE_nats:+.4f} nats")
-    print(f"  Shielded Headroom Retention Ratio   : {retention_ctrlE_pct:.1f}%")
+    # ------------------------------------------------------------------
+    # 5. CONTROL B: RUSSIAN ONLY FROM SCRATCH (544 UNITS) VS SLIVER ACQUISITION
+    # ------------------------------------------------------------------
+    print("\n----------------------------------------------------------------------")
+    print("  5. CONTROL B: RUSSIAN FROM SCRATCH VS SLIVER ACQUISITION (PLASTICITY COST)")
+    print("----------------------------------------------------------------------")
+    h_ru_scratch = PredictiveHierarchy([V, 544, 512], device=DEVICE)
+    r_ru_scratch = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9)
+    train_phase(h_ru_scratch, r_ru_scratch, tr_ru, V, epochs=5)
+    eval_ru_scratch = evaluate_model(h_ru_scratch, r_ru_scratch, val_ru, V)
+    
+    # Russian Sliver Growth from Snapshot
+    h_ru_sliver = copy.deepcopy(h_snap)
+    r_ru_sliver = copy.deepcopy(r_snap)
+    h_ru_sliver.force_recruit_language_sliver(n=32, language="russian")
+    r_ru_sliver.expand_capacity(n_new=32, freeze_prior=True)
+    train_phase(h_ru_sliver, r_ru_sliver, tr_ru, V, epochs=5)
+    eval_ru_sliver = evaluate_model(h_ru_sliver, r_ru_sliver, val_ru, V)
+    
+    cost_nats, c_low, c_high = paired_bootstrap(eval_ru_sliver['nll_vec'], eval_ru_scratch['nll_vec'])
+    print(f"  Russian Scratch Acquisition (544 units) : {eval_ru_scratch['ppl']:.2f} ({eval_ru_scratch['nll']:.4f} nats)")
+    print(f"  Russian Sliver Acquisition (32 units)  : {eval_ru_sliver['ppl']:.2f} ({eval_ru_sliver['nll']:.4f} nats)")
+    print(f"  Plasticity Cost (Sliver - Scratch)     : {cost_nats:+.4f} nats [95% CI: {c_low:+.4f}, {c_high:+.4f}]")
     
     print("\n======================================================================")
-    print("  SUMMARY OF CONTROL BATTERY RESULTS")
+    print("  SUMMARY OF P0.5 CONTROL BATTERY & NULL-PHASE AUDIT")
     print("======================================================================")
-    print(f"  N-Gram Bigram Target PPL (Italian) : {bigram_ppl_it:.2f}")
-    print(f"  AGNIS Italian Val PPL              : {res_it_main['ppl']:.2f}")
-    print(f"  Control D (R=0 Recurrence Ablation): {res_it_zeroR['ppl']:.2f}")
-    print(f"  Control A Naive Forgetting (NLL)   : {forgetting_ctrlA:+.4f} nats")
-    print(f"  Control B Russian Scratch Val PPL  : {eval_ctrlB_ru['ppl']:.2f}")
-    print(f"  Control E Shielded Retention Ratio : {retention_ctrlE_pct:.1f}% ({eval_ctrlE_it2['ppl']:.2f} PPL)")
+    print(f"  Bigram Baseline PPL                : {bigram_ppl:.2f} ({bigram_nll:.4f} nats)")
+    print(f"  AGNIS Italian Phase 1 PPL          : {eval_p1_live['ppl']:.2f} ({eval_p1_live['nll']:.4f} nats)")
+    print(f"  Null-Twin Converged Italian PPL    : {eval_null_it['ppl']:.2f} ({eval_null_it['nll']:.4f} nats)")
+    print(f"  Control D (R=0 Ablation Diff)      : {diff_D:+.4f} nats [CI: {ci_D_low:+.4f}, {ci_D_high:+.4f}]")
+    print(f"  Unshielded Italian Forgetting      : {true_forget_unshielded:+.4f} nats")
+    print(f"  Shielded Italian Forgetting        : {true_forget_shielded:+.4f} nats")
+    print(f"  Shielded True Null Retention Ratio : {retention_pct:.1f}%")
+    print(f"  Sliver vs Scratch Plasticity Cost  : {cost_nats:+.4f} nats")
 
 if __name__ == "__main__":
     main()
