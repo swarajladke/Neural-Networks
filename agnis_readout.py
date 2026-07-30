@@ -50,7 +50,7 @@ class TaskGatedDeltaSoftmaxReadout:
             print(f"    [Readout Shield] Task {self.active_task + 1} head frozen.")
             
         d_total_k = self.d_sensory + n_new
-        W_k = torch.randn(d_total_k, vocab_size, device=self.device) * 0.1
+        W_k = torch.randn(d_total_k, self.vocab_size, device=self.device) * 0.1
         W_k -= W_k.mean(dim=-1, keepdim=True)
         m_k = torch.zeros_like(W_k)
         
