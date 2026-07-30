@@ -112,9 +112,11 @@ class TaskGatedDeltaSoftmaxReadout:
         p = torch.softmax(self.logits(sensory_input, h_hierarchy, self.active_task), dim=-1)
         err = y_onehot - p
         head = self.task_heads[self.active_task]
-        d_top = top_h.shape[1]
-        W_top = head["W"][-d_top:, :]
-        return top_h + self.kappa * (err @ W_top.t())
+        d_top_k = head["d_sliver"] // 2
+        W_top = head["W"][-d_top_k:, :]
+        tgt_top_h = top_h.clone()
+        tgt_top_h[:, -d_top_k:] = top_h[:, -d_top_k:] + self.kappa * (err @ W_top.t())
+        return tgt_top_h
 
 
 # Alias for backward compatibility
