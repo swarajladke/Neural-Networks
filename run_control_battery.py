@@ -1,11 +1,11 @@
 """
 run_control_battery.py — Priority 0.5 Rigorous Control Battery & Null-Phase Twin Audit
 ======================================================================================
-Implements Opus 5's P0.5 Audit Protocol:
+Implements Opus 5's P0.5 Audit Protocol with Task-Gated Multi-Head Readouts:
 1. Paired-Bootstrap CIs on per-token NLL differences (nll_a - nll_b).
 2. Null-Phase Twin Control for Task 2 (cancels convergence drift, LR schedule, and warm-up).
-3. Matched Unshielded vs Shielded Italian -> Spanish on current codebase.
-4. Readout Bias (b_mask) freezing alongside W_mask.
+3. Matched Unshielded vs Task-Gated Shielded Italian -> Spanish.
+4. Task-Gated Readout Head routing (eliminates cross-task logit interference).
 5. Correct variable isolation for Control B, C, D, E.
 6. N-Gram Ladder with add-alpha Bigram (n=2) and Trigram (n=3) baselines.
 """
@@ -51,7 +51,6 @@ SPANISH_FALLBACK = (
 )
 
 def paired_bootstrap(nll_a, nll_b, n_boot=10000, seed=0):
-    """Opus 5 Paired-Bootstrap function on per-token NLL vectors."""
     g = torch.Generator().manual_seed(seed)
     d = torch.as_tensor(nll_a, dtype=torch.float32) - torch.as_tensor(nll_b, dtype=torch.float32)
     idx = torch.randint(0, d.numel(), (n_boot, d.numel()), generator=g)
@@ -83,7 +82,7 @@ def compute_unigram(train_tokens, test_tokens, V):
     return math.exp(mean_nll), mean_nll, nll_vec
 
 @torch.no_grad()
-def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
+def evaluate_model(hierarchy, readout, tokens, V, task_idx=None, zero_R=False, max_steps=15):
     hierarchy.reset_states(batch_size=1)
     if zero_R:
         original_R = [col.R.data.clone() for col in hierarchy.layers]
@@ -95,7 +94,7 @@ def evaluate_model(hierarchy, readout, tokens, V, zero_R=False, max_steps=15):
         x = one_hot([tokens[i]], V, DEVICE)
         _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=True)
         h = get_hierarchy_state(hierarchy)
-        log_p = readout.log_probs(x, h)
+        log_p = readout.log_probs(x, h, task_idx=task_idx)
         target_id = tokens[i + 1]
         nll_val = -log_p[0, target_id].item()
         nlls.append(nll_val)
@@ -149,7 +148,6 @@ def main():
     tokens_ru = [char_to_id[c] for c in text_ru][:6000]
     tokens_es = [char_to_id[c] for c in text_es][:6000]
     
-    # Train / Val / Null-Twin Splits
     tr_it = tokens_it[:5000]
     val_it = tokens_it[5000:6000]
     null_it = tokens_it[6000:11000]  # Held-out Italian tokens for Null-Twin training!
@@ -175,7 +173,7 @@ def main():
     print(f"  Trigram Baseline (n=3) : PPL = {trigram_ppl:.2f} ({trigram_nll:.4f} nats)")
     
     # ------------------------------------------------------------------
-    # 2. PHASE 1: ITALIAN TRAINING & CONTROL D (R=0 ABLATION)
+    # 2. PHASE 1: ITALIAN CONVERGENCE & CONTROL D (R=0 ABLATION)
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
     print("  2. PHASE 1: ITALIAN CONVERGENCE & CONTROL D (R=0 ABLATION)")
@@ -186,8 +184,8 @@ def main():
     
     train_phase(h_phase1, r_phase1, tr_it, V, epochs=5)
     
-    eval_p1_live = evaluate_model(h_phase1, r_phase1, val_it, V, zero_R=False)
-    eval_p1_zeroR = evaluate_model(h_phase1, r_phase1, val_it, V, zero_R=True)
+    eval_p1_live = evaluate_model(h_phase1, r_phase1, val_it, V, task_idx=0, zero_R=False)
+    eval_p1_zeroR = evaluate_model(h_phase1, r_phase1, val_it, V, task_idx=0, zero_R=True)
     
     diff_D, ci_D_low, ci_D_high = paired_bootstrap(eval_p1_zeroR['nll_vec'], eval_p1_live['nll_vec'])
     print(f"  AGNIS Italian Phase 1 PPL (Live R) : {eval_p1_live['ppl']:.2f} ({eval_p1_live['nll']:.4f} nats)")
@@ -197,12 +195,11 @@ def main():
     diff_bigram, ci_b_low, ci_b_high = paired_bootstrap(eval_p1_live['nll_vec'], vec_bigram)
     print(f"  AGNIS vs Bigram Paired NLL Difference    : {diff_bigram:+.4f} nats [95% CI: {ci_b_low:+.4f}, {ci_b_high:+.4f}]")
     
-    # Snapshot Phase 1 Checkpoint for Null-Twin controls
     h_snap = copy.deepcopy(h_phase1)
     r_snap = copy.deepcopy(r_phase1)
     
     # ------------------------------------------------------------------
-    # 3. NULL-TWIN CONTROL (CONTINUED ITALIAN TRAINING)
+    # 3. NULL-TWIN CONTROL (CONTINUED ITALIAN TRAINING ON HELD-OUT DATA)
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
     print("  3. NULL-TWIN CONTROL (CONTINUED ITALIAN TRAINING ON HELD-OUT DATA)")
@@ -210,7 +207,7 @@ def main():
     h_null = copy.deepcopy(h_snap)
     r_null = copy.deepcopy(r_snap)
     train_phase(h_null, r_null, null_it, V, epochs=5)
-    eval_null_it = evaluate_model(h_null, r_null, val_it, V)
+    eval_null_it = evaluate_model(h_null, r_null, val_it, V, task_idx=0)
     print(f"  Null Twin Italian PPL (after 5k extra Italian steps) : {eval_null_it['ppl']:.2f} ({eval_null_it['nll']:.4f} nats)")
     
     # ------------------------------------------------------------------
@@ -223,34 +220,33 @@ def main():
     h_unshielded = copy.deepcopy(h_snap)
     r_unshielded = copy.deepcopy(r_snap)
     train_phase(h_unshielded, r_unshielded, tr_es, V, epochs=5)
-    eval_unshielded_es = evaluate_model(h_unshielded, r_unshielded, val_es, V)
-    eval_unshielded_it = evaluate_model(h_unshielded, r_unshielded, val_it, V)
+    eval_unshielded_es = evaluate_model(h_unshielded, r_unshielded, val_es, V, task_idx=0)
+    eval_unshielded_it = evaluate_model(h_unshielded, r_unshielded, val_it, V, task_idx=0)
     
-    # Branch B: End-to-End Synaptic Shielded Training (Spanish)
+    # Branch B: Task-Gated Multi-Head Synaptic Shielded Training (Spanish)
     h_shielded = copy.deepcopy(h_snap)
     r_shielded = copy.deepcopy(r_snap)
     h_shielded.force_recruit_language_sliver(n=32, language="spanish")
     r_shielded.expand_capacity(n_new=32, freeze_prior=True)
     train_phase(h_shielded, r_shielded, tr_es, V, epochs=5)
-    eval_shielded_es = evaluate_model(h_shielded, r_shielded, val_es, V)
-    eval_shielded_it = evaluate_model(h_shielded, r_shielded, val_it, V)
+    eval_shielded_es = evaluate_model(h_shielded, r_shielded, val_es, V, task_idx=1)
+    eval_shielded_it = evaluate_model(h_shielded, r_shielded, val_it, V, task_idx=0)
     
-    # Paired-Bootstrap True Forgetting against Null-Twin Baseline!
     true_forget_unshielded, u_low, u_high = paired_bootstrap(eval_unshielded_it['nll_vec'], eval_null_it['nll_vec'])
     true_forget_shielded, s_low, s_high = paired_bootstrap(eval_shielded_it['nll_vec'], eval_null_it['nll_vec'])
     
     print(f"\n  [Unshielded] Spanish Acquisition PPL : {eval_unshielded_es['ppl']:.2f}")
     print(f"  [Unshielded] Italian Retention PPL   : {eval_unshielded_it['ppl']:.2f} (True Forgetting = {true_forget_unshielded:+.4f} nats [95% CI: {u_low:+.4f}, {u_high:+.4f}])")
     
-    print(f"\n  [Shielded] Spanish Acquisition PPL   : {eval_shielded_es['ppl']:.2f}")
-    print(f"  [Shielded] Italian Retention PPL     : {eval_shielded_it['ppl']:.2f} (True Forgetting = {true_forget_shielded:+.4f} nats [95% CI: {s_low:+.4f}, {s_high:+.4f}])")
+    print(f"\n  [Task-Gated Shielded] Spanish Acquisition PPL : {eval_shielded_es['ppl']:.2f}")
+    print(f"  [Task-Gated Shielded] Italian Retention PPL   : {eval_shielded_it['ppl']:.2f} (True Forgetting = {true_forget_shielded:+.4f} nats [95% CI: {s_low:+.4f}, {s_high:+.4f}])")
     
     headroom_nats = unigram_nll - eval_null_it['nll']
     retention_pct = (1.0 - (max(true_forget_shielded, 0.0) / max(headroom_nats, 1e-8))) * 100.0
-    print(f"  True Null-Twin Headroom Retention Ratio : {retention_pct:.1f}%")
+    print(f"  Task-Gated True Retention Ratio : {retention_pct:.1f}%")
     
     # ------------------------------------------------------------------
-    # 5. CONTROL B: RUSSIAN ONLY FROM SCRATCH (544 UNITS) VS SLIVER ACQUISITION
+    # 5. CONTROL B: RUSSIAN FROM SCRATCH (544 UNITS) VS SLIVER ACQUISITION
     # ------------------------------------------------------------------
     print("\n----------------------------------------------------------------------")
     print("  5. CONTROL B: RUSSIAN FROM SCRATCH VS SLIVER ACQUISITION (PLASTICITY COST)")
@@ -258,15 +254,14 @@ def main():
     h_ru_scratch = PredictiveHierarchy([V, 544, 512], device=DEVICE)
     r_ru_scratch = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9)
     train_phase(h_ru_scratch, r_ru_scratch, tr_ru, V, epochs=5)
-    eval_ru_scratch = evaluate_model(h_ru_scratch, r_ru_scratch, val_ru, V)
+    eval_ru_scratch = evaluate_model(h_ru_scratch, r_ru_scratch, val_ru, V, task_idx=0)
     
-    # Russian Sliver Growth from Snapshot
     h_ru_sliver = copy.deepcopy(h_snap)
     r_ru_sliver = copy.deepcopy(r_snap)
     h_ru_sliver.force_recruit_language_sliver(n=32, language="russian")
     r_ru_sliver.expand_capacity(n_new=32, freeze_prior=True)
     train_phase(h_ru_sliver, r_ru_sliver, tr_ru, V, epochs=5)
-    eval_ru_sliver = evaluate_model(h_ru_sliver, r_ru_sliver, val_ru, V)
+    eval_ru_sliver = evaluate_model(h_ru_sliver, r_ru_sliver, val_ru, V, task_idx=1)
     
     cost_nats, c_low, c_high = paired_bootstrap(eval_ru_sliver['nll_vec'], eval_ru_scratch['nll_vec'])
     print(f"  Russian Scratch Acquisition (544 units) : {eval_ru_scratch['ppl']:.2f} ({eval_ru_scratch['nll']:.4f} nats)")
@@ -281,8 +276,8 @@ def main():
     print(f"  Null-Twin Converged Italian PPL    : {eval_null_it['ppl']:.2f} ({eval_null_it['nll']:.4f} nats)")
     print(f"  Control D (R=0 Ablation Diff)      : {diff_D:+.4f} nats [CI: {ci_D_low:+.4f}, {ci_D_high:+.4f}]")
     print(f"  Unshielded Italian Forgetting      : {true_forget_unshielded:+.4f} nats")
-    print(f"  Shielded Italian Forgetting        : {true_forget_shielded:+.4f} nats")
-    print(f"  Shielded True Null Retention Ratio : {retention_pct:.1f}%")
+    print(f"  Task-Gated Shielded Forgetting     : {true_forget_shielded:+.4f} nats")
+    print(f"  Task-Gated True Retention Ratio    : {retention_pct:.1f}%")
     print(f"  Sliver vs Scratch Plasticity Cost  : {cost_nats:+.4f} nats")
 
 if __name__ == "__main__":
