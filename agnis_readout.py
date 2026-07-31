@@ -19,13 +19,16 @@ class TaskGatedDeltaSoftmaxReadout:
     Routes task k through its dedicated hierarchy state slice h_k and readout head W_k,
     completely isolating prior task representations from cross-task logit interference.
     """
-    def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 0.5, kappa: float = 1.0, beta: float = 0.9):
+    def __init__(self, d_sensory: int, d_hierarchy: int, vocab_size: int, device: torch.device, eta: float = 0.5, kappa: float = 1.0, beta: float = 0.9, d_top: int = None):
         self.d_sensory = d_sensory
         self.vocab_size = vocab_size
         self.device = device
         self.eta = eta
         self.kappa = kappa
         self.beta = beta
+        
+        if d_top is None:
+            d_top = d_hierarchy // 2
         
         # Task 1 Head: Sensory (d_sensory) + Base Hierarchy (d_hierarchy)
         self.task_heads = []
@@ -37,17 +40,21 @@ class TaskGatedDeltaSoftmaxReadout:
         self.task_heads.append({
             "d_feat": d_total_1,
             "d_sliver": d_hierarchy,
+            "d_top": d_top,
             "W": W_1,
             "m": m_1,
             "frozen": False
         })
         self.active_task = 0
 
-    def expand_capacity(self, n_new: int, freeze_prior: bool = True):
+    def expand_capacity(self, n_new: int, freeze_prior: bool = True, d_top_new: int = None):
         """Recruits a new task head for Task k with n_new sliver neurons."""
         if freeze_prior and len(self.task_heads) > 0:
             self.task_heads[self.active_task]["frozen"] = True
             print(f"    [Readout Shield] Task {self.active_task + 1} head frozen.")
+            
+        if d_top_new is None:
+            d_top_new = n_new // 2
             
         d_total_k = self.d_sensory + n_new
         W_k = torch.randn(d_total_k, self.vocab_size, device=self.device) * 0.1
@@ -57,6 +64,7 @@ class TaskGatedDeltaSoftmaxReadout:
         self.task_heads.append({
             "d_feat": d_total_k,
             "d_sliver": n_new,
+            "d_top": d_top_new,
             "W": W_k,
             "m": m_k,
             "frozen": False
@@ -112,7 +120,7 @@ class TaskGatedDeltaSoftmaxReadout:
         p = torch.softmax(self.logits(sensory_input, h_hierarchy, self.active_task), dim=-1)
         err = y_onehot - p
         head = self.task_heads[self.active_task]
-        d_top_k = head["d_sliver"] // 2
+        d_top_k = head.get("d_top", head["d_sliver"] // 2)
         W_top = head["W"][-d_top_k:, :]
         tgt_top_h = top_h.clone()
         tgt_top_h[:, -d_top_k:] = top_h[:, -d_top_k:] + self.kappa * (err @ W_top.t())
