@@ -252,7 +252,7 @@ def main():
     print("  5. CONTROL B: RUSSIAN FROM SCRATCH VS SLIVER ACQUISITION (PLASTICITY COST)")
     print("----------------------------------------------------------------------")
     h_ru_scratch = PredictiveHierarchy([V, 544, 512], device=DEVICE)
-    r_ru_scratch = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9)
+    r_ru_scratch = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9, d_top=512)
     train_phase(h_ru_scratch, r_ru_scratch, tr_ru, V, epochs=5)
     eval_ru_scratch = evaluate_model(h_ru_scratch, r_ru_scratch, val_ru, V, task_idx=0)
     

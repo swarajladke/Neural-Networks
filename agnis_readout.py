@@ -121,6 +121,7 @@ class TaskGatedDeltaSoftmaxReadout:
         err = y_onehot - p
         head = self.task_heads[self.active_task]
         d_top_k = head.get("d_top", head["d_sliver"] // 2)
+        d_top_k = min(d_top_k, top_h.shape[-1])
         W_top = head["W"][-d_top_k:, :]
         tgt_top_h = top_h.clone()
         tgt_top_h[:, -d_top_k:] = top_h[:, -d_top_k:] + self.kappa * (err @ W_top.t())
