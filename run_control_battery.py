@@ -17,7 +17,7 @@ import torch
 import numpy as np
 from collections import defaultdict
 from agnis_v4_core import PredictiveHierarchy
-from agnis_readout import DeltaSoftmaxReadout, get_hierarchy_state, one_hot
+from agnis_readout import DeltaSoftmaxReadout, one_hot
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -93,8 +93,7 @@ def evaluate_model(hierarchy, readout, tokens, V, task_idx=None, zero_R=False, m
     for i in range(len(tokens) - 1):
         x = one_hot([tokens[i]], V, DEVICE)
         _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=True)
-        h = get_hierarchy_state(hierarchy)
-        log_p = readout.log_probs(x, h, task_idx=task_idx)
+        log_p = readout.log_probs(x, hierarchy, task_idx=task_idx)
         target_id = tokens[i + 1]
         nll_val = -log_p[0, target_id].item()
         nlls.append(nll_val)
@@ -118,9 +117,8 @@ def train_phase(hierarchy, readout, train_tokens, V, epochs=5, max_steps=15):
             x = one_hot([train_tokens[i]], V, DEVICE)
             y = one_hot([train_tokens[i + 1]], V, DEVICE)
             _ = hierarchy.forward(x, max_steps=max_steps, update_temporal=False)
-            h = get_hierarchy_state(hierarchy)
             top_h = hierarchy.layers[-1].x.detach()
-            tgt = readout.teaching_signal(x, h, top_h, y)
+            tgt = readout.teaching_signal(x, hierarchy, top_h, y)
             hierarchy.infer_and_learn(x, top_level_label=tgt, max_steps=max_steps, warm_start=True, beta_push=2.0, dopamine_burst=1.0)
             
             if prev_h is not None:
@@ -129,7 +127,7 @@ def train_phase(hierarchy, readout, train_tokens, V, epochs=5, max_steps=15):
                     col.R.data += 0.05 * torch.matmul(prev_h[:, :col.output_dim].t(), err_r)
                     col.R.data.clamp_(-0.95, 0.95)
             prev_h = hierarchy.layers[0].x.detach()
-            readout.update(x, h.detach(), y)
+            readout.update(x, hierarchy, y)
 
 def main():
     print("======================================================================")
@@ -178,9 +176,9 @@ def main():
     print("\n----------------------------------------------------------------------")
     print("  2. PHASE 1: ITALIAN CONVERGENCE & CONTROL D (R=0 ABLATION)")
     print("----------------------------------------------------------------------")
-    d_sensory, d_hierarchy = V, 512 + 512
+    d_sensory = V
     h_phase1 = PredictiveHierarchy([V, 512, 512], device=DEVICE)
-    r_phase1 = DeltaSoftmaxReadout(d_sensory, d_hierarchy, V, device=DEVICE, eta=0.5, beta=0.9)
+    r_phase1 = DeltaSoftmaxReadout(d_sensory, [512, 512], V, device=DEVICE, eta=0.5, beta=0.9)
     
     train_phase(h_phase1, r_phase1, tr_it, V, epochs=5)
     
@@ -227,7 +225,7 @@ def main():
     h_shielded = copy.deepcopy(h_snap)
     r_shielded = copy.deepcopy(r_snap)
     h_shielded.force_recruit_language_sliver(n=32, language="spanish")
-    r_shielded.expand_capacity(n_new=32, freeze_prior=True)
+    r_shielded.expand_capacity(n_sliver=32, freeze_prior=True)
     train_phase(h_shielded, r_shielded, tr_es, V, epochs=5)
     eval_shielded_es = evaluate_model(h_shielded, r_shielded, val_es, V, task_idx=1)
     eval_shielded_it = evaluate_model(h_shielded, r_shielded, val_it, V, task_idx=0)
@@ -252,14 +250,14 @@ def main():
     print("  5. CONTROL B: RUSSIAN FROM SCRATCH VS SLIVER ACQUISITION (PLASTICITY COST)")
     print("----------------------------------------------------------------------")
     h_ru_scratch = PredictiveHierarchy([V, 544, 512], device=DEVICE)
-    r_ru_scratch = DeltaSoftmaxReadout(V, 544 + 512, V, device=DEVICE, eta=0.5, beta=0.9, d_top=512)
+    r_ru_scratch = DeltaSoftmaxReadout(V, [544, 512], V, device=DEVICE, eta=0.5, beta=0.9)
     train_phase(h_ru_scratch, r_ru_scratch, tr_ru, V, epochs=5)
     eval_ru_scratch = evaluate_model(h_ru_scratch, r_ru_scratch, val_ru, V, task_idx=0)
     
     h_ru_sliver = copy.deepcopy(h_snap)
     r_ru_sliver = copy.deepcopy(r_snap)
     h_ru_sliver.force_recruit_language_sliver(n=32, language="russian")
-    r_ru_sliver.expand_capacity(n_new=32, freeze_prior=True)
+    r_ru_sliver.expand_capacity(n_sliver=32, freeze_prior=True)
     train_phase(h_ru_sliver, r_ru_sliver, tr_ru, V, epochs=5)
     eval_ru_sliver = evaluate_model(h_ru_sliver, r_ru_sliver, val_ru, V, task_idx=1)
     
