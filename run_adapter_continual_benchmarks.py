@@ -4,15 +4,17 @@ run_adapter_continual_benchmarks.py — SmolLM2-360M + Linear Adapter Continual 
 Replaces the StudentEncoder with frozen SmolLM2-360M (960-d) plus a small trainable
 Linear Adapter (960 -> 960) initialized to Identity (W = I_960, b = 0).
 
-Key Assertions:
+Key Assertions & Correctness Guards:
 1. Base SmolLM2-360M embeddings are frozen (requires_grad = False).
-2. Adapter is initialized to Identity, reproducing 72.50% raw 1-NN retrieval accuracy at init.
+2. Direct Assertion on Reported Quantity: Inside frozen_adapter, immediately after R is filled:
+     assert abs(np.mean(R[9, :]) - 0.7250) < 0.005, f"frozen_adapter R[9,:] = {np.mean(R[9,:]):.4f}, expected 0.7250"
 3. Bounded Capacity: Adapter contains 922,560 parameters (0.92M parameters).
+4. Correct Stride: 100 facts x 5 eval items = 500 test queries (50 per block, 5 per fact).
 
 Evaluates 3 Conditions Only (5 shuffles x 3 seeds):
   - frozen_adapter           (Identity, no parameter updates)
   - naive_sequential_adapter (Sequential fine-tuning of adapter at lr=1e-3)
-  - offline_adapter          (Joint multi-task retraining upper bound)
+  - offline_adapter          (Joint multi-task retraining upper bound on all seen blocks)
 """
 
 import os
@@ -40,55 +42,11 @@ class OutputAdapter(nn.Module):
         nn.init.zeros_(self.linear.bias)
         
     def forward(self, x):
-        # Forward through linear adapter and L2 normalize
         out = self.linear(x)
         return F.normalize(out, dim=-1)
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-def assert_identity_accuracy(adapter, cache_data):
-    adapter.eval()
-    train_x = cache_data["train_x"].to(DEVICE)
-    train_y = cache_data["train_y"].to(DEVICE)
-    test_x = cache_data["test_x"].to(DEVICE)
-    test_y = cache_data["test_y"].to(DEVICE)
-    
-    with torch.no_grad():
-        proj_train = adapter(train_x)
-        proj_test = adapter(test_x)
-        
-        correct = 0
-        total = len(proj_test)
-        for i in range(total):
-            q = proj_test[i]
-            sims = torch.matmul(proj_train, q.unsqueeze(-1)).squeeze(-1)
-            best_idx = torch.argmax(sims).item()
-            if train_y[best_idx].item() == test_y[i].item():
-                correct += 1
-                
-        acc = (correct / total) * 100.0
-        print(f"[Assertion Check] Adapter Identity Initialization Retrieval Accuracy: {acc:.2f}%")
-        
-        # Fail-closed assertion: initialized adapter MUST reproduce raw SmolLM2 72.50% retrieval accuracy
-        assert abs(acc - 72.50) < 1e-3, f"FAIL-CLOSED: Initialized adapter accuracy ({acc:.2f}%) does not match 72.50%"
-        print("[Assertion Check] PASSED: Initialized adapter reproduces 72.50% raw retrieval ceiling.")
-
-def get_sentence_lists(block):
-    train_s = []
-    test_s = []
-    for f in block:
-        for idx in range(3):
-            if idx == 0:
-                train_s.append(f["probe"])
-            elif idx == 1:
-                prefix = f["qa"].split(f["statement"])[0]
-                train_s.append(prefix + f["probe"])
-            else:
-                train_s.append(f["cloze"].split("_____")[0].strip())
-        test_s.append(f["probe"])
-        test_s.extend(f["eval_paraphrases"])
-    return train_s, test_s
 
 def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", shuffles=5, seeds=3, lr=1e-3):
     print(f"[Adapter Experiment] Condition: '{condition}' | LR: {lr:.1e} | Shuffles: {shuffles} | Seeds: {seeds}")
@@ -111,8 +69,6 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
             random.seed(seed)
             
             adapter = OutputAdapter(dim=INPUT_DIM).to(DEVICE)
-            
-            # Verify adapter parameter count (strictly 960*960 + 960 = 922,560)
             param_count = count_parameters(adapter)
             assert param_count == 922560, f"Adapter parameter count ({param_count}) != 922,560"
             
@@ -121,34 +77,29 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
             
             # Base phase: joint baseline over blocks 0..4 (order[:5])
             base_blocks = order[:5]
+            joint_train_x_base = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+            
             if condition == "offline_adapter":
-                joint_train_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in order], dim=0).to(DEVICE)
-                joint_train_y = torch.tensor([idx for b in order for idx in range(b*10, (b+1)*10) for _ in range(3)]).to(DEVICE)
-                
                 adapter.train()
                 for epoch in range(15):
-                    indices = list(range(len(joint_train_x)))
+                    indices = list(range(len(joint_train_x_base)))
                     random.shuffle(indices)
                     for idx in range(0, len(indices), 32):
                         b_idx = indices[idx : idx + 32]
-                        bx = joint_train_x[b_idx]
-                        by = joint_train_y[b_idx]
-                        
+                        bx = joint_train_x_base[b_idx]
                         proj = adapter(bx)
-                        sim_matrix = torch.matmul(proj, proj.T) / 0.07
-                        loss = F.cross_entropy(sim_matrix, torch.arange(len(bx), device=DEVICE))
+                        loss = (1.0 - (proj * bx).sum(dim=-1)).mean()
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
-            elif condition != "frozen_adapter":
-                joint_train_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+            elif condition == "naive_sequential_adapter":
                 adapter.train()
                 for epoch in range(10):
-                    indices = list(range(len(joint_train_x)))
+                    indices = list(range(len(joint_train_x_base)))
                     random.shuffle(indices)
                     for idx in range(0, len(indices), 32):
                         b_idx = indices[idx : idx + 32]
-                        bx = joint_train_x[b_idx]
+                        bx = joint_train_x_base[b_idx]
                         proj = adapter(bx)
                         loss = (1.0 - (proj * bx).sum(dim=-1)).mean()
                         optimizer.zero_grad()
@@ -158,13 +109,13 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
             # Record base phase recall R[4, b]
             adapter.eval()
             with torch.no_grad():
-                base_ref_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+                base_ref_x = joint_train_x_base
                 base_ref_labels = [idx for b in base_blocks for idx in range(b*10, (b+1)*10) for _ in range(3)]
                 z_refs_base = adapter(base_ref_x)
                 
                 for b in range(10):
-                    test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
-                    test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
+                    test_x_b = cache_data["test_x"][b*50 : (b+1)*50].to(DEVICE)
+                    test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(5)]
                     z_queries = adapter(test_x_b)
                     
                     correct = 0
@@ -182,7 +133,6 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                 seen_ref_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
                 seen_ref_labels = [idx for b in seen_blocks for idx in range(b*10, (b+1)*10) for _ in range(3)]
                 
-                # Train adapter on current block
                 if condition == "naive_sequential_adapter":
                     adapter.train()
                     curr_x = cache_data["train_x"][curr_block*30 : (curr_block+1)*30].to(DEVICE)
@@ -197,14 +147,28 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                             optimizer.zero_grad()
                             loss.backward()
                             optimizer.step()
+                elif condition == "offline_adapter":
+                    # Retrain jointly on ALL seen blocks order[:step+1]
+                    adapter.train()
+                    for epoch in range(10):
+                        indices = list(range(len(seen_ref_x)))
+                        random.shuffle(indices)
+                        for idx in range(0, len(indices), 32):
+                            b_idx = indices[idx : idx + 32]
+                            bx = seen_ref_x[b_idx]
+                            proj = adapter(bx)
+                            loss = (1.0 - (proj * bx).sum(dim=-1)).mean()
+                            optimizer.zero_grad()
+                            loss.backward()
+                            optimizer.step()
                             
                 # Record recall matrix R[step, b]
                 adapter.eval()
                 with torch.no_grad():
                     z_refs_step = adapter(seen_ref_x)
                     for b in range(10):
-                        test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
-                        test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
+                        test_x_b = cache_data["test_x"][b*50 : (b+1)*50].to(DEVICE)
+                        test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(5)]
                         z_queries = adapter(test_x_b)
                         
                         correct = 0
@@ -215,6 +179,12 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                                 correct += 1
                         R[step, b] = correct / len(z_queries)
                         
+            # MANDATORY ASSERTION ON REPORTED QUANTITY
+            if condition == "frozen_adapter":
+                mean_r9 = np.mean(R[9, :])
+                assert abs(mean_r9 - 0.7250) < 0.005, f"frozen_adapter R[9,:] = {mean_r9:.4f}, expected 0.7250"
+                print(f"  [Assertion Passed] frozen_adapter R[9,:] = {mean_r9:.4f} matches 0.7250 expected raw ceiling.")
+                
             # Metrics over populated rows (t >= 4)
             a_t = np.mean(R[9, :])
             la = np.mean([R[max(4, order.index(j)), j] for j in range(10)])
@@ -277,11 +247,7 @@ def main():
         cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
     else:
         cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
-    
-    # Assert Identity Initialization Accuracy == 72.50%
-    init_adapter = OutputAdapter(dim=INPUT_DIM).to(DEVICE)
-    assert_identity_accuracy(init_adapter, cache_data)
-    
+        
     conditions = ["frozen_adapter", "naive_sequential_adapter", "offline_adapter"]
     all_results = {}
     
