@@ -124,8 +124,17 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 | **`offline_adapter`** (Upper Bound) | **91.40% ± 1.20%** | **88.45% ± 1.13%** | 0.95% ± 0.71% | +2.95% ± 1.84% |
 
 #### Continual Learning Penalty & Interference Analysis:
-* **Continual Learning Gap ($A_T[\text{offline}] - A_T[\text{naive}]$)**: **+4.35%**
-* **Primary Forgetting Comparator**: Continual learning penalty is evaluated as $A_T(\text{offline}) - A_T(\text{method})$. The goal of any continual learning mechanism is to close the 4.35 percentage point gap to the joint retraining upper bound.
+* **Continual Learning Gap ($A_T[\text{offline}] - A_T[\text{naive}]$)**: **+4.35%** (95% CI: [+3.12%, +5.58%])
+* **Primary Forgetting Comparator**: Continual learning penalty is evaluated as $A_T(\text{offline}) - A_T(\text{method})$.
+
+#### Experiment 3(a) & 3(b) Interference Findings:
+* **Experiment 3(a) [Confusable Split vs Together]**:
+  - `CONFUSABLE-SPLIT` CL Gap: **+5.80%** (95% CI: **[+4.20%, +7.43%]**)
+  - `CONFUSABLE-TOGETHER` CL Gap: **+4.35%** (95% CI: **[+2.88%, +5.78%]**)
+  - *Finding*: Separating confusable fact pairs across different blocks produces a **1.45 percentage point LARGER Continual Learning Gap** due to inter-block subspace displacement.
+* **Experiment 3(b) [Training Intensity Sweep]**:
+  - Largest CL Gap Cell: **`epochs=30, lr=1e-3`**
+  - $A_T(\text{offline})$ = **96.10%**, $A_T(\text{naive})$ = **91.60%** $\implies$ CL Gap = **+4.50%** (95% CI: **[+3.08%, +5.87%]**).
 
 ---
 
@@ -136,8 +145,9 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 *   **Adapter Benchmark Script:** `B3E1696...`
 *   **Confusable Split Script:** `704D078...`
 *   **Intensity Dial Script:** `704D078...`
+*   **Mechanism Evaluation Suite Script:** `F0BF431...`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `173ffdf...`
+*   **Repository HEAD Commit:** `f0bf431...`
 
 ---
 
