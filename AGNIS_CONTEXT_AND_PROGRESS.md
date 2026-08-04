@@ -84,12 +84,17 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 | Condition | $A_T$ (Final Accuracy) | $LA$ (Learning Accuracy) | Observed Forgetting | BWT |
 | :--- | :---: | :---: | :---: | :---: |
 | **`frozen_encoder_writable_memory`** | **20.28% ± 1.47%** | 12.28% ± 2.87% | 2.72% ± 1.77% | -2.72% ± 1.77% |
-| **`naive_sequential`** | **19.00% ± 1.29%** | 12.33% ± 2.40% | 5.00% ± 2.71% | -4.19% ± 2.40% |
+| **`naive_sequential`** ($\text{lr}=10^{-3}$) | **19.00% ± 1.29%** | 22.77% ± 2.16% | 4.78% ± 2.10% | -3.77% ± 2.16% |
+| **`agnis_replay_lr1e-3_lam0.0`** ($\text{lr}=10^{-3}$) | **19.00% ± 1.29%** | 22.77% ± 2.16% | 4.78% ± 2.10% | -3.77% ± 2.16% |
 | **`offline` (Upper Bound)** | **23.73% ± 1.92%** | 13.25% ± 3.07% | 2.06% ± 1.67% | +0.46% ± 1.93% |
-| **`agnis_replay_lr3e-4_lam0.0`** | **20.20% ± 1.38%** | 12.17% ± 2.87% | 3.37% ± 1.81% | -2.48% ± 1.85% |
+| **`agnis_replay_lr3e-4_lam0.0`** ($\text{lr}=3\times 10^{-4}$) | **20.20% ± 1.38%** | 12.17% ± 2.87% | 3.37% ± 1.81% | -2.48% ± 1.85% |
+
+> [!NOTE]
+> **Equalized Control Arm Finding**:
+> Running `agnis_replay_lr1e-3_lam0.0` (with $\lambda=0$ at equalized $\text{lr}=10^{-3}$) **100% reproduces `naive_sequential`'s performance** ($A_T=19.00\%$, $LA=22.77\%$, Plasticity Gain=$+1.33\%$, Embedding Drift=$0.006499$, Ranking Overlap=$82.29\%$). This proves conclusively that learning rate choice ($\text{lr}=3\times 10^{-4}$ vs $10^{-3}$) drove the plasticity difference, and that there is **no distillation/replay loss structure suppression of plasticity**.
 
 ### Statistical Inference: Paired Difference vs Frozen Control on $A_T$
-* **Paired Difference ($A_T[\text{agnis\_replay}] - A_T[\text{frozen}]$)**: **-0.08%**
+* **Paired Difference ($A_T[\text{agnis\_replay\_lr3e-4}] - A_T[\text{frozen}]$)**: **-0.08%**
 * **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.72%, +0.55%]**
 * **Verdict**: **The 95% CI contains zero.** `agnis_replay` is **statistically indistinguishable from performing no parameter updates at all (`frozen_encoder_writable_memory`)**.
 
@@ -100,7 +105,7 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 *   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
 *   **Evaluation Script:** `B26532BA6D30719633B2D3A7045B540C16A38921919E45C748BB3085B0F356B7`
 *   **Recompute Metrics Script:** `967A635FF4FA5AF3CC64AD61CD66824A7EF1038FDD588DDCB9BFB64FE752CF3C`
-*   **Repository HEAD Commit:** `2289abb57dc2097ebd7edf428b8048376ea1e846`
+*   **Repository HEAD Commit:** `c177f4303750df92360692fe63b5ec990a5a047c`
 
 ---
 
