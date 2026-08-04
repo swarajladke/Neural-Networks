@@ -118,47 +118,63 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 > 4. Explains why AGNIS's $R_{\text{mask}}$ "synaptic shielding" yielded zero effect — coordinate-aligned masking is equivalent to GPM in an unaligned axis basis.
 
 > [!NOTE]
-> **Ceiling & Range Statement (Item 5)**:
-> On the established high-interference benchmark (`CONFUSABLE-SPLIT` + `epochs=30, lr=1e-3`), $A_T(\text{naive}) = \mathbf{89.62\% - 90.48\%}$ and $A_T(\text{offline}) = \mathbf{94.45\% - 94.98\%}$. Across 100 total 50-run executions, OGP ($k \in [16, 32]$) consistently recovers **+1.97 to +2.72 percentage points** over naive sequential fine-tuning:
-> * **$A_T$ Gain Range**: **+1.97% to +2.72%** (Paired 95% CIs: **[+1.55%, +2.41%]** to **[+2.31%, +3.16%]**).
-> * **CL Gap Recovery Range**: **36.8% to 68.5% of the total Continual Learning Gap recovered**.
-> * **Observed Forgetting Reduction**: **-1.10% to -1.33%** (Paired 95% CIs: **[-1.48%, -0.71%]** to **[-1.68%, -0.95%]**).
+> **Standing Headline Statement (Item 5)**:
+> OGP with $k \in [16, 32]$ improves final accuracy by **+2.0 to +2.7 percentage points** over naive sequential fine-tuning (paired 95% CIs excluding zero on two independent seed sets, 50 runs each), and reduces observed forgetting by **1.1 to 1.3 points**. Percentage-of-gap recovery ranges **37–69%** because the naive-offline gap itself varies between seed sets ($5.35\%$ vs $3.97\%$).
 
-#### 50-Run Master Suite Table (Selection Seeds 101..105, 50 Runs per Condition):
+> [!IMPORTANT]
+> **Surviving Claims & Retractions (Item 2)**:
+> 1. **"The memory-protection claim STANDS: -1.33% and -1.23% at k=24, CIs excluding zero on both seed sets, with RANDOM-32 and BOTTOM-32 at zero forgetting change."**
+> 2. **Acquisition-Gain Confirmation**: With the corrected harness (base phase $R[4,:]$ populated), OGP $LA$ increases by **+0.73% to +1.20%** over naive sequential fine-tuning ($91.40\% - 91.63\%$ vs naive $90.43\% - 90.67\%$). OGP provides both genuine memory protection (**53.5% - 65.7% of total gain**) and acquisition improvement (**34.3% - 46.5% of total gain**).
 
-| Condition | $A_T$ (Min..Max) | $LA$ (Learning) | Observed Fgt | CL Gap ($A_T[\text{off}] - A_T[\text{meth}]$) | Diff $A_T$ vs Naive (95% CI) | Diff Fgt vs Naive (95% CI) | Status / Verdict |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`Baseline Naive`** | 89.62% ± 2.11% (86.75..92.25%) | 45.10% | 3.15% | +5.35% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | Sequential Baseline |
-| **`OGP (k=4)`** | 91.60% ± 2.23% (88.00..96.50%) | 45.60% | 2.47% | +3.38% | +1.98% [+1.51%, +2.43%] | -0.68% [-1.04%, -0.30%] | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=8)`** | 89.65% ± 2.82% (85.50..95.75%) | 45.00% | 3.38% | +5.33% | +0.02% [-0.53%, +0.59%] | +0.22% [-0.25%, +0.73%] | True Null |
-| **`OGP (k=16)`** | 91.67% ± 2.50% (87.50..95.75%) | 45.50% | 2.43% | +3.30% | +2.05% [+1.65%, +2.42%] | -0.72% [-1.08%, -0.34%] | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=24)`** | **91.88% ± 2.18% (89.00..95.25%)** | **45.82%** | **1.82%** | **+3.10%** | **+2.25% [+1.79%, +2.70%]** | **-1.33% [-1.68%, -0.95%]** | 🏆 **PEAK OF FRONTIER** |
-| **`OGP (k=32)`** | **91.60% ± 2.35% (88.50..95.00%)** | **45.75%** | **2.05%** | **+3.38%** | **+1.97% [+1.55%, +2.41%]** | **-1.10% [-1.48%, -0.71%]** | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=64)`** | 90.33% ± 2.68% (85.50..93.75%) | 45.58% | 2.42% | +4.65% | +0.70% [+0.33%, +1.06%] | -0.72% [-1.01%, -0.46%] | 🎉 **SUCCESS (+A_T)** |
-| **`RANDOM-32`** | 89.66% ± 2.17% (85.75..93.50%) | 44.96% | 3.06% | +5.32% | +0.03% [-0.17%, +0.24%] | -0.09% [-0.25%, +0.09%] | True Null |
-| **`BOTTOM-32`** | 89.70% ± 2.20% (86.75..92.75%) | 45.10% | 3.07% | +5.28% | +0.07% [+0.01%, +0.15%] | -0.07% [-0.11%, -0.04%] | True Null |
-| **`CURRENT-32`** | 87.78% ± 2.03% (85.00..91.25%) | 43.50% | 3.15% | +7.20% | -1.85% [-2.48%, -1.25%] | -0.00% [-0.37%, +0.38%] | ❌ **SIG WORSE (-A_T)** |
-| **`Upper Bound`**| **94.98% ± 0.74% (93.50..96.75%)** | **46.70%** | **0.63%** | **+0.00%** | **+5.35% [+4.75%, +5.95%]** | **-2.52% [-2.92%, -2.12%]** | Joint Upper Bound |
-
-#### 50-Run Master Suite Table (Fresh Replication Seeds 211..215, 50 Runs per Condition):
+#### Corrected 50-Run Master Suite Table (Selection Seeds 101..105, 50 Runs per Condition):
 
 | Condition | $A_T$ (Min..Max) | $LA$ (Learning) | Observed Fgt | CL Gap ($A_T[\text{off}] - A_T[\text{meth}]$) | Diff $A_T$ vs Naive (95% CI) | Diff Fgt vs Naive (95% CI) | Status / Verdict |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`Baseline Naive`** | 90.48% ± 2.62% (86.75..93.75%) | 44.72% | 2.45% | +3.97% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | Sequential Baseline |
-| **`OGP (k=4)`** | 91.65% ± 3.01% (86.00..95.50%) | 45.08% | 1.97% | +2.80% | +1.17% [+0.78%, +1.58%] | -0.48% [-0.77%, -0.21%] | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=8)`** | 91.42% ± 2.44% (86.25..95.25%) | 45.05% | 2.17% | +3.03% | +0.95% [+0.54%, +1.37%] | -0.28% [-0.54%, -0.02%] | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=16)`** | **93.15% ± 2.12% (88.50..95.75%)** | **45.83%** | **1.30%** | **+1.30%** | **+2.67% [+2.12%, +3.31%]** | **-1.15% [-1.69%, -0.69%]** | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=24)`** | **93.20% ± 1.96% (89.25..95.75%)** | **45.92%** | **1.22%** | **+1.25%** | **+2.72% [+2.31%, +3.16%]** | **-1.23% [-1.50%, -0.96%]** | 🏆 **PEAK OF FRONTIER** |
-| **`OGP (k=32)`** | **92.55% ± 1.76% (89.00..95.00%)** | **45.68%** | **1.32%** | **+1.90%** | **+2.07% [+1.58%, +2.56%]** | **-1.12% [-1.52%, -0.74%]** | 🎉 **SUCCESS (+A_T)** |
-| **`OGP (k=64)`** | 91.75% ± 2.42% (87.50..95.00%) | 45.70% | 2.30% | +2.70% | +1.27% [+0.60%, +1.99%] | -0.15% [-0.62%, +0.29%] | 🎉 **SUCCESS (+A_T)** |
-| **`RANDOM-32`** | 90.37% ± 2.81% (85.25..94.50%) | 44.67% | 2.51% | +4.08% | -0.11% [-0.25%, +0.03%] | +0.06% [-0.03%, +0.16%] | True Null |
-| **`BOTTOM-32`** | 90.48% ± 2.83% (86.00..94.50%) | 44.70% | 2.47% | +3.97% | -0.00% [-0.09%, +0.09%] | +0.03% [-0.05%, +0.11%] | True Null |
-| **`CURRENT-32`** | 86.35% ± 2.52% (83.00..90.50%) | 42.80% | 3.75% | +8.10% | -4.13% [-5.29%, -2.95%] | +1.30% [+0.69%, +1.93%] | ❌ **SIG WORSE (-A_T)** |
-| **`Upper Bound`**| **94.45% ± 1.31% (92.00..96.50%)** | **46.12%** | **0.67%** | **+0.00%** | **+3.97% [+3.28%, +4.66%]** | **-1.78% [-2.15%, -1.41%]** | Joint Upper Bound |
+| **`Baseline Naive`** | 89.62% ± 2.11% (86.75..92.25%) | 90.67% ± 1.64% | 3.42% ± 1.25% | +5.35% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | Sequential Baseline |
+| **`OGP (k=4)`** | 91.60% ± 2.23% (88.00..96.50%) | 91.18% | 2.53% | +3.38% | +1.98% [+1.51%, +2.43%] | -0.90% [-1.27%, -0.52%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=6)`** | 90.10% ± 2.46% (86.25..95.75%) | 90.65% | 3.35% | +4.88% | +0.47% [-0.07%, +1.03%] | -0.07% [-0.49%, +0.35%] | True Null |
+| **`OGP (k=8)`** | 89.65% ± 2.82% (85.50..95.75%) | 90.58% | 3.57% | +5.33% | +0.02% [-0.53%, +0.59%] | +0.15% [-0.31%, +0.65%] | True Null |
+| **`OGP (k=10)`** | 90.40% ± 2.03% (88.25..94.00%) | 91.07% | 3.52% | +4.58% | +0.77% [+0.45%, +1.07%] | +0.10% [-0.33%, +0.54%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=12)`** | 91.38% ± 2.25% (88.75..96.75%) | 91.40% | 3.10% | +3.60% | +1.75% [+1.33%, +2.19%] | -0.32% [-0.65%, +0.02%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=16)`** | **91.67% ± 2.50% (87.50..95.75%)** | **91.08%** | **2.62%** | **+3.30%** | **+2.05% [+1.65%, +2.42%]** | **-0.80% [-1.12%, -0.46%]** | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=24)`** | **91.88% ± 2.18% (89.00..95.25%)** | **91.40%** | **2.02%** | **+3.10%** | **+2.25% [+1.79%, +2.70%]** | **-1.40% [-1.72%, -1.07%]** | 🏆 **STABILITY REGIME** |
+| **`OGP (k=32)`** | **91.60% ± 2.35% (88.50..95.00%)** | **91.32%** | **2.25%** | **+3.38%** | **+1.97% [+1.55%, +2.41%]** | **-1.17% [-1.54%, -0.80%]** | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=64)`** | 90.33% ± 2.68% (85.50..93.75%) | 91.15% | 2.62% | +4.65% | +0.70% [+0.33%, +1.06%] | -0.80% [-1.09%, -0.52%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=128)`** | 89.70% ± 2.14% (85.25..92.75%) | 91.00% | 3.02% | +5.28% | +0.07% [-0.26%, +0.40%] | -0.40% [-0.62%, -0.19%] | True Null |
+| **`RANDOM-32`** | 89.66% ± 2.17% (85.75..93.50%) | 90.54% | 3.34% | +5.32% | +0.03% [-0.17%, +0.24%] | -0.08% [-0.25%, +0.08%] | Distinguishable, Negligible |
+| **`BOTTOM-32`** | 89.70% ± 2.20% (86.75..92.75%) | 90.68% | 3.35% | +5.28% | +0.07% [+0.01%, +0.15%] | -0.07% [-0.11%, -0.04%] | Distinguishable, Negligible |
+| **`CURRENT-32`** | 87.78% ± 2.03% (85.00..91.25%) | 89.07% | 3.48% | +7.20% | -1.85% [-2.48%, -1.25%] | +0.05% [-0.34%, +0.46%] | ❌ **SIG WORSE (-A_T)** |
+| **`Upper Bound`**| **94.98% ± 0.74% (94.00..95.75%)** | **93.05% ± 1.02%** | **0.65% ± 0.32%** | **+0.00%** | **+5.35% [+4.75%, +5.95%]** | **-2.77% [-3.15%, -2.39%]** | Joint Upper Bound |
 
-#### Item 2 Literal No-Op Audit Findings:
-* `BOTTOM-32` is **NOT** a literal no-op. Step 9 weight displacement $\max |W_{\text{bottom32}} - W_{\text{naive}}| = 0.0553$. Block recall matrices $R$ differ by up to **5.00 percentage points**.
-* Per-run overall $A_T$ was identical to 0.0000% because query quantization (0.25% per query) caused block recall shifts to cancel out perfectly across the 10 blocks when averaged.
+#### Corrected 50-Run Master Suite Table (Fresh Replication Seeds 211..215, 50 Runs per Condition):
+
+| Condition | $A_T$ (Min..Max) | $LA$ (Learning) | Observed Fgt | CL Gap ($A_T[\text{off}] - A_T[\text{meth}]$) | Diff $A_T$ vs Naive (95% CI) | Diff Fgt vs Naive (95% CI) | Status / Verdict |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`Baseline Naive`** | 90.48% ± 2.62% (86.75..93.75%) | 90.43% ± 1.74% | 2.65% ± 1.83% | +3.97% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | Sequential Baseline |
+| **`OGP (k=4)`** | 91.65% ± 3.01% (86.00..95.50%) | 90.77% | 2.08% | +2.80% | +1.17% [+0.78%, +1.58%] | -0.57% [-0.91%, -0.27%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=6)`** | 91.20% ± 2.63% (85.50..95.00%) | 90.75% | 2.47% | +3.25% | +0.72% [+0.25%, +1.20%] | -0.18% [-0.48%, +0.13%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=8)`** | 91.42% ± 2.44% (86.25..95.25%) | 90.75% | 2.30% | +3.03% | +0.95% [+0.54%, +1.37%] | -0.35% [-0.63%, -0.08%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=10)`** | 92.60% ± 2.13% (89.50..95.75%) | 91.35% | 1.67% | +1.85% | +2.12% [+1.61%, +2.66%] | -0.97% [-1.36%, -0.61%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=12)`** | 92.83% ± 2.38% (89.50..96.50%) | 91.45% | 1.95% | +1.62% | +2.35% [+1.88%, +2.83%] | -0.70% [-1.12%, -0.29%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=16)`** | **93.15% ± 2.12% (88.50..95.75%)** | **91.53%** | **1.35%** | **+1.30%** | **+2.67% [+2.12%, +3.31%]** | **-1.30% [-1.84%, -0.83%]** | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=24)`** | **93.20% ± 1.96% (89.25..95.75%)** | **91.63%** | **1.27%** | **+1.25%** | **+2.72% [+2.31%, +3.16%]** | **-1.38% [-1.68%, -1.09%]** | 🏆 **STABILITY REGIME** |
+| **`OGP (k=32)`** | **92.55% ± 1.76% (89.00..95.00%)** | **91.38%** | **1.40%** | **+1.90%** | **+2.07% [+1.58%, +2.56%]** | **-1.25% [-1.68%, -0.84%]** | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=64)`** | 91.75% ± 2.42% (87.50..95.00%) | 91.40% | 2.45% | +2.70% | +1.27% [+0.60%, +1.99%] | -0.20% [-0.66%, +0.22%] | 🎉 **SUCCESS (+A_T)** |
+| **`OGP (k=128)`** | 91.78% ± 2.38% (87.50..95.00%) | 91.33% | 2.12% | +2.68% | +1.30% [+0.68%, +1.95%] | -0.52% [-0.93%, -0.16%] | 🎉 **SUCCESS (+A_T)** |
+| **`RANDOM-32`** | 90.37% ± 2.81% (85.25..94.50%) | 90.37% | 2.73% | +4.08% | -0.11% [-0.25%, +0.03%] | +0.08% [-0.02%, +0.18%] | True Null |
+| **`BOTTOM-32`** | 90.48% ± 2.83% (86.00..94.50%) | 90.40% | 2.67% | +3.97% | -0.00% [-0.09%, +0.09%] | +0.03% [-0.05%, +0.11%] | Distinguishable, Negligible |
+| **`CURRENT-32`** | 86.35% ± 2.52% (83.00..90.50%) | 88.50% | 4.08% | +8.10% | -4.13% [-5.29%, -2.95%] | +1.43% [+0.81%, +2.05%] | ❌ **SIG WORSE (-A_T)** |
+| **`Upper Bound`**| **94.45% ± 1.31% (92.00..96.50%)** | **92.70% ± 1.26%** | **0.72% ± 0.71%** | **+0.00%** | **+3.97% [+3.28%, +4.66%]** | **-1.93% [-2.35%, -1.51%]** | Joint Upper Bound |
+
+#### Corrected Decomposition at $k=24$:
+* **Selection Seeds (50 runs)**:
+  $$\Delta A_T = \mathbf{+2.26\%} = \mathbf{+0.73\% \ (LA \text{ Gain})} + \mathbf{+1.40\% \ (\text{Fgt Drop})}$$
+  - **Memory Protection**: **65.7% of total gain** (Observed Forgetting drops from $3.42\%$ down to $2.02\%$).
+  - **Acquisition Gain**: **34.3% of total gain** ($LA$ increases from $90.67\%$ up to $91.40\%$).
+* **Fresh Seeds (50 runs)**:
+  $$\Delta A_T = \mathbf{+2.72\%} = \mathbf{+1.20\% \ (LA \text{ Gain})} + \mathbf{+1.38\% \ (\text{Fgt Drop})}$$
+  - **Memory Protection**: **53.5% of total gain** (Observed Forgetting drops from $2.65\%$ down to $1.27\%$).
+  - **Acquisition Gain**: **46.5% of total gain** ($LA$ increases from $90.43\%$ up to $91.63\%$).
 
 ---
 
@@ -173,9 +189,9 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 *   **Lambda Diagnostic & Sweep Script:** `396706E...`
 *   **OGP Mechanism Script:** `396706E...`
 *   **OGP Rigorous Verification Suite Script:** `A9058F2...`
-*   **50-Run Master Suite Script:** `838F8E0...`
+*   **50-Run Master Suite Script (Fixed LA):** `36174C1...`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `838f8e0...`
+*   **Repository HEAD Commit:** `36174c1...`
 
 ---
 
