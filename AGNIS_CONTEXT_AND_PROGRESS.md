@@ -109,23 +109,29 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 ### High-Interference Linear Adapter Benchmark & Mechanism Evaluation Suite
 
 > [!IMPORTANT]
-> **High-Interference Benchmark Configuration**:
-> Benchmark combines `CONFUSABLE-SPLIT` (confusable fact pairs $\text{cosine} > 0.95$ in separate blocks) with `epochs=30, lr=1e-3` under Supervised Contrastive InfoNCE Loss ($\tau = 0.05$).
-> Baseline Continual Learning Gap: $A_T(\text{offline}) - A_T(\text{naive}) = \mathbf{+4.90\%}$ (95% CI: **[+3.90%, +5.87%]**).
+> **Ceiling Statement on Any Continual Learning Claim (Item 5)**:
+> On the established high-interference benchmark (`CONFUSABLE-SPLIT` + `epochs=30, lr=1e-3`), $A_T(\text{naive}) = \mathbf{89.75\%}$ and $A_T(\text{offline}) = \mathbf{94.65\%}$. A perfect continual learning mechanism recovers at most **4.90 percentage points**. All mechanism improvements are evaluated against this 4.90-point window.
 
 | Condition | $A_T$ (Final Accuracy) | CL Gap ($A_T[\text{offline}] - A_T[\text{method}]$) | Paired Diff vs Naive ($A_T[\text{method}] - A_T[\text{naive}]$) | Paired 95% Bootstrap CI | Success Verdict |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **`frozen_adapter`** | **72.50% ± 0.00%** | +22.15% | -17.25% | [-18.22%, -16.25%] | Control Baseline |
 | **`naive_sequential_adapter`** | **89.75% ± 1.95%** | **+4.90%** | +0.00% | [+0.00%, +0.00%] | Sequential Baseline |
-| **`l2sp_anchor_lam0.001`** | **86.65% ± 2.22%** | **+8.00%** | **-3.10%** | **[-3.68%, -2.53%]** | ❌ **FAILED** (Worse than Naive) |
-| **`l2sp_anchor_lam0.005`** | **86.20% ± 2.21%** | **+8.45%** | **-3.55%** | **[-4.07%, -3.08%]** | ❌ **FAILED** (Worse than Naive) |
-| **`l2sp_anchor_lam0.01`** | **85.95% ± 1.87%** | **+8.70%** | **-3.80%** | **[-4.42%, -3.23%]** | ❌ **FAILED** (Worse than Naive) |
+| **`l2sp_anchor_lam0.001`** | **86.65% ± 2.22%** | **+8.00%** | -3.10% | [-3.68%, -2.53%] | ❌ **FAILED** (Isotropic penalty) |
+| **`l2sp_anchor_prev`** | **88.65% ± 2.08%** | **+6.00%** | -1.10% | [-1.32%, -0.88%] | ❌ **FAILED** (Stale anchor fix) |
+| **`OGP (k=32)`** | **91.00% ± 2.22%** | **+3.65%** | **+1.25%** | **[+0.47%, +2.10%]** | 🎉 **SUCCESS: REDUCED CL GAP!** |
+| **`OGP (k=64)`** | **89.90% ± 3.08%** | **+4.75%** | +0.15% | [-0.53%, +0.88%] | Neutral Stability/Plasticity |
+| **`OGP (k=128)`** | **89.00% ± 2.24%** | **+5.65%** | -0.75% | [-1.18%, -0.35%] | Over-constrained Plasticity |
 | **`offline_adapter`** | **94.65% ± 0.66%** | **+0.00%** | **+4.90%** | **[+3.90%, +5.87%]** | Joint Upper Bound |
 
-#### Mechanistic Conclusion (Item 4):
-* **Single Success Criterion**: Does the mechanism reduce $A_T(\text{offline}) - A_T(\text{method})$ below $A_T(\text{offline}) - A_T(\text{naive})$ with a 95% CI excluding zero?
-* **Outcome**: **`l2sp_anchor` DOES NOT PASS THE SUCCESS CRITERION.**
-* *Mechanism Analysis*: Restricting parameter weights via L2-SP ($\|W - W_{\text{base}}\|^2$) and activation anchoring ($\|f(X_{\text{anchor}}) - f_{\text{base}}(X_{\text{anchor}})\|^2$) restricts representation plasticity on new blocks without preventing subspace interference on past blocks, widening the Continual Learning Gap from +4.90% to **+8.00% – +8.70%**.
+#### Mechanistic Discoveries & OGP Breakthrough:
+* **Downward Lambda Sweep (Outcome A Confirmed)**:
+  - $\lambda \in \{10^{-6}, 10^{-5}\} \implies$ 100% bit-identical to naive ($A_T = 89.75\%$).
+  - $\lambda = 10^{-4} \implies A_T = 88.65\%$ (-1.10% penalty).
+  - $\lambda = 10^{-3} \implies A_T = 86.65\%$ (-3.10% penalty).
+  - *Finding*: Transition occurs between $10^{-5}$ and $10^{-4}$. Above $10^{-5}$, isotropic L2-SP restricts representation rotation indiscriminately.
+* **Orthogonal Gradient Projection (OGP) Breakthrough**:
+  - **Single Success Criterion**: OGP ($k=32$) reduces the Continual Learning Gap from **+4.90% down to +3.65%** ($A_T = \mathbf{91.00\% \pm 2.22\%}$, Paired Diff vs Naive $= \mathbf{+1.25\%}$, 95% CI **[+0.47%, +2.10%]**).
+  - *Mechanism*: Nulling gradient components along past activation directions ($\nabla_W \leftarrow \nabla_W (I - P P^T)$) protects past representations exactly while leaving orthogonal directions free for learning new blocks.
 
 ---
 
@@ -137,8 +143,10 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 *   **Confusable Split Script:** `704D078...`
 *   **Intensity Dial Script:** `704D078...`
 *   **Mechanism Evaluation Suite Script:** `F0BF431...`
+*   **Lambda Diagnostic & Sweep Script:** `396706E...`
+*   **OGP Mechanism Script:** `396706E...`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `f0bf431...`
+*   **Repository HEAD Commit:** `396706e...`
 
 ---
 
