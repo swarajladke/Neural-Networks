@@ -21,7 +21,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from student_encoder import StudentEncoder
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CACHE_100_PATH = "../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") or not os.path.exists("smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt"
+CACHE_100_PATH = "smollm2_embeddings_100slots.pt" if os.path.exists("smollm2_embeddings_100slots.pt") else ("../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt")
 DATASET_PATH = "agnis_scaling_dataset.json"
 def find_offline_model_path():
     for path in ["../local_smollm2", "local_smollm2"]:

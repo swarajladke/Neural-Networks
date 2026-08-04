@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CACHE_100_PATH = "../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") or not os.path.exists("smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt"
+CACHE_100_PATH = "smollm2_embeddings_100slots.pt" if os.path.exists("smollm2_embeddings_100slots.pt") else ("../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt")
 DATASET_PATH = "agnis_scaling_dataset.json"
 
 def find_offline_model_path():
@@ -619,77 +619,10 @@ def main():
     else:
         cache_data = torch.load(CACHE_100_PATH, weights_only=True)
     
-    sweep_configs = [
-        # Milli-scale sweeps at standard learning rate 1e-3
-        ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
-        ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
-        ("agnis_replay_ewc0.005_anc0.002", 1e-3, 0.005, 0.002),
-        ("agnis_replay_ewc0.005_anc0.005", 1e-3, 0.005, 0.005),
-        ("agnis_replay_ewc0.01_anc0.01", 1e-3, 0.01, 0.01),
-        ("agnis_replay_ewc0.02_anc0.01", 1e-3, 0.02, 0.01),
-        ("agnis_replay_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
-        # Higher learning rates to overcome EWC anchoring tension
-        ("agnis_replay_lr1.5e-3_ewc0.005", 1.5e-3, 0.005, 0.005),
-        ("agnis_replay_lr2e-3_ewc0.01", 2e-3, 0.01, 0.01)
-    ]
-    conditions = ["frozen_encoder_writable_memory", "naive_sequential"]
-    for name, _, _, _ in sweep_configs:
-        conditions.append(name)
-    conditions.append("offline")
-    
-    all_summary = {}
-    all_runs_results = {}
+import sys
+import glob
 
-    for cond in conditions:
-        print(f"\n[Running] Evaluating condition: {cond}...")
-        t0 = time.time()
-        
-        cfg = [c for c in sweep_configs if c[0] == cond]
-        if len(cfg) > 0:
-            name, lr_val, l_ewc, l_anchor = cfg[0]
-            res = run_continual_experiment(tokenizer, all_facts, cache_data, 
-                                           condition="agnis_replay", shuffles=5, seeds=3,
-                                           lr=lr_val, lambda_ewc=l_ewc, lambda_anchor=l_anchor)
-        else:
-            res = run_continual_experiment(tokenizer, all_facts, cache_data, condition=cond, shuffles=5, seeds=3)
-            
-        t_el = time.time() - t0
-        all_runs_results[cond] = res
-        
-        # Calculate summary statistics across shuffles and seeds
-        pls = [r["plasticity_gain"] for r in res]
-        fgts = [r["mean_forgetting"] for r in res if "mean_forgetting" in r]
-        w_fgts = [r["worst_forgetting"] for r in res if "worst_forgetting" in r]
-        bwts = [r["mean_bwt"] for r in res if "mean_bwt" in r]
-        
-        drifts_emb = [r["drift_emb"] for r in res if "drift_emb" in r]
-        drifts_student = [r["drift_student"] for r in res if "drift_student" in r]
-        drifts_verifier = [r["drift_verifier_score"] for r in res if "drift_verifier_score" in r]
-        drifts_ranking = [r["drift_ranking_overlap"] for r in res if "drift_ranking_overlap" in r]
-        
-        signed_bwt_dicts = [r["signed_bwt_per_block"] for r in res if "signed_bwt_per_block" in r]
-        
-        # Aggregate signed BWTs
-        flat_signed_bwts = {}
-        for block_key in [f"block_{i}" for i in range(10)]:
-            vals = [d[block_key] for d in signed_bwt_dicts if block_key in d]
-            flat_signed_bwts[block_key] = np.mean(vals) if len(vals) > 0 else 0.0
-        
-        all_summary[cond] = {
-            "plasticity_gain": np.mean(pls), "plasticity_gain_std": np.std(pls),
-            "forgetting": np.mean(fgts), "forgetting_std": np.std(fgts),
-            "worst_forgetting": np.mean(w_fgts), "worst_forgetting_std": np.std(w_fgts),
-            "bwt": np.mean(bwts), "bwt_std": np.std(bwts),
-            "drift_emb": np.mean(drifts_emb),
-            "drift_student": np.mean(drifts_student),
-            "drift_verifier_score": np.mean(drifts_verifier),
-            "drift_ranking_overlap": np.mean(drifts_ranking),
-            "signed_bwt": flat_signed_bwts,
-            "latency": t_el / (5 * 3)
-        }
-        print(f"  - Completed in {t_el:.2f}s.")
-        print(f"  - Plasticity Gain: {all_summary[cond]['plasticity_gain']*100:.2f}% | Forgetting: {all_summary[cond]['forgetting']*100:.2f}%")
-
+def print_audit_report(all_summary, all_runs_results, sweep_configs, conditions):
     # Print validation report
     print("\n" + "="*80)
     print("  FINAL CONTINUAL-LEARNING METRICS COMPILATION REPORT")
@@ -697,8 +630,9 @@ def main():
     print("  Condition                                | Plasticity  | Forgetting | Worst-Block | BWT        | Emb Drift | Output Drift | Verifier Score | Ranking Overlap")
     print("  -------------------------------------------------------------------------------------------------------------------------------------------------------------")
     for cond in conditions:
-        s = all_summary[cond]
-        print(f"  {cond:40s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {s['worst_forgetting']*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
+        if cond in all_summary:
+            s = all_summary[cond]
+            print(f"  {cond:40s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {s['worst_forgetting']*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
     print("="*80)
 
     # Print Signed BWT Breakdown
@@ -706,12 +640,17 @@ def main():
     print("  SIGNED PER-BLOCK BACKWARD TRANSFER (BWT) BREAKDOWN")
     print("-"*80)
     for cond in conditions:
-        s = all_summary[cond]
-        bwt_str = ", ".join([f"{k}: {v*100:+.1f}%" for k, v in s["signed_bwt"].items()])
-        print(f"  * {cond:40s} -> {bwt_str}")
+        if cond in all_summary:
+            s = all_summary[cond]
+            bwt_str = ", ".join([f"{k}: {v*100:+.1f}%" for k, v in s["signed_bwt"].items()])
+            print(f"  * {cond:40s} -> {bwt_str}")
     print("="*80)
 
     # Exit Criteria Checks
+    if "naive_sequential" not in all_summary or "frozen_encoder_writable_memory" not in all_summary:
+        print("\n[Notice] Controls (frozen / naive_sequential) missing in current evaluation. Run --merge after completing all chunks to execute full paired audit.")
+        return
+
     print("\n" + "-"*80)
     print("  PASS/FAIL AUDIT AGAINST DECLARED CONTINUAL-LEARNING PASS CRITERIA")
     print("-"*80)
@@ -723,6 +662,8 @@ def main():
     print(f"  - Frozen Learning Gain is ~0.00% (No leakage): {'PASSED' if frozen_leak_pass else 'FAILED'} (Observed: {frozen_sum['plasticity_gain']*100:.2f}%)")
     
     for name, _, _, _ in sweep_configs:
+        if name not in all_summary or name not in all_runs_results:
+            continue
         s = all_summary[name]
         
         # Calculate paired excess forgetting at the run/seed/block level
@@ -743,8 +684,8 @@ def main():
             excess_mean_runs.append(np.mean(excess_blocks))
             excess_worst_runs.append(np.max(excess_blocks))
             
-        mean_excess_forgetting = np.mean(excess_mean_runs)
-        worst_excess_forgetting = np.max(excess_worst_runs)
+        mean_excess_forgetting = np.mean(excess_mean_runs) if len(excess_mean_runs) > 0 else 0.0
+        worst_excess_forgetting = np.max(excess_worst_runs) if len(excess_worst_runs) > 0 else 0.0
         
         forgetting_pass = (mean_excess_forgetting <= 0.02)
         worst_forgetting_pass = (worst_excess_forgetting <= 0.05)
@@ -760,9 +701,164 @@ def main():
         print(f"    - Overall Certification Status         : {status}")
     print("="*80)
 
-    # Save summary metrics to file
-    with open("continual_learning_results.json", "w") as f:
+
+def main():
+    sweep_configs = [
+        # Milli-scale sweeps at standard learning rate 1e-3
+        ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
+        ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
+        ("agnis_replay_ewc0.005_anc0.002", 1e-3, 0.005, 0.002),
+        ("agnis_replay_ewc0.005_anc0.005", 1e-3, 0.005, 0.005),
+        ("agnis_replay_ewc0.01_anc0.01", 1e-3, 0.01, 0.01),
+        ("agnis_replay_ewc0.02_anc0.01", 1e-3, 0.02, 0.01),
+        ("agnis_replay_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
+        # Higher learning rates to overcome EWC anchoring tension
+        ("agnis_replay_lr1.5e-3_ewc0.005", 1.5e-3, 0.005, 0.005),
+        ("agnis_replay_lr2e-3_ewc0.01", 2e-3, 0.01, 0.01)
+    ]
+    all_twelve = ["frozen_encoder_writable_memory", "naive_sequential"] + [c[0] for c in sweep_configs] + ["offline"]
+
+    # Check for --merge command
+    if len(sys.argv) > 1 and "--merge" in sys.argv:
+        print("\n" + "="*80)
+        print("  MERGING CONTINUAL LEARNING CHUNK RESULTS AND TRAJECTORIES")
+        print("="*80)
+        all_summary = {}
+        all_runs_results = {}
+        
+        chunk_summary_files = sorted(glob.glob("continual_learning_results_*.json"))
+        chunk_summary_files = [f for f in chunk_summary_files if f != "continual_learning_results.json"]
+        chunk_runs_files = sorted(glob.glob("trajectories_*.json"))
+        
+        print(f"[Merge] Found {len(chunk_summary_files)} summary chunk files and {len(chunk_runs_files)} trajectory files.")
+        for sf in chunk_summary_files:
+            with open(sf, "r") as f:
+                all_summary.update(json.load(f))
+                
+        for rf in chunk_runs_files:
+            with open(rf, "r") as f:
+                all_runs_results.update(json.load(f))
+                
+        conditions = [c for c in all_twelve if c in all_summary]
+        
+        with open("continual_learning_results.json", "w") as f:
+            json.dump(all_summary, f, indent=2)
+        with open("trajectories_all.json", "w") as f:
+            json.dump(all_runs_results, f, indent=2)
+            
+        print_audit_report(all_summary, all_runs_results, sweep_configs, conditions)
+        return
+
+    # Parse dataset
+    with open(DATASET_PATH, "r") as f:
+        blocks = json.load(f)
+    all_facts = [fact for b in blocks for fact in b]
+    print(f"[Data] Loaded {len(blocks)} blocks containing {len(all_facts)} total facts.")
+    
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    
+    if not os.path.exists(CACHE_100_PATH):
+        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")
+        from transformers import AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        try:
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+            model.to(DEVICE)
+            model.eval()
+        except Exception as e:
+            raise RuntimeError("FAIL-CLOSED: Failed to load SmolLM2 model to generate embeddings cache") from e
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        cache_data = torch.load(CACHE_100_PATH, weights_only=True)
+
+    # Determine conditions to run
+    req_cond_str = os.environ.get("CONDITIONS") or os.environ.get("AGNIS_CONDITIONS")
+    chunk_tag = os.environ.get("CHUNK_NAME") or os.environ.get("CHUNK")
+    
+    for i, arg in enumerate(sys.argv):
+        if arg.startswith("--conditions="):
+            req_cond_str = arg.split("=", 1)[1]
+        elif arg == "--conditions" and i + 1 < len(sys.argv):
+            req_cond_str = sys.argv[i + 1]
+        elif arg.startswith("--chunk="):
+            chunk_tag = arg.split("=", 1)[1]
+        elif arg == "--chunk" and i + 1 < len(sys.argv):
+            chunk_tag = sys.argv[i + 1]
+            
+    if req_cond_str:
+        req_list = [c.strip() for c in req_cond_str.split(",") if c.strip()]
+        conditions = [c for c in all_twelve if c in req_list]
+    else:
+        conditions = all_twelve
+
+    is_subset = len(conditions) < len(all_twelve)
+    if is_subset or chunk_tag:
+        tag = chunk_tag if chunk_tag else "_".join([c[:10] for c in conditions])
+        if len(tag) > 40:
+            tag = f"chunk_{hash(tag) & 0xffffffff:08x}"
+        summary_out_path = f"continual_learning_results_{tag}.json"
+        runs_out_path = f"trajectories_{tag}.json"
+    else:
+        summary_out_path = "continual_learning_results.json"
+        runs_out_path = "trajectories_all.json"
+
+    all_summary = {}
+    all_runs_results = {}
+
+    for cond in conditions:
+        print(f"\n[Running] Evaluating condition: {cond}...")
+        t0 = time.time()
+        
+        cfg = [c for c in sweep_configs if c[0] == cond]
+        if len(cfg) > 0:
+            name, lr_val, l_ewc, l_anchor = cfg[0]
+            res = run_continual_experiment(tokenizer, all_facts, cache_data, 
+                                           condition="agnis_replay", shuffles=5, seeds=3,
+                                           lr=lr_val, lambda_ewc=l_ewc, lambda_anchor=l_anchor)
+        else:
+            res = run_continual_experiment(tokenizer, all_facts, cache_data, condition=cond, shuffles=5, seeds=3)
+            
+        t_el = time.time() - t0
+        all_runs_results[cond] = res
+        
+        pls = [r["plasticity_gain"] for r in res]
+        fgts = [r["mean_forgetting"] for r in res if "mean_forgetting" in r]
+        w_fgts = [r["worst_forgetting"] for r in res if "worst_forgetting" in r]
+        bwts = [r["mean_bwt"] for r in res if "mean_bwt" in r]
+        
+        drifts_emb = [r["drift_emb"] for r in res if "drift_emb" in r]
+        drifts_student = [r["drift_student"] for r in res if "drift_student" in r]
+        drifts_verifier = [r["drift_verifier_score"] for r in res if "drift_verifier_score" in r]
+        drifts_ranking = [r["drift_ranking_overlap"] for r in res if "drift_ranking_overlap" in r]
+        
+        signed_bwt_dicts = [r["signed_bwt_per_block"] for r in res if "signed_bwt_per_block" in r]
+        
+        flat_signed_bwts = {}
+        for block_key in [f"block_{i}" for i in range(10)]:
+            vals = [d[block_key] for d in signed_bwt_dicts if block_key in d]
+            flat_signed_bwts[block_key] = np.mean(vals) if len(vals) > 0 else 0.0
+        
+        all_summary[cond] = {
+            "plasticity_gain": np.mean(pls), "plasticity_gain_std": np.std(pls),
+            "forgetting": np.mean(fgts), "forgetting_std": np.std(fgts),
+            "worst_forgetting": np.mean(w_fgts), "worst_forgetting_std": np.std(w_fgts),
+            "bwt": np.mean(bwts), "bwt_std": np.std(bwts),
+            "drift_emb": np.mean(drifts_emb),
+            "drift_student": np.mean(drifts_student),
+            "drift_verifier_score": np.mean(drifts_verifier),
+            "drift_ranking_overlap": np.mean(drifts_ranking),
+            "signed_bwt": flat_signed_bwts,
+            "latency": t_el / (5 * 3)
+        }
+        print(f"  - Completed in {t_el:.2f}s.")
+        print(f"  - Plasticity Gain: {all_summary[cond]['plasticity_gain']*100:.2f}% | Forgetting: {all_summary[cond]['forgetting']*100:.2f}%")
+
+    with open(summary_out_path, "w") as f:
         json.dump(all_summary, f, indent=2)
+    with open(runs_out_path, "w") as f:
+        json.dump(all_runs_results, f, indent=2)
+
+    print_audit_report(all_summary, all_runs_results, sweep_configs, conditions)
 
 if __name__ == "__main__":
     main()

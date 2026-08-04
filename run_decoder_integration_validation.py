@@ -38,7 +38,7 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(42)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-CACHE_100_PATH = "../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") or not os.path.exists("smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt"
+CACHE_100_PATH = "smollm2_embeddings_100slots.pt" if os.path.exists("smollm2_embeddings_100slots.pt") else ("../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt") else "smollm2_embeddings_100slots.pt")
 DATASET_PATH = "agnis_scaling_dataset.json"
 MANIFEST_PATH = "split_manifest.json"
 INPUT_DIM = 960
