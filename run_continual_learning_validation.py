@@ -168,7 +168,7 @@ def train_verifier_on_fly(cache_data):
 # ---------------------------------------------------------------------------
 # Continual Learning Simulation
 # ---------------------------------------------------------------------------
-def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_replay", shuffles=5, seeds=3, lr=3e-4, lambda_ewc=0.1, lambda_anchor=0.1):
+def run_continual_experiment(tokenizer, all_facts, cache_data, condition="l2sp_anchor", shuffles=5, seeds=3, lr=3e-4, lambda_l2sp=0.1, lambda_anchor=0.1):
     results = []
     trajectories = []
     
@@ -809,8 +809,8 @@ def main():
         if len(cfg) > 0:
             name, lr_val, l_ewc, l_anchor = cfg[0]
             res = run_continual_experiment(tokenizer, all_facts, cache_data, 
-                                           condition="agnis_replay", shuffles=5, seeds=3,
-                                           lr=lr_val, lambda_ewc=l_ewc, lambda_anchor=l_anchor)
+                                           condition=cond, shuffles=5, seeds=3,
+                                           lr=lr_val, lambda_l2sp=l_ewc, lambda_anchor=l_anchor)
         else:
             res = run_continual_experiment(tokenizer, all_facts, cache_data, condition=cond, shuffles=5, seeds=3)
             
