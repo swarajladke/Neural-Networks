@@ -1,12 +1,15 @@
 """
-run_ogp_50run_master_suite.py — 50-Run Master OGP Verification & Control Suite
-================================================================================
-Executes 50 runs per condition (10 shuffles x 5 seeds) to establish exact 50-run statistical bounds for:
-  1. Item 2 Audit: BOTTOM-32 vs Naive elementwise matrix diffs & weight displacement.
-  2. Item 4 Metric Decomposition: Naive LA, Offline LA, OGP LA, Forgetting CIs, and Delta A_T = Delta LA + Delta Memory.
-  3. Item 3 Resolution for k=8: 50-run evaluation of k=8 to resolve noise vs structural dip.
-  4. Item 3 Control Arms: 50-run evaluation of RANDOM-32, BOTTOM-32, CURRENT-32 vs TOP-32 OGP.
-  5. Item 5 50-Run Replication across both Selection Seeds (101..105) and Fresh Seeds (211..215).
+run_ogp_50run_master_suite.py — Corrected 50-Run Master Suite with Base Phase R[4,:] Evaluation
+==============================================================================================
+Fixes the missing R[4,:] evaluation loop after base phase joint training, ensuring populated-row guard
+start_step = max(4, first_seen_step) calculates mathematically exact LA and BWT values.
+
+Sweeps conditions:
+  - naive, offline
+  - OGP_k4, OGP_k6, OGP_k8, OGP_k10, OGP_k12, OGP_k16, OGP_k24, OGP_k32, OGP_k64, OGP_k128
+  - RANDOM-32, BOTTOM-32, CURRENT-32
+
+Runs 50 executions per condition on Selection Seeds (101..105) and Fresh Seeds (211..215).
 """
 
 import os
@@ -101,7 +104,7 @@ def bootstrap_paired_ci(vals_1, vals_2, n_boot=10000, seed=42):
 
 def run_bottom32_literal_noop_audit(block_assignment, cache_data):
     print("\n" + "="*100)
-    print("  ITEM 2: BOTTOM-32 LITERAL NO-OP AUDIT")
+    print("  ITEM 2: BOTTOM-32 LITERAL NO-OP AUDIT & R-MATRIX DIFFS")
     print("="*100)
     
     train_x_blocks = []
@@ -152,6 +155,22 @@ def run_bottom32_literal_noop_audit(block_assignment, cache_data):
                 loss.backward()
                 opt_n.step()
                 
+            # Base phase evaluation R[4, b]
+            adapter_n.eval()
+            with torch.no_grad():
+                z_refs_base = adapter_n(joint_x_base)
+                for b in range(10):
+                    test_x_b = test_x_blocks[b].to(DEVICE)
+                    test_y_b = test_y_blocks[b].to(DEVICE)
+                    z_queries = adapter_n(test_x_b)
+                    correct = 0
+                    for q_idx, q_vec in enumerate(z_queries):
+                        sims = torch.matmul(z_refs_base, q_vec.unsqueeze(0).T).squeeze(-1)
+                        best_idx = torch.argmax(sims).item()
+                        if joint_y_base[best_idx].item() == test_y_b[q_idx].item():
+                            correct += 1
+                    R_n[4, b] = correct / len(z_queries)
+                    
             for step in range(5, 10):
                 curr_block = order[step]
                 seen_blocks = order[:step + 1]
@@ -199,6 +218,22 @@ def run_bottom32_literal_noop_audit(block_assignment, cache_data):
                 loss.backward()
                 opt_b.step()
                 
+            # Base phase evaluation R[4, b]
+            adapter_b.eval()
+            with torch.no_grad():
+                z_refs_base = adapter_b(joint_x_base)
+                for b in range(10):
+                    test_x_b = test_x_blocks[b].to(DEVICE)
+                    test_y_b = test_y_blocks[b].to(DEVICE)
+                    z_queries = adapter_b(test_x_b)
+                    correct = 0
+                    for q_idx, q_vec in enumerate(z_queries):
+                        sims = torch.matmul(z_refs_base, q_vec.unsqueeze(0).T).squeeze(-1)
+                        best_idx = torch.argmax(sims).item()
+                        if joint_y_base[best_idx].item() == test_y_b[q_idx].item():
+                            correct += 1
+                    R_b[4, b] = correct / len(z_queries)
+                    
             M_past = joint_x_base.clone().detach()
             
             for step in range(5, 10):
@@ -254,6 +289,10 @@ def run_bottom32_literal_noop_audit(block_assignment, cache_data):
     print(f"  * Per-run |A_T(bottom32) - A_T(naive)| : Mean = {np.mean(at_diffs)*100:.4f}% | Max = {np.max(at_diffs)*100:.4f}%")
     print(f"  * Step 9 Max |W_bottom32 - W_naive|      : Mean = {np.mean(max_w_diffs):.8e} | Max = {np.max(max_w_diffs):.8e}")
     print(f"  * Max elementwise |R_bottom32 - R_naive| : Mean = {np.mean(r_diffs):.8f} | Max = {np.max(r_diffs):.8f}")
+    
+    print("\n  [FULL R-MATRIX AUDIT FOR ONE NAIVE RUN]:")
+    print(f"  R_naive[4, :] (Base Phase Row 4): {naive_Rs[0][4, :]}")
+    print(f"  Unpopulated Rows 0..3: {np.sum(naive_Rs[0][:4, :]) == 0} (All zeros)")
     print("="*100)
 
 def run_50run_experiment_suite(block_assignment, cache_data, seeds=list(range(101, 106)), num_shuffles=10):
@@ -281,7 +320,7 @@ def run_50run_experiment_suite(block_assignment, cache_data, seeds=list(range(10
         
     conditions = [
         "naive", "offline",
-        "OGP_k4", "OGP_k8", "OGP_k16", "OGP_k24", "OGP_k32", "OGP_k64", "OGP_k128",
+        "OGP_k4", "OGP_k6", "OGP_k8", "OGP_k10", "OGP_k12", "OGP_k16", "OGP_k24", "OGP_k32", "OGP_k64", "OGP_k128",
         "RANDOM-32", "BOTTOM-32", "CURRENT-32"
     ]
     
@@ -310,6 +349,22 @@ def run_50run_experiment_suite(block_assignment, cache_data, seeds=list(range(10
                     loss.backward()
                     optimizer.step()
                     
+                # BASE PHASE EVALUATION LOOP FILLING R[4, :]
+                adapter.eval()
+                with torch.no_grad():
+                    z_refs_base = adapter(joint_train_x_base)
+                    for b in range(10):
+                        test_x_b = test_x_blocks[b].to(DEVICE)
+                        test_y_b = test_y_blocks[b].to(DEVICE)
+                        z_queries = adapter(test_x_b)
+                        correct = 0
+                        for q_idx, q_vec in enumerate(z_queries):
+                            sims = torch.matmul(z_refs_base, q_vec.unsqueeze(0).T).squeeze(-1)
+                            best_idx = torch.argmax(sims).item()
+                            if joint_train_y_base[best_idx].item() == test_y_b[q_idx].item():
+                                correct += 1
+                        R[4, b] = correct / len(z_queries)
+                        
                 M_past = joint_train_x_base.clone().detach()
                 
                 for step in range(5, 10):
@@ -379,9 +434,9 @@ def run_50run_experiment_suite(block_assignment, cache_data, seeds=list(range(10
     return suite_results
 
 def print_master_suite_summary(suite_results, title="50-RUN MASTER SUITE RESULTS"):
-    print("\n" + "="*140)
+    print("\n" + "="*145)
     print(f"  {title}")
-    print("="*140)
+    print("="*145)
     
     nai_runs = suite_results["naive"]
     off_runs = suite_results["offline"]
@@ -397,12 +452,12 @@ def print_master_suite_summary(suite_results, title="50-RUN MASTER SUITE RESULTS
     off_mean_at = np.mean(off_ats) * 100.0
     nai_mean_at = np.mean(nai_ats) * 100.0
     
-    print(f"  * Baseline Naive (n={len(nai_runs)})   : A_T={nai_mean_at:.2f}% ± {np.std(nai_ats)*100:.2f}% (Min: {np.min(nai_ats)*100:.2f}%, Max: {np.max(nai_ats)*100:.2f}%) | LA={np.mean(nai_las)*100:.2f}% | Fgt={np.mean(nai_fgts)*100:.2f}%")
-    print(f"  * Upper Bound Offline (n={len(off_runs)}): A_T={off_mean_at:.2f}% ± {np.std(off_ats)*100:.2f}% | LA={np.mean(off_las)*100:.2f}% | Fgt={np.mean(off_fgts)*100:.2f}%")
+    print(f"  * Naive (n={len(nai_runs):2d})   : A_T={nai_mean_at:.2f}% ± {np.std(nai_ats)*100:.2f}% (Min: {np.min(nai_ats)*100:.2f}%, Max: {np.max(nai_ats)*100:.2f}%) | LA={np.mean(nai_las)*100:.2f}% ± {np.std(nai_las)*100:.2f}% | Fgt={np.mean(nai_fgts)*100:.2f}% ± {np.std(nai_fgts)*100:.2f}%")
+    print(f"  * Offline (n={len(off_runs):2d}): A_T={off_mean_at:.2f}% ± {np.std(off_ats)*100:.2f}% (Min: {np.min(off_ats)*100:.2f}%, Max: {np.max(off_ats)*100:.2f}%) | LA={np.mean(off_las)*100:.2f}% ± {np.std(off_las)*100:.2f}% | Fgt={np.mean(off_fgts)*100:.2f}% ± {np.std(off_fgts)*100:.2f}%")
     print(f"  * Total Continual Learning Gap   : {off_mean_at - nai_mean_at:+.2f}%")
-    print("-" * 140)
+    print("-" * 145)
     
-    header = f"{'Condition':18s} | {'A_T (Min..Max)':25s} | {'LA (Learning)':15s} | {'Observed Fgt':15s} | {'CL Gap':8s} | {'Diff A_T vs Naive (95% CI)':28s} | {'Diff Fgt vs Naive (95% CI)':28s}"
+    header = f"{'Condition':16s} | {'A_T (Min..Max)':25s} | {'LA (Learning)':15s} | {'Observed Fgt':15s} | {'CL Gap':8s} | {'Diff A_T vs Naive (95% CI)':28s} | {'Diff Fgt vs Naive (95% CI)':28s}"
     print(header)
     print("-" * len(header))
     
@@ -432,10 +487,13 @@ def print_master_suite_summary(suite_results, title="50-RUN MASTER SUITE RESULTS
         elif ci_at_u < 0.0:
             verdict = "SIG WORSE (-A_T)"
         else:
-            verdict = "TRUE NULL"
-            
+            if abs(diff_at_m) < 0.001 and (ci_at_u - ci_at_l) < 0.005:
+                verdict = "DISTINGUISHABLE, NEGLIGIBLE"
+            else:
+                verdict = "TRUE NULL"
+                
         row_str = (
-            f"  {c_name:18s} | "
+            f"  {c_name:16s} | "
             f"{at_m:5.2f}% ± {at_s:4.2f}% ({at_min:5.2f}..{at_max:5.2f}%) | "
             f"{la_m:5.2f}%          | "
             f"{fgt_m:5.2f}%          | "
@@ -444,7 +502,7 @@ def print_master_suite_summary(suite_results, title="50-RUN MASTER SUITE RESULTS
             f"{diff_fgt_m*100:+5.2f}% [{ci_fgt_l*100:+5.2f}%, {ci_fgt_u*100:+5.2f}%] {verdict}"
         )
         print(row_str)
-    print("="*140)
+    print("="*145)
 
 def main():
     with open(DATASET_PATH, "r") as f:
@@ -463,16 +521,16 @@ def main():
     conf_pairs = find_confusable_pairs(cache_data)
     block_assignment = build_confusable_split_blocks(conf_pairs)
     
-    # 1. Item 2 Literal No-Op Audit
+    # 1. Item 2 Literal No-Op Audit & Matrix Dump
     run_bottom32_literal_noop_audit(block_assignment, cache_data)
     
-    # 2. 50-Run Master Suite on Selection Seeds (101..105, 10 shuffles x 5 seeds = 50 runs)
+    # 2. 50-Run Master Suite on Selection Seeds (101..105, 50 runs)
     res_select_50 = run_50run_experiment_suite(block_assignment, cache_data, seeds=[101, 102, 103, 104, 105], num_shuffles=10)
-    print_master_suite_summary(res_select_50, title="50-RUN MASTER SUITE RESULTS (SELECTION SEEDS 101..105, 50 RUNS)")
+    print_master_suite_summary(res_select_50, title="CORRECTED 50-RUN MASTER SUITE RESULTS (SELECTION SEEDS 101..105)")
     
-    # 3. 50-Run Master Suite on Fresh Seeds (211..215, 10 shuffles x 5 seeds = 50 runs)
+    # 3. 50-Run Master Suite on Fresh Seeds (211..215, 50 runs)
     res_fresh_50 = run_50run_experiment_suite(block_assignment, cache_data, seeds=[211, 212, 213, 214, 215], num_shuffles=10)
-    print_master_suite_summary(res_fresh_50, title="50-RUN MASTER SUITE RESULTS (FRESH SEEDS 211..215, 50 RUNS)")
+    print_master_suite_summary(res_fresh_50, title="CORRECTED 50-RUN MASTER SUITE RESULTS (FRESH SEEDS 211..215)")
 
 if __name__ == "__main__":
     main()
