@@ -106,35 +106,26 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 * **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.72%, +0.55%]**
 * **Verdict**: **The 95% CI contains zero.** `l2sp_anchor` is **statistically indistinguishable from performing no parameter updates at all (`frozen_encoder_writable_memory`)**.
 
-### Linear Adapter Continual Benchmark (SmolLM2-360M + 0.92M Parameter Linear Adapter, Supervised Contrastive InfoNCE Loss $\tau=0.05$)
+### High-Interference Linear Adapter Benchmark & Mechanism Evaluation Suite
 
 > [!IMPORTANT]
-> **Loss Formulation Diagnosis Correction (Item 0)**:
-> The old cosine distillation loss did not suffer from zero gradient ($\text{loss}=0.1418, \text{grad norm}=0.567$). Its global optimum was the 72.50% solution itself. The 0.1418 residual reflected cache-vs-live embedding noise ($\text{cos}=0.858$).
-> *1-Line Statement*: The 0.858 cache-vs-live embedding discrepancy originates from extraction sequence differences between raw last-hidden-layer mean pooling in `ensure_100_fact_embeddings` versus live forward execution.
+> **High-Interference Benchmark Configuration**:
+> Benchmark combines `CONFUSABLE-SPLIT` (confusable fact pairs $\text{cosine} > 0.95$ in separate blocks) with `epochs=30, lr=1e-3` under Supervised Contrastive InfoNCE Loss ($\tau = 0.05$).
+> Baseline Continual Learning Gap: $A_T(\text{offline}) - A_T(\text{naive}) = \mathbf{+4.90\%}$ (95% CI: **[+3.90%, +5.87%]**).
 
-> [!NOTE]
-> **Standing Plasticity Precondition (Gate 1) - PASSED**:
-> `offline_adapter` $A_T$ = **91.40% ± 1.20%** vs `frozen_adapter` $A_T$ = **72.50% ± 0.00%**. Plasticity Margin = **+18.90%** (exceeds required $\ge +5.00\%$ margin). Gate 1 is officially PASSED.
+| Condition | $A_T$ (Final Accuracy) | CL Gap ($A_T[\text{offline}] - A_T[\text{method}]$) | Paired Diff vs Naive ($A_T[\text{method}] - A_T[\text{naive}]$) | Paired 95% Bootstrap CI | Success Verdict |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **`frozen_adapter`** | **72.50% ± 0.00%** | +22.15% | -17.25% | [-18.22%, -16.25%] | Control Baseline |
+| **`naive_sequential_adapter`** | **89.75% ± 1.95%** | **+4.90%** | +0.00% | [+0.00%, +0.00%] | Sequential Baseline |
+| **`l2sp_anchor_lam0.001`** | **86.65% ± 2.22%** | **+8.00%** | **-3.10%** | **[-3.68%, -2.53%]** | ❌ **FAILED** (Worse than Naive) |
+| **`l2sp_anchor_lam0.005`** | **86.20% ± 2.21%** | **+8.45%** | **-3.55%** | **[-4.07%, -3.08%]** | ❌ **FAILED** (Worse than Naive) |
+| **`l2sp_anchor_lam0.01`** | **85.95% ± 1.87%** | **+8.70%** | **-3.80%** | **[-4.42%, -3.23%]** | ❌ **FAILED** (Worse than Naive) |
+| **`offline_adapter`** | **94.65% ± 0.66%** | **+0.00%** | **+4.90%** | **[+3.90%, +5.87%]** | Joint Upper Bound |
 
-| Condition | $A_T$ (Final Accuracy) | $LA$ (Learning Accuracy) | Observed Forgetting | BWT ($A_T - LA$) |
-| :--- | :---: | :---: | :---: | :---: |
-| **`frozen_adapter`** | **72.50% ± 0.00%** | **73.70% ± 0.76%** | 1.55% ± 0.81% | -1.20% ± 0.76% |
-| **`naive_sequential_adapter`** | **87.05% ± 2.15%** | **84.85% ± 1.96%** | 2.45% ± 1.20% | +2.20% ± 1.17% |
-| **`offline_adapter`** (Upper Bound) | **91.40% ± 1.20%** | **88.45% ± 1.13%** | 0.95% ± 0.71% | +2.95% ± 1.84% |
-
-#### Continual Learning Penalty & Interference Analysis:
-* **Continual Learning Gap ($A_T[\text{offline}] - A_T[\text{naive}]$)**: **+4.35%** (95% CI: [+3.12%, +5.58%])
-* **Primary Forgetting Comparator**: Continual learning penalty is evaluated as $A_T(\text{offline}) - A_T(\text{method})$.
-
-#### Experiment 3(a) & 3(b) Interference Findings:
-* **Experiment 3(a) [Confusable Split vs Together]**:
-  - `CONFUSABLE-SPLIT` CL Gap: **+5.80%** (95% CI: **[+4.20%, +7.43%]**)
-  - `CONFUSABLE-TOGETHER` CL Gap: **+4.35%** (95% CI: **[+2.88%, +5.78%]**)
-  - *Finding*: Separating confusable fact pairs across different blocks produces a **1.45 percentage point LARGER Continual Learning Gap** due to inter-block subspace displacement.
-* **Experiment 3(b) [Training Intensity Sweep]**:
-  - Largest CL Gap Cell: **`epochs=30, lr=1e-3`**
-  - $A_T(\text{offline})$ = **96.10%**, $A_T(\text{naive})$ = **91.60%** $\implies$ CL Gap = **+4.50%** (95% CI: **[+3.08%, +5.87%]**).
+#### Mechanistic Conclusion (Item 4):
+* **Single Success Criterion**: Does the mechanism reduce $A_T(\text{offline}) - A_T(\text{method})$ below $A_T(\text{offline}) - A_T(\text{naive})$ with a 95% CI excluding zero?
+* **Outcome**: **`l2sp_anchor` DOES NOT PASS THE SUCCESS CRITERION.**
+* *Mechanism Analysis*: Restricting parameter weights via L2-SP ($\|W - W_{\text{base}}\|^2$) and activation anchoring ($\|f(X_{\text{anchor}}) - f_{\text{base}}(X_{\text{anchor}})\|^2$) restricts representation plasticity on new blocks without preventing subspace interference on past blocks, widening the Continual Learning Gap from +4.90% to **+8.00% – +8.70%**.
 
 ---
 
