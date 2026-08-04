@@ -114,8 +114,8 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                 z_refs_base = adapter(base_ref_x)
                 
                 for b in range(10):
-                    test_x_b = cache_data["test_x"][b*50 : (b+1)*50].to(DEVICE)
-                    test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(5)]
+                    test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+                    test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
                     z_queries = adapter(test_x_b)
                     
                     correct = 0
@@ -167,8 +167,8 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                 with torch.no_grad():
                     z_refs_step = adapter(seen_ref_x)
                     for b in range(10):
-                        test_x_b = cache_data["test_x"][b*50 : (b+1)*50].to(DEVICE)
-                        test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(5)]
+                        test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+                        test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
                         z_queries = adapter(test_x_b)
                         
                         correct = 0
