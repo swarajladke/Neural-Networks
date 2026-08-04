@@ -266,7 +266,17 @@ def main():
         blocks = json.load(f)
     all_facts = [fact for b in blocks for fact in b]
     
-    cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
+    MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
+    if not os.path.exists(CACHE_100_PATH):
+        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
+        model.eval()
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        cache_data = torch.load(CACHE_100_PATH, map_location=DEVICE)
     
     # Assert Identity Initialization Accuracy == 72.50%
     init_adapter = OutputAdapter(dim=INPUT_DIM).to(DEVICE)

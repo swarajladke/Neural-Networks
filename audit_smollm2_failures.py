@@ -13,12 +13,19 @@ import torch.nn.functional as F
 def audit_failures():
     cache_path = "smollm2_embeddings_100slots.pt"
     if not os.path.exists(cache_path):
-        cache_path = "../smollm2_embeddings_100slots.pt"
-    if not os.path.exists(cache_path):
-        print("[Notice] Embeddings cache smollm2_embeddings_100slots.pt not found.")
-        return
-
-    data = torch.load(cache_path, map_location="cpu")
+        print(f"[Cache] Embeddings cache {cache_path} not found. Reconstructing automatically...")
+        import json
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
+        with open("agnis_scaling_dataset.json", "r") as f:
+            blocks = json.load(f)
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+        model.eval()
+        data = ensure_100_fact_embeddings(tokenizer, model, blocks)
+    else:
+        data = torch.load(cache_path, map_location="cpu")
     train_x = data["train_x"]  # 300 x 960 (3 per fact)
     train_y = data["train_y"]  # 300 (fact indices 0..99)
     test_x = data["test_x"]    # 400 x 960 (4 per fact)
