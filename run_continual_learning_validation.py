@@ -750,8 +750,15 @@ def main():
         return
 
     # Parse dataset
-    with open(DATASET_PATH, "r") as f:
-        blocks = json.load(f)
+    if not os.path.exists(DATASET_PATH):
+        print(f"[Dataset] {DATASET_PATH} not found. Generating dataset automatically...")
+        from generate_scaling_dataset import build_fact_dataset
+        blocks = build_fact_dataset()
+        with open(DATASET_PATH, "w") as f:
+            json.dump(blocks, f, indent=2)
+    else:
+        with open(DATASET_PATH, "r") as f:
+            blocks = json.load(f)
     all_facts = [fact for b in blocks for fact in b]
     print(f"[Data] Loaded {len(blocks)} blocks containing {len(all_facts)} total facts.")
     
