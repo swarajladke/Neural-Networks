@@ -763,6 +763,8 @@ def main():
     print(f"[Data] Loaded {len(blocks)} blocks containing {len(all_facts)} total facts.")
     
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    if getattr(tokenizer, "pad_token", None) is None:
+        tokenizer.pad_token = tokenizer.eos_token
     
     if not os.path.exists(CACHE_100_PATH):
         print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")

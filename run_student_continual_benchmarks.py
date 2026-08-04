@@ -42,6 +42,8 @@ INPUT_DIM = 960
 # Caching SmolLM2 Embeddings for the full 100-fact dataset
 # ---------------------------------------------------------------------------
 def ensure_100_fact_embeddings(tokenizer, model, blocks):
+    if getattr(tokenizer, "pad_token", None) is None:
+        tokenizer.pad_token = tokenizer.eos_token
     if os.path.exists(CACHE_100_PATH):
         print(f"[Cache] Loading 100-fact cached embeddings from {CACHE_100_PATH}...")
         return torch.load(CACHE_100_PATH, map_location=DEVICE)
