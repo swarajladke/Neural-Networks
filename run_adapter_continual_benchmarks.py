@@ -110,19 +110,19 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
             adapter.eval()
             with torch.no_grad():
                 base_ref_x = joint_train_x_base
-                base_ref_labels = [idx for b in base_blocks for idx in range(b*10, (b+1)*10) for _ in range(3)]
+                base_ref_y = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
                 z_refs_base = adapter(base_ref_x)
                 
                 for b in range(10):
                     test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
-                    test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
+                    test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
                     z_queries = adapter(test_x_b)
                     
                     correct = 0
                     for q_idx, q_vec in enumerate(z_queries):
                         sims = torch.matmul(z_refs_base, q_vec.unsqueeze(0).T).squeeze(-1)
                         best_idx = torch.argmax(sims).item()
-                        if base_ref_labels[best_idx] == test_labels[q_idx]:
+                        if base_ref_y[best_idx].item() == test_y_b[q_idx].item():
                             correct += 1
                     R[4, b] = correct / len(z_queries)
                     
@@ -131,7 +131,7 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                 curr_block = order[step]
                 seen_blocks = order[:step + 1]
                 seen_ref_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
-                seen_ref_labels = [idx for b in seen_blocks for idx in range(b*10, (b+1)*10) for _ in range(3)]
+                seen_ref_y = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
                 
                 if condition == "naive_sequential_adapter":
                     adapter.train()
@@ -168,14 +168,14 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
                     z_refs_step = adapter(seen_ref_x)
                     for b in range(10):
                         test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
-                        test_labels = [idx for idx in range(b*10, (b+1)*10) for _ in range(4)]
+                        test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
                         z_queries = adapter(test_x_b)
                         
                         correct = 0
                         for q_idx, q_vec in enumerate(z_queries):
                             sims = torch.matmul(z_refs_step, q_vec.unsqueeze(0).T).squeeze(-1)
                             best_idx = torch.argmax(sims).item()
-                            if seen_ref_labels[best_idx] == test_labels[q_idx]:
+                            if seen_ref_y[best_idx].item() == test_y_b[q_idx].item():
                                 correct += 1
                         R[step, b] = correct / len(z_queries)
                         
@@ -183,6 +183,7 @@ def run_adapter_experiment(all_facts, cache_data, condition="frozen_adapter", sh
             if condition == "frozen_adapter":
                 mean_r9 = np.mean(R[9, :])
                 assert abs(mean_r9 - 0.7250) < 0.005, f"frozen_adapter R[9,:] = {mean_r9:.4f}, expected 0.7250"
+                print(f"  [Assertion Passed] frozen_adapter R[9,:] = {mean_r9:.4f} matches 0.7250 expected raw ceiling.")
                 print(f"  [Assertion Passed] frozen_adapter R[9,:] = {mean_r9:.4f} matches 0.7250 expected raw ceiling.")
                 
             # Metrics over populated rows (t >= 4)
