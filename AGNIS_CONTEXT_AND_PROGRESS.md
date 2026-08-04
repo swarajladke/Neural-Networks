@@ -94,8 +94,12 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 > The condition formerly referred to as `agnis_replay` does NOT revisit previous block data and uses an L2 parameter distance constraint without Fisher weighting. It has been renamed to **`l2sp_anchor`** ($\text{L2-SP} + \text{Activation Anchoring}$) throughout the codebase and documentation.
 
 > [!KEYFINDING]
-> **Acquisition as the Binding Constraint**:
-> Every condition acquires a block to $\sim 23\%$ ($LA \approx 22.68\% - 23.27\%$) and then loses only 1–4 percentage points ($A_T \approx 19.00\% - 20.28\%$). **77 points out of 100 are lost during acquisition before any forgetting can occur.** Base retrieval acquisition is the primary binding constraint.
+> **Acquisition as the Primary Binding Constraint**:
+> - **Raw SmolLM2-360M 1-NN Retrieval Ceiling (No Student)**: **72.50%**
+> - **Student Encoder Initial Acquisition ($LA$)**: **22.77% ± 2.16%**
+> - **Student Encoder Final Accuracy ($A_T$)**: **20.28% ± 1.47%**
+> 
+> Over **49.73 percentage points** of retrieval accuracy are destroyed by the Student Encoder projection/capacity bottleneck during initial acquisition. Continual forgetting accounts for only 2.45–4.78 percentage points of loss. **Base retrieval acquisition is the primary binding constraint.**
 
 ### Statistical Inference: Paired Difference vs Frozen Control on $A_T$
 * **Paired Difference ($A_T[\text{l2sp\_anchor\_lr3e-4}] - A_T[\text{frozen}]$)**: **-0.08%**
@@ -107,9 +111,9 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 ## 5. Current Verification Locks & Hashing Manifest
 
 *   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
-*   **Evaluation Script:** `A038A094989EEB546DFC859EB028B34E270DDB5D11756D1462CE603235878A46`
+*   **Evaluation Script:** `FF8D1D149A92879B691CE2CDD78F766619EDC96B79483D48AF05CAA42945023F`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `e0d027bbbdaed49acd8763440929ae84b6e7ad7c`
+*   **Repository HEAD Commit:** `568966b2122d738c92e857ecdfca4d61edf19019`
 
 ---
 
