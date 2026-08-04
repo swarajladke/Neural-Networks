@@ -531,37 +531,40 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                     "plasticity_gain": plasticity_gain
                 })
 
-            # Calculate metrics at the final step N=9 (end of sequence)
-            # BWT: R[9, b] - R[first_seen_step, b]
+            # Calculate metrics at the final step N=9 (end of sequence) over populated rows (t >= 4)
+            # Base phase is recorded at R[4]. Sequential steps are recorded at R[5..9].
+            a_t_vals = [R[9, j] for j in range(10)]
+            la_vals = [R[max(4, order.index(j)), j] for j in range(10)]
+            
             bwt_vals = []
             signed_bwt_per_block = {}
             for j in range(10):
-                first_seen_step = order.index(j)
-                if first_seen_step < 9:
-                    start_step = max(4, first_seen_step)
-                    bwt_val = R[9, j] - R[start_step, j]
-                    bwt_vals.append(bwt_val)
-                    signed_bwt_per_block[f"block_{j}"] = bwt_val
-            mean_bwt = np.mean(bwt_vals) if len(bwt_vals) > 0 else 0.0
+                start_step = max(4, order.index(j))
+                bwt_val = R[9, j] - R[start_step, j]
+                bwt_vals.append(bwt_val)
+                signed_bwt_per_block[f"block_{j}"] = bwt_val
+            mean_bwt = np.mean(bwt_vals)
 
-            # Forgetting: max_t R[t, b] - R[9, b]
             forgetting_vals = []
             forgetting_per_block = {}
             for j in range(10):
-                first_seen_step = order.index(j)
-                if first_seen_step < 9:
-                    start_step = max(4, first_seen_step)
-                    max_seen = np.max(R[start_step:9, j])
-                    fgt_val = max_seen - R[9, j]
-                    forgetting_vals.append(fgt_val)
-                    forgetting_per_block[f"block_{j}"] = fgt_val
-            mean_forgetting = np.mean(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
-            worst_forgetting = np.max(forgetting_vals) if len(forgetting_vals) > 0 else 0.0
+                start_step = max(4, order.index(j))
+                max_seen = np.max(R[start_step:10, j])
+                fgt_val = max_seen - R[9, j]
+                forgetting_vals.append(fgt_val)
+                forgetting_per_block[f"block_{j}"] = fgt_val
+                
+            mean_forgetting = np.mean(forgetting_vals)
+            worst_forgetting = np.max(forgetting_vals)
+            mean_a_t = np.mean(a_t_vals)
+            mean_la = np.mean(la_vals)
 
             # Collect results for this seed/shuffle run
             results[-1].update({
                 "order": order,
                 "R_matrix": R.tolist(),
+                "A_T": mean_a_t,
+                "LA": mean_la,
                 "mean_bwt": mean_bwt,
                 "mean_forgetting": mean_forgetting,
                 "worst_forgetting": worst_forgetting,
@@ -685,6 +688,8 @@ def main():
         ("agnis_replay_lr3e-4_lam0.01", 3e-4, 0.01, 0.01),
         ("agnis_replay_lr3e-4_lam0.02", 3e-4, 0.02, 0.02),
         ("agnis_replay_lr3e-4_lam0.05", 3e-4, 0.05, 0.05),
+        # Equalized lr=1e-3 lambda=0 control arm (Item 2)
+        ("agnis_replay_lr1e-3_lam0.0", 1e-3, 0.0, 0.0),
         # Milli-scale sweeps at standard learning rate 1e-3
         ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
         ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
