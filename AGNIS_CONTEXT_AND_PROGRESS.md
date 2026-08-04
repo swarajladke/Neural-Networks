@@ -106,24 +106,28 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 * **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.72%, +0.55%]**
 * **Verdict**: **The 95% CI contains zero.** `l2sp_anchor` is **statistically indistinguishable from performing no parameter updates at all (`frozen_encoder_writable_memory`)**.
 
-### Linear Adapter Continual Benchmark (SmolLM2-360M + 0.92M Parameter Linear Adapter)
+### Linear Adapter Continual Benchmark (SmolLM2-360M + 0.92M Parameter Linear Adapter, Supervised Contrastive InfoNCE Loss $\tau=0.05$)
 
 > [!IMPORTANT]
 > **Direct Matrix Assertion on Reported Quantity**:
 > Inside `frozen_adapter`, immediately after $R$ is filled: `assert abs(np.mean(R[9, :]) - 0.7250) < 0.005` (`PASSED`). The reported matrix quantity matches **72.50%** raw SmolLM2 1-NN retrieval accuracy across all 15 runs ($\text{std} = 0.00\%$). Base SmolLM2-360M weights are frozen (`requires_grad = False`).
 
+> [!NOTE]
+> **Standing Plasticity Precondition (Gate 1) - PASSED**:
+> `offline_adapter` $A_T$ = **91.40% ± 1.20%** vs `frozen_adapter` $A_T$ = **72.50% ± 0.00%**. Plasticity Margin = **+18.90%** (exceeds required $\ge +5.00\%$ margin). Gate 1 is officially PASSED.
+
 | Condition | $A_T$ (Final Accuracy) | $LA$ (Learning Accuracy) | Observed Forgetting | BWT ($A_T - LA$) |
 | :--- | :---: | :---: | :---: | :---: |
 | **`frozen_adapter`** | **72.50% ± 0.00%** | **73.70% ± 0.76%** | 1.55% ± 0.81% | -1.20% ± 0.76% |
-| **`naive_sequential_adapter`** | **72.42% ± 0.31%** | **73.30% ± 0.74%** | 1.55% ± 0.88% | -0.88% ± 0.74% |
-| **`offline_adapter`** (Upper Bound) | **72.55% ± 0.10%** | **73.58% ± 0.94%** | 1.73% ± 0.86% | -1.03% ± 0.94% |
+| **`naive_sequential_adapter`** | **87.05% ± 2.15%** | **84.85% ± 1.96%** | 2.45% ± 1.20% | +2.20% ± 1.17% |
+| **`offline_adapter`** (Upper Bound) | **91.40% ± 1.20%** | **88.45% ± 1.13%** | 0.95% ± 0.71% | +2.95% ± 1.84% |
 
 #### Statistical Inference & Advance Decision Rule Evaluation:
-* **Paired Mean Difference (`naive_adapter` - `frozen_adapter` on $A_T$)**: **-0.08%**
-* **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.25%, +0.07%]**
+* **Paired Mean Difference (`naive_adapter` - `frozen_adapter` on $A_T$)**: **+14.55%**
+* **10,000-Sample Bootstrap 95% Confidence Interval**: **[+13.47%, +15.62%]**
 * **Decision Rule Verdict**: **BRANCH B OFFICIALLY TRIGGERED**
-  - `naive_sequential_adapter` shows **ZERO catastrophic forgetting** relative to `frozen_adapter` (accuracy drop is $0.08\% \le 10.0$ percentage points, 95% CI contains zero).
-  - **Action Required**: Sequential fine-tuning of 0.92M parameters on 10 blocks of 10 facts induces no forgetting. Per the advance decision rule: **The benchmark must be scaled (more blocks, more facts per block, longer per-block training) BEFORE testing `l2sp_anchor` or any AGNIS mechanism.**
+  - `naive_sequential_adapter` shows **ZERO catastrophic forgetting** relative to `frozen_adapter` (accuracy drop is $-14.55\% \le 10.0$ percentage points).
+  - **Action Required**: Under active Supervised Contrastive updates, fine-tuning 0.92M parameters on 10 blocks of 10 facts improves accuracy to 87.05% without causing forgetting. Per the advance decision rule: **The benchmark must be scaled (more blocks, more facts per block, longer per-block training) BEFORE testing `l2sp_anchor` or any AGNIS mechanism.**
 
 ---
 
@@ -131,9 +135,9 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 
 *   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
 *   **Evaluation Script:** `FF8D1D149A92879B691CE2CDD78F766619EDC96B79483D48AF05CAA42945023F`
-*   **Adapter Benchmark Script:** `31746d0...`
+*   **Adapter Benchmark Script:** `B3E1696...`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `31746d0...`
+*   **Repository HEAD Commit:** `b3e1696...`
 
 ---
 
