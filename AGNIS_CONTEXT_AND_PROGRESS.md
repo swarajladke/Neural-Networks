@@ -106,14 +106,34 @@ Below are the aggregated metrics from the sequential validation sweeps (5 shuffl
 * **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.72%, +0.55%]**
 * **Verdict**: **The 95% CI contains zero.** `l2sp_anchor` is **statistically indistinguishable from performing no parameter updates at all (`frozen_encoder_writable_memory`)**.
 
+### Linear Adapter Continual Benchmark (SmolLM2-360M + 0.92M Parameter Linear Adapter)
+
+> [!IMPORTANT]
+> **Identity Initialization Assertion**:
+> The Linear Adapter ($W = I_{960}, b = 0$) reproduces **72.50%** raw SmolLM2 1-NN retrieval accuracy at initialization (`PASSED`). Base SmolLM2-360M weights are frozen (`requires_grad = False`).
+
+| Condition | $A_T$ (Final Accuracy) | $LA$ (Learning Accuracy) | Observed Forgetting | BWT ($A_T - LA$) |
+| :--- | :---: | :---: | :---: | :---: |
+| **`frozen_adapter`** | **24.00% ± 0.00%** | **27.90% ± 1.03%** | 3.90% ± 1.03% | -3.90% ± 1.03% |
+| **`naive_sequential_adapter`** | **24.08% ± 0.12%** | **27.85% ± 1.06%** | 3.88% ± 1.09% | -3.77% ± 1.12% |
+| **`offline_adapter`** (Upper Bound) | **28.62% ± 0.31%** | **34.12% ± 1.15%** | 5.50% ± 1.02% | -5.50% ± 1.02% |
+
+#### Statistical Inference & Advance Decision Rule Evaluation:
+* **Paired Difference (`naive_adapter` - `frozen_adapter` on $A_T$)**: **+0.08%**
+* **10,000-Sample Bootstrap 95% Confidence Interval**: **[+0.03%, +0.15%]**
+* **Decision Rule Verdict**: **BRANCH B TRIGGERED**
+  - `naive_sequential_adapter` shows **ZERO catastrophic forgetting** relative to `frozen_adapter` (drop is $-0.08\% \le 10$ points).
+  - **Action Required**: The 10-block $\times$ 10-fact benchmark configuration is too easy to induce forgetting. Per the advance decision rule, **the benchmark must be scaled (more blocks, more facts per block, longer per-block training) BEFORE testing `l2sp_anchor` or any AGNIS mechanism.**
+
 ---
 
 ## 5. Current Verification Locks & Hashing Manifest
 
 *   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
 *   **Evaluation Script:** `FF8D1D149A92879B691CE2CDD78F766619EDC96B79483D48AF05CAA42945023F`
+*   **Adapter Benchmark Script:** `E841330...`
 *   **Recompute Metrics Script:** `C836AF62E8E0F01520417CF287DC977EA771B35D6232C20564F1E06CFC0D221D`
-*   **Repository HEAD Commit:** `568966b2122d738c92e857ecdfca4d61edf19019`
+*   **Repository HEAD Commit:** `e17d86d...`
 
 ---
 
