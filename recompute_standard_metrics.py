@@ -37,8 +37,16 @@ def load_trajectories():
                 data = json.load(f)
                 if isinstance(data, dict):
                     for cond, run_list in data.items():
-                        if cond not in trajectories_by_cond and isinstance(run_list, list):
-                            trajectories_by_cond[cond] = run_list
+                        if isinstance(run_list, list):
+                            valid_runs = [r for r in run_list if isinstance(r, dict) and "order" in r and "R_matrix" in r]
+                            if valid_runs and cond not in trajectories_by_cond:
+                                trajectories_by_cond[cond] = valid_runs
+                elif isinstance(data, list):
+                    valid_runs = [r for r in data if isinstance(r, dict) and "order" in r and "R_matrix" in r]
+                    if valid_runs:
+                        cond = valid_runs[0].get("condition", filepath.replace("trajectories_", "").replace(".json", ""))
+                        if cond not in trajectories_by_cond:
+                            trajectories_by_cond[cond] = valid_runs
         except Exception as e:
             print(f"[Notice] Error reading {filepath}: {e}")
             
@@ -67,6 +75,8 @@ def analyze_trajectories(trajectories_by_cond):
         R_matrices = []
         
         for run in runs:
+            if not isinstance(run, dict) or "order" not in run or "R_matrix" not in run:
+                continue
             order = run["order"]
             R = np.array(run["R_matrix"])
             R_matrices.append(R)

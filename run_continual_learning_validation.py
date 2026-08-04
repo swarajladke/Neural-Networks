@@ -560,6 +560,8 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
 
             # Collect results for this seed/shuffle run
             results[-1].update({
+                "order": order,
+                "R_matrix": R.tolist(),
                 "mean_bwt": mean_bwt,
                 "mean_forgetting": mean_forgetting,
                 "worst_forgetting": worst_forgetting,
