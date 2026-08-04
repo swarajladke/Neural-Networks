@@ -584,55 +584,18 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
         
     return results
 
-def main():
-    print("="*80)
-    print("  AGNIS PHASE C.2.1: DIAGNOSTIC ROBUSTNESS & LEAKAGE AUDIT")
-    print("="*80)
-    
-    # Load dataset
-    if not os.path.exists(DATASET_PATH):
-        print(f"[Data] Scaling dataset not found at {DATASET_PATH}. Reconstructing automatically...")
-        os.system("python generate_scaling_dataset.py")
-        if not os.path.exists(DATASET_PATH):
-            raise FileNotFoundError(f"Scaling dataset not found at {DATASET_PATH}")
-            
-    with open(DATASET_PATH, "r") as f:
-        blocks = json.load(f)
-    all_facts = [fact for b in blocks for fact in b]
-    print(f"[Data] Loaded {len(blocks)} blocks containing {len(all_facts)} total facts.")
-    
-    # Load tokenizers
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    
-    # Load cache
-    if not os.path.exists(CACHE_100_PATH):
-        print(f"[Cache] Embeddings cache {CACHE_100_PATH} not found. Reconstructing automatically...")
-        from transformers import AutoModelForCausalLM
-        from run_student_continual_benchmarks import ensure_100_fact_embeddings
-        try:
-            model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
-            model.to(DEVICE)
-            model.eval()
-        except Exception as e:
-            raise RuntimeError("FAIL-CLOSED: Failed to load SmolLM2 model to generate embeddings cache") from e
-        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks)
-    else:
-        cache_data = torch.load(CACHE_100_PATH, weights_only=True)
-    
-import sys
-import glob
-
 def print_audit_report(all_summary, all_runs_results, sweep_configs, conditions):
     # Print validation report
     print("\n" + "="*80)
     print("  FINAL CONTINUAL-LEARNING METRICS COMPILATION REPORT")
     print("="*80)
-    print("  Condition                                | Plasticity  | Forgetting | Worst-Block | BWT        | Emb Drift | Output Drift | Verifier Score | Ranking Overlap")
+    print("  Condition                                | Plasticity  | Forgetting | Floored Fgt | BWT        | Emb Drift | Output Drift | Verifier Score | Ranking Overlap")
     print("  -------------------------------------------------------------------------------------------------------------------------------------------------------------")
     for cond in conditions:
         if cond in all_summary:
             s = all_summary[cond]
-            print(f"  {cond:40s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {s['worst_forgetting']*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
+            fgt_fl = s.get('forgetting_floored', s['forgetting'])
+            print(f"  {cond:40s} | {s['plasticity_gain']*100:10.2f}% | {s['forgetting']*100:9.2f}% | {fgt_fl*100:10.2f}% | {s['bwt']*100:9.2f}% | {s['drift_emb']:9.6f} | {s['drift_student']:12.6f} | {s['drift_verifier_score']:14.4f} | {s['drift_ranking_overlap']*100:14.2f}%")
     print("="*80)
 
     # Print Signed BWT Breakdown
@@ -673,37 +636,51 @@ def print_audit_report(all_summary, all_runs_results, sweep_configs, conditions)
         excess_mean_runs = []
         excess_worst_runs = []
         
-        for run_idx in range(len(res_cond)):
+        for run_idx in range(min(len(res_cond), len(res_frozen))):
             fgt_cond = res_cond[run_idx]["forgetting_per_block"]
             fgt_frozen = res_frozen[run_idx]["forgetting_per_block"]
             
             excess_blocks = []
             for blk in fgt_cond:
-                excess_blocks.append(fgt_cond[blk] - fgt_frozen[blk])
+                if blk in fgt_frozen:
+                    excess_blocks.append(fgt_cond[blk] - fgt_frozen[blk])
                 
-            excess_mean_runs.append(np.mean(excess_blocks))
-            excess_worst_runs.append(np.max(excess_blocks))
+            if len(excess_blocks) > 0:
+                excess_mean_runs.append(np.mean(excess_blocks))
+                excess_worst_runs.append(np.max(excess_blocks))
             
         mean_excess_forgetting = np.mean(excess_mean_runs) if len(excess_mean_runs) > 0 else 0.0
-        worst_excess_forgetting = np.max(excess_worst_runs) if len(excess_worst_runs) > 0 else 0.0
+        
+        # Task 4 Fix: Report mean, 95th percentile, and max of excess_worst_runs. Use 95th percentile for gate.
+        worst_excess_mean = np.mean(excess_worst_runs) if len(excess_worst_runs) > 0 else 0.0
+        worst_excess_95th = float(np.percentile(excess_worst_runs, 95)) if len(excess_worst_runs) > 0 else 0.0
+        worst_excess_max = np.max(excess_worst_runs) if len(excess_worst_runs) > 0 else 0.0
         
         forgetting_pass = (mean_excess_forgetting <= 0.02)
-        worst_forgetting_pass = (worst_excess_forgetting <= 0.05)
+        worst_forgetting_pass = (worst_excess_95th <= 0.05)
         plasticity_pass = (s["plasticity_gain"] >= 0.95 * naive_sum["plasticity_gain"])
         ranking_pass = (s["drift_ranking_overlap"] >= 0.95)
         
         status = "PASSED (Certified CL Robust)" if (forgetting_pass and worst_forgetting_pass and plasticity_pass and ranking_pass) else "FAILED"
         print(f"\n  * Configuration: {name}")
-        print(f"    - Paired Excess Forgetting <= 2.0%      : {'PASSED' if forgetting_pass else 'FAILED'} (Observed: {mean_excess_forgetting*100:.2f}%)")
-        print(f"    - Worst Paired Excess Forgetting <= 5.0%: {'PASSED' if worst_forgetting_pass else 'FAILED'} (Observed: {worst_excess_forgetting*100:.2f}%)")
+        print(f"    - Paired Excess Forgetting <= 2.0%               : {'PASSED' if forgetting_pass else 'FAILED'} (Observed: {mean_excess_forgetting*100:.2f}%)")
+        print(f"    - Worst Paired Excess Forgetting (95th) <= 5.0%: {'PASSED' if worst_forgetting_pass else 'FAILED'} (Observed 95th: {worst_excess_95th*100:.2f}%, Mean: {worst_excess_mean*100:.2f}%, Max: {worst_excess_max*100:.2f}%)")
         print(f"    - Plasticity Gain within 95% of naive (Target >= {0.95*naive_sum['plasticity_gain']*100:.2f}%): {'PASSED' if plasticity_pass else 'FAILED'} (Observed: {s['plasticity_gain']*100:.2f}%)")
-        print(f"    - Ranking Overlap >= 95.0%              : {'PASSED' if ranking_pass else 'FAILED'} (Observed: {s['drift_ranking_overlap']*100:.2f}%)")
-        print(f"    - Overall Certification Status         : {status}")
+        print(f"    - Ranking Overlap >= 95.0%                       : {'PASSED' if ranking_pass else 'FAILED'} (Observed: {s['drift_ranking_overlap']*100:.2f}%)")
+        print(f"    - Overall Certification Status                  : {status}")
     print("="*80)
 
 
 def main():
     sweep_configs = [
+        # De-confounded sweeps at baseline learning rate 3e-4 (Task 3)
+        ("agnis_replay_lr3e-4_lam0.0", 3e-4, 0.0, 0.0),
+        ("agnis_replay_lr3e-4_lam0.001", 3e-4, 0.001, 0.001),
+        ("agnis_replay_lr3e-4_lam0.002", 3e-4, 0.002, 0.002),
+        ("agnis_replay_lr3e-4_lam0.005", 3e-4, 0.005, 0.005),
+        ("agnis_replay_lr3e-4_lam0.01", 3e-4, 0.01, 0.01),
+        ("agnis_replay_lr3e-4_lam0.02", 3e-4, 0.02, 0.02),
+        ("agnis_replay_lr3e-4_lam0.05", 3e-4, 0.05, 0.05),
         # Milli-scale sweeps at standard learning rate 1e-3
         ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
         ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),

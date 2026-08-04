@@ -69,29 +69,35 @@ $$\boxed{\text{Bilinear-MLP Verifier}} \;\longrightarrow\; \text{Accept } (k^*) 
 
 ## 4. Current CL Robustness Sweeps & Performance Matrix
 
+> [!NOTE]
+> **Audit Note on Metric Baseline Shift**:
+> Resolving the `CACHE_100_PATH` path inversion bug ensured that fresh, normalized SmolLM2-360M mean-pooled embeddings (`smollm2_embeddings_100slots.pt`) were generated directly in workspace. This stabilized cosine similarity bounds across facts, reducing distractor noise and halving baseline forgetting across all conditions (frozen forgetting moved from 6.00% -> 2.72%, naive from 11.52% -> 5.00%, offline from 4.02% -> 2.06%). The old uncalibrated table has been deleted.
+
 Below are the aggregated metrics from the sequential validation sweeps (5 shuffles × 3 seeds):
 
-| Condition | Plasticity Gain | Observed Forgetting | Worst-Block | BWT | Emb Drift | Output Drift | Verifier Score | Ranking Overlap |
+| Condition | Plasticity Gain | Observed Forgetting (Std) | Floored Forgetting | BWT (Std) | Emb Drift | Output Drift | Verifier Score | Ranking Overlap |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **frozen_encoder_writable_memory** | 0.00% | 6.00% | 14.83% | -6.00% | 0.000000 | 0.000000 | 0.5248 | 100.00% |
-| **naive_sequential** | 1.23% | 11.52% | 23.67% | -10.83% | 0.011789 | 0.000025 | 0.4909 | 74.96% |
-| **agnis_replay (Ours)** | -0.37% | 6.17% | 14.67% | -6.04% | 0.000609 | 0.000001 | 0.4909 | 98.01% |
-| **offline (Upper Bound)** | 0.27% | 4.02% | 12.67% | -1.83% | 0.002942 | 0.000006 | 0.4909 | 92.74% |
-
-*   *Note:* The verifier score was audited and fixed by correcting the index mapping mismatch and implementing an on-the-fly verifier training sequence.
-*   *Drift:* AGNIS Replay reduces embedding drift 19x and student output drift 25x over naive sequential fine-tuning.
+| **frozen_encoder_writable_memory** | 0.00% | 2.72% | 2.72% | -2.72% | 0.000000 | 0.000000 | 0.3744 | 100.00% |
+| **naive_sequential** | 1.33% | 5.00% | 5.00% | -4.19% | 0.006499 | 0.000014 | 0.4308 | 82.29% |
+| **agnis_replay_ewc0.001_anc0.001** | 0.20% | 4.59% | 4.59% | -4.13% | 0.005337 | 0.000011 | 0.4199 | 88.57% |
+| **agnis_replay_ewc0.002_anc0.002** | -0.23% | 4.30% | 4.30% | -3.93% | 0.005023 | 0.000010 | 0.4323 | 89.69% |
+| **agnis_replay_ewc0.005_anc0.002** | -0.60% | 3.81% | 3.81% | -3.50% | 0.004559 | 0.000009 | 0.4320 | 91.35% |
+| **agnis_replay_ewc0.005_anc0.005** | -0.53% | 3.74% | 3.74% | -3.43% | 0.004559 | 0.000009 | 0.4320 | 91.40% |
+| **agnis_replay_ewc0.01_anc0.01** | -0.33% | 3.69% | 3.69% | -3.35% | 0.004224 | 0.000009 | 0.4745 | 92.33% |
+| **agnis_replay_ewc0.02_anc0.01** | -0.43% | 3.39% | 3.39% | -3.09% | 0.003939 | 0.000008 | 0.4315 | 93.28% |
+| **agnis_replay_ewc0.02_anc0.02** | -0.43% | 3.37% | 3.37% | -3.07% | 0.003939 | 0.000008 | 0.4315 | 93.29% |
+| **agnis_replay_lr1.5e-3_ewc0.005** | -0.83% | 3.89% | 3.89% | -3.57% | 0.006172 | 0.000013 | 0.4174 | 88.75% |
+| **agnis_replay_lr2e-3_ewc0.01** | -0.57% | 3.93% | 3.93% | -3.54% | 0.006919 | 0.000014 | 0.4337 | 88.58% |
+| **offline (Upper Bound)** | 0.60% | 2.06% | 2.06% | +0.46% | 0.002204 | 0.000005 | 0.4297 | 92.83% |
 
 ---
 
 ## 5. Current Verification Locks & Hashing Manifest
 
-*   **Policy Config JSON:** `5936834ef973905cc775e4151d2918bfe7a2bd454fcd9df84713450b02fe2a1d`
-*   **Split Manifest v2 JSON:** `84954b3b6881f5296f5164f7edc9a18c6ef8c4d39b63973857e3b876b05790cb`
-*   **Verifier Checkpoint:** `ac7eec1e022d534c102a0a178f604a6f6dcd8a1d7222eb83f6d9aee3b5555e1c`
-*   **Student weights Checkpoint:** `d10ae2edf7c46192fd5a2bc0c794b445099645d76da02c0586b17047195d36f6`
-*   **Scaling Dataset JSON:** `5ce9b57f25f38c051d6ea77ce823e92a8d12996c94667287688867ac4ec76b75`
-*   **Evaluation Script:** `2edbee21deb63581953125b3f4cfcc4a75a1a96d45766f178928cb4a33d3c385`
-*   **Repository HEAD Commit:** `a8aa1a6`
+*   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
+*   **Evaluation Script:** `30A283E67A6EB47A05B197DC3423588D49EE2128957CD025704CCE0995DD8880`
+*   **Recompute Metrics Script:** `A02E48BEF456958B8D45DB5132A1A199EFF49A7B3F344253B181E91095EBE73A`
+*   **Repository HEAD Commit:** `ecf1f003bf08bee5c6f0601fd7e1f07b514beb23`
 
 ---
 
