@@ -729,15 +729,20 @@ def main():
         chunk_summary_files = sorted(glob.glob("continual_learning_results_*.json"))
         chunk_summary_files = [f for f in chunk_summary_files if f != "continual_learning_results.json"]
         chunk_runs_files = sorted(glob.glob("trajectories_*.json"))
+        chunk_runs_files = [f for f in chunk_runs_files if f != "trajectories_all.json"]
         
         print(f"[Merge] Found {len(chunk_summary_files)} summary chunk files and {len(chunk_runs_files)} trajectory files.")
         for sf in chunk_summary_files:
             with open(sf, "r") as f:
-                all_summary.update(json.load(f))
+                data = json.load(f)
+                if isinstance(data, dict):
+                    all_summary.update(data)
                 
         for rf in chunk_runs_files:
             with open(rf, "r") as f:
-                all_runs_results.update(json.load(f))
+                data = json.load(f)
+                if isinstance(data, dict):
+                    all_runs_results.update(data)
                 
         conditions = [c for c in all_twelve if c in all_summary]
         
