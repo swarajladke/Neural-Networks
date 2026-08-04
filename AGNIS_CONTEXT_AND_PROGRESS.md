@@ -75,35 +75,32 @@ $$\boxed{\text{Bilinear-MLP Verifier}} \;\longrightarrow\; \text{Accept } (k^*) 
 
 Below are the aggregated metrics from the sequential validation sweeps (5 shuffles × 3 seeds):
 
-### Standard Continual Learning Metrics ($A_T, LA$, Standard Forgetting, Standard BWT)
+> [!IMPORTANT]
+> **Matrix Populated Rows Notice ($t \ge 4$)**:
+> Matrix $R[t, b]$ is populated at row $t=4$ (joint base phase for blocks 0-4) and rows $t=5..9$ (5 sequential steps for blocks 5..9). Rows 0..3 are un-populated zero rows. All metrics below are computed strictly over populated rows ($t \ge 4$).
 
-| Condition | $A_T$ (Final Acc) | $LA$ (Learning Acc) | Standard Forgetting | Floored Forgetting | Standard BWT | Floored BWT |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`frozen_encoder_writable_memory`** | $20.28\% \pm 1.47\%$ | $7.37\% \pm 1.72\%$ | $2.45\% \pm 1.59\%$ | $2.72\% \pm 1.77\%$ | $+12.92\% \pm 1.86\%$ | $-2.72\% \pm 1.77\%$ |
-| **`naive_sequential`** | $19.00\% \pm 1.29\%$ | $7.40\% \pm 1.44\%$ | $4.78\% \pm 2.10\%$ | $5.00\% \pm 2.71\%$ | $+11.60\% \pm 1.95\%$ | $-4.19\% \pm 2.40\%$ |
-| **`offline`** | $23.73\% \pm 1.92\%$ | $7.95\% \pm 1.84\%$ | $2.33\% \pm 1.18\%$ | $2.06\% \pm 1.67\%$ | $+15.78\% \pm 1.76\%$ | $+0.46\% \pm 1.93\%$ |
-| **`agnis_replay`** | $20.20\% \pm 1.38\%$ | $7.30\% \pm 1.72\%$ | $2.77\% \pm 1.62\%$ | $3.06\% \pm 1.81\%$ | $+12.90\% \pm 1.75\%$ | $-2.74\% \pm 1.85\%$ |
+### Standard Headline Continual Learning Metrics (Computed Over Populated Rows $t \ge 4$)
 
-### De-Confounded Learning Rate Sweep ($\text{lr}=3\times 10^{-4}$) Empirical Performance
+| Condition | $A_T$ (Final Accuracy) | $LA$ (Learning Accuracy) | Observed Forgetting | BWT |
+| :--- | :---: | :---: | :---: | :---: |
+| **`frozen_encoder_writable_memory`** | **20.28% ± 1.47%** | 12.28% ± 2.87% | 2.72% ± 1.77% | -2.72% ± 1.77% |
+| **`naive_sequential`** | **19.00% ± 1.29%** | 12.33% ± 2.40% | 5.00% ± 2.71% | -4.19% ± 2.40% |
+| **`offline` (Upper Bound)** | **23.73% ± 1.92%** | 13.25% ± 3.07% | 2.06% ± 1.67% | +0.46% ± 1.93% |
+| **`agnis_replay_lr3e-4_lam0.0`** | **20.20% ± 1.38%** | 12.17% ± 2.87% | 3.37% ± 1.81% | -2.48% ± 1.85% |
 
-| Condition | Plasticity Gain | Standard Forgetting | Floored Forgetting | Standard BWT | Emb Drift | Output Drift | Verifier Score | Ranking Overlap |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`agnis_replay_lr3e-4_lam0.0`** | -0.23% | 3.37% | 3.37% | -2.48% | 0.002938 | 0.000006 | 0.4253 | 92.17% |
-| **`agnis_replay_lr3e-4_lam0.001`** | -0.30% | 3.56% | 3.56% | -2.56% | 0.002677 | 0.000006 | 0.4286 | 94.24% |
-| **`agnis_replay_lr3e-4_lam0.002`** | -0.57% | 3.31% | 3.31% | -2.41% | 0.002572 | 0.000005 | 0.4285 | 94.91% |
-| **`agnis_replay_lr3e-4_lam0.005`** | -0.33% | 3.44% | 3.44% | -2.65% | 0.002365 | 0.000005 | 0.4285 | 95.29% |
-| **`agnis_replay_lr3e-4_lam0.01`** | -0.37% | 3.26% | 3.26% | -2.57% | 0.002126 | 0.000004 | 0.4286 | 95.90% |
-| **`agnis_replay_lr3e-4_lam0.02`** | -0.20% | 3.11% | 3.11% | -2.69% | 0.001814 | 0.000004 | 0.4287 | 96.42% |
-| **`agnis_replay_lr3e-4_lam0.05`** | -0.03% | 3.06% | 3.06% | -2.74% | 0.001409 | 0.000003 | 0.4286 | 96.76% |
+### Statistical Inference: Paired Difference vs Frozen Control on $A_T$
+* **Paired Difference ($A_T[\text{agnis\_replay}] - A_T[\text{frozen}]$)**: **-0.08%**
+* **10,000-Sample Bootstrap 95% Confidence Interval**: **[-0.72%, +0.55%]**
+* **Verdict**: **The 95% CI contains zero.** `agnis_replay` is **statistically indistinguishable from performing no parameter updates at all (`frozen_encoder_writable_memory`)**.
 
 ---
 
 ## 5. Current Verification Locks & Hashing Manifest
 
 *   **Scaling Dataset JSON:** `B1609C3034AED4DCD50B06E9A18164418B9B4FB609D4319D091E2581C61F0C0D`
-*   **Evaluation Script:** `EA9A4E600E9829E43B7047B59DFA538C96FC341DE4D4A1DB176ADB1B39FAE58A`
-*   **Recompute Metrics Script:** `2E0DC9C8E782F788BA37B855A1B1FD9B3D6EAD41C58ED6683555108E99DAE0E6`
-*   **Repository HEAD Commit:** `de303ab71180e99280452f61aab0d9394f110a68`
+*   **Evaluation Script:** `B26532BA6D30719633B2D3A7045B540C16A38921919E45C748BB3085B0F356B7`
+*   **Recompute Metrics Script:** `967A635FF4FA5AF3CC64AD61CD66824A7EF1038FDD588DDCB9BFB64FE752CF3C`
+*   **Repository HEAD Commit:** `2289abb57dc2097ebd7edf428b8048376ea1e846`
 
 ---
 
