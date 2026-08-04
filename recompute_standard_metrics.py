@@ -173,7 +173,40 @@ def analyze_trajectories(trajectories_by_cond):
         json.dump(clean_summary, f, indent=2)
     print("\n[OK] Saved standard CL metrics report to standard_cl_metrics_report.json")
 
+def compute_raw_smollm2_accuracy():
+    cache_path = "smollm2_embeddings_100slots.pt"
+    if not os.path.exists(cache_path):
+        cache_path = "../smollm2_embeddings_100slots.pt"
+    if not os.path.exists(cache_path):
+        return None
+    try:
+        import torch
+        data = torch.load(cache_path, map_location="cpu")
+        train_x = data["train_x"]  # 300 x 960
+        train_y = data["train_y"]  # 300
+        test_x = data["test_x"]    # 400 x 960
+        test_y = data["test_y"]    # 400
+        
+        correct = 0
+        total = len(test_x)
+        for i in range(total):
+            q = test_x[i]
+            sims = torch.matmul(train_x, q.unsqueeze(-1)).squeeze(-1)
+            best_idx = torch.argmax(sims).item()
+            if train_y[best_idx].item() == test_y[i].item():
+                correct += 1
+        return (correct / total) * 100.0
+    except Exception as e:
+        print(f"[Notice] Could not compute raw SmolLM2 accuracy: {e}")
+        return None
+
 if __name__ == "__main__":
+    raw_acc = compute_raw_smollm2_accuracy()
+    if raw_acc is not None:
+        print("\n" + "="*80)
+        print(f"  RAW SmolLM2-360M 1-NN RETRIEVAL ACCURACY (NO STUDENT): {raw_acc:.2f}%")
+        print("="*80)
+
     trajs = load_trajectories()
     if not trajs:
         print("[Notice] No trajectory files found. Run validation experiment first.")

@@ -340,11 +340,8 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             recall_count += 1
                     r_before = recall_count / len(z_queries)
                 
-                # Set up optimizer for this block's updates
-                if condition == "agnis_replay":
-                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-4)
-                else:
-                    inc_optimizer = torch.optim.AdamW(student.parameters(), lr=1e-3, weight_decay=1e-4)
+                # Set up optimizer for this block's updates (passed lr is used for all conditions)
+                inc_optimizer = torch.optim.AdamW(student.parameters(), lr=lr, weight_decay=1e-4)
 
                 # Train updates
                 if condition == "frozen_encoder_writable_memory":
@@ -367,7 +364,7 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             inc_optimizer.zero_grad()
                             loss.backward()
                             inc_optimizer.step()
-                elif condition == "agnis_replay":
+                elif condition.startswith("l2sp_anchor") or condition.startswith("agnis_replay"):
                     student.train()
                     curr_s = block_train_s[curr_block]
                     curr_x = block_train_x[curr_block]
@@ -381,21 +378,20 @@ def run_continual_experiment(tokenizer, all_facts, cache_data, condition="agnis_
                             z_s = student(ids, mask)
                             z_t = curr_x[b_idx]
                             
-                            # 1. New-fact distillation loss (un-diluted, matching naive sequential)
+                            # 1. New-fact distillation loss
                             loss_distill = (1.0 - (z_s * z_t).sum(dim=-1)).mean()
                             
                             # 2. Stability coordinate preservation penalty (L2 anchor constraint)
                             cur_anchor_embeddings = student(anchor_ids, anchor_mask)
                             loss_anchor = F.mse_loss(cur_anchor_embeddings, anchor_embeddings)
                             
-                            # 3. L2 parameter EWC stability regularization
-                            loss_ewc = 0.0
+                            # 3. L2-SP parameter distance regularization (L2-SP, parameter distance to base state)
+                            loss_l2sp = 0.0
                             for name, param in student.named_parameters():
                                 if param.requires_grad:
-                                    loss_ewc += torch.sum((param - base_state[name]) ** 2)
+                                    loss_l2sp += torch.sum((param - base_state[name]) ** 2)
                                     
-                            loss = loss_distill + lambda_anchor * loss_anchor + lambda_ewc * loss_ewc
-                            
+                            loss = loss_distill + lambda_anchor * loss_anchor + lambda_l2sp * loss_l2sp
                             inc_optimizer.zero_grad()
                             loss.backward()
                             inc_optimizer.step()
@@ -681,26 +677,26 @@ def print_audit_report(all_summary, all_runs_results, sweep_configs, conditions)
 def main():
     sweep_configs = [
         # De-confounded sweeps at baseline learning rate 3e-4 (Task 3)
-        ("agnis_replay_lr3e-4_lam0.0", 3e-4, 0.0, 0.0),
-        ("agnis_replay_lr3e-4_lam0.001", 3e-4, 0.001, 0.001),
-        ("agnis_replay_lr3e-4_lam0.002", 3e-4, 0.002, 0.002),
-        ("agnis_replay_lr3e-4_lam0.005", 3e-4, 0.005, 0.005),
-        ("agnis_replay_lr3e-4_lam0.01", 3e-4, 0.01, 0.01),
-        ("agnis_replay_lr3e-4_lam0.02", 3e-4, 0.02, 0.02),
-        ("agnis_replay_lr3e-4_lam0.05", 3e-4, 0.05, 0.05),
+        ("l2sp_anchor_lr3e-4_lam0.0", 3e-4, 0.0, 0.0),
+        ("l2sp_anchor_lr3e-4_lam0.001", 3e-4, 0.001, 0.001),
+        ("l2sp_anchor_lr3e-4_lam0.002", 3e-4, 0.002, 0.002),
+        ("l2sp_anchor_lr3e-4_lam0.005", 3e-4, 0.005, 0.005),
+        ("l2sp_anchor_lr3e-4_lam0.01", 3e-4, 0.01, 0.01),
+        ("l2sp_anchor_lr3e-4_lam0.02", 3e-4, 0.02, 0.02),
+        ("l2sp_anchor_lr3e-4_lam0.05", 3e-4, 0.05, 0.05),
         # Equalized lr=1e-3 lambda=0 control arm (Item 2)
-        ("agnis_replay_lr1e-3_lam0.0", 1e-3, 0.0, 0.0),
+        ("l2sp_anchor_lr1e-3_lam0.0", 1e-3, 0.0, 0.0),
         # Milli-scale sweeps at standard learning rate 1e-3
-        ("agnis_replay_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
-        ("agnis_replay_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
-        ("agnis_replay_ewc0.005_anc0.002", 1e-3, 0.005, 0.002),
-        ("agnis_replay_ewc0.005_anc0.005", 1e-3, 0.005, 0.005),
-        ("agnis_replay_ewc0.01_anc0.01", 1e-3, 0.01, 0.01),
-        ("agnis_replay_ewc0.02_anc0.01", 1e-3, 0.02, 0.01),
-        ("agnis_replay_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
-        # Higher learning rates to overcome EWC anchoring tension
-        ("agnis_replay_lr1.5e-3_ewc0.005", 1.5e-3, 0.005, 0.005),
-        ("agnis_replay_lr2e-3_ewc0.01", 2e-3, 0.01, 0.01)
+        ("l2sp_anchor_ewc0.001_anc0.001", 1e-3, 0.001, 0.001),
+        ("l2sp_anchor_ewc0.002_anc0.002", 1e-3, 0.002, 0.002),
+        ("l2sp_anchor_ewc0.005_anc0.002", 1e-3, 0.005, 0.002),
+        ("l2sp_anchor_ewc0.005_anc0.005", 1e-3, 0.005, 0.005),
+        ("l2sp_anchor_ewc0.01_anc0.01", 1e-3, 0.01, 0.01),
+        ("l2sp_anchor_ewc0.02_anc0.01", 1e-3, 0.02, 0.01),
+        ("l2sp_anchor_ewc0.02_anc0.02", 1e-3, 0.02, 0.02),
+        # Higher learning rates to overcome L2-SP anchoring tension
+        ("l2sp_anchor_lr1.5e-3_ewc0.005", 1.5e-3, 0.005, 0.005),
+        ("l2sp_anchor_lr2e-3_ewc0.01", 2e-3, 0.01, 0.01)
     ]
     all_twelve = ["frozen_encoder_writable_memory", "naive_sequential"] + [c[0] for c in sweep_configs] + ["offline"]
 
