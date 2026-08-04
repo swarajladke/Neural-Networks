@@ -20,8 +20,9 @@ def audit_failures():
         MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
         with open("agnis_scaling_dataset.json", "r") as f:
             blocks = json.load(f)
+        DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-        model = AutoModelForCausalLM.from_pretrained(MODEL_ID)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
         model.eval()
         data = ensure_100_fact_embeddings(tokenizer, model, blocks)
     else:
