@@ -31,7 +31,7 @@
 - Selection: A_T(offline) - A_T(frozen) = 94.98% - 72.50% = **+22.48%**
 - Fresh: A_T(offline) - A_T(frozen) = 94.45% - 72.50% = **+21.95%**
 
-The adapter learns substantially (~+22 points). Any mechanism that does not outperform the frozen baseline has not demonstrated useful adaptation.
+The adapter learns substantially (~+22 points). Mechanisms are evaluated by how much of A_T(offline) - A_T(method) they close. Frozen establishes only that the adapter can learn.
 
 **Naive Sequential Fine-tuning** (train each block in sequence, no memory):
 
@@ -46,7 +46,7 @@ The adapter learns substantially (~+22 points). Any mechanism that does not outp
 
 | Metric | Selection (50 runs) | Fresh (50 runs) |
 |:---|:---:|:---:|
-| A_T | 94.98% +/- 0.74% (94.00..95.75%) | 94.45% +/- 1.31% (92.00..96.50%) |
+| A_T | 94.98% +/- 0.74% (94.00..95.75%) [CONFIRMED] | 94.45% +/- 1.31% (92.00..96.50%) |
 | LA | 93.05% +/- 1.02% | 92.70% +/- 1.26% |
 | BWT | **+1.93%** | **+1.75%** |
 | Observed Forgetting | 0.65% +/- 0.32% | 0.72% +/- 0.71% |
@@ -59,12 +59,12 @@ The adapter learns substantially (~+22 points). Any mechanism that does not outp
 
 ---
 
-## 3. OGP Rank Sweep -- Pooled Results Table (100 Runs per Condition)
+## 3. OGP Rank Sweep -- Per-Seed-Set Results (50 Runs per Condition per Seed Set)
 
 **Method**: After training on base blocks 0-4, before each sequential block step t in [5, 9]:
 1. Accumulate past training inputs M in R^{N_past x 960}.
 2. SVD: right singular vectors V_k in R^{960 x k}.
-3. Gradient projection: grad_W <- grad_W * (I - V_k V_k^T).
+3. Gradient projection applied to grad_W only: grad_W <- grad_W * (I - V_k V_k^T). The 960-dim bias b is unprojected (see Limitation 6).
 
 At step 9, N_past = 270 (9 blocks x 30 refs). k protected directions; 960 - k free.
 
@@ -75,7 +75,7 @@ At step 9, N_past = 270 (9 blocks x 30 refs). k protected directions; 960 - k fr
 - Observed Forgetting = mean_j[max_{t>=t_j} R[t,j] - R[9,j]] (robust to unpopulated rows; does NOT satisfy A_T = LA - Fgt).
 - Paired 95% CI: 10,000-sample bootstrap on within-run differences vs naive.
 
-Point estimates below: unweighted mean of two 50-run means. Format `[sel | fre]` shows per-seed-set values.
+All values below are per-seed-set; the `[sel | fre]` format shows Selection Seeds 101-105 and Fresh Seeds 211-215 separately. No single pooled estimate is reported because the two seed sets differ in naive BWT by 1.10 pp and in OGP gain by up to 0.47 pp, making an unweighted mean potentially misleading.
 
 | k | A_T [sel\|fre] | LA [sel\|fre] | BWT [sel\|fre] | Obs.Fgt [sel\|fre] | CI sel | CI fre | Verdict |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -109,7 +109,7 @@ Point estimates below: unweighted mean of two 50-run means. Format `[sel | fre]`
 | BOTTOM-32 | Bottom-32 right singular vectors of past inputs M | 89.70\|90.48 | -0.98\|+0.08 | +0.07 [+0.01,+0.15] | -0.00 [-0.09,+0.09] | Negligible (sel CI width 0.14 vs std 2.20) |
 | CURRENT-32 | Top-32 singular vectors of current block only | 87.78\|86.35 | -1.29\|-2.15 | -1.85 [-2.48,-1.25] | -4.13 [-5.29,-2.95] | Sig. worse both |
 
-**Mechanistic conclusion**: RANDOM-32 is null on both seed sets (OGP is not a generic rank constraint). BOTTOM-32 is negligible despite confirmed weight displacement (max|W_bot - W_naive| = 0.055; R matrices differ by up to 5.0 pp, but shifts cancel across blocks at 0.25% quantisation). CURRENT-32 significantly degrades A_T and BWT on both seed sets. Only TOP-32 (top principal directions of the accumulated past-input matrix) produces the gain. The mechanism is confirmed as described.
+**Mechanistic conclusion**: RANDOM-32 is null on both seed sets (OGP is not a generic rank constraint). BOTTOM-32 has a negligible net A_T effect despite confirmed weight displacement (max|W_bot - W_naive| = 0.055; R matrices differ by up to 5.0 pp per block, but the aggregate A_T change is negligible at 0.25% quantisation resolution). CURRENT-32 significantly degrades A_T and BWT on both seed sets. Only TOP-32 (top principal directions of the accumulated past-input matrix) produces the gain. The mechanism is confirmed as described.
 
 ---
 
@@ -144,21 +144,21 @@ Both project task gradients into the complement of a stored basis built from pas
 
 3. **Three-way mechanistic control**: RANDOM-32 (generic rank constraint), BOTTOM-32 (non-principal past directions), CURRENT-32 (current-only subspace). All three are null or significantly negative while TOP-32 is significantly positive on both seed sets -- a pattern not standard in GPM papers.
 
-4. **Diagnosis of past failed mechanism**: AGNIS's R_mask "synaptic shielding" is coordinate-aligned weight masking, equivalent to GPM in the standard basis -- an unaligned basis relative to any task's activation geometry. This explains why the mask mechanism measured exactly zero effect on every evaluation in this project.
+4. **Inference about coordinate-aligned masking**: RANDOM-32 is null on both seed sets, indicating that a subspace unaligned with past activation geometry confers no protection. This predicts that coordinate-aligned weight masking (AGNIS's R_mask "synaptic shielding", i.e. GPM in the standard basis) would likewise be inert. This is consistent with R_mask never having produced a measurable effect -- however, R_mask was never validly executed (the mask term was absent from the weight update in run_control_battery.py and Control E could not run due to the task_idx oracle requirement). The inertness of R_mask remains an inference, not a measurement.
 
 ---
 
 ## 7. Headline Summary
 
-OGP with k in [16, 32] improves final accuracy by **+2.0 to +2.7 percentage points** over naive sequential fine-tuning (paired 95% CIs excluding zero on two independent seed sets of 50 runs each), and raises BWT from -1.05/+0.05 (naive) to +0.28/+1.17 (k=32) and +0.48/+1.57 (k=24). The forgetting reduction (delta_BWT) is -1.23 to -1.40 percentage points across the two seed sets at k=24, with CIs excluding zero.
+OGP with k in [16, 32] improves final accuracy by **+2.0 to +2.7 percentage points** over naive sequential fine-tuning (paired 95% CIs excluding zero on two independent seed sets of 50 runs each), and raises BWT from -1.05/+0.05 (naive) to +0.28/+1.17 (k=32) and +0.48/+1.57 (k=24). At k=24, OGP raises BWT by **+1.52 to +1.53 points** and reduces observed forgetting by **1.38 to 1.40 points** (both CIs exclude zero on both seed sets).
 
-k=24 shows the highest mean A_T on both seed sets and is the headline result. k=32 is the robustness anchor (between-set gain spread 0.10 pp). Percentage-of-gap recovery ranges 37-69% because the naive-offline gap itself varies between seed sets (5.35% vs 3.97%). The absolute gain (+2.0 to +2.7 points) is the more stable quantity.
+k=24 shows the highest mean A_T on both seed sets and is the headline result. k=32 is the robustness anchor (between-set gain spread 0.10 pp). Gap recovery at k=24 is 42% (selection, gap 5.35%) to 69% (fresh, gap 3.97%); at k=32 it is 37% to 52%. These percentages vary because the naive-offline gap differs between seed sets. The absolute gain (+2.0 to +2.7 points) is the more stable quantity and should be the primary citation.
 
 ---
 
 ## 8. Limitations
 
-1. **4-to-5 point ceiling**: The measurable CL gap is 3.97-5.35 points. OGP recovers roughly half. The remaining gap is not addressed.
+1. **4-to-5 point ceiling**: The measurable CL gap is 3.97-5.35 points. At k=24, OGP recovers 42% on the selection set and 69% on the fresh set; at k=32, 37% and 52%. The remaining gap is not addressed.
 
 2. **Cross-set verdict disagreements at k=6, 8, 128**: Three rank values produce opposite verdicts across independent 50-run seed sets. Block-ordering variance accounts for more outcome variance than rank-budget tuning does.
 
@@ -167,6 +167,8 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 4. **Single-task retrieval benchmark**: All 10 blocks are the same task type (1-NN retrieval from a fixed corpus). The mechanism has not been evaluated under multi-task classification. Positive transfer across similar tasks may mask forgetting that would appear under genuinely dissimilar task distributions.
 
 5. **Synthetic corpus with engineered interference**: Confusable-pair placement was constructed to maximise inter-block interference. Results may not generalise to naturally occurring corpora.
+
+6. **Bias vector unprojected**: The gradient projection (I - V_k V_k^T) is applied to grad_W only. The 960-dim bias b is updated without projection, so each gradient step shifts outputs by delta_b in all directions including the protected subspace. The empirical effect of this gap was not measured in this suite. Either extend the projection to include b, or treat the k-direction protection as approximate.
 
 ---
 
