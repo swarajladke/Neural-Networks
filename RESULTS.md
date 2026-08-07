@@ -247,80 +247,110 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 4. **Control C4 (Gradient Clip Control)**:
    - `GRADIENT-CLIP-C4` (naive $\text{lr}=10^{-2}$ clipped to near-zero norm): Selection $A_T = \mathbf{88.95\%}$, Fresh $A_T = \mathbf{86.65\%}$. Replicates `FREEZE-AFTER-BASE` exactly.
 
-**Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regulariser and does not represent a valid mechanism.
+**Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regular## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
+
+> **SECTION 10 HOLD (C2 SPLIT)**: The base-trained vs never-trained C2 split is marked **PENDING** until `dump_c2_raw_data.py` executes on Kaggle to produce `c2_raw_arrays.json` and its SHA-256 checksum. Both the "strictly localized" and "generic metric transfer" claims are temporarily withdrawn. The measured overall C2 $A_T$ figure ($88.95\% \pm 2.41\%$ Selection / $86.67\% \pm 3.44\%$ Fresh) remains valid.
+
+### 10.1 Definitional Correction: Joint Offline Upper Bound vs Incremental Joint
+- **CORRECTION**: The intermediate report (3:12 PM) listed Offline $LA = 62.46\%$ and Offline $BWT = +34.76\%$. This was caused by an **incremental joint training** definition (training 30 epochs step-by-step as each block was added), which evaluated block $j$ at step $\text{order.index}(j)$ before joint training on remaining blocks completed.
+- **True Joint Offline Upper Bound**: Single-pass joint training on all 100 classes for 300 epochs yields Offline $A_T = \mathbf{97.23\%}$, Offline $LA = \mathbf{96.78\%}$, and Offline $BWT = \mathbf{+0.45\%}$.
+- **Gap Baseline Perspectives**:
+  - *Vs True Joint Offline*: Available Retention Gap $= +25.59\text{ pp}$ ($+0.45 - [-25.14]$), Available Acquisition Gap $= +41.08\text{ pp}$ ($96.78 - 55.70$).
+  - *Vs Incremental Joint*: Available Retention Gap $= +59.90\text{ pp}$ ($+34.76 - [-25.14]$), Available Acquisition Gap $= +6.77\text{ pp}$ ($62.46 - 55.69$). Under incremental joint, retention gap available dominates acquisition roughly **9:1**.
 
 ---
 
-## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
+### 10.2 Full-Rank ($r=960$) Results — Selection Seeds 101..105 (50 Runs per Cell)
 
-### 10.1 Phase 1/2 Retrieval Negative Finding & C2 Step-9 Reconciliation
-- **Negative Finding on 1-NN Retrieval**: An adapter fine-tuned over a frozen encoder with an external reference bank stores knowledge non-parametrically in reference vectors. Naive sequential training exhibits minimal forgetting ($\text{BWT} \approx -1\%$), confusable pairs at $\cos > 0.95$ produce zero retroactive interference, and Gate 2's $\sim 70$-point gap between freezing and offline training appears ONLY once memory becomes parametric.
-- **C2 Step-9 Arithmetic Reconciliation**: When evaluated at Step 9 against the full 100-fact reference bank ($r=32$, `FREEZE-AFTER-BASE`, 50 runs per set):
-  - Base-Trained Blocks (`order[0:5]`): **91.05% ± 1.72%** (Selection) / **90.20% ± 2.49%** (Fresh)
-  - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
-  - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
-- **Metric Transfer**: Never-trained blocks land at $86.85\% / 83.15\%$, far above the $70.50\%$ frozen floor. Fine-tuning on 50 facts causes the adapter to learn a generic representation alignment (scaling/centering) that transfers non-parametrically to unseen facts.
-
----
-
-### 10.2 Part 2: Parametric Memory Benchmark (100-Class Classification)
-**Setup**: Reference bank removed from inference. 100-class linear classification head over frozen SmolLM2-360M embeddings. Fixed $\text{lr}=10^{-3}$, $\text{epochs}=30$.
-
-#### Precondition Gates (Selection Seeds, 50 Runs per Cell):
-- **$r=32$ Bottleneck**: Naive $A_T = 21.00\%$, Naive BWT $= -19.93\text{ pp}$, Offline $A_T = 91.47\%$, Freeze $A_T = 16.24\%$.
-- **$r=960$ Full Rank**: Naive $A_T = 30.56\%$, Naive BWT $= -25.14\text{ pp}$, Offline $A_T = 97.23\%$, Freeze $A_T = 27.40\%$.
-- **Gate Status**: Both Gate 1 ($\text{BWT} \le -10\text{ pp}$) and Gate 2 ($\text{Freeze} \ll \text{Offline}$) **PASSED** with $100\%$ margin.
-
-#### Full-Rank ($r=960$) Results — Selection Seeds 101..105 (50 Runs per Cell):
-
-| Condition | $A_T$ (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+| Condition | $A_T$ Mean ± Std (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap (True / Incr) | Acq. Gap (True / Incr) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Naive** | 30.56% ± 7.93% (19.75..46.00%) | 55.69% | -25.14% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
-| **Offline** | 97.23% ± 0.99% (95.00..99.50%) | 62.46% | +34.76% | +66.67% [+64.47%, +68.76%] | +59.90% [+57.55%, +62.11%] | +100.0% | +100.0% |
-| **FREEZE-AFTER-BASE** | 27.40% ± 3.68% (19.75..38.00%) | 27.40% | +0.00% | -3.16% [-5.41%, -1.07%] | +25.14% [+22.67%, +27.45%] | +42.0% | -417.9% |
-| **OGP_k2** | 38.45% ± 7.49% (26.75..50.50%) | 55.68% | -17.24% | +7.89% [+5.97%, +9.94%] | +7.90% [+5.88%, +10.02%] | +13.2% | -0.1% |
-| **OGP_k4** | 43.77% ± 5.46% (34.00..53.50%) | 55.16% | -11.39% | +13.22% [+10.83%, +15.60%] | +13.75% [+11.43%, +16.00%] | +23.0% | -7.9% |
-| **OGP_k8** | **44.60% ± 4.62% (35.50..51.50%)** | **53.82%** | **-9.22%** | **+14.05% [+11.31%, +16.69%]** | **+15.92% [+13.27%, +18.39%]** | **+26.6%** | **-27.6%** |
-| **OGP_k12** | 42.71% ± 5.24% (29.00..51.75%) | 53.38% | -10.67% | +12.16% [+9.65%, +14.51%] | +14.47% [+12.01%, +16.76%] | +24.2% | -34.2% |
-| **OGP_k16** | 38.65% ± 5.59% (29.25..50.00%) | 52.32% | -13.67% | +8.09% [+5.25%, +10.89%] | +11.47% [+8.95%, +13.90%] | +19.1% | -49.9% |
-| **OGP_k24** | 29.52% ± 6.91% (20.00..46.00%) | 48.86% | -19.34% | -1.04% [-4.09%, +1.96%] | +5.80% [+3.12%, +8.41%] | +9.7% | -100.9% |
-| **OGP_k32** | 23.05% ± 7.36% (14.00..39.25%) | 45.94% | -22.90% | -7.51% [-10.30%, -4.71%] | +2.24% [-0.04%, +4.47%] | +3.7% | -144.0% |
-| **RANDOM-k (all k)** | 30.22%..30.62% | ~55.4% | ~-25.0% | ~0.00% [CIs include 0] | ~0.10% [CIs include 0] | +0.2%..+0.6% | -1.0%..-9.8% |
-| **BOTTOM-k (all k)** | 30.53%..30.56% | ~55.7% | ~-25.1% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
+| **Naive Baseline** | 30.56% ± 7.93% (19.75..46.00%) | 55.69% | -25.14% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% / +0.0% | +0.0% / +0.0% |
+| **Offline Upper Bound**| 97.23% ± 0.99% (95.00..99.50%) | 96.78% | +0.45% | +66.67% [+64.47%, +68.76%] | +25.59% [+23.15%, +28.00%] | +100.0% / +100.0% | +100.0% / +100.0% |
+| **FREEZE-AFTER-BASE**| 27.40% ± 3.68% (19.75..38.00%) | 27.40% | +0.00% | -3.16% [-5.41%, -1.07%] | +25.14% [+22.67%, +27.45%] | +98.2% / +42.0% | -68.9% / -417.9% |
+| **OGP_k2** | 38.45% ± 7.49% (26.75..50.50%) | 55.68% | -17.24% | +7.89% [+5.97%, +9.94%] | +7.90% [+5.88%, +10.02%] | +30.9% / +13.2% | -0.0% / -0.1% |
+| **OGP_k4** | 43.77% ± 5.46% (34.00..53.50%) | 55.16% | -11.39% | +13.22% [+10.83%, +15.60%] | +13.75% [+11.43%, +16.00%] | +53.7% / +23.0% | -1.3% / -7.9% |
+| **OGP_k8 (Optimum)**| **44.60% ± 4.62% (35.50..51.50%)** | **53.82%** | **-9.22%** | **+14.05% [+11.31%, +16.69%]** | **+15.92% [+13.27%, +18.39%]** | **+62.2% / +26.6%** | **-4.6% / -27.6%** |
+| **OGP_k12** | 42.71% ± 5.24% (29.00..51.75%) | 53.38% | -10.67% | +12.16% [+9.65%, +14.51%] | +14.47% [+12.01%, +16.76%] | +56.5% / +24.2% | -5.6% / -34.2% |
+| **OGP_k16** | 38.65% ± 5.59% (29.25..50.00%) | 52.32% | -13.67% | +8.09% [+5.25%, +10.89%] | +11.47% [+8.95%, +13.90%] | +44.8% / +19.1% | -8.2% / -49.9% |
+| **OGP_k24** | 29.52% ± 6.91% (20.00..46.00%) | 48.86% | -19.34% | -1.04% [-4.09%, +1.96%] | +5.80% [+3.12%, +8.41%] | +22.7% / +9.7% | -16.6% / -100.9% |
+| **OGP_k32** | 23.05% ± 7.36% (14.00..39.25%) | 45.94% | -22.90% | -7.51% [-10.30%, -4.71%] | +2.24% [-0.04%, +4.47%] | +8.8% / +3.7% | -23.7% / -144.0% |
+| **RANDOM-k (all k)** | 30.22%..30.62% (19.25..46.00%) | ~55.4% | ~-25.0% | ~0.00% [CIs include 0] | ~0.10% [CIs include 0] | ~+0.4% / +0.2% | ~-0.5% / -3.0% |
+| **BOTTOM-k (all k)** | 30.53%..30.56% (19.75..46.00%) | ~55.7% | ~-25.1% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% / 0.0% | 0.0% / 0.0% |
 
 #### Full-Rank ($r=960$) Results — Fresh Replication Seeds 211..215 (50 Runs per Cell):
 
-| Condition | $A_T$ (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+| Condition | $A_T$ Mean ± Std (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap (True / Incr) | Acq. Gap (True / Incr) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Naive** | 27.78% ± 7.58% (16.50..41.25%) | 53.98% | -26.20% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
-| **Offline** | 97.15% ± 1.58% (93.50..99.75%) | 59.43% | +37.72% | +69.38% [+67.42%, +71.29%] | +63.93% [+62.36%, +65.46%] | +100.0% | +100.0% |
-| **FREEZE-AFTER-BASE** | 22.92% ± 3.36% (16.00..30.00%) | 22.92% | +0.00% | -4.86% [-7.29%, -2.42%] | +26.20% [+24.39%, +27.99%] | +41.0% | -569.9% |
-| **OGP_k2** | 39.82% ± 7.40% (26.75..53.50%) | 53.37% | -13.55% | +12.05% [+9.41%, +14.71%] | +12.66% [+10.06%, +15.30%] | +19.8% | -11.2% |
-| **OGP_k4** | 41.51% ± 7.25% (28.75..53.00%) | 53.47% | -11.96% | +13.73% [+11.03%, +16.49%] | +14.24% [+11.81%, +16.71%] | +22.3% | -9.4% |
-| **OGP_k8** | **42.83% ± 6.22% (31.50..56.75%)** | **53.05%** | **-10.22%** | **+15.06% [+12.59%, +17.60%]** | **+15.99% [+13.77%, +18.25%]** | **+25.0%** | **-17.1%** |
-| **OGP_k12** | 40.57% ± 6.90% (26.25..51.50%) | 51.73% | -11.16% | +12.80% [+10.54%, +15.06%] | +15.05% [+12.98%, +17.13%] | +23.5% | -41.3% |
-| **OGP_k16** | 37.10% ± 7.75% (18.75..48.50%) | 50.90% | -13.80% | +9.33% [+6.67%, +11.99%] | +12.40% [+9.88%, +14.90%] | +19.4% | -56.4% |
-| **OGP_k24** | 29.58% ± 6.54% (19.00..42.50%) | 48.22% | -18.65% | +1.80% [-0.58%, +4.29%] | +7.56% [+5.48%, +9.74%] | +11.8% | -105.6% |
-| **OGP_k32** | 28.00% ± 6.79% (18.00..41.25%) | 46.68% | -18.68% | +0.23% [-2.16%, +2.68%] | +7.53% [+5.57%, +9.58%] | +11.8% | -133.9% |
-| **RANDOM-k (all k)** | 26.47%..27.69% | ~53.4% | ~-26.3% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | -0.7%..+0.4% | -1.9%..-15.7% |
-| **BOTTOM-k (all k)** | 27.62%..27.78% | ~53.9% | ~-26.2% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
+| **Naive Baseline** | 27.78% ± 7.58% (16.50..41.25%) | 53.98% | -26.20% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% / +0.0% | +0.0% / +0.0% |
+| **Offline Upper Bound**| 97.15% ± 1.58% (93.50..99.75%) | 96.58% | +0.57% | +69.37% [+67.42%, +71.29%] | +26.77% [+24.30%, +29.10%] | +100.0% / +100.0% | +100.0% / +100.0% |
+| **FREEZE-AFTER-BASE**| 22.92% ± 3.36% (16.00..30.00%) | 22.92% | +0.00% | -4.86% [-7.29%, -2.42%] | +26.20% [+24.39%, +27.99%] | +97.9% / +41.0% | -72.9% / -569.9% |
+| **OGP_k2** | 39.82% ± 7.40% (26.75..53.50%) | 53.37% | -13.55% | +12.05% [+9.41%, +14.71%] | +12.66% [+10.06%, +15.30%] | +47.3% / +19.8% | -1.4% / -11.2% |
+| **OGP_k4** | 41.51% ± 7.25% (28.75..53.00%) | 53.47% | -11.96% | +13.73% [+11.03%, +16.49%] | +14.24% [+11.81%, +16.71%] | +53.2% / +22.3% | -1.2% / -9.4% |
+| **OGP_k8 (Optimum)**| **42.83% ± 6.22% (31.50..56.75%)** | **53.05%** | **-10.22%** | **+15.06% [+12.59%, +17.60%]** | **+15.99% [+13.77%, +18.25%]** | **+59.7% / +25.0%** | **-2.2% / -17.1%** |
+| **OGP_k12** | 40.57% ± 6.90% (26.25..51.50%) | 51.73% | -11.16% | +12.80% [+10.54%, +15.06%] | +15.05% [+12.98%, +17.13%] | +56.2% / +23.5% | -5.3% / -41.3% |
+| **OGP_k16** | 37.10% ± 7.75% (18.75..48.50%) | 50.90% | -13.80% | +9.33% [+6.67%, +11.99%] | +12.40% [+9.88%, +14.90%] | +46.3% / +19.4% | -7.2% / -56.4% |
+| **OGP_k24** | 29.58% ± 6.54% (19.00..42.50%) | 48.22% | -18.65% | +1.80% [-0.58%, +4.29%] | +7.56% [+5.48%, +9.74%] | +28.2% / +11.8% | -13.5% / -105.6% |
+| **OGP_k32** | 28.00% ± 6.79% (18.00..41.25%) | 46.68% | -18.68% | +0.23% [-2.16%, +2.68%] | +7.53% [+5.57%, +9.58%] | +28.1% / +11.8% | -17.1% / -133.9% |
+| **RANDOM-k (all k)** | 26.47%..27.69% (13.00..42.25%) | ~53.4% | ~-26.3% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | ~0.0% / +0.0% | ~-0.5% / -2.0% |
+| **BOTTOM-k (all k)** | 27.62%..27.78% (13.00..41.25%) | ~53.9% | ~-26.2% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% / 0.0% | 0.0% / 0.0% |
+
+> **Cross-Set Disagreement Flag ($k=32$)**: At $k=32$, Selection seeds produce significant degradation ($\Delta A_T = -7.51\% [-10.30\%, -4.71\%]$), whereas Fresh seeds produce a true null ($\Delta A_T = +0.23\% [-2.16\%, +2.68\%]$).
 
 ---
 
-### 10.3 Reframed Theoretical Insights
+### 10.3 Refutation of Intrinsic-Rank Scaling at Bottleneck Capacity ($r=32$)
+
+> **REFUTATION**: The prediction that optimal $k$ scales with adapter rank within a task is **NOT supported**. At $r=32$, no $k \in \{2, 4, 8\}$ produces a significant gain; OGP requires $r \gg k$ and fails entirely at bottleneck capacity. This is a limitation of the mechanism, not a scaling law.
+
+#### Bottleneck ($r=32$) Results — Selection Seeds 101..105 (50 Runs per Cell):
+
+| Condition | $A_T$ Mean ± Std (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Naive Baseline** | 21.00% ± 5.62% (13.50..34.00%) | 40.93% | -19.93% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
+| **Offline Upper Bound**| 91.47% ± 1.56% (88.75..95.25%) | 91.20% | +0.27% | +70.47% [+68.85%, +71.95%] | +20.20% [+18.15%, +22.10%] | +100.0% | +100.0% |
+| **FREEZE-AFTER-BASE**| 16.24% ± 3.74% (10.00..25.50%) | 16.24% | +0.00% | -4.77% [-6.56%, -3.09%] | +19.93% [+17.84%, +21.87%] | +98.7% | -49.1% |
+| **OGP_k2** | 20.00% ± 3.51% (13.50..30.25%) | 40.00% | -20.00% | -1.00% [-1.91%, -0.20%] | -0.07% [-0.98%, +0.74%] | -0.3% | -1.8% |
+| **OGP_k4** | 21.04% ± 3.83% (14.25..29.50%) | 40.38% | -19.34% | +0.04% [-1.01%, +0.97%] | +0.59% [-0.49%, +1.55%] | +2.9% | -1.1% |
+| **OGP_k8** | 20.79% ± 3.55% (14.25..29.25%) | 39.95% | -19.16% | -0.21% [-1.53%, +0.91%] | +0.77% [-0.50%, +1.88%] | +3.8% | -1.9% |
+| **OGP_k12** | 18.84% ± 3.82% (11.75..27.50%) | 39.19% | -20.36% | -2.16% [-3.82%, -0.73%] | -0.42% [-1.91%, +0.84%] | -2.1% | -3.5% |
+| **OGP_k16** | 17.15% ± 3.85% (11.00..24.75%) | 38.48% | -21.33% | -3.85% [-5.67%, -2.33%] | -1.40% [-3.05%, -0.03%] | -6.9% | -4.9% |
+| **OGP_k24** | 15.63% ± 3.42% (11.00..23.00%) | 37.33% | -21.70% | -5.37% [-7.13%, -3.92%] | -1.77% [-3.36%, -0.43%] | -8.8% | -7.2% |
+| **OGP_k32** | 14.57% ± 2.96% (11.00..21.00%) | 36.80% | -22.24% | -6.44% [-8.10%, -5.06%] | -2.31% [-3.84%, -1.02%] | -11.4% | -8.2% |
+| **RANDOM-k (all k)** | 20.33%..20.89% (13.50..34.00%) | ~40.6% | ~-20.1% | ~-0.30% [CIs include 0] | ~-0.15% [CIs include 0] | -0.7% | -0.7% |
+| **BOTTOM-k (all k)** | 20.97%..21.03% (13.50..34.00%) | ~40.9% | ~-19.9% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
+
+#### Bottleneck ($r=32$) Results — Fresh Replication Seeds 211..215 (50 Runs per Cell):
+
+| Condition | $A_T$ Mean ± Std (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Naive Baseline** | 19.60% ± 6.38% (10.00..33.75%) | 39.77% | -20.17% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
+| **Offline Upper Bound**| 89.47% ± 2.90% (84.25..96.25%) | 89.15% | +0.32% | +69.87% [+68.39%, +71.34%] | +20.49% [+18.40%, +22.40%] | +100.0% | +100.0% |
+| **FREEZE-AFTER-BASE**| 15.66% ± 2.87% (10.25..24.75%) | 15.66% | +0.00% | -3.94% [-5.97%, -1.98%] | +20.17% [+18.69%, +21.66%] | +98.4% | -48.8% |
+| **OGP_k2** | 18.88% ± 5.19% (10.00..32.00%) | 39.18% | -20.30% | -0.72% [-1.61%, +0.11%] | -0.13% [-0.93%, +0.60%] | -0.6% | -1.2% |
+| **OGP_k4** | 19.48% ± 5.26% (11.50..32.00%) | 39.85% | -20.37% | -0.12% [-1.06%, +0.76%] | -0.20% [-1.06%, +0.62%] | -1.0% | +0.2% |
+| **OGP_k8** | 19.76% ± 4.92% (11.50..32.00%) | 39.71% | -19.95% | +0.16% [-0.80%, +1.08%] | +0.22% [-0.65%, +1.06%] | +1.1% | -0.1% |
+| **OGP_k12** | 17.57% ± 5.10% (10.00..30.25%) | 38.77% | -21.20% | -2.03% [-3.35%, -0.80%] | -1.03% [-2.18%, +0.05%] | -5.0% | -2.0% |
+| **OGP_k16** | 16.96% ± 4.01% (10.00..27.75%) | 38.31% | -21.35% | -2.64% [-3.84%, -1.48%] | -1.18% [-2.16%, -0.23%] | -5.8% | -3.0% |
+| **OGP_k24** | 15.00% ± 3.66% (10.00..22.75%) | 37.32% | -22.33% | -4.61% [-6.22%, -3.04%] | -2.16% [-3.41%, -0.92%] | -10.5% | -5.0% |
+| **OGP_k32** | 14.55% ± 3.28% (10.00..23.00%) | 37.09% | -22.54% | -5.06% [-6.66%, -3.52%] | -2.37% [-3.63%, -1.12%] | -11.6% | -5.4% |
+| **RANDOM-k (all k)** | 19.29%..19.50% (10.00..34.50%) | ~39.6% | ~-20.1% | ~-0.20% [CIs include 0] | ~0.00% [CIs include 0] | ~0.0% | ~-0.3% |
+| **BOTTOM-k (all k)** | 19.56%..19.60% (10.00..33.75%) | ~39.8% | ~-20.2% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
+
+---
+
+### 10.4 Reframed Theoretical Conclusions
 
 1. **Decomposed Gap Analysis & Genuine Stability-Plasticity Tradeoff**:
-   - At $k=8$ ($r=960$), OGP closes **26.6%** (Selection) / **25.0%** (Fresh) of the available retention gap ($\Delta BWT = +15.92\text{ pp} / +15.99\text{ pp}$ out of $59.90 / 63.93\text{ pp}$), while closing **-27.6%** / **-17.1%** of the acquisition gap ($LA$ falls $1.87\text{ pp} / 0.93\text{ pp}$ from naive).
+   - At $k=8$ ($r=960$), OGP closes **62.2%** (Selection) / **59.7%** (Fresh) of the available true retention gap ($\Delta BWT = +15.92\text{ pp} / +15.99\text{ pp}$ out of $+25.59 / +26.77\text{ pp}$), while closing **-4.6%** / **-2.2%** of the acquisition gap ($LA$ falls $1.87\text{ pp} / 0.93\text{ pp}$ from naive).
    - Retention share exceeds $100\%$ ($\Delta BWT / \Delta A_T = 113.4\%$). This represents the **first genuine stability-plasticity tradeoff measured in this project**, appearing only once memory became parametric.
-2. **Absolute Standing**: $44.60\%$ $A_T$ vs $97.23\%$ offline upper bound closes **21.1%** of the total gap. Naive acquisition failure ($LA = 55.69\%$ vs offline $LA = 62.46\%$) remains a major bottleneck.
+2. **Absolute Standing & Deficit Identification**: $44.60\%$ $A_T$ vs $97.23\%$ offline upper bound closes **21.1%** of the total gap. Naive acquisition failure ($LA = 55.69\%$ vs offline $LA = 96.78\%$) remains the primary deficit.
 3. **Task Subspace & Degradation at $k \ge 24$**:
    - The task-relevant subspace is $\le 64$ dimensions (frozen capacity curve: $r=64$ and $r=128$ are bit-identical to $r=960$). Protecting $k \ge 24$ principal directions projects out past input directions from the 64-dim task subspace, leaving insufficient orthogonal directions for acquiring new blocks.
-4. **Capacity Bottleneck at $r=32$**:
-   - At $r=32$, NO value of $k$ achieves a statistically significant positive $\Delta A_T$. Bottlenecking adapter capacity to 32 dimensions while protecting $k \ge 4$ input directions severely constrains optimization. Peak OGP efficacy requires full adapter rank ($r=960$).
 
 ---
 
-*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 9530645.*
+*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 02c88eb.*
+bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 9530645.*
 
 
 
