@@ -1,54 +1,38 @@
 """
 run_phase1_forgetting_calibration.py  --  Naive Forgetting Calibration Screening
 ==================================================================================
-v3: All four blocking items from review of commit 644be70 addressed.
+v3.1: Incorporates Edits A, B, C, D per review.
 
-1. AXIS D SHUFFLE CONSTRAINT (blocking fix)
-   |b1-b2| constraint is on block assignment, not on the shuffled training order.
-   Fix: generate per-run shuffles as (shuffled base-half, shuffled seq-half) where
-   the base/seq partition of the 10 blocks is chosen to maximise the number of
-   confusable pairs that straddle the base/sequential boundary.
-   Finding the optimal partition: brute-force all C(10,5)=252 balanced bipartitions;
-   select the one maximising straddled pairs. Shuffles are then constrained to this
-   partition. Report per-run straddle fraction.
+Diagnostics mode: run pre-run gates (cosine histogram, frozen curve, single-pair probe)
+and stop before running any sweep cells.
 
-2. SINGLE-PAIR PROBE GATE (run before sweep)
-   Pairwise cosine histogram over all 100 fact centroids (thresholds 0.95/0.90/0.85).
-   Find the single most confusable pair. Construct a block assignment with that pair
-   in blocks 0 and 9. Run naive sequential (pure step-by-step, no joint base phase,
-   fixed order 0..9, epochs=30, lr=1e-3, 5 seeds). Report R[0,0] (fact-0 accuracy
-   just after block 0) and R[9,0] (after block 9 training).
-   DECISION: if mean drop < 20pp, drop Axis D entirely and treat Axis A as the only
-   viable interference lever. Print decision and reason.
+EDITS INCLUDED:
+  A. Probe Gate Statistic:
+     Report R[0,0], R[8,0], R[9,0] and calculate:
+     - Generic drift drop: R[0,0] - R[8,0]
+     - Interference-specific drop: R[8,0] - R[9,0]
+     - Total drop: R[0,0] - R[9,0]
+     The gate statistic is R[8,0] - R[9,0] (interference-specific).
+     Thresholds:
+       >= 20 pp   : High interference. Run Axis D (with straddle-min control).
+       [10, 20) pp: Weak interference. Run Axis D alongside straddle-min control; capacity is primary lever.
+       < 10 pp    : Negligible interference (<10pp for most confusable pair). Drop Axis D entirely.
 
-3. PCA BASIS / FORWARD PASS FIX (critical)
-   Use SVD of UNCENTRED X (no mean subtraction). Forward pass also uncentred.
-   Claim: "projects input onto top-r singular directions of the uncentred training
-   embedding matrix -- best rank-r approximation to the identity in the direction of
-   maximum energy in the reference embedding space."
-   Assertion: r <= min(X.shape[0], X.shape[1]) before slicing Vh.
-   Monotonicity check: frozen A_T must decrease (or stay equal) as r decreases.
-   If non-monotonic, halt with explanation.
+  B. Monotonicity Threshold:
+     Warn on any inversion in the frozen A_T vs r curve.
+     Halt only if an inversion exceeds 2.0 percentage points.
 
-4. GATE INCONSISTENCY FIX (critical)
-   80% automatic fallback removed. If no cell reaches offline A_T >= 90%:
-   print "PREREGISTRATION DEVIATION" prominently, halt, require explicit decision.
+  C. Matched Control Arm for Axis D:
+     `straddle-MINIMISING` partition added alongside `straddle-MAXIMISING`.
+     If both achieve the same naive BWT, straddling does nothing.
 
-STANDING RULES:
-  - 15-run numbers are SCREENING ONLY (3 shuffles x 5 seeds). Not citable as results.
-  - Selection: most negative naive BWT AMONG cells with offline A_T >= 90%.
-  - BWT = A_T - LA (exact identity). Report BWT, not observed forgetting, for decisions.
-  - All per-cell: naive A_T, naive LA, naive BWT, naive obs-fgt,
-    offline A_T, offline LA, offline BWT, CL gap, frozen A_T.
-
-PREREGISTERED DECISIONS:
-  - naive BWT <= -10 and offline A_T >= 90: adopt -> Phase 2.
-  - naive BWT in [-10, -5] and offline A_T >= 90: adopt, note mild regime.
-  - No cell reaches naive BWT <= -5 with offline A_T >= 90: 1-NN over this fixed
-    bank cannot exhibit catastrophic forgetting. Existing +2.0-2.7 result is
-    optimisation-quality. Do not tune further. Change task.
+  D. Achieved Straddle Fraction:
+     Report achieved straddle fraction. If < 70%, warn that fixed fact-to-block
+     assignment is the binding constraint.
 """
 
+import sys
+import argparse
 import itertools
 import os
 import json
@@ -83,24 +67,7 @@ class FullRankAdapter(nn.Module):
 
 
 class BottleneckAdapter(nn.Module):
-    """Low-rank adapter W = U(V(x)), r-dim bottleneck.
-
-    V: nn.Linear(960, r, bias=False)  -- weight shape (r, 960)
-    U: nn.Linear(r, 960, bias=True)   -- weight shape (960, r)
-
-    PCA INIT (v3 -- uncentred SVD, no mean subtraction):
-      X = training embedding matrix, shape (N, 960), NOT mean-centred.
-      SVD: X = U_svd S Vh  where Vh has shape (min(N,960), 960).
-      V.weight = Vh[:r]          -- top-r right singular vectors, shape (r, 960)
-      U.weight = Vh[:r].T        -- shape (960, r)
-      Forward: x -> V_r @ V_r.T @ x -> normalise = projection onto top-r directions.
-      Claim: best rank-r approximation to the identity in the direction of maximum
-      energy in the UNCENTRED reference embedding space.
-      Assertion: r <= min(N, 960) enforced before slicing Vh.
-
-    No centering in forward pass. Consistent with uncentred SVD.
-    Reproducibility assertion: same seed -> bit-identical frozen A_T (std=0.00%).
-    """
+    """Low-rank adapter W = U(V(x)), r-dim bottleneck."""
     def __init__(self, r, pca_basis):
         super().__init__()
         assert pca_basis.shape == (r, INPUT_DIM), (
@@ -118,11 +85,7 @@ class BottleneckAdapter(nn.Module):
 
 
 def compute_pca_basis(cache_data, r):
-    """Top-r right singular vectors of UNCENTRED training embedding matrix X.
-    X shape: (300, 960). SVD: Vh shape (300, 960) for full_matrices=False.
-    Returns: tensor (r, 960) on CPU.
-    Assertion: r <= min(300, 960) = 300.
-    """
+    """Top-r right singular vectors of UNCENTRED training embedding matrix X."""
     X = cache_data["train_x"].float().cpu()              # (300, 960)
     max_r = min(X.shape[0], X.shape[1])                  # 300
     assert r <= max_r, (
@@ -205,9 +168,7 @@ def report_cosine_histogram(cache_data):
     print(f"    p95  = {np.percentile(sims, 95):.6f}")
     print(f"    p99  = {np.percentile(sims, 99):.6f}")
 
-    # Find the single most confusable pair
     most_idx = int(np.argmax(sims))
-    # Recover (i, j)
     k = 0
     best_pair = None
     for i in range(100):
@@ -222,7 +183,7 @@ def report_cosine_histogram(cache_data):
 
 
 # ============================================================================
-# Block assignment builders
+# Block assignment & Straddle Partition
 # ============================================================================
 
 def build_standard_confusable_split(confusable_pairs):
@@ -245,26 +206,12 @@ def build_standard_confusable_split(confusable_pairs):
 
 
 def build_optimal_straddle_partition(block_assignment, confusable_pairs):
-    """Find the balanced bipartition of 10 blocks that maximises confusable-pair
-    straddling across the base/sequential boundary.
-
-    Method: brute-force all C(10,5)=252 balanced bipartitions of block indices {0..9}.
-    For each bipartition (base_set, seq_set), count how many confusable pairs have
-    one fact in a base_set block and one in a seq_set block.
-
-    Returns:
-        best_base_set   : frozenset of 5 block indices forming the base half
-        max_straddled   : number of confusable pairs straddled by the best partition
-        n_total_pairs   : total number of confusable pairs
-        all_results     : list of (n_straddled, base_set) for all 252 bipartitions
-    """
-    # Build fact-to-block lookup
+    """Find both straddle-MAXIMISING and straddle-MINIMISING balanced bipartitions."""
     fact_to_block = {}
     for b, facts in enumerate(block_assignment):
         for f in facts:
             fact_to_block[f] = b
 
-    # Build block-pair adjacency (which block-pairs have confusable facts)
     block_pair_set = set()
     for f1, f2, _ in confusable_pairs:
         b1 = fact_to_block.get(f1)
@@ -278,7 +225,6 @@ def build_optimal_straddle_partition(block_assignment, confusable_pairs):
 
     for base_set in combinations(range(10), 5):
         base_set_fs = frozenset(base_set)
-        seq_set_fs  = frozenset(range(10)) - base_set_fs
         n_straddled = sum(
             1 for (b1, b2) in block_pairs
             if (b1 in base_set_fs) != (b2 in base_set_fs)
@@ -287,36 +233,32 @@ def build_optimal_straddle_partition(block_assignment, confusable_pairs):
 
     all_results.sort(reverse=True)
     best_n, best_base = all_results[0]
+    worst_n, worst_base = all_results[-1]
+
+    straddle_frac = best_n / max(len(block_pairs), 1)
 
     print("\n" + "=" * 70)
     print("  OPTIMAL STRADDLE PARTITION (AXIS D SHUFFLE CONSTRAINT)")
     print("=" * 70)
     print(f"  Confusable pairs in corpus (cos>0.95):           {len(confusable_pairs)}")
     print(f"  Distinct block-pair edges:                        {len(block_pairs)}")
-    print(f"  Best balanced bipartition straddled pairs:        {best_n}/{len(block_pairs)}")
-    print(f"  (All 252 bipartitions searched exhaustively)")
-    print(f"  Worst bipartition straddled pairs:                {all_results[-1][0]}")
+    print(f"  Straddle-MAXIMISING partition straddled pairs:    {best_n}/{len(block_pairs)} ({straddle_frac*100:.1f}%)")
+    print(f"  Straddle-MINIMISING partition straddled pairs:    {worst_n}/{len(block_pairs)}")
     print(f"  Mean straddled across all 252 bipartitions:       {np.mean([r[0] for r in all_results]):.2f}")
-    print(f"  Best base-half block indices:                     {sorted(best_base)}")
-    print(f"  Best seq-half block indices:                      {sorted(frozenset(range(10)) - best_base)}")
+    print(f"  Best base-half block indices (straddle-max):      {sorted(best_base)}")
+    print(f"  Worst base-half block indices (straddle-min):     {sorted(worst_base)}")
 
-    if len(confusable_pairs) < 20:
-        print(f"\n  NOTE: Only {len(confusable_pairs)} confusable pairs exist (< 20).")
-        print("  The corpus has low pairwise similarity at cos>0.95. This is a")
-        print("  reportable finding regardless of Phase 1 outcome.")
+    if straddle_frac < 0.70:
+        print(f"\n  [WARNING] Achieved straddle fraction ({straddle_frac*100:.1f}%) is below 70%.")
+        print("  The fixed fact-to-block assignment is the binding constraint.")
 
     print("=" * 70)
-    return best_base, best_n, len(confusable_pairs), all_results
+    return best_base, worst_base, best_n, worst_n, straddle_frac, len(confusable_pairs)
 
 
-def make_straddle_shuffles(best_base_set, num_shuffles, seed_offset=0):
-    """Generate shuffles where order[0:5] is a random permutation of best_base_set
-    and order[5:10] is a random permutation of the complementary seq_set.
-    All confusable pairs that the best partition straddled are guaranteed to have
-    one member in base and one in sequential phase, every run.
-    """
-    seq_set = sorted(frozenset(range(10)) - frozenset(best_base_set))
-    base_list = sorted(best_base_set)
+def make_straddle_shuffles(base_set, num_shuffles, seed_offset=0):
+    seq_set = sorted(frozenset(range(10)) - frozenset(base_set))
+    base_list = sorted(base_set)
     rng = random.Random(42 + seed_offset)
     orders = []
     for _ in range(num_shuffles):
@@ -353,9 +295,6 @@ def build_block_tensors(block_assignment, cache_data):
 # ============================================================================
 
 def compute_metrics_from_R(R, order):
-    """A_T, LA, BWT (= A_T - LA, exact), observed forgetting.
-    Populated-row guard: start_step = max(4, order.index(j)).
-    """
     A_T   = float(np.mean(R[9, :]))
     la_v, fg_v = [], []
     for j in range(10):
@@ -369,30 +308,22 @@ def compute_metrics_from_R(R, order):
 
 
 # ============================================================================
-# Single-pair probe gate (item 2)
+# Single-pair probe gate (Item A)
 # ============================================================================
 
 def build_probe_assignment(cache_data, f1, f2, confusable_pairs):
-    """Construct a block assignment with f1 in block 0 and f2 in block 9.
-    Other facts fill blocks 1-8. Uses round-robin as base, then swaps f1 and f2
-    into positions 0 and 9.
-    """
     blocks = [[] for _ in range(10)]
     for i in range(100):
         blocks[i % 10].append(i)
 
-    # Find current blocks of f1 and f2
     b1 = next(b for b in range(10) if f1 in blocks[b])
     b9 = next(b for b in range(10) if f2 in blocks[b])
 
-    # Move f1 to block 0
     if b1 != 0:
-        # Swap f1 with first element of block 0
         swap1 = blocks[0][0]
         blocks[b1].remove(f1);    blocks[b1].append(swap1)
         blocks[0].remove(swap1);  blocks[0].append(f1)
 
-    # Move f2 to block 9
     b9_now = next(b for b in range(10) if f2 in blocks[b])
     if b9_now != 9:
         swap2 = blocks[9][0]
@@ -405,27 +336,27 @@ def build_probe_assignment(cache_data, f1, f2, confusable_pairs):
 def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
                            seeds=(101, 102, 103, 104, 105),
                            epochs=30, lr=1e-3):
-    """Pure sequential protocol (no joint base phase). Fixed order [0..9].
-    Report R[0, 0] (fact f1's block accuracy just after training block 0)
-    and R[9, 0] (fact f1's block accuracy after training block 9, which has f2).
+    """Report R[0,0], R[8,0], R[9,0] and calculate:
+      - Generic drift drop: R[0,0] - R[8,0]
+      - Interference-specific drop: R[8,0] - R[9,0]
+      - Total drop: R[0,0] - R[9,0]
+    Gate statistic: R[8,0] - R[9,0] (interference-specific).
     """
     probe_blocks  = build_probe_assignment(cache_data, f1, f2, confusable_pairs)
     tr_x, tr_y, te_x, te_y = build_block_tensors(probe_blocks, cache_data)
-    order = list(range(10))  # fixed: 0,1,...,9
 
-    r0_accs, r9_accs = [], []
+    r0_accs, r8_accs, r9_accs = [], [], []
 
     for seed in seeds:
         torch.manual_seed(seed)
         np.random.seed(seed)
         random.seed(seed)
 
-        adapter = FullRankAdapter().to(DEVICE)   # r=960 for probe
+        adapter = FullRankAdapter().to(DEVICE)
         opt     = torch.optim.AdamW(adapter.parameters(), lr=lr, weight_decay=1e-4)
         R       = np.zeros((10, 10))
 
-        ref_x_acc = []    # cumulative reference store (growing)
-        ref_y_acc = []
+        ref_x_acc, ref_y_acc = [], []
 
         for step in range(10):
             cx  = tr_x[step].to(DEVICE)
@@ -445,7 +376,6 @@ def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
             adapter.eval()
             with torch.no_grad():
                 zr  = adapter(cum_rx)
-                # Evaluate block 0's test queries (fact f1's test queries)
                 zq  = adapter(te_x[0].to(DEVICE))
                 correct = sum(
                     1 for qi, qv in enumerate(zq)
@@ -455,54 +385,76 @@ def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
                 R[step, 0] = correct / len(zq)
 
         r0_accs.append(R[0, 0] * 100)
+        r8_accs.append(R[8, 0] * 100)
         r9_accs.append(R[9, 0] * 100)
 
     r0_arr = np.array(r0_accs)
+    r8_arr = np.array(r8_accs)
     r9_arr = np.array(r9_accs)
-    drops  = r0_arr - r9_arr
 
-    print("\n" + "=" * 70)
-    print("  SINGLE-PAIR PROBE GATE")
+    tot_drops = r0_arr - r9_arr
+    drift_drops = r0_arr - r8_arr
+    interf_drops = r8_arr - r9_arr
+
+    print("\n" + "=" * 75)
+    print("  SINGLE-PAIR PROBE GATE (INTERFERENCE vs DRIFT DECOMPOSITION)")
     print(f"  Most confusable pair: fact {f1} (block 0) vs fact {f2} (block 9)")
     print(f"  Protocol: pure sequential, fixed order [0..9], epochs={epochs}, lr={lr:.0e}")
     print(f"  Seeds: {list(seeds)}")
-    print(f"  {'Seed':>6s}  {'R[0,0]':>10s}  {'R[9,0]':>10s}  {'Drop':>10s}")
-    print("-" * 44)
+    print(f"  {'Seed':>6s} | {'R[0,0]':>8s} {'R[8,0]':>8s} {'R[9,0]':>8s} | "
+          f"{'Total Drop (R0-R9)':>18s} {'Drift (R0-R8)':>14s} {'Interf (R8-R9)':>15s}")
+    print("-" * 88)
     for i, seed in enumerate(seeds):
-        print(f"  {seed:>6d}  {r0_accs[i]:>9.2f}%  {r9_accs[i]:>9.2f}%  {drops[i]:>+9.2f}%")
-    print(f"  {'Mean':>6s}  {r0_arr.mean():>9.2f}%  {r9_arr.mean():>9.2f}%  {drops.mean():>+9.2f}%")
-    print(f"  {'Std':>6s}  {r0_arr.std():>9.2f}%  {r9_arr.std():>9.2f}%  {drops.std():>9.2f}%")
+        print(f"  {seed:>6d} | {r0_accs[i]:>7.2f}% {r8_accs[i]:>7.2f}% {r9_accs[i]:>7.2f}% | "
+              f"{tot_drops[i]:>+17.2f}% {drift_drops[i]:>+13.2f}% {interf_drops[i]:>+14.2f}%")
+
+    def _row(label, arr):
+        return f"  {label:>6s} | {arr[0]:>7.2f}% {arr[1]:>7.2f}% {arr[2]:>7.2f}% | " \
+               f"{arr[3]:>+17.2f}% {arr[4]:>+13.2f}% {arr[5]:>+14.2f}%"
+
+    means = [r0_arr.mean(), r8_arr.mean(), r9_arr.mean(), tot_drops.mean(), drift_drops.mean(), interf_drops.mean()]
+    stds  = [r0_arr.std(),  r8_arr.std(),  r9_arr.std(),  tot_drops.std(),  drift_drops.std(),  interf_drops.std()]
+    mins  = [r0_arr.min(),  r8_arr.min(),  r9_arr.min(),  tot_drops.min(),  drift_drops.min(),  interf_drops.min()]
+    maxs  = [r0_arr.max(),  r8_arr.max(),  r9_arr.max(),  tot_drops.max(),  drift_drops.max(),  interf_drops.max()]
+
+    print("-" * 88)
+    print(_row("Mean", means))
+    print(_row("Std", stds))
+    print(_row("Min", mins))
+    print(_row("Max", maxs))
     print()
 
-    mean_drop = drops.mean()
-    if mean_drop < 20.0:
-        print(f"  DECISION: Mean drop = {mean_drop:.2f}% < 20pp threshold.")
-        print("  The most confusable pair in the corpus produces negligible retroactive")
-        print("  interference (< 20pp drop). Axis D cannot reach naive BWT <= -10.")
-        print("  ACTION: Axis D dropped. Treat Axis A (capacity) as the sole viable")
-        print("           interference lever. Axes B, C evaluated over Axis A selections.")
-        print("  CONTEXT: CONFUSABLE-SPLIT already measured naive BWT at -1.05 and +0.05;")
-        print("           the conflict-pair construction cannot do worse than this probe.")
-        run_axis_d = False
-    else:
-        print(f"  DECISION: Mean drop = {mean_drop:.2f}% >= 20pp threshold.")
-        print("  ACTION: Proceed with Axis D sweep.")
-        run_axis_d = True
+    mean_interf = interf_drops.mean()
+    mean_total  = tot_drops.mean()
 
-    print("=" * 70)
-    return mean_drop, run_axis_d
+    if mean_interf >= 20.0:
+        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% >= 20.0 pp.")
+        print("  HIGH INTERFERENCE DETECTED. Proceed with Axis D (with straddle-min control).")
+        axis_d_status = "RUN_FULL"
+    elif mean_interf >= 10.0:
+        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% in [10.0, 20.0) pp.")
+        print("  WEAK INTERFERENCE. Run Axis D only alongside straddle-min control;")
+        print("  treat capacity (Axis A) as the primary lever.")
+        axis_d_status = "RUN_WEAK"
+    else:
+        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% < 10.0 pp.")
+        print("  NEGLIGIBLE INTERFERENCE (< 10pp for most confusable pair).")
+        print("  1-NN retrieval over a fixed fact bank with a frozen encoder does not")
+        print("  support catastrophic forgetting via confusable-pair interference.")
+        print("  ACTION: Axis D dropped entirely. Proceed with Axis A (capacity) as sole lever.")
+        axis_d_status = "DROP"
+
+    print("=" * 75)
+    return mean_interf, mean_total, axis_d_status
 
 
 # ============================================================================
-# Frozen A_T vs r curve (item 3 -- monotonicity check)
+# Frozen A_T vs r curve (Item B -- thresholded monotonicity check)
 # ============================================================================
 
 def report_frozen_curve(cache_data, pca_bases, r_values, n_seeds=5):
-    """Frozen A_T vs r with PCA (uncentred) init. Monotonicity enforced.
-    At r=960 (FullRankAdapter): frozen A_T = 72.50% (live assertion).
-    At r < 960: frozen A_T should approach 72.50% from below as r -> 960,
-    and should decrease (or stay equal) monotonically as r decreases.
-    Non-monotonicity -> halt.
+    """Frozen A_T vs r with thresholded monotonicity check (Item B).
+    Warns on any inversion; halts ONLY if inversion > 2.0 percentage points.
     """
     print("\n" + "=" * 70)
     print("  FROZEN A_T vs RANK (PCA UNCENTRED INIT) -- CAPACITY CURVE")
@@ -517,9 +469,9 @@ def report_frozen_curve(cache_data, pca_bases, r_values, n_seeds=5):
 
     curve = {}
     prev_mean = None
-    non_monotonic_pairs = []
+    inversions = []
 
-    for r in sorted(r_values, reverse=True):  # process high r first
+    for r in sorted(r_values, reverse=True):
         seed_ats = []
         for seed in range(n_seeds):
             torch.manual_seed(seed)
@@ -541,33 +493,26 @@ def report_frozen_curve(cache_data, pca_bases, r_values, n_seeds=5):
               f"{min(seed_ats):>6.2f}%  {max(seed_ats):>6.2f}%  {bit_id:>14s}  [{label}]")
         curve[r] = {"mean": mean_at, "std": std_at, "vals": seed_ats}
 
-        # Monotonicity check (r decreasing means A_T should not increase)
-        if prev_mean is not None and mean_at > prev_mean + 0.01:
-            non_monotonic_pairs.append((r, mean_at, prev_mean))
+        if prev_mean is not None and mean_at > prev_mean + 0.001:
+            inv_mag = mean_at - prev_mean
+            inversions.append((r, mean_at, prev_mean, inv_mag))
         prev_mean = mean_at
 
     print("=" * 70)
 
-    if non_monotonic_pairs:
-        print("\n  [HALT] NON-MONOTONIC FROZEN A_T CURVE DETECTED.")
-        for (r_lo, at_lo, at_hi) in non_monotonic_pairs:
-            print(f"    r={r_lo}: {at_lo:.2f}% > previous r: {at_hi:.2f}%  (+{at_lo-at_hi:.2f}%)")
-        print("  This indicates a bug in the PCA basis or adapter initialisation.")
-        print("  Fix before running the sweep.")
-        raise RuntimeError("Non-monotonic frozen A_T curve. Halting.")
+    for (r_lo, at_lo, at_hi, inv_mag) in inversions:
+        if inv_mag > 2.0:
+            print(f"\n  [HALT] SEVERE FROZEN A_T INVERSION DETECTED: r={r_lo}: {at_lo:.2f}% > prev: {at_hi:.2f}% (+{inv_mag:.2f} pp > 2.0 pp threshold).")
+            raise RuntimeError(f"Severe non-monotonicity (+{inv_mag:.2f} pp > 2.0 pp). Halting.")
+        else:
+            print(f"  [WARNING] Minor frozen A_T inversion at r={r_lo}: {at_lo:.2f}% > prev: {at_hi:.2f}% (+{inv_mag:.2f} pp <= 2.0 pp threshold). Continuing.")
 
-    # Validate full-rank assertion
     if INPUT_DIM in curve:
         frz_full = curve[INPUT_DIM]["mean"]
         if abs(frz_full - 72.50) > 0.01:
-            raise RuntimeError(
-                f"Full-rank frozen A_T = {frz_full:.2f}% != 72.50%. "
-                "Check embedding cache. Halting.")
+            raise RuntimeError(f"Full-rank frozen A_T = {frz_full:.2f}% != 72.50%. Check cache. Halting.")
         print(f"  [PASS] Full-rank frozen A_T = {frz_full:.2f}% = 72.50% (live assertion).")
 
-    print("  [PASS] Monotonicity confirmed: frozen A_T decreases as r decreases.")
-    print("  Interpretation: PCA uncentred init preserves the most embedding energy")
-    print("  at each rank. Curve shows intrinsic capacity loss as bottleneck narrows.")
     return curve
 
 
@@ -576,7 +521,6 @@ def report_frozen_curve(cache_data, pca_bases, r_values, n_seeds=5):
 # ============================================================================
 
 def analytic_offline_bound_gate(cache_data, conflict_blocks, frz_full):
-    """Verify offline A_T >= 90% is satisfiable for Axis D and full-rank."""
     print("\n" + "=" * 70)
     print("  ANALYTIC OFFLINE UPPER BOUND GATE")
     print("=" * 70)
@@ -584,15 +528,7 @@ def analytic_offline_bound_gate(cache_data, conflict_blocks, frz_full):
     ok = all_facts == list(range(100))
     print(f"  Conflict-pair block assignment covers all 100 facts exactly once: {ok}")
     print(f"  Block sizes: {[len(b) for b in conflict_blocks]}")
-    print()
-    print("  Reasoning:")
-    print("  - Offline condition joint-trains on ALL seen facts at every step.")
-    print("    Block assignment affects naive sequential order only.")
-    print("  - 100 facts, same frozen encoder, same adapter -> same representational")
-    print("    capacity as the standard design where offline A_T = 94.98% (sel) /")
-    print("    94.45% (fresh) was measured empirically.")
-    print("  - Therefore offline A_T >> 90% is guaranteed by construction for Axis D.")
-    print("  - Gate 'offline A_T >= 90%' is SATISFIABLE. [PASS]")
+    print("  Gate 'offline A_T >= 90%' is SATISFIABLE. [PASS]")
     print("=" * 70)
     return ok
 
@@ -603,19 +539,13 @@ def analytic_offline_bound_gate(cache_data, conflict_blocks, frz_full):
 
 def run_naive_offline(block_assignment, cache_data, pca_bases,
                       r=960, epochs=30, lr=1e-3,
-                      order_list=None,   # if None, generate standard shuffles
+                      order_list=None,
                       seeds=(101, 102, 103, 104, 105),
                       num_shuffles=3):
-    """Run naive and offline conditions on a given block assignment.
-    order_list: pre-built list of orders (for constrained shuffles in Axis D).
-    Returns: {"naive": [...], "offline": [...]}, frozen_at.
-    """
     tr_x, tr_y, te_x, te_y = build_block_tensors(block_assignment, cache_data)
-
     if order_list is None:
         order_list = make_standard_shuffles(num_shuffles)
 
-    # Frozen accuracy
     frz_adp = make_adapter(r, pca_bases)
     frz_adp.eval()
     ref_xf = cache_data["train_x"].to(DEVICE)
@@ -732,17 +662,12 @@ def print_cell(label, results, frz_at, mode="std"):
 def select_top2(cells, axis_name):
     eligible = [c for c in cells if c["eligible"]]
     if not eligible:
-        print(f"\n  [PREREGISTRATION DEVIATION] No cells in Axis {axis_name} have"
-              " offline A_T >= 90%.")
-        print("  The preregistered adoption rule requires offline A_T >= 90%.")
-        print("  No automatic fallback is applied. HALTING. Require explicit decision.")
-        raise RuntimeError(
-            f"PREREGISTRATION DEVIATION: Axis {axis_name} has no eligible cells.")
+        print(f"\n  [PREREGISTRATION DEVIATION] No cells in Axis {axis_name} have offline A_T >= 90%.")
+        raise RuntimeError(f"PREREGISTRATION DEVIATION: Axis {axis_name} has no eligible cells.")
     top2 = sorted(eligible, key=lambda c: c["naive_bwt"])[:2]
     print(f"\n  [Axis {axis_name}] Top-2 selected (offline A_T >= 90%, most neg BWT):")
     for c in top2:
-        print(f"    {c['label']:40s}  naive_BWT={c['naive_bwt']:+.2f}%"
-              f"  offline_A_T={c['offline_at']:.2f}%")
+        print(f"    {c['label']:40s}  naive_BWT={c['naive_bwt']:+.2f}%  offline_A_T={c['offline_at']:.2f}%")
     return top2
 
 
@@ -752,8 +677,7 @@ def preregistered_decision(all_cells):
     print("=" * 70)
     eligible = [c for c in all_cells if c["eligible"]]
     if not eligible:
-        print("  OUTCOME: No cell achieves offline A_T >= 90%.")
-        print("  [PREREGISTRATION DEVIATION] HALTING.")
+        print("  OUTCOME: No cell achieves offline A_T >= 90%. [PREREGISTRATION DEVIATION] HALTING.")
         return
     best = min(eligible, key=lambda c: c["naive_bwt"])
     bwt  = best["naive_bwt"]
@@ -768,10 +692,8 @@ def preregistered_decision(all_cells):
         print("  ACTION: Adopt. Note mild forgetting regime in paper.")
     else:
         print(f"  OUTCOME: BEST naive BWT = {bwt:+.2f}% > -5% (all eligible cells).")
-        print("  1-NN retrieval over this fixed 100-fact bank with a frozen encoder")
-        print("  cannot exhibit catastrophic forgetting.")
-        print("  ACTION: Report existing +2.0-2.7 result as optimisation-quality,")
-        print("  not memory-protection. Do not tune further. Change task.")
+        print("  1-NN retrieval over this fixed fact bank with a frozen encoder cannot exhibit catastrophic forgetting.")
+        print("  ACTION: Report existing +2.0-2.7 result as optimisation-quality, not memory-protection. Change task.")
     print("=" * 70)
 
 
@@ -780,8 +702,13 @@ def preregistered_decision(all_cells):
 # ============================================================================
 
 def main():
+    parser = argparse.ArgumentParser(description="Phase 1 Naive Forgetting Calibration Screening")
+    parser.add_argument("--sweep", action="store_true", help="Run full grid sweep after diagnostic gates")
+    parser.add_argument("--diagnostics-only", action="store_true", help="Run diagnostic gates only and stop")
+    args = parser.parse_args()
+
     print("=" * 70)
-    print("  PHASE 1: NAIVE FORGETTING CALIBRATION -- SCREENING  (v3)")
+    print("  PHASE 1: NAIVE FORGETTING CALIBRATION -- DIAGNOSTICS & SCREENING (v3.1)")
     print("  15 runs/cell (3 shuffles x 5 seeds) | naive + offline only")
     print("=" * 70)
 
@@ -794,58 +721,65 @@ def main():
     SEEDS     = [101, 102, 103, 104, 105]
     SHUFFLES  = 3
 
-    # Pre-compute PCA bases (uncentred SVD)
     pca_bases = {INPUT_DIM: None}
     for r in R_VALUES:
         if r < INPUT_DIM:
             pca_bases[r] = compute_pca_basis(cache_data, r)
 
     # ------------------------------------------------------------------
-    # PRE-RUN GATE A: Cosine histogram + most confusable pair
+    # DIAGNOSTIC GATE 1: Cosine histogram & most confusable pair
     # ------------------------------------------------------------------
     sims_all, best_pair = report_cosine_histogram(cache_data)
     f1_probe, f2_probe  = best_pair[0], best_pair[1]
     conf_pairs          = find_confusable_pairs(cache_data, threshold=0.95)
 
     # ------------------------------------------------------------------
-    # PRE-RUN GATE B: Frozen A_T vs r curve + monotonicity check
+    # DIAGNOSTIC GATE 2: Frozen A_T vs r curve (thresholded monotonicity)
     # ------------------------------------------------------------------
     frz_curve = report_frozen_curve(cache_data, pca_bases, R_VALUES, n_seeds=5)
 
     # ------------------------------------------------------------------
-    # PRE-RUN GATE C: Single-pair probe -> decide on Axis D
+    # DIAGNOSTIC GATE 3: Single-pair probe (interference vs drift)
     # ------------------------------------------------------------------
-    mean_drop, run_axis_d = run_single_pair_probe(
+    mean_interf, mean_total, axis_d_status = run_single_pair_probe(
         cache_data, f1_probe, f2_probe, conf_pairs, pca_bases,
         seeds=SEEDS, epochs=30, lr=1e-3)
 
     # ------------------------------------------------------------------
-    # PRE-RUN GATE D: Straddle partition analysis + offline bound
-    # (only if Axis D will run)
+    # DIAGNOSTIC GATE 4: Straddle partition analysis & offline bound
     # ------------------------------------------------------------------
     standard_blocks = build_standard_confusable_split(conf_pairs)
-    conflict_blocks = None
-    best_base_set   = None
-    straddle_orders = None
+    best_base_set, worst_base_set, max_n, min_n, straddle_frac, n_pairs = \
+        build_optimal_straddle_partition(standard_blocks, conf_pairs)
 
-    if run_axis_d:
-        best_base_set, best_n, n_pairs, _ = build_optimal_straddle_partition(
-            standard_blocks, conf_pairs)
-        conflict_blocks = standard_blocks   # same facts, different shuffle constraint
-        analytic_offline_bound_gate(cache_data, standard_blocks, frz_curve[INPUT_DIM]["mean"])
-        straddle_orders = make_straddle_shuffles(best_base_set, num_shuffles=SHUFFLES)
+    analytic_offline_bound_gate(cache_data, standard_blocks, frz_curve[INPUT_DIM]["mean"])
+
+    print("\n" + "=" * 70)
+    print("  DIAGNOSTIC SUMMARY & PRE-RUN VERDICT")
+    print("=" * 70)
+    print(f"  1. Confusable Pairs (cos > 0.95):  {n_pairs}")
+    print(f"  2. Full-rank Frozen A_T (r=960):    {frz_curve[INPUT_DIM]['mean']:.2f}% (Assertion 72.50% PASS)")
+    print(f"  3. Single-Pair Probe Interference:  R[8,0] - R[9,0] = {mean_interf:+.2f} pp")
+    print(f"     Single-Pair Probe Total Drop:    R[0,0] - R[9,0] = {mean_total:+.2f} pp")
+    print(f"  4. Achieved Straddle Fraction:     {max_n}/{n_pairs} ({straddle_frac*100:.1f}%)")
+    print(f"  5. Axis D Status:                   {axis_d_status}")
+    print("=" * 70)
+
+    # STOP if diagnostics-only or if --sweep not passed
+    if args.diagnostics-only or not args.sweep:
+        print("\n  [DIAGNOSTICS COMPLETE] Stopping here as requested.")
+        print("  To run full grid sweep, pass --sweep flag.\n")
+        return
 
     # ------------------------------------------------------------------
-    # All pre-run gates passed
+    # FULL GRID SWEEP (if --sweep passed)
     # ------------------------------------------------------------------
-    print("\n  [PRE-RUN GATES] All gates passed. Starting sweep.\n")
+    print("\n  [SWEEP START] Executing full screening grid.\n")
     all_cells = []
 
-    # ------------------------------------------------------------------
     # AXIS A: CAPACITY
-    # ------------------------------------------------------------------
     print("\n" + "=" * 70)
-    print("  AXIS A: CAPACITY SWEEP  (epochs=30, lr=1e-3, confusable-split blocks)")
+    print("  AXIS A: CAPACITY SWEEP")
     print("=" * 70)
     axis_a_cells = []
     for r in R_VALUES:
@@ -856,16 +790,13 @@ def main():
             r=r, epochs=30, lr=1e-3, seeds=SEEDS, num_shuffles=SHUFFLES)
         info = print_cell(label, res, frz, mode="disjoint_std")
         info.update({"r": r, "epochs": 30, "lr": 1e-3, "_res": res})
-        axis_a_cells.append(info)
-        all_cells.append(info)
+        axis_a_cells.append(info); all_cells.append(info)
 
     top2_r = select_top2(axis_a_cells, "A")
 
-    # ------------------------------------------------------------------
-    # AXIS B: TRAINING INTENSITY (top-2 r from A)
-    # ------------------------------------------------------------------
+    # AXIS B: INTENSITY
     print("\n" + "=" * 70)
-    print("  AXIS B: TRAINING INTENSITY SWEEP  (top-2 r from A, lr=1e-3)")
+    print("  AXIS B: TRAINING INTENSITY SWEEP")
     print("=" * 70)
     axis_b_cells = []
     seen_b_keys  = set()
@@ -873,12 +804,9 @@ def main():
         br = rinfo["r"]
         for ep in [30, 100, 300]:
             key = (br, ep, 1e-3)
-            if key in seen_b_keys:
-                continue
+            if key in seen_b_keys: continue
             seen_b_keys.add(key)
-            # Reuse Axis A result if available
-            existing = next((c for c in axis_a_cells
-                             if c["r"] == br and c["epochs"] == ep), None)
+            existing = next((c for c in axis_a_cells if c["r"] == br and c["epochs"] == ep), None)
             if existing:
                 label = existing["label"] + " [reuse]"
                 info  = dict(existing); info["label"] = label
@@ -891,16 +819,13 @@ def main():
                     r=br, epochs=ep, lr=1e-3, seeds=SEEDS, num_shuffles=SHUFFLES)
                 info = print_cell(label, res, frz, mode="disjoint_std")
                 info.update({"r": br, "epochs": ep, "lr": 1e-3, "_res": res})
-            axis_b_cells.append(info)
-            all_cells.append(info)
+            axis_b_cells.append(info); all_cells.append(info)
 
     top2_rep = select_top2(axis_b_cells, "B")
 
-    # ------------------------------------------------------------------
-    # AXIS C: LEARNING RATE (top-2 (r, epochs) from B)
-    # ------------------------------------------------------------------
+    # AXIS C: LEARNING RATE
     print("\n" + "=" * 70)
-    print("  AXIS C: LEARNING RATE SWEEP  (top-2 (r, epochs) from B)")
+    print("  AXIS C: LEARNING RATE SWEEP")
     print("=" * 70)
     axis_c_cells = []
     seen_c_keys  = set()
@@ -908,12 +833,9 @@ def main():
         br = rep_info["r"]; bep = rep_info["epochs"]
         for lr in [1e-3, 3e-3, 1e-2]:
             key = (br, bep, round(lr, 5))
-            if key in seen_c_keys:
-                continue
+            if key in seen_c_keys: continue
             seen_c_keys.add(key)
-            existing = next((c for c in axis_b_cells
-                             if c["r"] == br and c["epochs"] == bep
-                             and abs(c["lr"] - lr) < 1e-9), None)
+            existing = next((c for c in axis_b_cells if c["r"] == br and c["epochs"] == bep and abs(c["lr"] - lr) < 1e-9), None)
             if existing:
                 label = existing["label"] + " [reuse]"
                 info  = dict(existing); info["label"] = label
@@ -926,65 +848,62 @@ def main():
                     r=br, epochs=bep, lr=lr, seeds=SEEDS, num_shuffles=SHUFFLES)
                 info = print_cell(label, res, frz, mode="disjoint_std")
                 info.update({"r": br, "epochs": bep, "lr": lr, "_res": res})
-            axis_c_cells.append(info)
-            all_cells.append(info)
+            axis_c_cells.append(info); all_cells.append(info)
 
     top2_abc = select_top2(axis_c_cells, "C")
 
-    # ------------------------------------------------------------------
-    # AXIS D: CONFLICT-PAIR INTERFERENCE (only if probe gate passed)
-    # ------------------------------------------------------------------
-    if run_axis_d:
+    # AXIS D: CONFLICT-PAIR INTERFERENCE
+    if axis_d_status != "DROP":
         print("\n" + "=" * 70)
-        print("  AXIS D: CONFLICT-PAIR INTERFERENCE (constrained shuffles)")
-        print(f"  Straddle partition: base={sorted(best_base_set)}")
+        print(f"  AXIS D: CONFLICT-PAIR INTERFERENCE ({axis_d_status})")
         print("=" * 70)
 
-        # D1: standard config with conflict-pair constrained shuffles
-        label = "D1_r960_ep30_lr1e-3_cfpair"
-        print(f"\n  --- {label} ---")
-        res_d1, frz_d1 = run_naive_offline(
-            standard_blocks, cache_data, pca_bases,
-            r=960, epochs=30, lr=1e-3,
-            order_list=straddle_orders, seeds=SEEDS)
-        info_d1 = print_cell(label, res_d1, frz_d1, mode="conflict_pair")
-        info_d1.update({"r": 960, "epochs": 30, "lr": 1e-3})
-        all_cells.append(info_d1)
+        max_orders = make_straddle_shuffles(best_base_set, num_shuffles=SHUFFLES)
+        min_orders = make_straddle_shuffles(worst_base_set, num_shuffles=SHUFFLES)
 
-        # D2+: A+B+C selection with conflict-pair constrained shuffles
+        # D1_max (straddle-MAXIMISING)
+        label_max = "D1_r960_ep30_lr1e-3_cfpair_MAX"
+        print(f"\n  --- {label_max} ---")
+        res_d1_max, frz_d1 = run_naive_offline(
+            standard_blocks, cache_data, pca_bases,
+            r=960, epochs=30, lr=1e-3, order_list=max_orders, seeds=SEEDS)
+        info_d1_max = print_cell(label_max, res_d1_max, frz_d1, mode="straddle_max")
+        info_d1_max.update({"r": 960, "epochs": 30, "lr": 1e-3}); all_cells.append(info_d1_max)
+
+        # D1_min (straddle-MINIMISING control arm -- Item C)
+        label_min = "D1_r960_ep30_lr1e-3_cfpair_MIN_control"
+        print(f"\n  --- {label_min} ---")
+        res_d1_min, frz_d1 = run_naive_offline(
+            standard_blocks, cache_data, pca_bases,
+            r=960, epochs=30, lr=1e-3, order_list=min_orders, seeds=SEEDS)
+        info_d1_min = print_cell(label_min, res_d1_min, frz_d1, mode="straddle_min_control")
+        info_d1_min.update({"r": 960, "epochs": 30, "lr": 1e-3}); all_cells.append(info_d1_min)
+
+        # A+B+C selections for Axis D
         for idx, abc_info in enumerate(top2_abc):
             br = abc_info["r"]; bep = abc_info["epochs"]; blr = abc_info["lr"]
             if br == 960 and bep == 30 and abs(blr - 1e-3) < 1e-9:
-                print(f"\n  [skip D{idx+2}] same config as D1")
                 continue
-            label = f"D{idx+2}_r{br}_ep{bep}_lr{blr:.0e}_cfpair"
+            label = f"D{idx+2}_r{br}_ep{bep}_lr{blr:.0e}_cfpair_MAX"
             print(f"\n  --- {label} ---")
             res_dx, frz_dx = run_naive_offline(
                 standard_blocks, cache_data, pca_bases,
-                r=br, epochs=bep, lr=blr,
-                order_list=straddle_orders, seeds=SEEDS)
-            info_dx = print_cell(label, res_dx, frz_dx, mode="conflict_pair")
-            info_dx.update({"r": br, "epochs": bep, "lr": blr})
-            all_cells.append(info_dx)
-    else:
-        print("\n  AXIS D: SKIPPED (single-pair probe drop < 20pp). "
-              "Capacity (Axis A) is the sole interference lever.")
+                r=br, epochs=bep, lr=blr, order_list=max_orders, seeds=SEEDS)
+            info_dx = print_cell(label, res_dx, frz_dx, mode="straddle_max")
+            info_dx.update({"r": br, "epochs": bep, "lr": blr}); all_cells.append(info_dx)
 
-    # ------------------------------------------------------------------
-    # Full summary table
-    # ------------------------------------------------------------------
+    else:
+        print("\n  AXIS D: SKIPPED (interference drop < 10pp). Capacity (Axis A) is sole lever.")
+
+    # SUMMARY
     print("\n" + "=" * 90)
-    print("  FULL SCREENING SUMMARY  (SCREENING ONLY -- 15 runs/cell)")
+    print("  FULL SCREENING SUMMARY (SCREENING ONLY -- 15 runs/cell)")
     print("=" * 90)
-    print(f"  {'Cell':44s}  {'n_BWT':>8s}  {'off_A_T':>9s}  "
-          f"{'n_A_T':>8s}  {'frz':>7s}  {'elig':>5s}")
-    print("-" * 90)
     for c in all_cells:
         flag = " <- TARGET" if c["naive_bwt"] <= -10.0 and c["eligible"] else \
                " <- MILD"   if c["naive_bwt"] <= -5.0  and c["eligible"] else ""
-        print(f"  {c['label']:44s}  {c['naive_bwt']:+7.2f}%  {c['offline_at']:8.2f}%  "
-              f"{c['naive_at']:7.2f}%  {c['frz_at']:6.2f}%  "
-              f"{'Y' if c['eligible'] else 'N':>5s}{flag}")
+        print(f"  {c['label']:48s}  {c['naive_bwt']:+7.2f}%  {c['offline_at']:8.2f}%  "
+              f"{c['naive_at']:7.2f}%  {c['frz_at']:6.2f}%  {'Y' if c['eligible'] else 'N':>5s}{flag}")
     print("=" * 90)
 
     preregistered_decision(all_cells)
