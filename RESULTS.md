@@ -249,9 +249,19 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 **Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regular## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
 
-> **SECTION 10 HOLD (C2 SPLIT)**: The base-trained vs never-trained C2 split is marked **PENDING** until `dump_c2_raw_data.py` executes on Kaggle to produce `c2_raw_arrays.json` and its SHA-256 checksum. Both the "strictly localized" and "generic metric transfer" claims are temporarily withdrawn. The measured overall C2 $A_T$ figure ($88.95\% \pm 2.41\%$ Selection / $86.67\% \pm 3.44\%$ Fresh) remains valid.
+## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
 
-### 10.1 Definitional Correction: Joint Offline Upper Bound vs Incremental Joint
+### 10.1 Raw Array Verification & C2 Step-9 Reconciliation (VERIFIED)
+- **Raw File Checksum**: Dumped to `c2_raw_arrays.json` (SHA-256: `533bfdae6847efa704614de9df41f67b6c92a76591010489e5872019234857bc`).
+- **Unweighted Mean Reconciliation**: Computed directly from `c2_raw_arrays.json` by `dump_c2_raw_data.py`:
+  - Base-Trained Blocks (`order[0:5]`): **91.05% ± 1.72%** (Selection) / **90.20% ± 2.49%** (Fresh)
+  - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
+  - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall C2 $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
+- **Metric Transfer Finding**: Never-trained facts land at $86.85\% / 83.15\%$, far above the $70.50\%$ frozen adapter floor. Fine-tuning the adapter on 50 facts causes it to learn a generic metric alignment (scaling and centering representations) that transfers non-parametrically to unseen facts in the reference bank.
+
+---
+
+### 10.2 Definitional Correction: Joint Offline Upper Bound vs Incremental Joint
 - **CORRECTION**: The intermediate report (3:12 PM) listed Offline $LA = 62.46\%$ and Offline $BWT = +34.76\%$. This was caused by an **incremental joint training** definition (training 30 epochs step-by-step as each block was added), which evaluated block $j$ at step $\text{order.index}(j)$ before joint training on remaining blocks completed.
 - **True Joint Offline Upper Bound**: Single-pass joint training on all 100 classes for 300 epochs yields Offline $A_T = \mathbf{97.23\%}$, Offline $LA = \mathbf{96.78\%}$, and Offline $BWT = \mathbf{+0.45\%}$.
 - **Gap Baseline Perspectives**:
