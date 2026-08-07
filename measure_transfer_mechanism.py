@@ -139,7 +139,7 @@ def fit_isotropic_rank1_decomposition(W):
 
 def measure_singular_spectrum(W):
     """Compute singular values of W = U V."""
-    S = torch.linalg.svdvals(W)
+    S = torch.linalg.svdvals(W.detach())
     S_np = S.cpu().numpy()
     top_10 = S_np[:10]
     cond_num = float(S_np[0] / S_np[31]) if S_np[31] > 1e-12 else float('inf')
