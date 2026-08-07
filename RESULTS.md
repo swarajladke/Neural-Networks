@@ -267,7 +267,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
    - *Finding*: Adapting the 32-d bottleneck representation map completely eliminates representation space collapse, separating confusable pairs across both trained and untrained knowledge subsets.
 3. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
-| Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Std Across Seeds | Difference vs 70.50% Frozen Floor |
+| Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
 |:---|:---:|:---:|:---:|:---:|
 | **Frozen Floor** | 0 blocks (0 facts) | **70.50%** | $\pm 0.00\%$ | Baseline Floor |
 | **10 facts** | 1 block | **60.00%** | $\pm 4.07\%$ | **-10.50 pp (BELOW FLOOR)** |
@@ -276,10 +276,10 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 | **40 facts** | 4 blocks | **84.70%** | $\pm 0.87\%$ | **+14.20 pp (ABOVE FLOOR)** |
 | **50 facts** | 5 blocks | **84.50%** | $\pm 0.00\%$ | **+14.00 pp (ABOVE FLOOR)** |
 
-   - *Finding*: Small base phase adaptation ($B=1, 2$) disrupts unadapted representations and falls **below** the $70.50\%$ floor ($60.00\%$ and $67.20\%$). Once base training reaches 30–50 facts ($B=3..5$), representation geometry aligns, jumping to **$84.50\%$** retrieval accuracy on fixed held-out facts.
-4. **Seed Wiring & Deterministic PCA Initialization**:
+   - *Correction*: Adaptation degrades unseen-fact retrieval below the 70.50% floor at $B=1$ (60.00%) and $B=2$ (67.20%); crosses the floor between $B=2$ and $B=3$ (79.00%); and saturates by $B=4$ (84.70%) with no further gain at $B=5$ (84.50%). The progression is smooth and saturating, not a phase transition. The $B=1..4$ error bars reflect **block-selection variance** (since base blocks were drawn randomly per seed); adapter training for a fixed set of blocks is **deterministic**.
+4. **Seed Wiring & Single-Pair Probe $n=1$ Clarification**:
    - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`), which copies SVD components of cached embeddings. When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
-   - When per-seed shuffle sequences are applied (as in the benchmark), sequence variation creates distinct weight matrices $W_{\text{seed101}} \neq W_{\text{seed102}}$.
+   - **Axis D Evidence Status ($n=1$)**: Because the single-pair probe executed without block order shuffle variation, its five seeds were identical deterministic runs. The single-pair probe's $0.00\text{ pp}$ interference finding rests on $n=1$. (Axis D remains dropped). When per-seed shuffle sequences are applied (as in the benchmark), sequence variation creates distinct weight matrices $W_{\text{seed101}} \neq W_{\text{seed102}}$.
 
 ---
 
