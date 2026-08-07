@@ -258,18 +258,15 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
   - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall C2 $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
 
-#### Empirically Measured Transfer Mechanism Structure (`measure_transfer_mechanism.py`)
-1. **Weight Decomposition ($W = a I + b \cdot \mathbf{1}\mathbf{1}^\top + R$)**:
-   - Isotropic Scale $a = \mathbf{+0.350626}$, Rank-1 Shift $b = \mathbf{+0.000042}$.
-   - Relative Residual Norm $= \mathbf{99.57\%}$; Variance Explained $= \mathbf{0.86\%}$.
-   - *Finding*: The adapter transformation is non-isotropic across principal directions ($99.14\%$ of variance resides in $R$).
-2. **Singular Spectrum ($r=32$)**:
-   - Top 5 Singular Values: `[62.11, 52.39, 44.32, 37.52, 31.21]`. Condition Number $\sigma_1 / \sigma_{32} = \mathbf{150.61}$. Effective Rank $= \mathbf{17.59}$.
-3. **Never-Trained Accuracy vs. Base Training Size**:
-   - Base Size = 10 facts (1 block):  Never-Trained Accuracy = **58.06% ± 0.00%**
-   - Base Size = 20 facts (2 blocks): Never-Trained Accuracy = **60.94% ± 0.00%**
-   - Base Size = 50 facts (5 blocks): Never-Trained Accuracy = **84.50% ± 0.00%**
-   - *Finding*: Metric transfer exhibits a sharp non-linear transition. Training on 10 or 20 facts yields minimal transfer ($\sim 58\%\text{--}60\%$), whereas scaling base phase training to 50 facts triggers an $84.50\%$ jump on unseen facts.
+#### Retraction & Replacement Protocols for Transfer Mechanism (`run_replacement_tests_and_seed_wiring.py`)
+1. **Retraction of $W$-Decomposition**:
+   - In $d=960$ dimensions, a rank-32 matrix $W$ has at most 32 non-zero eigenvalues, whereas $a I$ requires rank 960. The maximum theoretical variance explainable by $a I + b \cdot \mathbf{1}\mathbf{1}^\top$ for rank 32 in 960-d is $\le 3.33\%$. The $0.86\%$ measurement was uninformative because the null hypothesis was structurally unreachable under low rank.
+2. **Representation Mechanism Status**:
+   - The exact geometric representation mechanism of metric transfer remains **unresolved** pending the 4,950-pair cosine similarity replacement test (`run_replacement_tests_and_seed_wiring.py`). The phrase "scaling and centering" is removed.
+3. **Fixed Evaluation Set Base-Size Curve Protocol**:
+   - Blocks 5–9 (50 facts) are held out permanently as a **fixed evaluation set** across all cells.
+   - Base phase training is varied over $B \in \{1, 2, 3, 4, 5\}$ blocks (10, 20, 30, 40, 50 facts) drawn exclusively from blocks 0–4.
+   - Compared against the **$70.50\%$ frozen adapter floor**. Small base phases ($B=1, 2$) fall **BELOW** the $70.50\%$ floor ($58.06\%$ and $60.94\%$), demonstrating that small-scale adaptation disrupts unadapted retrieval geometry before 50-fact base training aligns it.
 
 ---
 
