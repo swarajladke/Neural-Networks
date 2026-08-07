@@ -126,7 +126,7 @@ def fit_and_report_model(X_df, Y, groups, model_name, var_names):
     res_naive   = model_naive.fit(disp=False)
     
     # 2. Cluster-Robust Model (grouped by fact ID)
-    res_clust   = res_naive.get_robustcov_results(cov_type='cluster', groups=groups)
+    res_clust   = model_naive.fit(cov_type='cluster', cov_kwds={'groups': groups}, disp=False)
 
     # McFadden Pseudo-R^2
     mcfadden_r2 = float(res_naive.prsquared)
