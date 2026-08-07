@@ -9,3 +9,7 @@
    - $\text{Acquisition Gap Closed} = \Delta \text{LA} / (\text{Offline LA} - \text{Naive LA})$
    A single "% of total gap" metric conceals whether a mechanism actually mitigates forgetting or alters task acquisition.
 
+3. **Correction & Value Change Flags**:
+   Any reported quantity that changes value between reports must be explicitly flagged as a **CORRECTION** detailing the prior value, the new value, and the exact cause (whether code diff, hyperparameter change, or definitional change). Never present a definitional change as a physical measurement.
+
+
