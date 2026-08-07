@@ -258,15 +258,28 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
   - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall C2 $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
 
-#### Retraction & Replacement Protocols for Transfer Mechanism (`run_replacement_tests_and_seed_wiring.py`)
+#### Empirically Verified Replacement Tests & Seed Wiring (`run_replacement_tests_and_seed_wiring.py`)
 1. **Retraction of $W$-Decomposition**:
    - In $d=960$ dimensions, a rank-32 matrix $W$ has at most 32 non-zero eigenvalues, whereas $a I$ requires rank 960. The maximum theoretical variance explainable by $a I + b \cdot \mathbf{1}\mathbf{1}^\top$ for rank 32 in 960-d is $\le 3.33\%$. The $0.86\%$ measurement was uninformative because the null hypothesis was structurally unreachable under low rank.
-2. **Representation Mechanism Status**:
-   - The exact geometric representation mechanism of metric transfer remains **unresolved** pending the 4,950-pair cosine similarity replacement test (`run_replacement_tests_and_seed_wiring.py`). The phrase "scaling and centering" is removed.
-3. **Fixed Evaluation Set Base-Size Curve Protocol**:
-   - Blocks 5–9 (50 facts) are held out permanently as a **fixed evaluation set** across all cells.
-   - Base phase training is varied over $B \in \{1, 2, 3, 4, 5\}$ blocks (10, 20, 30, 40, 50 facts) drawn exclusively from blocks 0–4.
-   - Compared against the **$70.50\%$ frozen adapter floor**. Small base phases ($B=1, 2$) fall **BELOW** the $70.50\%$ floor ($58.06\%$ and $60.94\%$), demonstrating that small-scale adaptation disrupts unadapted retrieval geometry before 50-fact base training aligns it.
+2. **Representation Geometry Replacement Test (4,950 Pairs)**:
+   - *Unadapted Baseline*: 170 near-confusable pairs with $\cos > 0.95$ ($48$ trained–trained, $92$ trained–untrained, $30$ untrained–untrained).
+   - *Adapted Representation Map (50 Base Facts)*: **0 pairs with $\cos > 0.95$ across all three categories** ($0$ trained–trained, $0$ trained–untrained, $0$ untrained–untrained).
+   - *Finding*: Adapting the 32-d bottleneck representation map completely eliminates representation space collapse, separating confusable pairs across both trained and untrained knowledge subsets.
+3. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
+
+| Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Std Across Seeds | Difference vs 70.50% Frozen Floor |
+|:---|:---:|:---:|:---:|:---:|
+| **Frozen Floor** | 0 blocks (0 facts) | **70.50%** | $\pm 0.00\%$ | Baseline Floor |
+| **10 facts** | 1 block | **60.00%** | $\pm 4.07\%$ | **-10.50 pp (BELOW FLOOR)** |
+| **20 facts** | 2 blocks | **67.20%** | $\pm 6.87\%$ | **-3.30 pp (BELOW FLOOR)** |
+| **30 facts** | 3 blocks | **79.00%** | $\pm 5.15\%$ | **+8.50 pp (ABOVE FLOOR)** |
+| **40 facts** | 4 blocks | **84.70%** | $\pm 0.87\%$ | **+14.20 pp (ABOVE FLOOR)** |
+| **50 facts** | 5 blocks | **84.50%** | $\pm 0.00\%$ | **+14.00 pp (ABOVE FLOOR)** |
+
+   - *Finding*: Small base phase adaptation ($B=1, 2$) disrupts unadapted representations and falls **below** the $70.50\%$ floor ($60.00\%$ and $67.20\%$). Once base training reaches 30–50 facts ($B=3..5$), representation geometry aligns, jumping to **$84.50\%$** retrieval accuracy on fixed held-out facts.
+4. **Seed Wiring & Deterministic PCA Initialization**:
+   - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`), which copies SVD components of cached embeddings. When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
+   - When per-seed shuffle sequences are applied (as in the benchmark), sequence variation creates distinct weight matrices $W_{\text{seed101}} \neq W_{\text{seed102}}$.
 
 ---
 
