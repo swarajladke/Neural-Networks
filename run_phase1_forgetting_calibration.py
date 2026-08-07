@@ -124,10 +124,13 @@ def supervised_contrastive_loss(z, y, tau=0.05):
 # ============================================================================
 
 def compute_all_centroids(cache_data):
-    X, y = cache_data["train_x"], cache_data["train_y"]
-    cen  = torch.zeros(100, INPUT_DIM)
+    X = cache_data["train_x"].float()
+    y = cache_data["train_y"]
+    cen = torch.zeros(100, INPUT_DIM, dtype=torch.float32)
     for i in range(100):
-        cen[i] = F.normalize(X[y == i].mean(0), dim=-1)
+        mask = (y == i)
+        if mask.sum() > 0:
+            cen[i] = F.normalize(X[mask].mean(0, keepdim=True), dim=-1).squeeze(0)
     return cen
 
 
@@ -781,7 +784,7 @@ def main():
     print("=" * 70)
 
     # STOP if diagnostics-only or if --sweep not passed
-    if args.diagnostics-only or not args.sweep:
+    if args.diagnostics_only or not args.sweep:
         print("\n  [DIAGNOSTICS COMPLETE] Stopping here as requested.")
         print("  To run full grid sweep, pass --sweep flag.\n")
         return
