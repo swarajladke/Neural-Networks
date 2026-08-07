@@ -112,15 +112,19 @@ def build_block_tensors(block_assignment, cache_data):
 
 
 def run_seed_wiring_check(block_assignment, cache_data, pca_basis_r32):
-    """Check max |W_seed101 - W_seed102| after base phase training."""
+    """Check max |W_seed101 - W_seed102| after base phase training with per-seed shuffle order."""
     tr_x, tr_y, _, _ = build_block_tensors(block_assignment, cache_data)
     W_weights = {}
     for seed in [101, 102, 103]:
+        random.seed(seed)
+        shuffled_order = list(range(10))
+        random.shuffle(shuffled_order)
+        base_blocks = shuffled_order[:5]
+
         torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
         adapter = BottleneckAdapter(r=32, pca_basis=pca_basis_r32).to(DEVICE)
         optimizer = torch.optim.AdamW(adapter.parameters(), lr=1e-2, weight_decay=1e-4)
 
-        base_blocks = [0, 1, 2, 3, 4]
         joint_train_x_base = torch.cat([tr_x[b] for b in base_blocks], dim=0).to(DEVICE)
         joint_train_y_base = torch.cat([tr_y[b] for b in base_blocks], dim=0).to(DEVICE)
 
@@ -188,12 +192,13 @@ def run_representation_geometry_replacement_test(block_assignment, cache_data, p
                 for f2 in facts_B:
                     vals.append(S_mat[f1, f2].item())
         vals = np.array(vals)
+        vals = vals[np.isfinite(vals)]
         return {
             "count": len(vals),
-            "mean": float(np.mean(vals)),
-            "std": float(np.std(vals)),
-            "min": float(np.min(vals)),
-            "max": float(np.max(vals)),
+            "mean": float(np.mean(vals)) if len(vals) > 0 else 0.0,
+            "std": float(np.std(vals)) if len(vals) > 0 else 0.0,
+            "min": float(np.min(vals)) if len(vals) > 0 else 0.0,
+            "max": float(np.max(vals)) if len(vals) > 0 else 0.0,
             "gt_090": int(np.sum(vals > 0.90)),
             "gt_095": int(np.sum(vals > 0.95))
         }
