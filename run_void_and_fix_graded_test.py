@@ -218,8 +218,10 @@ def main():
     # Raw centroids (100 facts)
     train_x_all = cache_data["train_x"].float().to(DEVICE)
     train_y_all = cache_data["train_y"].to(DEVICE)
+    valid_classes = [c.item() for c in torch.unique(train_y_all) if (train_y_all == c).sum() > 0]
+
     cen_raw = torch.zeros(100, INPUT_DIM, device=DEVICE)
-    for c in range(100):
+    for c in valid_classes:
         mask_c = (train_y_all == c)
         cen_raw[c] = F.normalize(train_x_all[mask_c].mean(0, keepdim=True), dim=-1).squeeze(0)
 
@@ -249,7 +251,7 @@ def main():
     # Centroid reference embeddings for 100-centroid evaluation
     adapted_centroids = torch.zeros(100, INPUT_DIM, device=DEVICE)
     with torch.no_grad():
-        for c in range(100):
+        for c in valid_classes:
             mask_c = (train_y_all == c)
             samples = train_x_all[mask_c]
             adapted_centroids[c] = adapter(samples).mean(0, keepdim=True).squeeze(0)
@@ -271,19 +273,16 @@ def main():
 
             for q_idx in range(len(test_y_b)):
                 correct_class = test_y_b[q_idx].item()
+                incorrect_classes = [c for c in valid_classes if c != correct_class]
+                incorrect_sims = raw_sims[q_idx, incorrect_classes]
 
                 c_val = raw_sims[q_idx, correct_class].item()
-
-                sim_vec = raw_sims[q_idx].clone()
-                sim_vec[correct_class] = -999.0
-                x_val = sim_vec.max().item()
-
+                x_val = incorrect_sims.max().item()
                 m_val = c_val - x_val
 
-                incorrect_indices = [i for i in range(100) if i != correct_class]
-                mean_val = raw_sims[q_idx, incorrect_indices].mean().item()
+                mean_val = incorrect_sims.mean().item()
                 gap_val  = x_val - mean_val
-                top5_val = torch.topk(raw_sims[q_idx, incorrect_indices], k=5).values.mean().item()
+                top5_val = torch.topk(incorrect_sims, k=5).values.mean().item()
                 d_val    = raw_base_sims[q_idx].max().item()
 
                 # Outcome 1: 300-sample 1-NN (31 failures)
