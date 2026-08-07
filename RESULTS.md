@@ -258,14 +258,17 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
   - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall C2 $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
 
-#### Empirically Verified Replacement Tests & Seed Wiring (`run_replacement_tests_and_seed_wiring.py`)
+#### Empirically Verified Replacement Tests, Scale-Invariant Margin Test & Failure Audit (`run_section10_final_verification.py`)
 1. **Retraction of $W$-Decomposition**:
    - In $d=960$ dimensions, a rank-32 matrix $W$ has at most 32 non-zero eigenvalues, whereas $a I$ requires rank 960. The maximum theoretical variance explainable by $a I + b \cdot \mathbf{1}\mathbf{1}^\top$ for rank 32 in 960-d is $\le 3.33\%$. The $0.86\%$ measurement was uninformative because the null hypothesis was structurally unreachable under low rank.
-2. **Representation Geometry Replacement Test (4,950 Pairs)**:
-   - *Unadapted Baseline*: 170 near-confusable pairs with $\cos > 0.95$ ($48$ trained–trained, $92$ trained–untrained, $30$ untrained–untrained).
-   - *Adapted Representation Map (50 Base Facts)*: **0 pairs with $\cos > 0.95$ across all three categories** ($0$ trained–trained, $0$ trained–untrained, $0$ untrained–untrained).
-   - *Finding*: Adapting the 32-d bottleneck representation map completely eliminates representation space collapse, separating confusable pairs across both trained and untrained knowledge subsets.
-3. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
+2. **Scale-Invariant Margin Test ($m = \cos(q, z_{\text{correct}}) - \max_{y \neq \text{correct}} \cos(q, z_y)$)**:
+   - *Raw Baseline (400 Test Queries)*: Trained $m = \mathbf{+0.0065 \pm 0.0121}$ (Error $= 28.50\%$, Acc $= 71.50\%$); Untrained $m = \mathbf{+0.0059 \pm 0.0100}$ (Error $= 26.50\%$, Acc $= 73.50\%$).
+   - *Adapted Map (50 Base Facts)*: Trained $m = \mathbf{+0.2671 \pm 0.1977}$ (Error $= \mathbf{8.50\%}$, Acc $= \mathbf{91.50\%}$); Untrained $m = \mathbf{+0.2185 \pm 0.2126}$ (Error $= \mathbf{15.50\%}$, Acc $= \mathbf{84.50\%}$).
+   - *Exact Alignment*: The fraction $m < 0$ equals the observed retrieval error rate **EXACTLY** ($8.50\%$ trained, $15.50\%$ untrained). Margin analysis and retrieval harness are in **100% mathematical agreement**.
+3. **Retrieval Failure Audit (Resolving the $84.50\%$ Ceiling Constraint)**:
+   - Of the 48 total test query failures after 50-fact adaptation, **33 out of 48 failures ($\mathbf{68.8\%}$)** involve nearest incorrect neighbours from pairs that were $> 0.95$ in the raw unadapted embeddings ($58.8\%$ for trained blocks, $74.2\%$ for untrained blocks).
+   - *Finding*: Formerly-confusable pairs ($\cos > 0.95$ in raw embeddings) **ARE the primary binding constraint** limiting retrieval accuracy to $84.50\%$.
+4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
 | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
 |:---|:---:|:---:|:---:|:---:|
@@ -277,9 +280,10 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 | **50 facts** | 5 blocks | **84.50%** | $\pm 0.00\%$ | **+14.00 pp (ABOVE FLOOR)** |
 
    - *Correction*: Adaptation degrades unseen-fact retrieval below the 70.50% floor at $B=1$ (60.00%) and $B=2$ (67.20%); crosses the floor between $B=2$ and $B=3$ (79.00%); and saturates by $B=4$ (84.70%) with no further gain at $B=5$ (84.50%). The progression is smooth and saturating, not a phase transition. The $B=1..4$ error bars reflect **block-selection variance** (since base blocks were drawn randomly per seed); adapter training for a fixed set of blocks is **deterministic**.
-4. **Seed Wiring & Single-Pair Probe $n=1$ Clarification**:
-   - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`), which copies SVD components of cached embeddings. When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
-   - **Axis D Evidence Status ($n=1$)**: Because the single-pair probe executed without block order shuffle variation, its five seeds were identical deterministic runs. The single-pair probe's $0.00\text{ pp}$ interference finding rests on $n=1$. (Axis D remains dropped). When per-seed shuffle sequences are applied (as in the benchmark), sequence variation creates distinct weight matrices $W_{\text{seed101}} \neq W_{\text{seed102}}$.
+5. **Seed Wiring, Step-9 Max Weight Diff & Axis D Evidence Status ($n=1$)**:
+   - At Step 9 in the 50-run benchmark (where shuffle order varies per seed), $\max_{i, j} |W_{\text{seed101}}[i, j] - W_{\text{seed102}}[i, j]| = \mathbf{2.5985}$, proving sequence shuffling creates distinct weight matrices across runs.
+   - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`). When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
+   - **Axis D Evidence Status ($n=1$)**: Because the single-pair probe executed without block order shuffle variation, its five seeds were identical deterministic runs. The single-pair probe's $0.00\text{ pp}$ interference finding rests on $n=1$. (Axis D remains dropped).
 
 ---
 
