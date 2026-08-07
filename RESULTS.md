@@ -178,6 +178,23 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 
 Under this configuration, naive sequential fine-tuning exhibits severe catastrophic forgetting (BWT $= -12.35\%$ / $-9.15\%$, CL gap $= +19.72\text{ pp}$ / $+16.62\text{ pp}$), while offline joint training reaches $94.20\%$ / $94.15\%$ $A_T$.
 
+### Disclosure D1: Phase 1 Axis Progression & Forgetting Attribution
+
+| Cell | Config | Naive A_T | Naive LA | Naive BWT | Offline A_T | CL Gap | Status |
+|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `A_r32` | $r=32, \text{ep}=30, \text{lr}=1\text{e-}3$ | 85.08% | 81.25% | **+3.83%** | 93.25% | +8.17% | Mild |
+| `B_r32_ep100` | $r=32, \text{ep}=100, \text{lr}=1\text{e-}3$ | 89.92% | 88.83% | **+1.08%** | 95.25% | +5.33% | Mild |
+| `C_r32_ep100_lr1e-02` | $r=32, \text{ep}=100, \text{lr}=1\text{e-}2$ | 75.08% | 87.58% | **-12.50%** | 95.17% | +20.08% | **Target Met** |
+
+**Attribution**: Catastrophic forgetting is directly attributable to the high learning rate ($\text{lr}=10^{-2}$) acting within the constrained bottleneck ($r=32$). Neither $r=32$ alone at $\text{lr}=10^{-3}$ nor $\text{lr}=10^{-2}$ at full rank ($r=960$) produces BWT $< -10\%$.
+
+### Disclosure D2: Parameterisation Projection Specification
+In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_V` (shape $32 \times 960$), multiplying by $\text{proj\_mat} = I_{960} - P P^\top$ (shape $960 \times 960$). Because $V \in \mathbb{R}^{32 \times 960}$, projecting along 960-d space with rank $k \le 32$ restricts the 960-d input space without annihilating $V$.
+
+### Leading Results & S1/S2 Corrections:
+- **Gap Recovery (S2)**: At $k=32$, OGP recovers **14.7%** of the CL gap on Selection ($2.90 / 19.72$) and **13.2%** on Fresh ($2.20 / 16.62$), down from $37\%\text{--}52\%$ in the mild regime.
+- **Retention Share Direction (S1)**: Under real catastrophic forgetting, OGP's gain becomes **MORE acquisition-driven** ($\Delta LA = +2.63\text{ pp} / +1.45\text{ pp}$ vs $\Delta BWT = +0.27\text{ pp} / +0.75\text{ pp}$; retention share fell to **9.5% – 34.1%**, down from $55.9\%\text{--}67.7\%$ in the mild regime). This weakens the pure memory-protection interpretation.
+
 ### Selection Seeds 101..105 (50 Runs per Condition):
 
 | Condition | $A_T$ (Min..Max) | $LA$ | BWT ($A_T - LA$) | Obs. Fgt | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Retention Share | Verdict |
@@ -193,7 +210,7 @@ Under this configuration, naive sequential fine-tuning exhibits severe catastrop
 | **OGP (k=32)** | 77.38% ± 7.96% (57.50..88.00%) | 89.45% | -12.08% | 13.15% | +2.90% [+0.02%, +5.47%] | +0.27% [-2.38%, +2.54%] | 9.5% | 🎉 **SUCCESS** |
 | **RANDOM-32** | 73.36% ± 6.39% (59.50..86.00%) | 86.59% | -13.23% | 14.83% | -1.12% [-2.34%, +0.05%] | -0.88% [-1.95%, +0.20%] | 79.0% | True Null |
 | **BOTTOM-32** | 73.90% ± 5.05% (64.75..81.50%) | 86.92% | -13.02% | 14.35% | -0.57% [-1.06%, -0.10%] | -0.67% [-1.10%, -0.27%] | 117.4% | ❌ **SIG WORSE** |
-| **CURRENT-32**| **83.80% ± 4.95% (75.50..90.25%)**| **89.60%**| **-5.80%** | **7.27%**| **+9.33% [+8.11%, +10.46%]**| **+6.55% [+5.38%, +7.65%]**| **70.2%** | 🏆 **HIGH SUCCESS**|
+| **CURRENT-32**| 83.80% ± 4.95% (75.50..90.25%) | 89.60% | -5.80% | 7.27% | +9.33% [+8.11%, +10.46%] | +6.55% [+5.38%, +7.65%] | 70.2% | Pending Controls C1-C4 |
 
 ### Fresh Replication Seeds 211..215 (50 Runs per Condition):
 
@@ -210,7 +227,10 @@ Under this configuration, naive sequential fine-tuning exhibits severe catastrop
 | **OGP (k=32)** | 79.73% ± 6.19% (71.50..91.00%) | 88.12% | -8.40% | 10.12% | +2.20% [+0.25%, +4.29%] | +0.75% [-1.00%, +2.52%] | 34.1% | 🎉 **SUCCESS** |
 | **RANDOM-32** | 77.27% ± 4.88% (66.50..86.75%) | 86.67% | -9.40% | 11.12% | -0.26% [-1.49%, +0.97%] | -0.25% [-1.38%, +0.87%] | 100.0% | True Null |
 | **BOTTOM-32** | 76.60% ± 5.00% (68.25..85.75%) | 86.42% | -9.82% | 11.72% | -0.92% [-1.84%, -0.04%] | -0.67% [-1.48%, +0.09%] | ❌ **SIG WORSE** |
-| **CURRENT-32**| **82.25% ± 3.61% (77.25..90.50%)**| **86.82%**| **-4.58%** | **6.62%**| **+4.72% [+3.00%, +6.46%]**| **+4.57% [+3.21%, +6.10%]**| **96.8%** | 🏆 **HIGH SUCCESS**|
+| **CURRENT-32**| 82.25% ± 3.61% (77.25..90.50%) | 86.82% | -4.58% | 6.62% | +4.72% [+3.00%, +6.46%] | +4.57% [+3.21%, +6.10%] | 96.8% | Pending Controls C1-C4 |
+
+### S3 Note on CURRENT-32
+CURRENT-32 shows elevated performance (+9.33% / +4.72% A_T). Decisive controls C1-C4 (learning rate sweep, freeze-after-base, gradient-norm ratio logging, and gradient-clip control) are pending to determine whether this reflects step-size damping or genuine regularisation. No mechanistic claims are made for CURRENT-32 until C1-C4 complete.
 
 ---
 
