@@ -339,16 +339,21 @@ def build_probe_assignment(cache_data, f1, f2, confusable_pairs):
 def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
                            seeds=(101, 102, 103, 104, 105),
                            epochs=30, lr=1e-3):
-    """Report R[0,0], R[8,0], R[9,0] and calculate:
-      - Generic drift drop: R[0,0] - R[8,0]
-      - Interference-specific drop: R[8,0] - R[9,0]
-      - Total drop: R[0,0] - R[9,0]
-    Gate statistic: R[8,0] - R[9,0] (interference-specific).
+    """P1: Report FACT f1's OWN accuracy (out of 4 queries) at steps 0, 8, 9.
+    P3: Seed-wiring check: max|W_seed101 - W_seed102| at step 9.
+    P4: Extended probe across all confusable pairs.
     """
     probe_blocks  = build_probe_assignment(cache_data, f1, f2, confusable_pairs)
     tr_x, tr_y, te_x, te_y = build_block_tensors(probe_blocks, cache_data)
 
-    r0_accs, r8_accs, r9_accs = [], [], []
+    f1_correct_step0 = []
+    f1_correct_step8 = []
+    f1_correct_step9 = []
+    w_step9_list = []
+
+    # Fact f1 test queries (4 queries)
+    f1_test_x = cache_data["test_x"][f1*4 : (f1+1)*4].to(DEVICE)
+    f1_test_y = cache_data["test_y"][f1*4 : (f1+1)*4].to(DEVICE)
 
     for seed in seeds:
         torch.manual_seed(seed)
@@ -357,7 +362,6 @@ def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
 
         adapter = FullRankAdapter().to(DEVICE)
         opt     = torch.optim.AdamW(adapter.parameters(), lr=lr, weight_decay=1e-4)
-        R       = np.zeros((10, 10))
 
         ref_x_acc, ref_y_acc = [], []
 
@@ -373,82 +377,121 @@ def run_single_pair_probe(cache_data, f1, f2, confusable_pairs, pca_bases,
 
             ref_x_acc.append(tr_x[step])
             ref_y_acc.append(tr_y[step])
-            cum_rx = torch.cat(ref_x_acc, dim=0).to(DEVICE)
-            cum_ry = torch.cat(ref_y_acc, dim=0).to(DEVICE)
 
             adapter.eval()
             with torch.no_grad():
-                zr  = adapter(cum_rx)
-                zq  = adapter(te_x[0].to(DEVICE))
-                correct = sum(
-                    1 for qi, qv in enumerate(zq)
-                    if cum_ry[torch.argmax(torch.matmul(zr, qv)).item()].item()
-                    == te_y[0][qi].item()
-                )
-                R[step, 0] = correct / len(zq)
+                if step in (0, 8, 9):
+                    cum_rx = torch.cat(ref_x_acc, dim=0).to(DEVICE)
+                    cum_ry = torch.cat(ref_y_acc, dim=0).to(DEVICE)
+                    zr = adapter(cum_rx)
+                    zq = adapter(f1_test_x)
+                    corr = sum(
+                        1 for qi, qv in enumerate(zq)
+                        if cum_ry[torch.argmax(torch.matmul(zr, qv)).item()].item() == f1_test_y[qi].item()
+                    )
+                    if step == 0: f1_correct_step0.append(corr)
+                    elif step == 8: f1_correct_step8.append(corr)
+                    elif step == 9: f1_correct_step9.append(corr)
 
-        r0_accs.append(R[0, 0] * 100)
-        r8_accs.append(R[8, 0] * 100)
-        r9_accs.append(R[9, 0] * 100)
+        w_step9_list.append(adapter.linear.weight.detach().clone())
 
-    r0_arr = np.array(r0_accs)
-    r8_arr = np.array(r8_accs)
-    r9_arr = np.array(r9_accs)
+    # P3: Seed wiring check
+    w_diff_101_102 = (w_step9_list[0] - w_step9_list[1]).abs().max().item()
+    print("\n" + "=" * 75)
+    print("  SEED-WIRING CHECK (P3)")
+    print(f"  Max |W_seed101 - W_seed102| at step 9: {w_diff_101_102:.8e}")
+    if w_diff_101_102 == 0.0:
+        print("  [ALERT] Seeds are NOT reaching RNG! 5 seeds is one run repeated 5 times.")
+    else:
+        print("  [PASS] Seeds correctly produce distinct random initialisations / optimiser states.")
+    print("=" * 75)
 
-    tot_drops = r0_arr - r9_arr
-    drift_drops = r0_arr - r8_arr
-    interf_drops = r8_arr - r9_arr
+    # P1: Per-fact accuracy for Fact 9 (f1)
+    s0_arr = np.array(f1_correct_step0)
+    s8_arr = np.array(f1_correct_step8)
+    s9_arr = np.array(f1_correct_step9)
 
     print("\n" + "=" * 75)
-    print("  SINGLE-PAIR PROBE GATE (INTERFERENCE vs DRIFT DECOMPOSITION)")
-    print(f"  Most confusable pair: fact {f1} (block 0) vs fact {f2} (block 9)")
-    print(f"  Protocol: pure sequential, fixed order [0..9], epochs={epochs}, lr={lr:.0e}")
-    print(f"  Seeds: {list(seeds)}")
-    print(f"  {'Seed':>6s} | {'R[0,0]':>8s} {'R[8,0]':>8s} {'R[9,0]':>8s} | "
-          f"{'Total Drop (R0-R9)':>18s} {'Drift (R0-R8)':>14s} {'Interf (R8-R9)':>15s}")
-    print("-" * 88)
+    print(f"  PER-FACT PROBE ANALYSIS (P1) -- FACT {f1} OWN ACCURACY (4 queries)")
+    print(f"  Confusable pair: Fact {f1} (Block 0) vs Fact {f2} (Block 9)")
+    print(f"  {'Seed':>6s} | {'Step 0 (out of 4)':>18s} {'Step 8 (out of 4)':>18s} {'Step 9 (out of 4)':>18s} | {'Interference Drop (S8-S9)':>26s}")
+    print("-" * 90)
     for i, seed in enumerate(seeds):
-        print(f"  {seed:>6d} | {r0_accs[i]:>7.2f}% {r8_accs[i]:>7.2f}% {r9_accs[i]:>7.2f}% | "
-              f"{tot_drops[i]:>+17.2f}% {drift_drops[i]:>+13.2f}% {interf_drops[i]:>+14.2f}%")
+        drop_i = f1_correct_step8[i] - f1_correct_step9[i]
+        print(f"  {seed:>6d} | {f1_correct_step0[i]:>10d} ({f1_correct_step0[i]/4*100:5.1f}%) "
+              f"{f1_correct_step8[i]:>10d} ({f1_correct_step8[i]/4*100:5.1f}%) "
+              f"{f1_correct_step9[i]:>10d} ({f1_correct_step9[i]/4*100:5.1f}%) | "
+              f"{drop_i:>16d} ({drop_i/4*100:+6.1f} pp)")
+    print("-" * 90)
+    mean_drop_q = (s8_arr - s9_arr).mean()
+    mean_drop_pp = mean_drop_q / 4.0 * 100.0
+    print(f"  Mean Interference Drop on Fact {f1}: {mean_drop_q:.2f} / 4 queries ({mean_drop_pp:+.2f} pp)")
 
-    def _row(label, arr):
-        return f"  {label:>6s} | {arr[0]:>7.2f}% {arr[1]:>7.2f}% {arr[2]:>7.2f}% | " \
-               f"{arr[3]:>+17.2f}% {arr[4]:>+13.2f}% {arr[5]:>+14.2f}%"
+    # P4: All 170 Pairs Evaluation
+    print("\n" + "=" * 75)
+    print("  ALL 170 HIGH-CONFUSABILITY PAIRS PROBE AGGREGATION (P4)")
+    print("  Evaluating per-fact accuracy of earlier member before and after later member trains...")
+    print("=" * 75)
 
-    means = [r0_arr.mean(), r8_arr.mean(), r9_arr.mean(), tot_drops.mean(), drift_drops.mean(), interf_drops.mean()]
-    stds  = [r0_arr.std(),  r8_arr.std(),  r9_arr.std(),  tot_drops.std(),  drift_drops.std(),  interf_drops.std()]
-    mins  = [r0_arr.min(),  r8_arr.min(),  r9_arr.min(),  tot_drops.min(),  drift_drops.min(),  interf_drops.min()]
-    maxs  = [r0_arr.max(),  r8_arr.max(),  r9_arr.max(),  tot_drops.max(),  drift_drops.max(),  interf_drops.max()]
+    all_pair_drops = []
+    for pair_idx, (pa, pb, sim_val) in enumerate(confusable_pairs):
+        # Determine earlier and later member
+        f_earlier, f_later = (pa, pb) if pa < pb else (pb, pa)
+        # Quick eval for earlier fact
+        f_earlier_tx = cache_data["test_x"][f_earlier*4 : (f_earlier+1)*4].to(DEVICE)
+        f_earlier_ty = cache_data["test_y"][f_earlier*4 : (f_earlier+1)*4].to(DEVICE)
 
-    print("-" * 88)
-    print(_row("Mean", means))
-    print(_row("Std", stds))
-    print(_row("Min", mins))
-    print(_row("Max", maxs))
-    print()
+        # Single seed 101 test for all pairs
+        torch.manual_seed(101)
+        adapter_p = FullRankAdapter().to(DEVICE)
+        opt_p = torch.optim.AdamW(adapter_p.parameters(), lr=lr, weight_decay=1e-4)
 
-    mean_interf = interf_drops.mean()
-    mean_total  = tot_drops.mean()
+        # Build blocks with earlier in block 0, later in block 9
+        pr_blocks = build_probe_assignment(cache_data, f_earlier, f_later, confusable_pairs)
+        ptr_x, ptr_y, pte_x, pte_y = build_block_tensors(pr_blocks, cache_data)
 
-    if mean_interf >= 20.0:
-        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% >= 20.0 pp.")
-        print("  HIGH INTERFERENCE DETECTED. Proceed with Axis D (with straddle-min control).")
+        ref_x_acc, ref_y_acc = [], []
+        acc_s8, acc_s9 = 0, 0
+        for step in range(10):
+            cx = ptr_x[step].to(DEVICE); cy = ptr_y[step].to(DEVICE)
+            adapter_p.train()
+            for _ in range(epochs):
+                opt_p.zero_grad()
+                supervised_contrastive_loss(adapter_p(cx), cy).backward()
+                opt_p.step()
+            ref_x_acc.append(ptr_x[step]); ref_y_acc.append(ptr_y[step])
+            if step in (8, 9):
+                adapter_p.eval()
+                with torch.no_grad():
+                    cum_rx = torch.cat(ref_x_acc, dim=0).to(DEVICE)
+                    cum_ry = torch.cat(ref_y_acc, dim=0).to(DEVICE)
+                    zr = adapter_p(cum_rx)
+                    zq = adapter_p(f_earlier_tx)
+                    corr = sum(1 for qi, qv in enumerate(zq)
+                               if cum_ry[torch.argmax(torch.matmul(zr, qv)).item()].item() == f_earlier_ty[qi].item())
+                    if step == 8: acc_s8 = corr
+                    elif step == 9: acc_s9 = corr
+
+        all_pair_drops.append(acc_s8 - acc_s9)
+
+    arr_all_drops = np.array(all_pair_drops)
+    mean_p4_drop_q = arr_all_drops.mean()
+    mean_p4_drop_pp = mean_p4_drop_q / 4.0 * 100.0
+
+    print(f"  Evaluated {len(confusable_pairs)} pairs (cos > 0.95, 4 queries each).")
+    print(f"  Mean per-fact accuracy before later member (step 8): {np.mean([acc_s8 for _ in range(len(confusable_pairs))]):.2f} / 4")
+    print(f"  Mean per-fact interference drop (S8 - S9): {mean_p4_drop_q:+.4f} queries ({mean_p4_drop_pp:+.2f} pp)")
+    print(f"  Distribution of drops across 170 pairs: min={arr_all_drops.min()}, max={arr_all_drops.max()}, std={arr_all_drops.std():.4f}")
+    print("=" * 75)
+
+    if mean_p4_drop_pp >= 20.0:
         axis_d_status = "RUN_FULL"
-    elif mean_interf >= 10.0:
-        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% in [10.0, 20.0) pp.")
-        print("  WEAK INTERFERENCE. Run Axis D only alongside straddle-min control;")
-        print("  treat capacity (Axis A) as the primary lever.")
+    elif mean_p4_drop_pp >= 10.0:
         axis_d_status = "RUN_WEAK"
     else:
-        print(f"  DECISION: Interference-specific drop = {mean_interf:.2f}% < 10.0 pp.")
-        print("  NEGLIGIBLE INTERFERENCE (< 10pp for most confusable pair).")
-        print("  1-NN retrieval over a fixed fact bank with a frozen encoder does not")
-        print("  support catastrophic forgetting via confusable-pair interference.")
-        print("  ACTION: Axis D dropped entirely. Proceed with Axis A (capacity) as sole lever.")
         axis_d_status = "DROP"
 
-    print("=" * 75)
-    return mean_interf, mean_total, axis_d_status
+    return mean_p4_drop_pp, 0.0, axis_d_status
 
 
 # ============================================================================
@@ -735,7 +778,7 @@ def main():
         cache_data = torch.load(cache_path, map_location=DEVICE)
         print(f"  [Cache] Loaded embeddings from {cache_path}")
 
-    R_VALUES  = [8, 16, 32, 64, 128, 960]
+    R_VALUES  = [2, 4, 8, 16, 24, 32, 960]
     SEEDS     = [101, 102, 103, 104, 105]
     SHUFFLES  = 3
 
