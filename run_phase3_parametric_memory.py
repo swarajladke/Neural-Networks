@@ -104,6 +104,23 @@ def supervised_contrastive_loss(z, y, tau=0.05):
     return -mlp.mean()
 
 
+def find_confusable_pairs(cache_data, threshold=0.95):
+    X = cache_data["train_x"].float()
+    y = cache_data["train_y"]
+    cen = torch.zeros(100, INPUT_DIM, dtype=torch.float32)
+    for i in range(100):
+        mask = (y == i)
+        if mask.sum() > 0:
+            cen[i] = F.normalize(X[mask].mean(0, keepdim=True), dim=-1).squeeze(0)
+    S = torch.matmul(cen, cen.T)
+    pairs = []
+    for i in range(100):
+        for j in range(i + 1, 100):
+            if S[i, j].item() > threshold:
+                pairs.append((i, j, S[i, j].item()))
+    return pairs
+
+
 def build_confusable_split_blocks(confusable_pairs):
     blocks = [[] for _ in range(10)]
     for i in range(100):
