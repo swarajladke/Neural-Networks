@@ -265,9 +265,10 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
    - *Raw Baseline (400 Test Queries)*: Trained $m = \mathbf{+0.0065 \pm 0.0121}$ (Error $= 28.50\%$, Acc $= 71.50\%$); Untrained $m = \mathbf{+0.0059 \pm 0.0100}$ (Error $= 26.50\%$, Acc $= 73.50\%$).
    - *Adapted Map (50 Base Facts)*: Trained $m = \mathbf{+0.2671 \pm 0.1977}$ (Error $= \mathbf{8.50\%}$, Acc $= \mathbf{91.50\%}$); Untrained $m = \mathbf{+0.2185 \pm 0.2126}$ (Error $= \mathbf{15.50\%}$, Acc $= \mathbf{84.50\%}$).
    - *Exact Alignment*: The fraction $m < 0$ equals the observed retrieval error rate **EXACTLY** ($8.50\%$ trained, $15.50\%$ untrained). Margin analysis and retrieval harness are in **100% mathematical agreement**.
-3. **Retrieval Failure Audit (Resolving the $84.50\%$ Ceiling Constraint)**:
-   - Of the 48 total test query failures after 50-fact adaptation, **33 out of 48 failures ($\mathbf{68.8\%}$)** involve nearest incorrect neighbours from pairs that were $> 0.95$ in the raw unadapted embeddings ($58.8\%$ for trained blocks, $74.2\%$ for untrained blocks).
-   - *Finding*: Formerly-confusable pairs ($\cos > 0.95$ in raw embeddings) **ARE the primary binding constraint** limiting retrieval accuracy to $84.50\%$.
+3. **Retrieval Failure Base-Rate Enrichment Test (`run_base_rate_enrichment_test.py`)**:
+   - *Population Base Rate*: **100 out of 100 facts (100.0%)** and **400 out of 400 test queries (100.0%)** belong to at least one raw $> 0.95$ confusable pair.
+   - *Fisher's Exact Test*: Contingency table for combined 400 queries yields `[[31, 0], [369, 0]]` (Odds Ratio $=$ `nan`, $p = 1.0000$, NOT SIGNIFICANT).
+   - *Withdrawal*: Because $100.0\%$ of the population belongs to confusable pairs, observing $100.0\%$ of query failures on confusable targets carries zero statistical enrichment over the population base rate. The claim that confusable pairs are the "primary binding constraint" is **WITHDRAWN**. The precise geometric cause of the $84.50\%$ retrieval accuracy ceiling remains **UNRESOLVED**.
 4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
 | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
