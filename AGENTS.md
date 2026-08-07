@@ -12,4 +12,7 @@
 3. **Correction & Value Change Flags**:
    Any reported quantity that changes value between reports must be explicitly flagged as a **CORRECTION** detailing the prior value, the new value, and the exact cause (whether code diff, hyperparameter change, or definitional change). Never present a definitional change as a physical measurement.
 
+4. **Base-Rate Enrichment & Significance Testing**:
+   Any "X of Y failures involve Z" claim must be accompanied by the base rate of Z in the population and a statistical significance test (e.g., Fisher's exact test with Odds Ratio and 95% Confidence Interval). A raw proportion without a base rate is not evidence of a causal constraint.
+
 
