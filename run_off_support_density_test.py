@@ -204,7 +204,7 @@ def main():
 
     pca_basis_r32 = compute_pca_basis(cache_data, r=32).to(DEVICE)
     conf_pairs = find_confusable_pairs(cache_data, threshold=0.95)
-    block_assignment = build_confusable_split_blocks(confusable_pairs)
+    block_assignment = build_confusable_split_blocks(conf_pairs)
     tr_x, tr_y, te_x, te_y = build_block_tensors(block_assignment, cache_data)
 
     # Raw centroids (100 facts)
