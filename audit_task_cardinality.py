@@ -57,36 +57,41 @@ def main():
     print(f"     Total Train Samples:                       {len(train_x)} ({len(train_x)//100} per class)")
     print(f"     Total Test Queries:                        {len(test_x)} ({len(test_x)//100} per class)")
 
-    # Compute true class centroids (100 classes)
+    valid_classes = [c.item() for c in unique_train_classes]
+    N_classes = len(valid_classes)
+
+    # Compute true class centroids over valid classes
     cen_true = torch.zeros(100, INPUT_DIM, device=DEVICE)
-    for c in range(100):
+    for c in valid_classes:
         mask_c = (train_y == c)
         cen_true[c] = F.normalize(train_x[mask_c].mean(0, keepdim=True), dim=-1).squeeze(0)
 
-    # Compute 4,950 pairwise cosine similarities between true centroids
-    S = torch.matmul(cen_true, cen_true.T)
+    # Compute pairwise cosine similarities between valid class centroids
+    valid_cens = cen_true[valid_classes]
+    S = torch.matmul(valid_cens, valid_cens.T)
     conf_pairs_count = 0
     conf_classes = set()
-    for i in range(100):
-        for j in range(i + 1, 100):
+    for i in range(N_classes):
+        for j in range(i + 1, N_classes):
             if S[i, j].item() > 0.95:
                 conf_pairs_count += 1
-                conf_classes.add(i)
-                conf_classes.add(j)
+                conf_classes.add(valid_classes[i])
+                conf_classes.add(valid_classes[j])
 
     print(f"\n  2. CONFUSABLE BASE RATE UNDER TRUE CLASS CENTROIDS:")
     print(f"     Total Pairwise Centroid Comparisons (100 x 99 / 2): 4,950 pairs")
     print(f"     Pairs with cos > 0.95:                             {conf_pairs_count} pairs")
     print(f"     Distinct Classes Involved in >0.95 Pairs:          {len(conf_classes)} / 100 classes ({len(conf_classes)}%)")
 
-    # Raw 1-NN Retrieval Accuracy on All 400 Test Queries (100 Centroids)
-    raw_test_sims = torch.matmul(F.normalize(test_x, dim=-1), cen_true.T)
-    raw_preds = torch.argmax(raw_test_sims, dim=-1)
+    # Raw 1-NN Retrieval Accuracy on All 400 Test Queries (over valid_classes)
+    raw_test_sims = torch.matmul(F.normalize(test_x, dim=-1), valid_cens.T) # (400, N_classes)
+    raw_pred_indices = torch.argmax(raw_test_sims, dim=-1)
+    raw_preds = torch.tensor([valid_classes[i] for i in raw_pred_indices.cpu().numpy()], device=DEVICE)
     raw_acc_400 = (raw_preds == test_y).float().mean().item()
     correct_count = (raw_preds == test_y).sum().item()
 
     print(f"\n  3. CANONICAL RAW BASELINE RETRIEVAL ACCURACY:")
-    print(f"     Raw 1-NN Accuracy against 100 Centroids (All 400 Test Queries): {raw_acc_400*100:.2f}% ({correct_count}/400)")
+    print(f"     Raw 1-NN Accuracy against Valid Class Centroids (All 400 Test Queries): {raw_acc_400*100:.2f}% ({correct_count}/400)")
 
     print(f"\n  4. DIRECT ANSWER TO TASK CARDINALITY:")
     print(f"     - Retrieval is a 100-WAY CLASSIFICATION TASK (100 candidate target class centroids in memory).")
