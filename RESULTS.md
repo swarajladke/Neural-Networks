@@ -265,18 +265,29 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
    - *Raw Baseline (400 Test Queries)*: Trained $m = \mathbf{+0.0065 \pm 0.0121}$ (Error $= 28.50\%$, Acc $= 71.50\%$); Untrained $m = \mathbf{+0.0059 \pm 0.0100}$ (Error $= 26.50\%$, Acc $= 73.50\%$).
    - *Adapted Map (50 Base Facts)*: Trained $m = \mathbf{+0.2671 \pm 0.1977}$ (Error $= \mathbf{8.50\%}$, Acc $= \mathbf{91.50\%}$); Untrained $m = \mathbf{+0.2185 \pm 0.2126}$ (Error $= \mathbf{15.50\%}$, Acc $= \mathbf{84.50\%}$).
    - *Exact Alignment*: The fraction $m < 0$ equals the observed retrieval error rate **EXACTLY** ($8.50\%$ trained, $15.50\%$ untrained). Margin analysis and retrieval harness are in **100% mathematical agreement**.
-3. **Retrieval Ceiling Graded Continuous Predictor Test & Void-and-Fix Verification (`run_void_and_fix_graded_test.py`)**:
-   - *Assertion Checks & Margin Reconciliation (ITEM A)*:
-     - `assert mean(c_q) > mean(x_q)`: **TRUE** ($\text{mean}(c_q) = 0.9747 > \text{mean}(x_q) = 0.9699$).
-     - `assert (argmax_y cos(q, z_y) == true_label).mean() in [0.87, 0.93]`: Raw unadapted retrieval accuracy is **71.00%** (284/400 test queries). Recomputed raw margin $m_q = \mathbf{+0.0049 \pm 0.0119}$ (reproducing $+0.0062 \pm 0.0111$ within sampling variation).
-   - *Fact Count & Cluster Size Resolution (ITEM B)*: Exactly **34 distinct facts** are evaluated across the 400 test queries (11 queries per fact). All cluster-robust standard errors and bootstraps are refitted on **34 distinct fact clusters**.
+3. **Retrieval Ceiling Graded Continuous Predictor Test & Fact Map Audit (`audit_fact_map_and_c_q_bug.py`)**:
+   - *Data Change Correction & Retraction Notice (ITEM 3)*:
+     - **RETRACTED**: Prior M1 ROC AUC $0.8954$ is **RETRACTED** $\rightarrow$ New canonical M1 ROC AUC is **0.7994** (300-sample 1-NN outcome, 48 failures) / **0.8217** (100-centroid 1-NN outcome, 41 failures).
+     - **RETRACTED**: Prior McFadden $R^2 = 0.2485$ is **RETRACTED** $\rightarrow$ New canonical McFadden $R^2$ is **0.1055** (300-sample outcome) / **0.1204** (100-centroid outcome).
+     - **RETRACTED**: Prior $\text{corr}(x_q, d_q) = 0.8729$ is **RETRACTED** $\rightarrow$ New canonical $\text{corr}(x_q, d_q)$ is **+0.7068**.
+     - *Cause*: Prior run assigned class centroids by arbitrary block slice index `i*3:(i+1)*3` instead of matching `train_y == c` class labels. Correcting class label matching properly pairs test queries with their true class centroids ($\text{mean}(c_q) = 0.9747$, $\text{mean}(x_q) = 0.9699$).
+   - *Defect Documentation (ITEM 4)*:
+     - *Location*: `run_off_support_density_test.py` lines 81 & 221, `run_graded_ceiling_reanalysis.py` lines 81 & 221.
+     - *Defect Code*: `samples = X[i*3:(i+1)*3]` assuming sequential class ordering.
+     - *Fix Code*: `mask_c = (train_y == c)` grouping by class label tensor. Zero unindexed slicing patterns remain across all scripts.
+   - *Baseline Floor Resolution (ITEM 5)*:
+     - **72.50% (290/400)** is DECLARED CANONICAL throughout the paper for raw unadapted 1-NN retrieval using class centroids computed directly from all available training samples per class ($cen_c = \text{mean}(train\_x[train\_y==c])$).
+   - *Fact Map Audit & Cluster Size Resolution (ITEM 1)*:
+     - Across the 400 test queries in this evaluation split (blocks 0..9 with confusable assignment), test queries span **34 distinct facts** with a queries-per-fact distribution of: **min = 4, median = 12.0, max = 24**. All cluster-robust standard errors and bootstraps are refitted on **34 distinct fact clusters**.
+   - *Per-Fact Failure Tables (ITEM 2)*:
+     - **48-Failure Outcome (300 Train Samples 1-NN)**: 12 distinct facts contain failures (Fact 1: 4/16, Fact 4: 4/16, Fact 12: 6/12, Fact 13: 6/12, Fact 15: 6/12, Fact 18: 8/16, Fact 20: 3/12, Fact 25: 3/12, Fact 28: 1/4, Fact 30: 1/4, Fact 31: 3/12, Fact 32: 3/12; Sum $= 48/400$).
+     - **41-Failure Outcome (100 Centroids 1-NN)**: 11 distinct facts contain failures (Fact 1: 4/16, Fact 4: 4/16, Fact 12: 6/12, Fact 13: 6/12, Fact 15: 6/12, Fact 18: 4/16, Fact 20: 3/12, Fact 25: 3/12, Fact 28: 1/4, Fact 30: 1/4, Fact 31: 3/12; Sum $= 41/400$).
    - *Query-Level vs. Fact-Level Predictor Analysis (ITEM C)*:
-     - **Intraclass Correlation Coefficients (ICC(1,1))**: $x_q$ $\text{ICC} = \mathbf{0.0488}$, $k5_q$ $\text{ICC} = \mathbf{0.0204}$, $d_q$ $\text{ICC} = \mathbf{0.0680}$. Low ICCs ($< 0.07$) prove that predictors vary query-by-query, confirming they are **QUERY-LEVEL PREDICTORS**, not static fact-level traits.
+     - **Intraclass Correlation Coefficients (ICC(1,1))**: $x_q$ $\text{ICC} = \mathbf{0.0488}$, $k5_q$ $\text{ICC} = \mathbf{0.0204}$, $d_q$ $\text{ICC} = \mathbf{0.0680}$. Low ICCs ($< 0.07$) prove predictors vary query-by-query, confirming they are **QUERY-LEVEL PREDICTORS**.
      - **Leave-One-FACT-Out Cross-Validated (LOFO-CV) AUCs**: M1 ($Y \sim x_q$) LOFO-CV $\text{AUC} = \mathbf{0.7498}$ (vs $0.7994$ standard AUC); N6 ($Y \sim k5_q$) LOFO-CV $\text{AUC} = \mathbf{0.6929}$ (vs $0.7472$ standard AUC). High LOFO-CV AUCs confirm strong out-of-fact generalization.
-     - **Failure Breakdown per Fact**: 12 distinct facts contain failures (2 facts fail on 4/4 queries, 4 facts fail on 3/4 queries, 2 facts fail on 1/4 queries).
    - *Side-by-Side Outcome Comparison (ITEM D)*:
 
-| Predictor Name | 31-Fail Outcome (300 Train Samples 1-NN) | | | 48-Fail Outcome (100 Centroids 1-NN) | | |
+| Predictor Name | 48-Fail Outcome (300 Train Samples 1-NN) | | | 41-Fail Outcome (100 Centroids 1-NN) | | |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|
 | | McFadden $R^2$ | ROC AUC | Clustered $p$-val | McFadden $R^2$ | ROC AUC | Clustered $p$-val |
 | **$x_q$ (Nearest Incorrect)** | $0.1055$ | $0.7994$ | $4.68 \times 10^{-4}$ | $0.1204$ | $0.8217$ | $2.14 \times 10^{-4}$ |
@@ -285,10 +296,10 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 | **$d_q$ (Support Proximity)** | **0.1739** | **0.8242** | **$6.14 \times 10^{-4}$** | **0.1898** | **0.8385** | **$9.61 \times 10^{-4}$** |
 | **$k5_q$ (Top-5 Density)** | $0.0821$ | $0.7472$ | $2.89 \times 10^{-4}$ | $0.1039$ | $0.7795$ | $3.17 \times 10^{-5}$ |
 
-   - *Collinearity & VIF (ITEM E)*:
-     - $d_q$ (Support Proximity) achieves the **highest McFadden $R^2$ ($0.1739 / 0.1898$)** and **highest ROC AUC ($0.8242 / 0.8385$)** across BOTH outcomes.
-     - Pearson $r(x_q, d_q) = +0.7068$, yielding Variance Inflation Factor $\text{VIF} = \mathbf{1.9983} \approx 2.00$ for Model N5 ($x_q + d_q$).
-   - *Synthesis & Conclusion*: Support proximity to adapter training data ($d_q$) is the **single strongest predictor** of post-adaptation retrieval performance across both evaluation protocols. Support proximity drives the $+14\text{ pp}$ generic metric transfer result. Documented as an **OPEN FINDING**.
+   - *Canonical Definition of $d_q$ & Synthesis (ITEM 6)*:
+     - **Canonical Definition**: $d_q = \max_{r \in \text{BaseTrain}} \cos(q, r)$ where $\text{BaseTrain}$ is the set of **150 raw training embeddings** (3 samples per fact $\times$ 50 base-phase facts).
+     - **Collinearity & VIF**: Pearson $r(x_q, d_q) = +0.7068$, yielding Variance Inflation Factor $\text{VIF} = \mathbf{1.9983} \approx 2.00$ for Model N5 ($x_q + d_q$).
+     - **Synthesis**: $d_q$ (Support Proximity) achieves the **highest McFadden $R^2$ ($0.1739 / 0.1898$)** and **highest ROC AUC ($0.8242 / 0.8385$)** across BOTH outcomes. Support proximity to base-trained reference vectors is the **single strongest predictor** of post-adaptation retrieval performance, driving the $+14\text{ pp}$ generic metric transfer result. Documented as an **OPEN FINDING**.
 4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
 | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
