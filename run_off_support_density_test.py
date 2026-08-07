@@ -73,7 +73,7 @@ def supervised_contrastive_loss(z, y, tau=0.05):
     logits = sim - lm.detach()
     exp_l  = torch.exp(logits) * mask.float()
     lp     = logits - torch.log(exp_l.sum(1, keepdim=True).clamp_min(1e-12))
-    mlp    = (pos.float() * lp).sum(1) / pos.float().sum(1].clamp_min(1.0)
+    mlp    = (pos.float() * lp).sum(1) / pos.float().sum(1).clamp_min(1.0)
     return -mlp.mean()
 
 
