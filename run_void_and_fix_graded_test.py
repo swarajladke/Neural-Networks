@@ -76,10 +76,11 @@ def supervised_contrastive_loss(z, y, tau=0.05):
 
 def find_confusable_pairs(cache_data, threshold=0.95):
     X = cache_data["train_x"].float()
+    Y = cache_data["train_y"]
     cen = torch.zeros(100, INPUT_DIM, dtype=torch.float32)
-    for i in range(100):
-        samples = X[i*3:(i+1)*3]
-        cen[i] = F.normalize(samples.mean(0, keepdim=True), dim=-1).squeeze(0)
+    for c in range(100):
+        mask_c = (Y == c)
+        cen[c] = F.normalize(X[mask_c].mean(0, keepdim=True), dim=-1).squeeze(0)
     S = torch.matmul(cen, cen.T)
     pairs = []
     for i in range(100):
@@ -215,10 +216,12 @@ def main():
     tr_x, tr_y, te_x, te_y = build_block_tensors(block_assignment, cache_data)
 
     # Raw centroids (100 facts)
+    train_x_all = cache_data["train_x"].float().to(DEVICE)
+    train_y_all = cache_data["train_y"].to(DEVICE)
     cen_raw = torch.zeros(100, INPUT_DIM, device=DEVICE)
-    for i in range(100):
-        samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
-        cen_raw[i] = F.normalize(samples.mean(0, keepdim=True), dim=-1).squeeze(0)
+    for c in range(100):
+        mask_c = (train_y_all == c)
+        cen_raw[c] = F.normalize(train_x_all[mask_c].mean(0, keepdim=True), dim=-1).squeeze(0)
 
     # Raw base-trained reference vectors (50 vectors)
     joint_train_x_base = torch.cat([tr_x[b] for b in range(5)], dim=0).to(DEVICE)
@@ -246,9 +249,10 @@ def main():
     # Centroid reference embeddings for 100-centroid evaluation
     adapted_centroids = torch.zeros(100, INPUT_DIM, device=DEVICE)
     with torch.no_grad():
-        for i in range(100):
-            samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
-            adapted_centroids[i] = adapter(samples).mean(0, keepdim=True).squeeze(0)
+        for c in range(100):
+            mask_c = (train_y_all == c)
+            samples = train_x_all[mask_c]
+            adapted_centroids[c] = adapter(samples).mean(0, keepdim=True).squeeze(0)
         adapted_centroids = F.normalize(adapted_centroids, dim=-1)
 
         z_refs_300 = adapter(all_train_x)
