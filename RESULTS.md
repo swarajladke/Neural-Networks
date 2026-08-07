@@ -253,69 +253,74 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 ## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
 
-### 10.1 Part 1: C2 FREEZE-AFTER-BASE Breakdown (1-NN Retrieval)
-Evaluated at Step 9 on the 1-NN retrieval benchmark ($r=32$, `FREEZE-AFTER-BASE`, 50 runs per seed set):
-
-| Block Subset | Selection Seeds (101..105) | Fresh Replication Seeds (211..215) |
-|:---|:---:|:---:|
-| **Base-Trained Blocks** (`order[0:5]`, 50 facts) | **93.15% ± 2.01%** | **92.60% ± 2.55%** |
-| **Never-Trained Blocks** (`order[5:10]`, 50 facts) | **71.75% ± 5.98%** | **59.85% ± 5.00%** |
-| **Overall $A_T$ (Step 9)** | **82.45% ± 3.42%** | **76.22% ± 3.47%** |
-
-**Finding**: Base-trained blocks maintain joint offline retrieval performance ($93.15\% / 92.60\%$), while never-trained blocks drop to $71.75\% / 59.85\%$ (near the frozen floor $70.50\%$). Fact knowledge is strictly localized to trained reference bank vectors.
+### 10.1 Phase 1/2 Retrieval Negative Finding & C2 Step-9 Reconciliation
+- **Negative Finding on 1-NN Retrieval**: An adapter fine-tuned over a frozen encoder with an external reference bank stores knowledge non-parametrically in reference vectors. Naive sequential training exhibits minimal forgetting ($\text{BWT} \approx -1\%$), confusable pairs at $\cos > 0.95$ produce zero retroactive interference, and Gate 2's $\sim 70$-point gap between freezing and offline training appears ONLY once memory becomes parametric.
+- **C2 Step-9 Arithmetic Reconciliation**: When evaluated at Step 9 against the full 100-fact reference bank ($r=32$, `FREEZE-AFTER-BASE`, 50 runs per set):
+  - Base-Trained Blocks (`order[0:5]`): **91.05% ± 1.72%** (Selection) / **90.20% ± 2.49%** (Fresh)
+  - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
+  - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
+- **Metric Transfer**: Never-trained blocks land at $86.85\% / 83.15\%$, far above the $70.50\%$ frozen floor. Fine-tuning on 50 facts causes the adapter to learn a generic representation alignment (scaling/centering) that transfers non-parametrically to unseen facts.
 
 ---
 
-### 10.2 Part 2: Parametric Memory Benchmark (100-Class Parametric Classification)
+### 10.2 Part 2: Parametric Memory Benchmark (100-Class Classification)
 **Setup**: Reference bank removed from inference. 100-class linear classification head over frozen SmolLM2-360M embeddings. Fixed $\text{lr}=10^{-3}$, $\text{epochs}=30$.
 
 #### Precondition Gates (Selection Seeds, 50 Runs per Cell):
-- **$r=32$ Bottleneck**: Naive $A_T = \mathbf{21.00\%}$, Naive BWT $= \mathbf{-19.93\text{ pp}}$, Offline $A_T = \mathbf{91.47\%}$, Freeze $A_T = \mathbf{16.24\%}$.
-- **$r=960$ Full Rank**: Naive $A_T = \mathbf{30.56\%}$, Naive BWT $= \mathbf{-25.14\text{ pp}}$, Offline $A_T = \mathbf{97.23\%}$, Freeze $A_T = \mathbf{27.40\%}$.
+- **$r=32$ Bottleneck**: Naive $A_T = 21.00\%$, Naive BWT $= -19.93\text{ pp}$, Offline $A_T = 91.47\%$, Freeze $A_T = 16.24\%$.
+- **$r=960$ Full Rank**: Naive $A_T = 30.56\%$, Naive BWT $= -25.14\text{ pp}$, Offline $A_T = 97.23\%$, Freeze $A_T = 27.40\%$.
 - **Gate Status**: Both Gate 1 ($\text{BWT} \le -10\text{ pp}$) and Gate 2 ($\text{Freeze} \ll \text{Offline}$) **PASSED** with $100\%$ margin.
 
-#### Full-Rank ($r=960$) OGP Sweep Results:
+#### Full-Rank ($r=960$) Results — Selection Seeds 101..105 (50 Runs per Cell):
 
-| Condition | $A_T$ | BWT ($A_T - LA$) | $\Delta A_T$ vs Naive | $\Delta BWT$ vs Naive | Verdict |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **Naive** | 30.56% ± 3.82% | -25.14% | +0.00 pp | +0.00 pp | Baseline |
-| **Offline** | **97.23% ± 0.65%** | +0.45% | +66.67 pp | +25.59 pp | Upper Bound |
-| **FREEZE-AFTER-BASE** | 27.40% ± 2.10% | -1.85% | -3.16 pp | +23.29 pp | Standing Control |
-| **OGP_k4** | **43.77% ± 4.12%** | **-11.39%** | **+13.21 pp** | **+13.75 pp** | 🏆 **HIGH SUCCESS** |
-| **OGP_k8** | **44.60% ± 4.25%** | **-9.22%** | **+14.04 pp** | **+15.92 pp** | 🏆 **PEAK OPTIMUM (k=8)** |
-| **OGP_k12** | **42.71% ± 3.98%** | **-10.67%** | **+12.15 pp** | **+14.47 pp** | 🏆 **HIGH SUCCESS** |
-| **OGP_k16** | **38.65% ± 4.05%** | **-13.67%** | **+8.09 pp** | **+11.47 pp** | 🎉 **SUCCESS** |
-| **OGP_k24** | 29.52% ± 3.75% | -19.34% | -1.04 pp | +5.80 pp | True Null |
-| **OGP_k32** | 23.05% ± 3.50% | -22.90% | -7.51 pp | +2.24 pp | Capacity Oversaturation |
-| **RANDOM-k (all k)** | 30.22%..30.60% | -24.81%..-25.03% | ~0.00 pp | ~0.00 pp | Standing Control Null |
-| **BOTTOM-k (all k)** | 30.53%..30.56% | -25.12%..-25.16% | ~0.00 pp | ~0.00 pp | Standing Control Null |
+| Condition | $A_T$ (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Naive** | 30.56% ± 7.93% (19.75..46.00%) | 55.69% | -25.14% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
+| **Offline** | 97.23% ± 0.99% (95.00..99.50%) | 62.46% | +34.76% | +66.67% [+64.47%, +68.76%] | +59.90% [+57.55%, +62.11%] | +100.0% | +100.0% |
+| **FREEZE-AFTER-BASE** | 27.40% ± 3.68% (19.75..38.00%) | 27.40% | +0.00% | -3.16% [-5.41%, -1.07%] | +25.14% [+22.67%, +27.45%] | +42.0% | -417.9% |
+| **OGP_k2** | 38.45% ± 7.49% (26.75..50.50%) | 55.68% | -17.24% | +7.89% [+5.97%, +9.94%] | +7.90% [+5.88%, +10.02%] | +13.2% | -0.1% |
+| **OGP_k4** | 43.77% ± 5.46% (34.00..53.50%) | 55.16% | -11.39% | +13.22% [+10.83%, +15.60%] | +13.75% [+11.43%, +16.00%] | +23.0% | -7.9% |
+| **OGP_k8** | **44.60% ± 4.62% (35.50..51.50%)** | **53.82%** | **-9.22%** | **+14.05% [+11.31%, +16.69%]** | **+15.92% [+13.27%, +18.39%]** | **+26.6%** | **-27.6%** |
+| **OGP_k12** | 42.71% ± 5.24% (29.00..51.75%) | 53.38% | -10.67% | +12.16% [+9.65%, +14.51%] | +14.47% [+12.01%, +16.76%] | +24.2% | -34.2% |
+| **OGP_k16** | 38.65% ± 5.59% (29.25..50.00%) | 52.32% | -13.67% | +8.09% [+5.25%, +10.89%] | +11.47% [+8.95%, +13.90%] | +19.1% | -49.9% |
+| **OGP_k24** | 29.52% ± 6.91% (20.00..46.00%) | 48.86% | -19.34% | -1.04% [-4.09%, +1.96%] | +5.80% [+3.12%, +8.41%] | +9.7% | -100.9% |
+| **OGP_k32** | 23.05% ± 7.36% (14.00..39.25%) | 45.94% | -22.90% | -7.51% [-10.30%, -4.71%] | +2.24% [-0.04%, +4.47%] | +3.7% | -144.0% |
+| **RANDOM-k (all k)** | 30.22%..30.62% | ~55.4% | ~-25.0% | ~0.00% [CIs include 0] | ~0.10% [CIs include 0] | +0.2%..+0.6% | -1.0%..-9.8% |
+| **BOTTOM-k (all k)** | 30.53%..30.56% | ~55.7% | ~-25.1% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
 
-#### Bottleneck ($r=32$) OGP Sweep Results:
+#### Full-Rank ($r=960$) Results — Fresh Replication Seeds 211..215 (50 Runs per Cell):
 
-| Condition | $A_T$ | BWT ($A_T - LA$) | $\Delta A_T$ vs Naive | Verdict |
-|:---|:---:|:---:|:---:|:---:|
-| **Naive** | 21.00% ± 3.15% | -19.93% | +0.00 pp | Baseline |
-| **Offline** | **91.47% ± 1.12%** | +0.22% | +70.47 pp | Upper Bound |
-| **FREEZE-AFTER-BASE** | 16.24% ± 1.85% | -1.42% | -4.76 pp | Standing Control |
-| **OGP_k4** | 21.04% ± 3.12% | -19.34% | +0.04 pp | True Null |
-| **OGP_k8** | 20.79% ± 3.18% | -19.16% | -0.21 pp | True Null |
-| **OGP_k12** | 18.84% ± 2.95% | -20.36% | -2.16 pp | Capacity Oversaturation |
-| **OGP_k16** | 17.15% ± 2.80% | -21.33% | -3.85 pp | Capacity Oversaturation |
-| **OGP_k24** | 15.63% ± 2.65% | -21.70% | -5.37 pp | Capacity Oversaturation |
-| **OGP_k32** | 14.57% ± 2.50% | -22.24% | -6.43 pp | Gradient Annihilation |
-| **RANDOM-k (all k)** | 20.33%..20.74% | -20.04%..-20.20% | ~0.00 pp | Standing Control Null |
-| **BOTTOM-k (all k)** | 20.97%..21.00% | -19.92%..-19.96% | ~0.00 pp | Standing Control Null |
-
----
-
-### Key Theoretical Conclusions from Phase 3
-
-1. **Confirmation of Intrinsic-Rank Prediction**: At full rank ($r=960$), OGP demonstrates a dramatic peak optimum at **$k=8$ ($\mathbf{+14.04\text{ pp}}$ $A_T$, $\mathbf{+15.92\text{ pp}}$ BWT)**, cutting catastrophic forgetting from $-25.14\%$ down to $-9.22\%$.
-2. **Subspace Protection Necessity**: `RANDOM-k` and `BOTTOM-k` controls across all $k$ remain inert ($\sim 30.5\%$), proving that protection requires the top principal subspace of past inputs.
-3. **Capacity Oversaturation under Bottleneck constraints**: Under a low-rank adapter bottleneck ($r=32$), protecting $k \ge 12$ input directions consumes the available rank degrees of freedom, causing capacity oversaturation. Peak OGP efficacy requires adapter rank $r > k_{\text{intrinsic}}$.
+| Condition | $A_T$ (Min..Max) | $LA$ | BWT | $\Delta A_T$ vs Naive (95% CI) | $\Delta BWT$ vs Naive (95% CI) | Ret. Gap Closed | Acq. Gap Closed |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Naive** | 27.78% ± 7.58% (16.50..41.25%) | 53.98% | -26.20% | +0.00% [+0.00%, +0.00%] | +0.00% [+0.00%, +0.00%] | +0.0% | +0.0% |
+| **Offline** | 97.15% ± 1.58% (93.50..99.75%) | 59.43% | +37.72% | +69.38% [+67.42%, +71.29%] | +63.93% [+62.36%, +65.46%] | +100.0% | +100.0% |
+| **FREEZE-AFTER-BASE** | 22.92% ± 3.36% (16.00..30.00%) | 22.92% | +0.00% | -4.86% [-7.29%, -2.42%] | +26.20% [+24.39%, +27.99%] | +41.0% | -569.9% |
+| **OGP_k2** | 39.82% ± 7.40% (26.75..53.50%) | 53.37% | -13.55% | +12.05% [+9.41%, +14.71%] | +12.66% [+10.06%, +15.30%] | +19.8% | -11.2% |
+| **OGP_k4** | 41.51% ± 7.25% (28.75..53.00%) | 53.47% | -11.96% | +13.73% [+11.03%, +16.49%] | +14.24% [+11.81%, +16.71%] | +22.3% | -9.4% |
+| **OGP_k8** | **42.83% ± 6.22% (31.50..56.75%)** | **53.05%** | **-10.22%** | **+15.06% [+12.59%, +17.60%]** | **+15.99% [+13.77%, +18.25%]** | **+25.0%** | **-17.1%** |
+| **OGP_k12** | 40.57% ± 6.90% (26.25..51.50%) | 51.73% | -11.16% | +12.80% [+10.54%, +15.06%] | +15.05% [+12.98%, +17.13%] | +23.5% | -41.3% |
+| **OGP_k16** | 37.10% ± 7.75% (18.75..48.50%) | 50.90% | -13.80% | +9.33% [+6.67%, +11.99%] | +12.40% [+9.88%, +14.90%] | +19.4% | -56.4% |
+| **OGP_k24** | 29.58% ± 6.54% (19.00..42.50%) | 48.22% | -18.65% | +1.80% [-0.58%, +4.29%] | +7.56% [+5.48%, +9.74%] | +11.8% | -105.6% |
+| **OGP_k32** | 28.00% ± 6.79% (18.00..41.25%) | 46.68% | -18.68% | +0.23% [-2.16%, +2.68%] | +7.53% [+5.57%, +9.58%] | +11.8% | -133.9% |
+| **RANDOM-k (all k)** | 26.47%..27.69% | ~53.4% | ~-26.3% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | -0.7%..+0.4% | -1.9%..-15.7% |
+| **BOTTOM-k (all k)** | 27.62%..27.78% | ~53.9% | ~-26.2% | ~0.00% [CIs include 0] | ~0.00% [CIs include 0] | 0.0% | 0.0% |
 
 ---
 
-*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. Repository: github.com/swarajladke/Neural-Networks, HEAD commit b3022b7.*
+### 10.3 Reframed Theoretical Insights
+
+1. **Decomposed Gap Analysis & Genuine Stability-Plasticity Tradeoff**:
+   - At $k=8$ ($r=960$), OGP closes **26.6%** (Selection) / **25.0%** (Fresh) of the available retention gap ($\Delta BWT = +15.92\text{ pp} / +15.99\text{ pp}$ out of $59.90 / 63.93\text{ pp}$), while closing **-27.6%** / **-17.1%** of the acquisition gap ($LA$ falls $1.87\text{ pp} / 0.93\text{ pp}$ from naive).
+   - Retention share exceeds $100\%$ ($\Delta BWT / \Delta A_T = 113.4\%$). This represents the **first genuine stability-plasticity tradeoff measured in this project**, appearing only once memory became parametric.
+2. **Absolute Standing**: $44.60\%$ $A_T$ vs $97.23\%$ offline upper bound closes **21.1%** of the total gap. Naive acquisition failure ($LA = 55.69\%$ vs offline $LA = 62.46\%$) remains a major bottleneck.
+3. **Task Subspace & Degradation at $k \ge 24$**:
+   - The task-relevant subspace is $\le 64$ dimensions (frozen capacity curve: $r=64$ and $r=128$ are bit-identical to $r=960$). Protecting $k \ge 24$ principal directions projects out past input directions from the 64-dim task subspace, leaving insufficient orthogonal directions for acquiring new blocks.
+4. **Capacity Bottleneck at $r=32$**:
+   - At $r=32$, NO value of $k$ achieves a statistically significant positive $\Delta A_T$. Bottlenecking adapter capacity to 32 dimensions while protecting $k \ge 4$ input directions severely constrains optimization. Peak OGP efficacy requires full adapter rank ($r=960$).
+
+---
+
+*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 9530645.*
+
 
 
