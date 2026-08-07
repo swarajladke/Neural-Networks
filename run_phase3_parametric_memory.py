@@ -370,12 +370,12 @@ def main():
     c2_fre = run_part1_c2_breakdown(block_assignment, cache_data, pca_basis_r32, seeds=[211, 212, 213, 214, 215])
 
     print("\n  C2 BREAKDOWN RESULTS:")
-    print(f"    Selection Seeds {101..105} (50 runs):")
+    print("    Selection Seeds 101..105 (50 runs):")
     print(f"      - Base-Trained Blocks order[0:5]:  {c2_sel['base_trained_mean']:.2f}% ± {c2_sel['base_trained_std']:.2f}%")
     print(f"      - Never-Trained Blocks order[5:10]: {c2_sel['never_trained_mean']:.2f}% ± {c2_sel['never_trained_std']:.2f}%")
     print(f"      - Overall A_T (step 9):            {c2_sel['overall_mean']:.2f}% ± {c2_sel['overall_std']:.2f}%")
 
-    print(f"    Fresh Replication Seeds {211..215} (50 runs):")
+    print("    Fresh Replication Seeds 211..215 (50 runs):")
     print(f"      - Base-Trained Blocks order[0:5]:  {c2_fre['base_trained_mean']:.2f}% ± {c2_fre['base_trained_std']:.2f}%")
     print(f"      - Never-Trained Blocks order[5:10]: {c2_fre['never_trained_mean']:.2f}% ± {c2_fre['never_trained_std']:.2f}%")
     print(f"      - Overall A_T (step 9):            {c2_fre['overall_mean']:.2f}% ± {c2_fre['overall_std']:.2f}%")
