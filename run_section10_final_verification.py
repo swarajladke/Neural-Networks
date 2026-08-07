@@ -140,12 +140,10 @@ def main():
         conf_pair_set.add((min(f1, f2), max(f1, f2)))
 
     # Compute unadapted centroids
-    X = cache_data["train_x"].float().to(DEVICE)
-    y = cache_data["train_y"].to(DEVICE)
     cen_raw = torch.zeros(100, INPUT_DIM, device=DEVICE)
     for i in range(100):
-        mask = (y == i)
-        cen_raw[i] = F.normalize(X[mask].mean(0, keepdim=True), dim=-1).squeeze(0)
+        samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
+        cen_raw[i] = F.normalize(samples.mean(0, keepdim=True), dim=-1).squeeze(0)
 
     S_raw = torch.matmul(cen_raw, cen_raw.T)
 
