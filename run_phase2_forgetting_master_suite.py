@@ -257,9 +257,9 @@ def run_phase2_suite(block_assignment, cache_data, pca_basis_r32,
                         loss = supervised_contrastive_loss(proj, train_data_y, tau=0.05)
                         optimizer.zero_grad()
                         loss.backward()
-                        if proj_mat is not None and adapter.U.weight.grad is not None:
-                            # Apply gradient projection to output layer U
-                            adapter.U.weight.grad = torch.matmul(adapter.U.weight.grad, proj_mat)
+                        if proj_mat is not None and adapter.V.weight.grad is not None:
+                            # Apply gradient projection to input layer V (shape 32x960 * 960x960 -> 32x960)
+                            adapter.V.weight.grad = torch.matmul(adapter.V.weight.grad, proj_mat)
                         optimizer.step()
 
                     M_past = torch.cat([M_past, curr_x.clone().detach()], dim=0)
