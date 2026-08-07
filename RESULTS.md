@@ -210,7 +210,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 | **OGP (k=32)** | 77.38% ± 7.96% (57.50..88.00%) | 89.45% | -12.08% | 13.15% | +2.90% [+0.02%, +5.47%] | +0.27% [-2.38%, +2.54%] | 9.5% | 🎉 **SUCCESS** |
 | **RANDOM-32** | 73.36% ± 6.39% (59.50..86.00%) | 86.59% | -13.23% | 14.83% | -1.12% [-2.34%, +0.05%] | -0.88% [-1.95%, +0.20%] | 79.0% | True Null |
 | **BOTTOM-32** | 73.90% ± 5.05% (64.75..81.50%) | 86.92% | -13.02% | 14.35% | -0.57% [-1.06%, -0.10%] | -0.67% [-1.10%, -0.27%] | 117.4% | ❌ **SIG WORSE** |
-| **CURRENT-32**| 83.80% ± 4.95% (75.50..90.25%) | 89.60% | -5.80% | 7.27% | +9.33% [+8.11%, +10.46%] | +6.55% [+5.38%, +7.65%] | 70.2% | Pending Controls C1-C4 |
+| **CURRENT-32**| 83.80% ± 4.95% (75.50..90.25%) | 89.60% | -5.80% | 7.27% | +9.33% [+8.11%, +10.46%] | +6.55% [+5.38%, +7.65%] | 70.2% | Refuted (Off-Switch Artifact) |
 
 ### Fresh Replication Seeds 211..215 (50 Runs per Condition):
 
@@ -227,12 +227,29 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 | **OGP (k=32)** | 79.73% ± 6.19% (71.50..91.00%) | 88.12% | -8.40% | 10.12% | +2.20% [+0.25%, +4.29%] | +0.75% [-1.00%, +2.52%] | 34.1% | 🎉 **SUCCESS** |
 | **RANDOM-32** | 77.27% ± 4.88% (66.50..86.75%) | 86.67% | -9.40% | 11.12% | -0.26% [-1.49%, +0.97%] | -0.25% [-1.38%, +0.87%] | 100.0% | True Null |
 | **BOTTOM-32** | 76.60% ± 5.00% (68.25..85.75%) | 86.42% | -9.82% | 11.72% | -0.92% [-1.84%, -0.04%] | -0.67% [-1.48%, +0.09%] | ❌ **SIG WORSE** |
-| **CURRENT-32**| 82.25% ± 3.61% (77.25..90.50%) | 86.82% | -4.58% | 6.62% | +4.72% [+3.00%, +6.46%] | +4.57% [+3.21%, +6.10%] | 96.8% | Pending Controls C1-C4 |
+| **CURRENT-32**| 82.25% ± 3.61% (77.25..90.50%) | 86.82% | -4.58% | 6.62% | +4.72% [+3.00%, +6.46%] | +4.57% [+3.21%, +6.10%] | 96.8% | Refuted (Off-Switch Artifact) |
 
-### S3 Note on CURRENT-32
-CURRENT-32 shows elevated performance (+9.33% / +4.72% A_T). Decisive controls C1-C4 (learning rate sweep, freeze-after-base, gradient-norm ratio logging, and gradient-clip control) are pending to determine whether this reflects step-size damping or genuine regularisation. No mechanistic claims are made for CURRENT-32 until C1-C4 complete.
+### Decisive Controls C1–C4 Summary
+
+1. **Control C3 (Gradient Norm Ratio)**:
+   - `TOP-32`: Mean ratio $||\text{grad\_proj}|| / ||\text{grad\_raw}|| = \mathbf{0.116224}$ ($11.62\%$ gradient retained).
+   - `CURRENT-32`: Mean ratio $||\text{grad\_proj}|| / ||\text{grad\_raw}|| = \mathbf{0.000005}$ ($99.9995\%$ gradient annihilated; projected norm $= 0.000000$).
+   - **Conclusion**: `CURRENT-32` is a literal **gradient off-switch**. Because the adapter has rank $32$ and `CURRENT-32` projects orthogonal to the 32 principal directions of the current batch, $P P^\top \approx I_{32}$, annihilating virtually all gradient updates during sequential steps 5..9.
+
+2. **Control C2 (Freeze-After-Base Null Hypothesis)**:
+   - `FREEZE-AFTER-BASE` (zero adaptation for blocks 5..9): Selection $A_T = \mathbf{88.95\%}$, Fresh $A_T = \mathbf{86.68\%}$.
+   - **Conclusion**: Zero adaptation significantly **outperforms `CURRENT-32`** ($83.80\%$ / $82.25\%$). `CURRENT-32` is an imperfect off-switch that allowed minor leakage of destructive updates, performing worse than doing no updates at all.
+
+3. **Control C1 (Naive Fine-Tuning at Lower Learning Rates)**:
+   - `naive_lr1e-3` ($\text{lr}=10^{-3}$, $\text{ep}=100$): Selection $A_T = \mathbf{85.67\%}$, Fresh $A_T = \mathbf{85.32\%}$.
+   - **Conclusion**: Lowering the learning rate to $10^{-3}$ **outperforms `CURRENT-32`** on both seed sets without any subspace projection.
+
+4. **Control C4 (Gradient Clip Control)**:
+   - `GRADIENT-CLIP-C4` (naive $\text{lr}=10^{-2}$ clipped to near-zero norm): Selection $A_T = \mathbf{88.95\%}$, Fresh $A_T = \mathbf{86.65\%}$. Replicates `FREEZE-AFTER-BASE` exactly.
+
+**Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regulariser and does not represent a valid mechanism.
 
 ---
 
-*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit e99a051.*
+*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 748ed90.*
 
