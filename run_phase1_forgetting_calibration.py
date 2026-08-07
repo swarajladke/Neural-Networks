@@ -713,9 +713,24 @@ def main():
     print("=" * 70)
 
     with open(DATASET_PATH, "r") as f:
-        _ = json.load(f)
-    cache_data = torch.load(CACHE_PATH, map_location=DEVICE)
-    print(f"  [Cache] {CACHE_PATH}")
+        blocks_data = json.load(f)
+
+    cache_path = ("smollm2_embeddings_100slots.pt" if os.path.exists("smollm2_embeddings_100slots.pt")
+                  else ("../smollm2_embeddings_100slots.pt" if os.path.exists("../smollm2_embeddings_100slots.pt")
+                        else "smollm2_embeddings_100slots.pt"))
+
+    if not os.path.exists(cache_path):
+        print("  [Cache] Embedding cache not found. Generating fresh embeddings for 100 facts...")
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
+        model.eval()
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks_data)
+    else:
+        cache_data = torch.load(cache_path, map_location=DEVICE)
+        print(f"  [Cache] Loaded embeddings from {cache_path}")
 
     R_VALUES  = [8, 16, 32, 64, 128, 960]
     SEEDS     = [101, 102, 103, 104, 105]
