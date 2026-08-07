@@ -257,7 +257,19 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - Base-Trained Blocks (`order[0:5]`): **91.05% ± 1.72%** (Selection) / **90.20% ± 2.49%** (Fresh)
   - Never-Trained Blocks (`order[5:10]`): **86.85% ± 3.51%** (Selection) / **83.15% ± 4.55%** (Fresh)
   - Unweighted Mean: **88.95%** (Selection) / **86.68%** (Fresh) — matches measured overall C2 $A_T$ ($88.95\% \pm 2.41\%$ / $86.67\% \pm 3.44\%$) down to $0.01\%$.
-- **Metric Transfer Finding**: Never-trained facts land at $86.85\% / 83.15\%$, far above the $70.50\%$ frozen adapter floor. Fine-tuning the adapter on 50 facts causes it to learn a generic metric alignment (scaling and centering representations) that transfers non-parametrically to unseen facts in the reference bank.
+
+#### Empirically Measured Transfer Mechanism Structure (`measure_transfer_mechanism.py`)
+1. **Weight Decomposition ($W = a I + b \cdot \mathbf{1}\mathbf{1}^\top + R$)**:
+   - Isotropic Scale $a = \mathbf{+0.350626}$, Rank-1 Shift $b = \mathbf{+0.000042}$.
+   - Relative Residual Norm $= \mathbf{99.57\%}$; Variance Explained $= \mathbf{0.86\%}$.
+   - *Finding*: The adapter transformation is non-isotropic across principal directions ($99.14\%$ of variance resides in $R$).
+2. **Singular Spectrum ($r=32$)**:
+   - Top 5 Singular Values: `[62.11, 52.39, 44.32, 37.52, 31.21]`. Condition Number $\sigma_1 / \sigma_{32} = \mathbf{150.61}$. Effective Rank $= \mathbf{17.59}$.
+3. **Never-Trained Accuracy vs. Base Training Size**:
+   - Base Size = 10 facts (1 block):  Never-Trained Accuracy = **58.06% ± 0.00%**
+   - Base Size = 20 facts (2 blocks): Never-Trained Accuracy = **60.94% ± 0.00%**
+   - Base Size = 50 facts (5 blocks): Never-Trained Accuracy = **84.50% ± 0.00%**
+   - *Finding*: Metric transfer exhibits a sharp non-linear transition. Training on 10 or 20 facts yields minimal transfer ($\sim 58\%\text{--}60\%$), whereas scaling base phase training to 50 facts triggers an $84.50\%$ jump on unseen facts.
 
 ---
 
