@@ -265,10 +265,11 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
    - *Raw Baseline (400 Test Queries)*: Trained $m = \mathbf{+0.0065 \pm 0.0121}$ (Error $= 28.50\%$, Acc $= 71.50\%$); Untrained $m = \mathbf{+0.0059 \pm 0.0100}$ (Error $= 26.50\%$, Acc $= 73.50\%$).
    - *Adapted Map (50 Base Facts)*: Trained $m = \mathbf{+0.2671 \pm 0.1977}$ (Error $= \mathbf{8.50\%}$, Acc $= \mathbf{91.50\%}$); Untrained $m = \mathbf{+0.2185 \pm 0.2126}$ (Error $= \mathbf{15.50\%}$, Acc $= \mathbf{84.50\%}$).
    - *Exact Alignment*: The fraction $m < 0$ equals the observed retrieval error rate **EXACTLY** ($8.50\%$ trained, $15.50\%$ untrained). Margin analysis and retrieval harness are in **100% mathematical agreement**.
-3. **Retrieval Failure Base-Rate Enrichment Test (`run_base_rate_enrichment_test.py`)**:
-   - *Population Base Rate*: **100 out of 100 facts (100.0%)** and **400 out of 400 test queries (100.0%)** belong to at least one raw $> 0.95$ confusable pair.
-   - *Fisher's Exact Test*: Contingency table for combined 400 queries yields `[[31, 0], [369, 0]]` (Odds Ratio $=$ `nan`, $p = 1.0000$, NOT SIGNIFICANT).
-   - *Withdrawal*: Because $100.0\%$ of the population belongs to confusable pairs, observing $100.0\%$ of query failures on confusable targets carries zero statistical enrichment over the population base rate. The claim that confusable pairs are the "primary binding constraint" is **WITHDRAWN**. The precise geometric cause of the $84.50\%$ retrieval accuracy ceiling remains **UNRESOLVED**.
+3. **Retrieval Ceiling Graded Continuous Predictor Test (`run_graded_ceiling_test.py`)**:
+   - *Boundary Base-Rate Context*: Because $100.0\%$ of the population facts belong to confusable pairs ($\cos > 0.95$), binary Fisher exact testing is uninformative ($p = 1.0000$, $\text{OR} = \text{nan}$). As required by Rule 4, a graded continuous predictor (raw nearest-incorrect centroid cosine $x_q = \max_{y \neq \text{correct}} \cos(q, z_y)$) was evaluated via logistic regression $\text{logit}(P(\text{Failure})) = \beta_0 + \beta_1 x_q$.
+   - *Empirical Predictor Means*: Failed queries mean $x_q = \mathbf{0.9509 \pm 0.0146}$ vs Passed queries mean $x_q = \mathbf{0.9793 \pm 0.0176}$.
+   - *Logistic Regression Effect Size*: $\beta_1 = \mathbf{-67.8433}$, $\text{OR}_{0.01} = \mathbf{0.5074}$ per $+0.01$ cosine unit (95% CI: $[0.4147, 0.6208]$, $p = \mathbf{4.3592 \times 10^{-11}}$).
+   - *Finding*: Raw representation similarity to surrounding class manifolds is a **statistically significant predictor of retrieval failure** ($p = 4.36 \times 10^{-11}$). Each $+0.01$ increase in raw nearest-incorrect cosine similarity cuts post-adaptation failure odds in half ($\text{OR}_{0.01} = 0.5074$). Queries starting with low raw similarity ($x_q \approx 0.9509$) have double the failure odds of queries starting with high raw similarity ($x_q \approx 0.9793$).
 4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
 | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
