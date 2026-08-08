@@ -92,7 +92,7 @@ class ParametricModel(nn.Module):
     def __init__(self, head_type="l1a"):
         super().__init__()
         self.adapter = FullRankAdapter()
-        if head_type in ["l1a", "naive"]:
+        if head_type in ["l1a", "naive", "freeze_after_base", "step_matched_joint"]:
             self.head = HeadL1a()
         elif head_type == "l1b":
             self.head = HeadL1b()
