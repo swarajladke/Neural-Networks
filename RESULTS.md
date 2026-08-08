@@ -299,9 +299,34 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
      - **Canonical Definition**: $d_q = \max_{r \in \text{BaseTrain}} \cos(q, r)$ where $\text{BaseTrain}$ is the set of **150 raw training embeddings** (3 samples per fact $\times$ 50 base-phase facts).
      - **Collinearity & VIF**: Pearson $r(x_q, d_q) = +0.7068$, yielding Variance Inflation Factor $\text{VIF} = \mathbf{1.9983} \approx 2.00$ for Model N5 ($x_q + d_q$).
      - **Synthesis**: $d_q$ (Support Proximity) achieves the **highest McFadden $R^2$ ($0.1739 / 0.1898$)** and **highest ROC AUC ($0.8242 / 0.8385$)** across BOTH outcomes. Support proximity to base-trained reference vectors is the **single strongest predictor** of post-adaptation retrieval performance, driving the $+14\text{ pp}$ generic metric transfer result. Documented as an **OPEN FINDING**.
-4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
 
-| Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
+### 10.2 Phase 4 Part 0 Blocking Corrections (VERIFIED & AUDITED)
+
+1. **0.1 & 0.2 Confusable Base-Rate & Evaluation Split Assertion**:
+   - `assert set(evaluated_class_ids) == set(classes_in_any_high_cosine_pair)`: **TRUE** (both lists match exactly: `[0..33]`).
+   - **Class-Level Base Rate**: 34 / 100 classes (**34.0%**).
+   - **Query-Level Base Rate**: 400 / 400 queries (**100.0%**).
+   - **Notice & Action**: Evaluation split consists entirely of confusable classes (base rate = 100.0%). The within-split binary contingency test is UNDEFINED (0 non-confusable queries). Confusability claim stays **WITHDRAWN** due to 100% population base rate in evaluation split.
+2. **0.3 Refitted Logistic Models with Fact-Clustered 95% Bootstrap CIs**:
+   - **48-Failure Outcome (300-Sample 1-NN)**:
+     - M1 ($x_q$): McFadden $R^2 = \mathbf{0.1055}$, AUC $= \mathbf{0.7994}$ (95% CI: $[0.7084, 0.8824]$), Clustered $p = 4.68 \times 10^{-4}$.
+     - M2 ($c_q$): McFadden $R^2 = 0.1325$, AUC $= 0.8053$ (95% CI: $[0.7249, 0.8781]$), Clustered $p = 1.09 \times 10^{-5}$.
+     - N3 ($d_q$): McFadden $R^2 = \mathbf{0.1739}$, AUC $= \mathbf{0.8242}$ (95% CI: $[0.7273, 0.9032]$), Clustered $p = 6.14 \times 10^{-4}$ (Top predictor!).
+   - **41-Failure Outcome (100-Centroid 1-NN)**:
+     - M1 ($x_q$): McFadden $R^2 = \mathbf{0.1204}$, AUC $= \mathbf{0.8217}$ (95% CI: $[0.7354, 0.8941]$), Clustered $p = 2.14 \times 10^{-4}$.
+     - M2 ($c_q$): McFadden $R^2 = 0.1498$, AUC $= 0.8259$ (95% CI: $[0.7572, 0.8862]$), Clustered $p = 1.03 \times 10^{-6}$.
+     - N3 ($d_q$): McFadden $R^2 = \mathbf{0.1898}$, AUC $= \mathbf{0.8385}$ (95% CI: $[0.7286, 0.9171]$), Clustered $p = 9.61 \times 10^{-4}$ (Top predictor!).
+3. **0.4 R-Matrix Indexing Sweep in `run_continual_learning_validation.py`**:
+   - Inspected **7 total sites** (2 writes at lines 291 & 452, 5 reads at lines 518, 533, 534, 540, 549). All read sites correctly resolve through `order.index(j)`.
+4. **0.5 Primary Offline Baseline Declaration & Sensitivity**:
+   - **Primary Offline Baseline**: Step-Matched Joint Upper Bound ($30$ epochs per added block step-by-step, matching epoch budget and step information availability).
+   - **Sensitivity Analysis for OGP $k=8$**:
+     - *Against Step-Matched Joint*: Retention Gap Closed $= \mathbf{+26.6\%}$ ($+15.92 / +59.90$ pp), Acquisition Gap Closed $= \mathbf{-27.6\%}$ ($-1.87 / +6.77$ pp).
+     - *Against True Joint Ceiling*: Retention Gap Closed $= \mathbf{+62.2\%}$ ($+15.92 / +25.59$ pp), Acquisition Gap Closed $= \mathbf{-4.6\%}$ ($-1.87 / +41.09$ pp).
+
+4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
+ 
+ | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
 |:---|:---:|:---:|:---:|:---:|
 | **Frozen Floor** | 0 blocks (0 facts) | **70.50%** | $\pm 0.00\%$ | Baseline Floor |
 | **10 facts** | 1 block | **60.00%** | $\pm 4.07\%$ | **-10.50 pp (BELOW FLOOR)** |
