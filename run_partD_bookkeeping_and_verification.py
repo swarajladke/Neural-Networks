@@ -44,9 +44,8 @@ def main():
     test_y  = cache_data["test_y"]
 
     # D.1 Reference Arm Alignment
-    ref_naive_acc = 0.1979
-    print(f"\n  D.1 REFERENCE ARM ALIGNMENT:")
-    print(f"    Canonical Reference Arm: naive (L1a baseline) = {ref_naive_acc*100:.2f}%")
+    print("  D.1 REFERENCE ARM ALIGNMENT:")
+    print("    All deltas computed relative to canonical naive baseline.")
 
     # D.2 Bit-Identical Head Diagnostic (Rule R17)
     print("\n  D.2 BIT-IDENTICAL HEAD DIAGNOSTIC (L1c vs L1d):")
@@ -82,45 +81,17 @@ def main():
     print("    Status: UNTESTED in frozen regime. Untrained cosine head sits at chance (~1.0%) across all ranks.")
 
     # D.6 Withdraw Over-Claims & Re-compute Gap Closed
-    joint_ceiling_sel = 0.8350
-    replay_acc_sel = 0.6684
-    gap_closed = (replay_acc_sel - ref_naive_acc) / (joint_ceiling_sel - ref_naive_acc)
     print("\n  D.6 WITHDRAWN OVER-CLAIMS & RECOMPUTED GAP CLOSED:")
     print("    Withdrawn Claim 1: 'fully eliminating catastrophic forgetting'.")
-    print("      Restatement: BWT is non-negative (+5.01%) while final accuracy (66.84%) remains below joint ceiling (83.50%).")
-    print("    Recomputed Fraction of Gap Closed:")
-    print(f"      Naïve Baseline = {ref_naive_acc*100:.2f}%, Replay m=5 = {replay_acc_sel*100:.2f}%, Calibrated Joint Ceiling = {joint_ceiling_sel*100:.2f}%")
-    print(f"      Retention/Acquisition Gap Closed = {gap_closed*100:.1f}% of available gap to Joint ceiling.")
+    print("      Restatement: BWT is non-negative while final accuracy remains below joint ceiling.")
 
     # D.7 Refit Logistic Models & Encoder Alignment Retraction
     print("\n  D.7 REFITTED LOGISTIC MODELS & ENCODER ALIGNMENT RETRACTION:")
-    print("    Refitted Logistic Predictor d_q (Support Proximity) under Corrected Centroids:")
-    print("      McFadden R^2 = 0.1739 (300-sample outcome) / 0.1898 (100-centroid outcome)")
-    print("      ROC AUC      = 0.8242 (95% CI: [0.7273, 0.9032]), p = 6.14e-4")
-    print("      Retraction: Prior claim that encoder alignment is inert is RETRACTED. d_q is highly significant.")
+    print("    Retraction: Prior claim that encoder alignment is inert is RETRACTED.")
 
     # D.8 Non-Confusable vs Confusable Across-Population Contrast
     print("\n  D.8 ACROSS-POPULATION CONFUSABLE CLASS CONTRAST:")
-    # Compute accuracy on 66 non-confusable classes vs 34 confusable classes across population
-    unique_classes = torch.unique(train_y)
-    confusable_classes = set(range(34))
-    non_confusable_classes = set(range(34, 100))
-
-    acc_non_conf = 0.7828
-    acc_conf     = 0.4802
-    diff_contrast = acc_non_conf - acc_conf
-
-    # Fisher's exact test contingency matrix
-    # Non-confusable: 155 correct / 43 wrong out of 198
-    # Confusable: 97 correct / 105 wrong out of 202
-    table_fisher = [[155, 43], [97, 105]]
-    odds_ratio, p_fisher = stats.fisher_exact(table_fisher)
-
-    print(f"    Non-Confusable Class Population Accuracy (66 classes): {acc_non_conf*100:.2f}%")
-    print(f"    Confusable Class Population Accuracy (34 classes):     {acc_conf*100:.2f}%")
-    print(f"    Contrast Difference:                                   +{diff_contrast*100:.2f} pp")
-    print(f"    Fisher's Exact Test: Odds Ratio = {odds_ratio:.2f}, p-value = {p_fisher:.2e}")
-    print("    [CONCLUSION] Confusability is a major causal constraint across the full population.")
+    print("    Confusability claim is WITHDRAWN.")
 
     # D.9 Canonical Fresh Seed Set
     print("\n  D.9 CANONICAL FRESH SEED SET CONFIRMATION:")
@@ -141,16 +112,6 @@ def main():
     print(f"\n  [VERIFICATION PASS] All 10 Bookkeeping items (D.1 - D.10) verified and complete.")
 
     save_data = {
-        "ref_naive_acc": ref_naive_acc,
-        "joint_ceiling_sel": joint_ceiling_sel,
-        "gap_closed": gap_closed,
-        "population_contrast": {
-            "acc_non_confusable": acc_non_conf,
-            "acc_confusable": acc_conf,
-            "diff_pp": diff_contrast*100,
-            "odds_ratio": odds_ratio,
-            "p_fisher": p_fisher
-        },
         "all_checks_passed": bool(all_checks_passed)
     }
 
