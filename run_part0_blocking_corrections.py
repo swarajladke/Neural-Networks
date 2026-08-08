@@ -215,7 +215,7 @@ def main():
     test_y_full = cache_data["test_y"].to(DEVICE)
     
     # Evaluate raw retrieval on all 400 test queries against 100 centroids
-    valid_cens = cen_true[valid_classes]
+    valid_cens = cen_true[valid_classes].to(DEVICE)
     raw_sims_full = torch.matmul(F.normalize(test_x_full, dim=-1), valid_cens.T)
     raw_pred_idx = torch.argmax(raw_sims_full, dim=-1)
     raw_preds    = torch.tensor([valid_classes[i] for i in raw_pred_idx.cpu().numpy()], device=DEVICE)
@@ -269,7 +269,7 @@ def main():
             test_y_b = te_y[b].to(DEVICE)
 
             raw_q = F.normalize(test_x_b, dim=-1)
-            raw_sims = torch.matmul(raw_q, cen_true.T)
+            raw_sims = torch.matmul(raw_q, cen_true.to(DEVICE).T)
             raw_base_sims = torch.matmul(raw_q, raw_base_refs.T)
 
             z_queries = adapter(test_x_b)
