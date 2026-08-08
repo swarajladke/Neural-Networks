@@ -396,7 +396,7 @@ def main():
     print(f"  Collinearity between x_q and d_q:")
     print(f"    Pearson r(x_q, d_q) = {r_xd:+.4f}")
     print(f"    Variance Inflation Factor (VIF) = 1 / (1 - {r_xd:.4f}^2) = {vif_xd:.4f}")
-    print(f"  [CONCLUSION] VIF = {vif_xd:.2f} confirms extreme multicollinearity; x_q and d_q are NOT separable at r = 0.8729.")
+    print(f"  [CONCLUSION] VIF = {vif_xd:.2f} confirms collinearity (Pearson r = {r_xd:.4f}); x_q and d_q share common feature variance.")
     print("=" * 80)
 
 

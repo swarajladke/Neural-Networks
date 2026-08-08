@@ -341,19 +341,20 @@ def main():
     m3_ci_low, m3_ci_high = fact_bootstrap_auc_ci(X_m3, Y, Groups, num_bootstrap=10000)
     print(f"     M3 (Y ~ x_q + c_q) AUC Clustered Bootstrap 95% CI: [{m3_ci_low:.4f}, {m3_ci_high:.4f}]")
 
-    # 6. Threshold 0.0777 Classification Metrics (M1)
+    # 6. Dynamic Threshold Classification Metrics (M1)
     X_const_m1 = sm.add_constant(X_q)
     m1_logit = sm.Logit(Y, X_const_m1).fit(disp=False)
     probs_m1 = m1_logit.predict(X_const_m1)
-    preds_0777 = (probs_m1 >= 0.0777).astype(int)
-    cm_0777 = confusion_matrix(Y, preds_0777)
-    tn, fp, fn, tp = cm_0777.ravel()
+    thresh_m1 = float(np.percentile(probs_m1, 100.0 * (1.0 - np.mean(Y))))
+    preds_m1 = (probs_m1 >= thresh_m1).astype(int)
+    cm_m1 = confusion_matrix(Y, preds_m1)
+    tn, fp, fn, tp = cm_m1.ravel()
 
     precision   = (tp / (tp + fp)) * 100.0 if (tp + fp) > 0 else 0.0
     sensitivity = (tp / (tp + fn)) * 100.0 if (tp + fn) > 0 else 0.0
     specificity = (tn / (tn + fp)) * 100.0 if (tn + fp) > 0 else 0.0
 
-    print("\n  6. THRESHOLD 0.0777 CLASSIFICATION METRICS (M1 Model):")
+    print(f"\n  6. DYNAMIC THRESHOLD ({thresh_m1:.4f}) CLASSIFICATION METRICS (M1 Model):")
     print(f"     Confusion Matrix: TN={tn}, FP={fp}, FN={fn}, TP={tp}")
     print(f"     Precision:   {precision:.2f}%")
     print(f"     Sensitivity: {sensitivity:.2f}% (FN = {fn})")
