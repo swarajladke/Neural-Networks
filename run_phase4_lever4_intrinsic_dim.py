@@ -98,7 +98,16 @@ class ParametricModelRank(nn.Module):
 def compute_pca_basis(cache_data, r):
     X = cache_data["train_x"].float().cpu()
     _, _, Vh = torch.linalg.svd(X, full_matrices=False)
-    return Vh[:r].clone()
+    if r <= Vh.shape[0]:
+        return Vh[:r].clone()
+    else:
+        basis = torch.zeros(r, INPUT_DIM)
+        basis[:Vh.shape[0]] = Vh
+        rand_vecs = torch.randn(INPUT_DIM, r - Vh.shape[0])
+        proj = rand_vecs - Vh.T @ (Vh @ rand_vecs)
+        q, _ = torch.linalg.qr(proj)
+        basis[Vh.shape[0]:] = q.T
+        return basis.clone()
 
 
 def compute_intrinsic_dim_e90(X, threshold=0.90):
