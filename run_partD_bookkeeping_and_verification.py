@@ -113,8 +113,8 @@ def main():
                 raw_arr = np.array(res["sel"]["a_t_raw"])
                 calc_mean = float(np.mean(raw_arr))
                 stored_mean = float(res["sel"].get("a_t_mean", calc_mean))
-                if abs(calc_mean - stored_mean) > 0.01:
-                    raise RuntimeError(f"Array mean mismatch in {rf} for {arm}: {calc_mean:.4f} vs stored {stored_mean:.4f}. Halting.")
+                if abs(calc_mean - stored_mean) > 1e-6:
+                    raise RuntimeError(f"Array mean mismatch in {rf} for {arm}: {calc_mean:.6f} vs stored {stored_mean:.6f}. Halting.")
 
     print(f"\n  [VERIFICATION PASS] All 10 Bookkeeping items (D.1 - D.10) verified and complete.")
 

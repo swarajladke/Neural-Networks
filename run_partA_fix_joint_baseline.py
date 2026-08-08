@@ -153,25 +153,13 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                     train_acc_final_list.append(tr_acc)
                     train_loss_final_list.append(tr_loss)
 
-                    # Evaluate full 10x10 R matrix across all steps for all_data_joint
-                    for t in range(4, 10):
-                        for j in range(10):
-                            tx = te_x[j].to(DEVICE); ty = te_y[j].to(DEVICE)
-                            acc = (model(tx).argmax(1) == ty).float().mean().item()
-                            R[t, j] = acc
-
-                # R21 Assertion for Joint R Matrix
-                for t in range(4, 9):
-                    if np.allclose(R[t, :], R[t+1, :]):
-                        raise RuntimeError(f"Joint R rows {t} and {t+1} identical. Halting.")
+                    for j in range(10):
+                        tx = te_x[j].to(DEVICE); ty = te_y[j].to(DEVICE)
+                        acc = (model(tx).argmax(1) == ty).float().mean().item()
+                        R[9, j] = acc
 
                 a_t_vals = [R[9, j] for j in range(10)]
-                la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]
-                bwt_vals = [R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]
-
                 a_t_list.append(np.mean(a_t_vals))
-                la_list.append(np.mean(la_vals))
-                bwt_list.append(np.mean(bwt_vals))
 
             elif arm_type == "step_matched_joint":
                 # Step-by-step joint training (epochs_per_step epochs per step)
@@ -205,18 +193,23 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                             acc = (model(tx).argmax(1) == ty).float().mean().item()
                             R[step_pos, j] = acc
 
-                # R21 Assertion for Step-Matched Joint R Matrix
-                for t in range(4, 9):
-                    if np.allclose(R[t, :], R[t+1, :]):
-                        raise RuntimeError(f"Joint R rows {t} and {t+1} identical. Halting.")
+                # R21 Guards for Step-Matched Joint R Matrix
+                for t in range(4, 10):
+                    if np.all(R[t, :] == 0.0):
+                        raise RuntimeError(f"R row {t} never written. Halting.")
+                if np.allclose(R[4:10, :].std(axis=0), 0.0):
+                    raise RuntimeError("All R rows identical: eval is outside the training loop. Halting.")
 
-                a_t_vals = [R[9, j] for j in range(10)]
-                la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]
-                bwt_vals = [R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]
+                a_t = float(np.mean(R[9, :]))
+                la  = float(np.mean([R[max(4, order.index(j)), j] for j in range(10)]))
+                bwt = float(np.mean([R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]))
 
-                a_t_list.append(np.mean(a_t_vals))
-                la_list.append(np.mean(la_vals))
-                bwt_list.append(np.mean(bwt_vals))
+                if abs(la - a_t) < 1e-12:
+                    raise RuntimeError("LA equals A_T exactly. Halting.")
+
+                a_t_list.append(a_t)
+                la_list.append(la)
+                bwt_list.append(bwt)
 
     return {
         "arm_name": arm_type,
@@ -224,8 +217,8 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
         "a_t_std":  float(np.std(a_t_list)),
         "a_t_min":  float(np.min(a_t_list)),
         "a_t_max":  float(np.max(a_t_list)),
-        "la_mean":  float(np.mean(la_list)),
-        "bwt_mean": float(np.mean(bwt_list)),
+        "la_mean":  float(np.mean(la_list)) if la_list else "N/A (single-point ceiling, no trajectory)",
+        "bwt_mean": float(np.mean(bwt_list)) if bwt_list else "N/A (single-point ceiling, no trajectory)",
         "train_acc_mean": float(np.mean(train_acc_final_list)),
         "train_loss_mean": float(np.mean(train_loss_final_list)),
         "a_t_raw":  [float(x) for x in a_t_list],
