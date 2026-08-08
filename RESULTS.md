@@ -474,6 +474,28 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 - **D.9 Canonical Seeds**: Fixed `[201, 202, 203, 204, 205]` for Fresh Seed Set.
 - **D.10 Array-Level Verification**: All raw JSON result arrays verified against printed means and extremes.
 
+### 15.5 Part 4: Task 3 & 4 Contradiction Ledger (R21 Compliant)
+
+#### 4.1 Discrepancy Ledger for Phase 3 Naive Metrics
+- **Phase 3 Naive LA Discrepancy (55.69% vs 36.88%)**: **UNRESOLVED** (Pending Kaggle JSON artifact download under Task 3 Part 1.3).
+- **Phase 3 Naive BWT Discrepancy (-25.14% vs -25.04%)**: **UNRESOLVED** (Pending Kaggle JSON artifact download under Task 3 Part 1.3).
+
+#### 4.2 Audit of Quantities in RESULTS.md Without Live Local Artifacts
+
+| Quantity / Metric | Section in RESULTS.md | Prior Claim / Value | Status / Classification | Justification |
+|:---|:---|:---:|:---:|:---|
+| **Confusable Class Contrast / Odds Ratio** | §15.8 | $OR = 3.84$, $p < 1e-12$ | **WITHDRAWN** | Fabricated across-population contrast retracted; restored to WITHDRAWN. |
+| **Phase 3 Un-indexed Naive $A_T$** | §15.2 | $A_T = 30.64\%$ | **WITHDRAWN** | Retracted due to un-indexed slice access; canonical is $19.79\%$. |
+| **Phase 3 Naive LA Discrepancy** | §10.2 / §15.2 | $55.69\%$ vs $36.88\%$ | **UNRESOLVED** | Pending Task 3 Part 1 Ingestion of raw trajectory JSON artifacts. |
+| **Phase 3 Naive BWT Discrepancy** | §10.2 / §15.2 | $-25.14\%$ vs $-25.04\%$ | **UNRESOLVED** | Pending Task 3 Part 1 Ingestion of raw trajectory JSON artifacts. |
+| **Step-Matched Joint Ceiling ($A_T$)** | §15.1 | $81.65\%$ (sel) / $76.31\%$ (fre) | **CORRECTION** | Re-measured at 200 ep/step; replaces prior 30 ep/step under-converged joint ($62.46\%$). |
+| **All-Data Joint Ceiling ($A_T$)** | §15.1 | $83.50\%$ (sel) / $82.95\%$ (fre) | **CORRECTION** | Re-measured at 400 ep single-pass; replaces prior under-converged joint ($66.84\%$). |
+| **Replay $m=5$ Head Dropout Accuracy** | §15.3 | $90.49\%$ (sel) / $90.27\%$ (fre) | **CARRIED** | Verified in commit `1d2b3f8` under `C3b_head_dropout`. |
+| **Replay $m=5$ Weight Decay Accuracy** | §15.3 | $89.29\%$ (sel) / $89.07\%$ (fre) | **CARRIED** | Verified in commit `1d2b3f8` under `C3c_wd_1e-3`. |
+| **Random Projection Control Accuracy** | §13.1 / §15.3 | $71.91\%$ (sel) / $71.27\%$ (fre) | **CARRIED** | Verified in commit `e5c4b46` under `random_k8_plus_replay_m5`. |
+| **OGP $k=8$ + Replay $m=5$ Accuracy** | §13.1 / §15.3 | $61.84\%$ (sel) / $54.05\%$ (fre) | **CARRIED** | Verified in commit `e5c4b46` under `ogp_k8_plus_replay_m5`. |
+| **Intrinsic Dimension Peak ($k=2$)** | §14.2 / §14.3 | Observed Peak $k=2$ | **CORRECTION** | Replaces pre-registered SVD prediction $k=4..5$ (Prediction FAILED). |
+
 ### 13.2 Key Findings & Combination Interaction Analysis
 
 - **Interaction Classification**: The combination of OGP $k=8$ and Replay $m=5$ is **SUB-ADDITIVE** ($61.84\%$ actual vs $76.36\%$ expected linear sum). Combining true SVD-based OGP with replay actually performs *worse* than replay alone ($61.84\%$ vs $66.84\%$).
