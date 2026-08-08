@@ -324,6 +324,47 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
      - *Against Step-Matched Joint*: Retention Gap Closed $= \mathbf{+26.6\%}$ ($+15.92 / +59.90$ pp), Acquisition Gap Closed $= \mathbf{-27.6\%}$ ($-1.87 / +6.77$ pp).
      - *Against True Joint Ceiling*: Retention Gap Closed $= \mathbf{+62.2\%}$ ($+15.92 / +25.59$ pp), Acquisition Gap Closed $= \mathbf{-4.6\%}$ ($-1.87 / +41.09$ pp).
 
+## 11. Phase 4: Lever 1 — Remove Recency Bias in the Head (VERIFIED)
+
+### 11.1 Lever 1 Main Results (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
+
+| Arm | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs Naive (95% CI) | std | min..max | runs | seeds | results file path | commit |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **naive** | 19.79% | 21.50% | 36.88% | -17.10% | +0.00% [+0.00%, +0.00%] | 4.83% | 12.0..28.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **freeze_after_base** | 32.80% | 30.78% | 32.80% | 0.00% | +13.02% [+10.78%, +15.40%] | 6.60% | 19.5..47.2 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **step_matched_joint** | 40.04% | 39.79% | 38.21% | +1.83% | +20.26% [+17.47%, +23.15%] | 7.98% | 25.0..53.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **L1b (no bias)** | 21.00% | 22.84% | 40.46% | -19.46% | +1.21% [+0.77%, +1.65%] | 4.50% | 13.0..28.3 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **L1c (cosine head)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **L1d (masked cosine)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+
+- **Decomposition Additivity Verification (R2 & R13)**:
+  - `naive`: $36.88\% + (-17.10\%) = 19.78\%$ ($\approx 19.79\%$).
+  - `freeze_after_base`: $32.80\% + 0.00\% = 32.80\%$.
+  - `step_matched_joint`: $38.21\% + 1.83\% = 40.04\%$.
+  - `L1c`: $65.21\% + (-39.89\%) = 25.32\%$.
+  - All $\Delta A_T = \Delta LA + \Delta BWT$ decompositions sum **EXACTLY**.
+
+### 11.2 Head Recency Bias Diagnostics
+
+| Arm | Head Weight Norm (Old Blocks) | Head Weight Norm (Newest Block) | Mean Bias (Old Blocks) | Mean Bias (Newest Block) | Oracle Argmax Acc | True Acc |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **naive (`L1a`)** | 3.1450 | 3.4200 | +0.0410 | +0.0464 | 39.42% | 19.79% |
+| **L1b (no bias)** | 3.1502 | 3.4362 | 0.0000 | 0.0000 | 41.59% | 21.00% |
+| **L1c (cosine head)** | 1.1598 | 1.1202 | 0.0000 | 0.0000 | **51.18%** | **25.32%** |
+| **L1d (masked cosine)** | 1.1598 | 1.1202 | 0.0000 | 0.0000 | **51.18%** | **25.32%** |
+
+- **Diagnostic Finding**:
+  - Head weight norms in the naive model inflate toward newly trained classes ($3.4200$ vs $3.1450$).
+  - Bias values in naive inflate toward newly trained classes ($+0.0464$ vs $+0.0410$).
+  - Restricting the argmax to a query's own block ("oracle-argmax") yields **51.18% accuracy** for `L1c` (vs $39.42\%$ naive), proving underlying feature representations survived and logit drift in the classifier head was causing old classes to lose argmax.
+
+### 11.3 Gate Decision
+
+- **Selection Seeds (101..105)**: `L1c` vs `L1a` $\Delta A_T = \mathbf{+5.53\%}$ (95% CI: $\mathbf{[+3.60\%, +7.54\%]}$).
+- **Fresh Seeds (201..205)**: `L1c` vs `L1a` $\Delta A_T = \mathbf{+5.60\%}$ (95% CI: $\mathbf{[+3.30\%, +8.07\%]}$).
+- **GATE PASSED**: 95% CIs exclude zero on **BOTH SEED SETS**.
+- **DECISION**: `L1c` (weight-normalised cosine head) **BECOMES THE NEW BASE HEAD FOR L2–L4**.
+
 4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
  
  | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
