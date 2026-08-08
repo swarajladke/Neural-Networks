@@ -45,7 +45,7 @@ class HeadL1c(nn.Module):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(num_classes, in_features))
         nn.init.kaiming_uniform_(self.weight, a=np.sqrt(5))
-        self.scale = nn.Parameter(torch.tensor(10.0))
+        self.scale = nn.Parameter(torch.tensor(30.0))
 
     def forward(self, x, mask_unseen=None):
         w_norm = F.normalize(self.weight, dim=-1)
@@ -135,14 +135,15 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
             R = np.zeros((10, 10))
 
             if arm_type == "all_data_joint":
-                # Single-pass joint training on all 300 samples for 300 epochs
+                # Single-pass joint training on all 300 samples for epochs_per_step epochs
                 all_x = torch.cat([tr_x[b] for b in range(10)], dim=0).to(DEVICE)
                 all_y = torch.cat([tr_y[b] for b in range(10)], dim=0).to(DEVICE)
+                scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs_per_step)
                 model.train()
-                for epoch in range(300):
+                for epoch in range(epochs_per_step):
                     logits = model(all_x)
                     loss = criterion(logits, all_y)
-                    optimizer.zero_grad(); loss.backward(); optimizer.step()
+                    optimizer.zero_grad(); loss.backward(); optimizer.step(); scheduler.step()
 
                 model.eval()
                 with torch.no_grad():
@@ -163,7 +164,7 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                 bwt_list.append(0.0)
 
             elif arm_type == "step_matched_joint":
-                # Step-by-step joint training (100 epochs/step)
+                # Step-by-step joint training (epochs_per_step epochs per step)
                 for step_idx, step_pos in enumerate(range(4, 10)):
                     seen_blocks = order[:step_pos + 1]
                     jx = torch.cat([tr_x[b] for b in seen_blocks], dim=0).to(DEVICE)
@@ -173,11 +174,12 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                     if order_idx == 0 and seed == seeds[0]:
                         print(f"    Step {step_pos}: Samples={len(jx)} | Block IDs={sorted(list(seen_blocks))} | Epochs={epochs_per_step} | State=Carried")
 
+                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs_per_step)
                     model.train()
                     for epoch in range(epochs_per_step):
                         logits = model(jx)
                         loss = criterion(logits, jy)
-                        optimizer.zero_grad(); loss.backward(); optimizer.step()
+                        optimizer.zero_grad(); loss.backward(); optimizer.step(); scheduler.step()
 
                     model.eval()
                     with torch.no_grad():
@@ -259,11 +261,11 @@ def main():
     print("    Calibrating step-matched joint with 100 epochs/step achieves full convergence (>95% train accuracy).")
 
     print("\n  A.3 & A.4 RE-MEASURING BOTH JOINT BASELINES (L1c HEAD, 50 RUNS PER SEED SET):")
-    res_step_sel = run_joint_arm_calibrated("step_matched_joint", block_assignment, cache_data, sel_seeds, num_shuffles=10, epochs_per_step=100)
-    res_step_fre = run_joint_arm_calibrated("step_matched_joint", block_assignment, cache_data, fresh_seeds, num_shuffles=10, epochs_per_step=100)
+    res_step_sel = run_joint_arm_calibrated("step_matched_joint", block_assignment, cache_data, sel_seeds, num_shuffles=10, epochs_per_step=200, lr=3e-3)
+    res_step_fre = run_joint_arm_calibrated("step_matched_joint", block_assignment, cache_data, fresh_seeds, num_shuffles=10, epochs_per_step=200, lr=3e-3)
 
-    res_all_sel = run_joint_arm_calibrated("all_data_joint", block_assignment, cache_data, sel_seeds, num_shuffles=10, epochs_per_step=300)
-    res_all_fre = run_joint_arm_calibrated("all_data_joint", block_assignment, cache_data, fresh_seeds, num_shuffles=10, epochs_per_step=300)
+    res_all_sel = run_joint_arm_calibrated("all_data_joint", block_assignment, cache_data, sel_seeds, num_shuffles=10, epochs_per_step=400, lr=3e-3)
+    res_all_fre = run_joint_arm_calibrated("all_data_joint", block_assignment, cache_data, fresh_seeds, num_shuffles=10, epochs_per_step=400, lr=3e-3)
 
     print("\n" + "=" * 105)
     print("  PART A JOINT BASELINES RESULTS TABLE")
