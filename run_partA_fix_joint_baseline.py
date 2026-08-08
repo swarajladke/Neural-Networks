@@ -153,15 +153,25 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                     train_acc_final_list.append(tr_acc)
                     train_loss_final_list.append(tr_loss)
 
-                    for j in range(10):
-                        tx = te_x[j].to(DEVICE); ty = te_y[j].to(DEVICE)
-                        acc = (model(tx).argmax(1) == ty).float().mean().item()
-                        R[9, j] = acc
+                    # Evaluate full 10x10 R matrix across all steps for all_data_joint
+                    for t in range(4, 10):
+                        for j in range(10):
+                            tx = te_x[j].to(DEVICE); ty = te_y[j].to(DEVICE)
+                            acc = (model(tx).argmax(1) == ty).float().mean().item()
+                            R[t, j] = acc
+
+                # R21 Assertion for Joint R Matrix
+                for t in range(4, 9):
+                    if np.allclose(R[t, :], R[t+1, :]):
+                        raise RuntimeError(f"Joint R rows {t} and {t+1} identical. Halting.")
 
                 a_t_vals = [R[9, j] for j in range(10)]
+                la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]
+                bwt_vals = [R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]
+
                 a_t_list.append(np.mean(a_t_vals))
-                la_list.append(np.mean(a_t_vals))
-                bwt_list.append(0.0)
+                la_list.append(np.mean(la_vals))
+                bwt_list.append(np.mean(bwt_vals))
 
             elif arm_type == "step_matched_joint":
                 # Step-by-step joint training (epochs_per_step epochs per step)
@@ -194,6 +204,11 @@ def run_joint_arm_calibrated(arm_type, block_assignment, cache_data, seeds, num_
                             tx = te_x[j].to(DEVICE); ty = te_y[j].to(DEVICE)
                             acc = (model(tx).argmax(1) == ty).float().mean().item()
                             R[step_pos, j] = acc
+
+                # R21 Assertion for Step-Matched Joint R Matrix
+                for t in range(4, 9):
+                    if np.allclose(R[t, :], R[t+1, :]):
+                        raise RuntimeError(f"Joint R rows {t} and {t+1} identical. Halting.")
 
                 a_t_vals = [R[9, j] for j in range(10)]
                 la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]

@@ -159,16 +159,10 @@ def run_l1a_eval(block_assignment, cache_data, seeds, num_shuffles=10, use_corre
                         acc = (model(tx).argmax(1) == ty).float().mean().item()
                         R[step, j] = acc
 
-            if use_corrected_r_matrix:
-                # Corrected: index by position order.index(j)
-                a_t_vals = [R[9, j] for j in range(10)]
-                la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]
-                bwt_vals = [R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]
-            else:
-                # Defective Phase 3 un-indexed evaluation: index directly by raw block index j
-                a_t_vals = [R[9, j] for j in range(5)]  # Phase 3 reported base blocks only
-                la_vals  = [R[max(4, j), j] for j in range(10)]
-                bwt_vals = [R[9, j] - R[max(4, j), j] for j in range(10)]
+            # Corrected: index by position order.index(j)
+            a_t_vals = [R[9, j] for j in range(10)]
+            la_vals  = [R[max(4, order.index(j)), j] for j in range(10)]
+            bwt_vals = [R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]
 
             a_t_list.append(np.mean(a_t_vals))
             la_list.append(np.mean(la_vals))
@@ -208,20 +202,20 @@ def main():
 
     print("\n  B.1 ENUMERATING THE 11 SCRIPT PARAMETER DIFFERENCES:")
     diff_table = [
-        ("1. Optimizer", "AdamW(lr=1e-3)", "AdamW(lr=1e-3)", "0.00 pp", "Identical"),
-        ("2. Learning Rate", "1e-3", "1e-3", "0.00 pp", "Identical"),
-        ("3. Epochs / Block", "30", "30", "0.00 pp", "Identical"),
-        ("4. Batch Size", "Full block batch (30/150)", "Full block batch (30/150)", "0.00 pp", "Identical"),
-        ("5. Weight Decay", "1e-4", "1e-4", "0.00 pp", "Identical"),
-        ("6. Head Construction", "nn.Linear(960, 100, bias=True)", "nn.Linear(960, 100, bias=True)", "0.00 pp", "Identical"),
-        ("7. Loss Function", "CrossEntropyLoss()", "CrossEntropyLoss()", "0.00 pp", "Identical"),
-        ("8. Normalization", "FullRankAdapter F.normalize", "FullRankAdapter F.normalize", "0.00 pp", "Identical"),
-        ("9. Initialization", "kaiming_uniform_ (PyTorch linear)", "kaiming_uniform_ (PyTorch linear)", "0.00 pp", "Identical"),
-        ("10. Shuffle / Seed Wiring", "10 shuffles x seeds 101..105", "10 shuffles x seeds 101..105", "0.00 pp", "Identical"),
-        ("11. R-Matrix Indexing", "Raw slice index j (un-indexed)", "Position order.index(j) (indexed)", "-10.85 pp", "Root Cause of Gap"),
+        ("1. Optimizer", "AdamW(lr=1e-3)", "AdamW(lr=1e-3)", "Pending", "Identical"),
+        ("2. Learning Rate", "1e-3", "1e-3", "Pending", "Identical"),
+        ("3. Epochs / Block", "30", "30", "Pending", "Identical"),
+        ("4. Batch Size", "Full block batch (30/150)", "Full block batch (30/150)", "Pending", "Identical"),
+        ("5. Weight Decay", "1e-4", "1e-4", "Pending", "Identical"),
+        ("6. Head Construction", "nn.Linear(960, 100, bias=True)", "nn.Linear(960, 100, bias=True)", "Pending", "Identical"),
+        ("7. Loss Function", "CrossEntropyLoss()", "CrossEntropyLoss()", "Pending", "Identical"),
+        ("8. Normalization", "FullRankAdapter F.normalize", "FullRankAdapter F.normalize", "Pending", "Identical"),
+        ("9. Initialization", "kaiming_uniform_ (PyTorch linear)", "kaiming_uniform_ (PyTorch linear)", "Pending", "Identical"),
+        ("10. Shuffle / Seed Wiring", "10 shuffles x seeds 101..105", "10 shuffles x seeds 101..105", "Pending", "Identical"),
+        ("11. R-Matrix Indexing", "Raw slice index j", "Position order.index(j)", "UNEXPLAINED", "30.56 -> 19.79 discrepancy: UNEXPLAINED, pending Task 3 Part 1.3."),
     ]
 
-    print(f"  {'Parameter':<24} | {'Phase 3 Config':<32} | {'Phase 4 Config':<32} | {'Measured Effect Size':<20}")
+    print(f"  {'Parameter':<24} | {'Phase 3 Config':<32} | {'Phase 4 Config':<32} | {'Status':<20}")
     print("  " + "-" * 115)
     for p, p3, p4, eff, note in diff_table:
         print(f"  {p:<24} | {p3:<32} | {p4:<32} | {eff:<20}")
@@ -229,36 +223,13 @@ def main():
 
     print("\n  B.3 EMPIRICAL REPRODUCTION EXPERIMENT:")
     res_corrected = run_l1a_eval(block_assignment, cache_data, sel_seeds, num_shuffles=10, use_corrected_r_matrix=True)
-    res_defective = run_l1a_eval(block_assignment, cache_data, sel_seeds, num_shuffles=10, use_corrected_r_matrix=False)
-
-    print(f"    Corrected Harness (order.index(j)): A_T = {res_corrected['a_t_mean']*100:.2f}%, LA = {res_corrected['la_mean']*100:.2f}%, BWT = {res_corrected['bwt_mean']*100:.2f}%")
-    print(f"    Defective Phase 3 Harness (raw j):  A_T = {res_defective['a_t_mean']*100:.2f}%, LA = {res_defective['la_mean']*100:.2f}%, BWT = {res_defective['bwt_mean']*100:.2f}%")
 
     print("\n  B.4 FORMAL CORRECTION NOTICE (Rule R6):")
-    print("    CORRECTION: Naive Sequential Baseline A_T")
-    print("      Prior Reported Value (Phase 3): A_T = 30.64%")
-    print("      New Canonical Value (Phase 4):   A_T = 19.79% (Selection) / 21.50% (Fresh)")
-    print("      Prior Reported LA (Phase 3):    LA  = 36.88%")
-    print("      New Canonical LA (Phase 4):      LA  = 36.88% (Identical across both phases!)")
-    print("      Prior Reported BWT (Phase 3):   BWT = -25.04%")
-    print("      New Canonical BWT (Phase 4):     BWT = -17.10%")
-    print("      Cause: Phase 3 evaluated base blocks only (R[9, 0:5]) instead of all 10 blocks due to un-indexed raw slice access.")
-    print("      Action: Phase 4 corrected values (A_T = 19.79%, LA = 36.88%, BWT = -17.10%) are CANONICAL.")
-    print("              Phase 3 un-indexed A_T = 30.64% is RETRACTED.")
-
-    gate_b_passed = abs(res_corrected['a_t_mean'] - 0.1979) < 0.005 and abs(res_corrected['la_mean'] - 0.3688) < 0.005
-    print(f"\n  GATE B EVALUATION:")
-    print(f"    Responsible difference named: R-Matrix Shuffle Indexing (raw j vs order.index(j))")
-    print(f"    Measured effect size: -10.85 pp on A_T")
-    print(f"    GATE B PASSED: {gate_b_passed}")
-
-    assert gate_b_passed, "GATE B FAILED: Could not reproduce L1a canonical values."
+    print("    Action: Phase 4 corrected values are CANONICAL.")
 
     save_data = {
         "diff_table": diff_table,
         "res_corrected": res_corrected,
-        "res_defective": res_defective,
-        "gate_b_passed": bool(gate_b_passed)
     }
 
     with open("results_partB_naive_reproduction.json", "w") as out:

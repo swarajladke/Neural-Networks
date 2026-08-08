@@ -8,10 +8,10 @@ Calibrated Configuration adopted from Phase 1 Screening (Cell C_r32_ep100_lr1e-0
   - Learning rate: lr = 1e-2 (AdamW, weight_decay=1e-4)
   - Task: Disjoint label sequential fine-tuning (10 blocks, 100 facts)
 
-Calibrated Baseline Metrics (15-run screen):
-  - Naive BWT: -12.50%  (Severe catastrophic forgetting, target <= -10pp met)
-  - Offline A_T: 95.17%  (Offline ceiling >= 90% gate met)
-  - Total CL Gap: +20.08 pp
+Calibrated Baseline Metrics:
+  - Naive BWT: Severe catastrophic forgetting
+  - Offline A_T: Offline ceiling
+  - Total CL Gap: Measured gap
 
 Phase 2 Core Objective:
   Evaluate whether OGP's retention share (delta_BWT / delta_A_T) RISES under real catastrophic forgetting

@@ -337,28 +337,8 @@ def main():
     print("=" * 80)
 
     print("  Primary Offline Baseline Declaration:")
-    print("    - Step-Matched Joint Upper Bound (30 epochs per added block) is DECLARED PRIMARY.")
-    print("    - Justification: It matches the exact step-by-step information availability and epoch budget per step.")
-    print("    - Unconstrained Asymptotic Ceiling (True Joint, 300 epochs single-pass): A_T = 97.23% (Selection) / 97.15% (Fresh).")
-    print("    - True Joint's LA (96.78%) is measured on a model that has already seen all blocks, so it is an unconstrained ceiling.")
-
-    print("\n  Gap Shares for OGP at k=8 (Full Rank r=960, Selection Seeds 101..105):")
-    print("    - Naive Sequential:   A_T = 30.56%, LA = 55.69%, BWT = -25.14%")
-    print("    - Step-Matched Joint: A_T = 62.46%, LA = 62.46%, BWT = +34.76%")
-    print("    - True Joint Ceiling: A_T = 97.23%, LA = 96.78%, BWT = +0.45%")
-    print("    - OGP k=8 Optimum:    A_T = 44.60%, LA = 53.82%, BWT = -9.22%")
-    print("    - Delta A_T vs Naive: +14.05%  |  Delta BWT vs Naive: +15.92%")
-    print("    - Against Step-Matched Joint:")
-    print("        Retention Gap Available   = +59.90 pp (+34.76 - [-25.14])")
-    print("        Retention Gap Closed      = +26.6% (+15.92 / +59.90)")
-    print("        Acquisition Gap Available = +6.77 pp (62.46 - 55.69)")
-    print("        Acquisition Gap Closed    = -27.6% (-1.87 / +6.77)")
-    print("    - Against True Joint Ceiling:")
-    print("        Retention Gap Available   = +25.59 pp (+0.45 - [-25.14])")
-    print("        Retention Gap Closed      = +62.2% (+15.92 / +25.59)")
-    print("        Acquisition Gap Available = +41.09 pp (96.78 - 55.69)")
-    print("        Acquisition Gap Closed    = -4.6% (-1.87 / +41.09)")
-
+    print("    - Step-Matched Joint Upper Bound is DECLARED PRIMARY.")
+    print("    - Justification: It matches step-by-step information availability.")
     print("=" * 80)
 
 

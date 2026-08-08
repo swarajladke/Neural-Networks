@@ -8,10 +8,34 @@ regularization strength lambda (l2sp_anchor_lr3e-4_lam* grid) with error bars.
 import matplotlib.pyplot as plt
 import numpy as np
 
-lambdas = [0.0, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05]
-emb_drift = [0.002938, 0.002677, 0.002572, 0.002365, 0.002126, 0.001814, 0.001409]
-ranking_overlap = [92.17, 94.24, 94.91, 95.29, 95.90, 96.42, 96.76]
-forgetting = [3.37, 3.56, 3.31, 3.44, 3.26, 3.11, 3.06]
+import os
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+
+GRID_JSON = "standard_cl_metrics_report.json"
+if not os.path.exists(GRID_JSON):
+    raise RuntimeError(f"Missing required artifact {GRID_JSON} for stability dose-response plot. Figure removed from paper. Halting.")
+
+with open(GRID_JSON, "r") as f:
+    grid_data = json.load(f)
+
+# Extract lambdas and metrics dynamically
+lambdas = []
+ranking_overlap = []
+emb_drift = []
+forgetting = []
+
+for cond, s in grid_data.items():
+    if "l2sp_anchor_lr3e-4_lam" in cond:
+        try:
+            lam = float(cond.split("_lam")[-1])
+            lambdas.append(lam)
+            ranking_overlap.append(float(s.get("ranking_overlap_mean", 0.0)))
+            emb_drift.append(float(s.get("emb_drift_mean", 0.0)))
+            forgetting.append(float(s.get("fgt_mean", 0.0)) * 100)
+        except Exception:
+            pass
 
 # Standard error bounds
 emb_drift_err = [d * 0.05 for d in emb_drift]

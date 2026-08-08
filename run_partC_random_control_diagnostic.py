@@ -440,15 +440,16 @@ def main():
     print("  " + "-" * 90)
 
     # C.5 Mechanism Paragraph
+    ogp_acc = c3_results.get("ogp_k8_plus_replay_m5", {}).get("a_t_mean", 0.0) * 100
+    rand_acc = c3_results.get("random_k8_plus_replay_m5", {}).get("a_t_mean", 0.0) * 100
+
     mechanism_paragraph = (
         "EMPIRICAL MECHANISM CONCLUSION (Item C.5):\n"
         "Outcome (iii) is supported: Projection actively HARMS learning once replay supplies real historical gradients.\n"
-        "True SVD-based projection (ogp_k8_plus_replay_m5 = 61.84%) rigidly constrains gradient updates away from the\n"
+        f"True SVD-based projection (ogp_k8_plus_replay_m5 = {ogp_acc:.2f}%) rigidly constrains gradient updates away from the\n"
         "principal subspace of base features, restricting the optimizer from adapting shared representations joint-wise.\n"
-        "The random projection control (random_k8_plus_replay_m5 = 71.91%) performs better precisely because it acts as\n"
-        "an isotropic stochastic regularizer rather than a rigid subspace constraint. When generic regularizers (such as\n"
-        "weight decay wd=1e-2 or gradient noise) are applied alongside replay alone, performance increases toward 71%,\n"
-        "proving that the benefit of random projection is generic regularization and that true subspace projection is harmful."
+        f"The random projection control (random_k8_plus_replay_m5 = {rand_acc:.2f}%) performs better precisely because it acts as\n"
+        "an isotropic stochastic regularizer rather than a rigid subspace constraint."
     )
 
     print(f"\n{mechanism_paragraph}")
