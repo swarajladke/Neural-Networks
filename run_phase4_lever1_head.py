@@ -461,9 +461,9 @@ def main():
     # Save Results JSON
     save_data = {
         "results": results,
-        "gate_passed": gate_passed,
-        "ci_sel": ci_sel,
-        "ci_fre": ci_fre
+        "gate_passed": bool(gate_passed),
+        "ci_sel": [float(ci_sel[0]), float(ci_sel[1])],
+        "ci_fre": [float(ci_fre[0]), float(ci_fre[1])]
     }
     with open("results_l1_head.json", "w") as out:
         json.dump(save_data, out, indent=2)
