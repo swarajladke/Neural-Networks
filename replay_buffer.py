@@ -93,6 +93,44 @@ class ReplayBuffer:
         return f"ReplayBuffer(size={len(self.buffer)}, tasks={task_counts})"
 
 
+class DERBuffer:
+    """
+    Dark Experience Replay (DER++) Tensor Buffer.
+    
+    Stores (input_tensor, label_tensor, logit_tensor, task_id) for logit matching.
+    Reference: Buzzega et al., "Dark Experience for General Continual Learning" (NeurIPS 2020)
+    """
+    def __init__(self, capacity: int = 1000):
+        self.capacity = capacity
+        self.buffer: List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor, int]] = []
+        self.total_seen = 0
+
+    def add(self, x: torch.Tensor, y: torch.Tensor, logits: torch.Tensor, task_id: int = 0):
+        """Add sample with past network logits using reservoir sampling."""
+        self.total_seen += 1
+        entry = (x.detach().cpu(), y.detach().cpu(), logits.detach().cpu(), task_id)
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(entry)
+        else:
+            if random.random() < self.capacity / self.total_seen:
+                idx = random.randint(0, self.capacity - 1)
+                self.buffer[idx] = entry
+
+    def sample(self, batch_size: int, device: torch.device = torch.device("cpu")) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Sample a batch of (x, y, logits) tensors for DER++ training step."""
+        if not self.buffer:
+            raise RuntimeError("Cannot sample from an empty DERBuffer.")
+        n = min(batch_size, len(self.buffer))
+        batch = random.sample(self.buffer, n)
+        x_batch = torch.stack([b[0] for b in batch]).to(device)
+        y_batch = torch.stack([b[1] for b in batch]).to(device)
+        z_batch = torch.stack([b[2] for b in batch]).to(device)
+        return x_batch, y_batch, z_batch
+
+    def __len__(self):
+        return len(self.buffer)
+
+
 class GEMOptimizer:
     """
     Gradient Episodic Memory (GEM) Optimizer.
