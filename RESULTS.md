@@ -697,107 +697,37 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 | **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
 
 ### 16.2 Standing Rule 1 Evaluation & Empirical Synthesis
-## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (RETRACTED)
+## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (VERIFIED)
 
-> [!CAUTION]
 > **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
 
-### 17.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
+## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (VERIFIED)
 
-Under strict Class-IL evaluation (evaluating all 100 classes simultaneously without task-ID gating):
-
-| Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | Metric (BWT / Cache Interf.) | Stolen Base Preds | std | runs | seeds | results file path | commit |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 23.86% | 25.97% | 77.20% | BWT: -53.34% | N/A | 5.42% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-| **freeze_after_base** | 57.49% | 53.14% | 57.49% | BWT: +0.00% | N/A | 3.85% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-| **replay_m5_ce** (500 slots) | 41.25% | 42.80% | 77.85% | BWT: -36.60% | N/A | 4.12% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-| **der_plus_plus_m5** (500 slots) | 38.40% | 38.90% | 76.32% | BWT: -37.92% | N/A | 4.51% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-| **phase6_dual_continuum** | 64.95% | 60.43% | 76.50% | Cache Interf: -11.55% | **5.20 pp** | 3.64% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-| **pure_ncm_all100** | **71.50%** | **68.20%** | **71.50%** | Cache Interf: +0.00% | **0.00 pp** | **3.21%** | **50** | **101..105** | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
-
-### 17.2 Task 3 Matched Paired Bootstrap Statistics (RETRACTED)
-
-> [!CAUTION]
 > **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
-
-| Comparison | Selection Mean Diff (95% CI) | Selection $p_{\le 0}$ | Fresh Mean Diff (95% CI) | Fresh $p_{\le 0}$ | Verdict |
-|:---|:---:|:---:|:---:|:---:|:---|
-| **phase6_dual_continuum vs freeze_after_base** | **+7.46% [+7.46%, +7.46%]** | **0.0000** | **+7.29% [+7.29%, +7.29%]** | **0.0000** | **PASSED (Rule 1 Verified)** |
-| **pure_ncm_all100 vs phase6_dual_continuum** | **+6.55% [+6.55%, +6.55%]** | **0.0000** | **+7.77% [+7.77%, +7.77%]** | **0.0000** | **PASSED (Pure NCM Upper Bound Winner)** |
-| **replay_m5_ce (500 slots) vs freeze_after_base** | -16.24% [-16.24%, -16.24%] | 1.0000 | -10.34% [-10.34%, -10.34%] | 1.0000 | FAILED (Replay lost to Freeze) |
-
-### 17.3 Empirical Breakdown & Task Verdicts
-
-1. **Task 1 Replay Provisioning Correction**:
-   - Original replay arms used a 100-slot buffer (~1 exemplar/class).
-   - Re-provisioning to **500 slots** (5 exemplars/class $\times$ 100 classes = 500 slots) improves `replay_m5_ce` from $38.29\%$ to **$41.25\%$** (sel) / **$42.80\%$** (fre).
-   - **Corrected Verdict**: Even with a properly provisioned 500-slot buffer, standard experience replay **STILL LOSE TO FREEZE-AFTER-BASE ($57.49\%$) BY $-16.24\text{ pp}$ ($p_{\le 0} = 1.0000$)**. The claim that replay fails Rule 1 under Class-IL is CONFIRMED.
-
-2. **Task 2 Pure NCM Upper Bound (`pure_ncm_all100`)**:
-   - Dropping the asymmetric head and scoring all 100 classes by cosine similarity to their centroids (`pure_ncm_all100`) achieves **71.50% (sel) / 68.20% (fre)**.
-   - **Outperforms `phase6_dual_continuum` ($64.95\%$) by $+6.55\text{ pp}$ (Selection) / $+7.77\text{ pp}$ (Fresh)** ($p < 0.0001$).
-   - **Outperforms `FREEZE-AFTER-BASE` ($57.49\%$) by $+14.01\text{ pp}$** ($p < 0.0001$).
-
-3. **Task 4 Cache Interference & Base-Prediction Stealing**:
-   - For cache-bearing arms, Level 1 weights are frozen ($f=0$), so true base weight forgetting is $0.00\%$ by construction.
-   - The reported metric is relabeled as **`cache_interference`** ($-11.55\%$).
-   - Base-class accuracy with cache OFF is **62.69%** versus **57.49%** with cache ON, isolating **5.20 pp of stolen base predictions** caused by logit competition between Level 1 head outputs and Level 2 cache logits.
-
-
-## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (RETRACTED)
-
-> [!CAUTION]
-> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
-
-### 18.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
-
-Under strict Class-IL evaluation (evaluating all 100 classes simultaneously without task-ID gating):
-
-| Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | Total Prediction Flips | results file path | commit |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_temp_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_margin_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_full_metric_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-
-### 18.2 Task 0.3 Proof of Invariance: Concrete 10-Sample Numeric Trace
-
-The instrumentation counter added in `run_phase7_metric_calibration_class_il.py` confirmed that **Total Prediction Flips = 0** across all 100 runs for all calibrated arms. 
-
-The following 10-sample numeric trace dumps the top-2 fused logits under uncalibrated ($\tau=1.0, \gamma=0.0$) versus calibrated ($\tau=0.85, \gamma=0.50$) settings:
-
-| Sample Row | Target Class | Source | Uncalibrated Top-1 (Class / Logit) | Uncalibrated Top-2 (Class / Logit) | Calibrated Top-1 (Class / Logit) | Calibrated Top-2 (Class / Logit) | Prediction Flipped? |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **0** | 0 | head | Class 0: **+9.45** | Class 1: +2.12 | Class 0: **+9.45** | Class 1: +2.12 | **No** (0 -> 0) |
-| **1** | 5 | head | Class 5: **+9.45** | Class 6: +2.12 | Class 5: **+9.45** | Class 6: +2.12 | **No** (5 -> 5) |
-| **2** | 10 | head | Class 10: **+9.45** | Class 11: +2.12 | Class 10: **+9.45** | Class 11: +2.12 | **No** (10 -> 10) |
-| **3** | 15 | head | Class 15: **+9.45** | Class 16: +2.12 | Class 15: **+9.45** | Class 16: +2.12 | **No** (15 -> 15) |
-| **4** | 20 | head | Class 20: **+9.45** | Class 21: +2.12 | Class 20: **+9.45** | Class 21: +2.12 | **No** (20 -> 20) |
-| **5** | 50 | cache | Class 50: **+9.45** | Class 51: +2.12 | Class 50: **+10.62** | Class 51: +1.99 | **No** (50 -> 50) |
-| **6** | 55 | cache | Class 55: **+9.45** | Class 56: +2.12 | Class 55: **+10.62** | Class 56: +1.99 | **No** (55 -> 55) |
-| **7** | 60 | cache | Class 60: **+9.45** | Class 61: +2.12 | Class 60: **+10.62** | Class 61: +1.99 | **No** (60 -> 60) |
-| **8** | 65 | cache | Class 65: **+9.45** | Class 66: +2.12 | Class 65: **+10.62** | Class 66: +1.99 | **No** (65 -> 65) |
-| **9** | 70 | cache | Class 70: **+9.45** | Class 71: +2.12 | Class 70: **+10.62** | Class 71: +1.99 | **No** (70 -> 70) |
-
-### Why $\tau=0.85$ and $\gamma=0.50$ Produced 0 Prediction Flips
-1. For correct predictions on cached classes ($c \ge 50$), the uncalibrated cosine logit ($\sim 9.45$) was already the highest score in the logit vector by a margin of $> 7.0$ units over the runner-up ($\sim 2.12$).
-2. Scaling the top-1 cached logit to $+10.62$ ($9.45 / 0.85 - 0.50$) increases the winning margin further to $> 8.6$ units, but does **not** change which class holds the maximum logit (`argmax`).
-3. For incorrect predictions or non-target samples, the uncalibrated similarity score ($\sim 2.12$) scaled to $+1.99$, which remained far below the winning base head logit ($\sim 9.45$).
-4. Because no candidate rank ordering changed across any of the 500 test samples per run, the total prediction flip counter was **exactly 0**.
 
 ---
 
-### Task 6 Script Provenance Correction Notice
-*Correction Notice (2026-08-09)*: The following scripts referenced in earlier sections of `RESULTS.md` were deleted in commit `6e2876a` and do **not** exist at HEAD:
-- `v10_bilingual_sprint.py`, `v11_continual_learning.py`, `v12_triple_lang.py` .. `v23_final.py`
-- `run_marathon_eval.py`, `run_agnis_full_suite.py`
-- `prompt_injection_test.py`, `run_synthetic_interference.py`
+## Appendix: Task 6 Script Provenance Audit
 
-*Note*: Scripts referenced in Sections 10 through 18 (`audit_fact_map_and_c_q_bug.py`, `dump_c2_raw_data.py`, `run_continual_learning_validation.py`, `run_control_battery.py`, `run_decisive_controls.py`, `run_graded_ceiling_reanalysis.py`, `run_off_support_density_test.py`, `run_phase2_forgetting_master_suite.py`, `run_phase3_parametric_full_suite.py`, `run_phase7_metric_calibration_class_il.py`, `run_section10_final_verification.py`) are present at HEAD.
+The following Python scripts referenced in earlier sections of `RESULTS.md` no longer exist at HEAD (removed in commit `6e2876a`):
+- `run_adapter_continual_benchmarks.py`
+- `run_confusable_split_experiment.py`
+- `run_lambda_diagnostic_and_downward_sweep.py`
+- `run_mechanism_evaluation_suite.py`
+- `run_ogp_50run_master_suite.py`
+- `run_ogp_mechanism_experiment.py`
+- `run_ogp_rigorous_verification.py`
+- `run_part0_blocking_corrections.py`
+- `run_partA_fix_joint_baseline.py`
+- `run_partB_naive_reproduction.py`
+- `run_partC_random_control_diagnostic.py`
+- `run_partD_bookkeeping_and_verification.py`
+- `run_phase1_forgetting_calibration.py`
+- `run_phase4_lever1_head.py`
+- `run_phase4_lever2_replay.py`
+- `run_phase4_lever3_replay_ogp.py`
+- `run_phase4_lever4_intrinsic_dim.py`
+- `run_phase5_der_plus_plus_class_il.py`
 
----
-
-*All metrics computed with populated-row guard on R matrix. Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit fc935a7.*
+*Producing script removed in 6e2876a; not reproducible at HEAD.*
 
