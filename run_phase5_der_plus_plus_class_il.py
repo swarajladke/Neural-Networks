@@ -229,9 +229,15 @@ def main():
         blocks_data = json.load(f)
 
     if not os.path.exists(CACHE_PATH):
-        raise RuntimeError(f"Missing required cache {CACHE_PATH}. Run on Kaggle. Halting.")
-    
-    cache_data = torch.load(CACHE_PATH, map_location=DEVICE)
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from run_student_continual_benchmarks import ensure_100_fact_embeddings
+        MODEL_ID = "HuggingFaceTB/SmolLM2-360M"
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID).to(DEVICE)
+        model.eval()
+        cache_data = ensure_100_fact_embeddings(tokenizer, model, blocks_data)
+    else:
+        cache_data = torch.load(CACHE_PATH, map_location=DEVICE)
 
     conf_pairs = find_confusable_pairs(cache_data, threshold=0.95)
     block_assignment = build_confusable_split_blocks(conf_pairs)
