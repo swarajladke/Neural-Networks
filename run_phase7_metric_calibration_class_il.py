@@ -90,18 +90,27 @@ def build_confusable_split_blocks(confusable_pairs):
 
 
 def build_block_tensors(block_assignment, cache_data):
-    # Task 5.1 Assertion Guards
-    for fids in block_assignment:
-        for f in fids:
-            assert (cache_data["train_y"][f*3:(f+1)*3] == f).all(), f"Task 5.1 Guard Failed: train_y indexing error for fact {f}"
-            assert (cache_data["test_y"][f*4:(f+1)*4]  == f).all(), f"Task 5.1 Guard Failed: test_y indexing error for fact {f}"
-
     tr_x, tr_y, te_x, te_y = [], [], [], []
     for fids in block_assignment:
-        tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
-        tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
-        te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
-        te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+        b_tr_x, b_tr_y, b_te_x, b_te_y = [], [], [], []
+        for f in fids:
+            tr_idx = (cache_data["train_y"] == f).nonzero(as_tuple=True)[0]
+            te_idx = (cache_data["test_y"]  == f).nonzero(as_tuple=True)[0]
+
+            assert len(tr_idx) > 0, f"Task 5.1 Guard Failed: Fact {f} has 0 train samples in cache."
+            assert len(te_idx) > 0, f"Task 5.1 Guard Failed: Fact {f} has 0 test samples in cache."
+            assert (cache_data["train_y"][tr_idx] == f).all(), f"Task 5.1 Guard Failed: train_y label mismatch for fact {f}"
+            assert (cache_data["test_y"][te_idx]  == f).all(), f"Task 5.1 Guard Failed: test_y label mismatch for fact {f}"
+
+            b_tr_x.append(cache_data["train_x"][tr_idx])
+            b_tr_y.append(cache_data["train_y"][tr_idx])
+            b_te_x.append(cache_data["test_x"][te_idx])
+            b_te_y.append(cache_data["test_y"][te_idx])
+
+        tr_x.append(torch.cat(b_tr_x, dim=0))
+        tr_y.append(torch.cat(b_tr_y, dim=0))
+        te_x.append(torch.cat(b_te_x, dim=0))
+        te_y.append(torch.cat(b_te_y, dim=0))
     return tr_x, tr_y, te_x, te_y
 
 
