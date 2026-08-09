@@ -684,7 +684,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 ## 16. Phase 5: Class-IL Dark Experience Replay (DER++) Benchmark & Rule 1 Evaluation (VERIFIED)
 
-> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 ### 16.1 Strict Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -705,7 +705,7 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 ## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (VERIFIED)
 
-> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 ### 17.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -741,7 +741,7 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 ## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (VERIFIED)
 
-> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 ### 18.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
