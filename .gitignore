@@ -5,6 +5,7 @@
 !audit_dataset_integrity_stdout.txt
 !audit_generator_defects_stdout.txt
 !stride_file_mapping_stdout.txt
+!generate_dataset_v2_stdout.txt
 *.csv
 *.npz
 *.pkl
