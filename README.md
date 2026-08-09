@@ -1,62 +1,46 @@
-# AGNIS: Autonomous Gated Neural Inference System
-**The Future of Continual Language Modeling**
+# Continual Learning & Multi-Frequency Continuum Memory System
 
-AGNIS is a high-performance neural architecture designed for **Zero-Forgetting Continual Learning**. Unlike traditional transformers that suffer from catastrophic interference, AGNIS uses a **Predictive Coding** framework and a **Synaptic Shield** protocol to learn multiple languages sequentially within a single neural manifold.
+## 🚀 Overview
 
----
+This repository evaluates Continual Learning (CL) mechanisms on a 100-class benchmark using **SmolLM2-360M** embeddings under strict **Class-Incremental Learning (Class-IL)** evaluation.
 
-## 🚀 Key Features
-
-### 🏛️ **Spectral Stable Recurrence (V8.4)**
-Inspired by *OpenMythos* and Linear Time-Invariant (LTI) systems, the AGNIS core uses a **Spectrally Normalized Matrix** ($R$) to guarantee mathematical stability. The spectral radius is strictly bounded at 0.98, preventing the "gradient explosions" typical of long-range recurrent networks.
-
-### 🛡️ **The Synaptic Shield (V5.0)**
-An advanced manifold-slicing protocol that allows the system to:
-1.  Train on **Language A** (e.g., Italian).
-2.  Lock the participating synapses using a **Manifold Mask**.
-3.  Train on **Language B** (e.g., Russian) without overwriting any Language A knowledge.
-*   **Proven Result:** Achieved **92.0% Italian retention** after full Russian training.
-
-### ⚡ **Adaptive Computation Time (ACT)**
-A learned halting mechanism that allows each neuron to "stop thinking" once it reaches high confidence.
-*   **Efficiency:** Drastically reduces compute load on common patterns.
-*   **Optimization:** Increases throughput from **15** to **40+ Tokens/sec** on the RTX 3060.
-
-### 🌡️ **Thermal Guardian Protocol**
-Built-in hardware safety for mobile/laptop research environments. 
-*   **Thermal Guard:** Automatically pauses execution at 80°C.
-*   **Memory Detachment:** Prevents VRAM ballooning by detaching the settlement graph from the gradient tape.
+Key Mechanisms:
+- **Level 1 (f = 0)**: Frozen base feature representation (eliminates representation corruption).
+- **Level 2 (f = fast)**: Non-parametric `fact_memory` continuous vector cache acquiring new classes with zero backprop parameter updates.
+- **Pure NCM Upper Bound (`pure_ncm_all100`)**: Un-fused Nearest-Centroid Classifier across all 100 classes achieving **71.50% Class-IL accuracy** ($+14.01\text{ pp}$ over `FREEZE-AFTER-BASE`).
 
 ---
 
-## 🛠️ Technical Stack
-*   **Engine:** Python 3.12 + PyTorch 2.3+
-*   **Hardware:** Optimized for **NVIDIA RTX 3060** (CUDA Core)
-*   **Framework:** Predictive Coding (Iterative Settlement)
+## 🧪 Running the Benchmarks
 
----
-
-## 🧪 Running the Research
-
-### **Bilingual Zero-Forgetting Sprint**
-To verify the synaptic shield across Italian and Russian corpora:
-```powershell
-python -u v10_bilingual_sprint.py
+### **Phase 6: Multi-Frequency Continuum Memory System**
+Runs the 100-run Class-IL benchmark across 6 arms:
+```bash
+python run_phase6_continuum_memory_class_il.py
 ```
 
-### **Temporal Reasoning Diagnostic**
-To verify the memory fidelity of the stable recurrent core:
-```powershell
-python -u v6_delayed_parity_diagnostic.py
+### **Phase 7: Local Metric Calibration & Temperature Scaling**
+Runs logit scale alignment and prediction flip instrumentation:
+```bash
+python run_phase7_metric_calibration_class_il.py
+```
+
+### **Task 3 Matched Paired Bootstrap CIs**
+Computes 10,000-sample matched paired bootstrap CIs on `(shuffle, seed)` keys:
+```bash
+python compute_phase6_paired_bootstrap.py
 ```
 
 ---
 
-## 📈 Research Milestones
-- [x] **V7.0**: Broke the 0.500 Parity Floor (Memory Validation).
-- [x] **V8.4**: Achieved Spectral Stability (Hardware Safety).
-- [x] **V10.1**: Demonstrated 92% Bilingual Retention (The Continual Learning Breakthrough).
+## ⚠️ Provenance & Legacy Checkpoint Status Notice
 
----
+Commit `6e2876a` cleaned up obsolete legacy sprint scripts (`v10`..`v23` series, prompt injection tests, and old marathons).
 
-**Developed for the Autonomous SLM Research Study (2026).**
+### Orphaned Checkpoint Binaries (No Provenance at HEAD)
+The following binary checkpoint files in `checkpoints/` are retained for historical record but have **no reproducible source script at HEAD** (producing scripts removed in commit `6e2876a`):
+- `checkpoints/ru_milestone_500.pt` .. `checkpoints/ru_milestone_3000.pt`
+- `checkpoints/italian_baseline_v72.pt`
+- `checkpoints/phase_733_breakthrough.pt`
+
+**Choice**: Retained in `checkpoints/` with explicit non-provenance documentation above.

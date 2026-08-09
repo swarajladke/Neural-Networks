@@ -127,6 +127,14 @@ class DERBuffer:
         z_batch = torch.stack([b[2] for b in batch]).to(device)
         return x_batch, y_batch, z_batch
 
+    def get_per_class_counts(self) -> Dict[int, int]:
+        """Return audit map of realized exemplar count per class in buffer."""
+        counts: Dict[int, int] = defaultdict(int)
+        for entry in self.buffer:
+            c = int(entry[1].item()) if hasattr(entry[1], 'item') else int(entry[1])
+            counts[c] += 1
+        return dict(counts)
+
     def __len__(self):
         return len(self.buffer)
 
