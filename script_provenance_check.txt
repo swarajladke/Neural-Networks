@@ -1,0 +1,71 @@
+==================================================
+ Script Provenance Audit (os.path.exists Check)
+==================================================
+  [EXISTS ] audit_fact_map_and_c_q_bug.py
+  [EXISTS ] dump_c2_raw_data.py
+  [EXISTS ] measure_transfer_mechanism.py
+  [MISSING] prompt_injection_test.py
+  [EXISTS ] run_adapter_continual_benchmarks.py
+  [MISSING] run_agnis_full_suite.py
+  [EXISTS ] run_base_rate_enrichment_test.py
+  [EXISTS ] run_confusable_split_experiment.py
+  [EXISTS ] run_continual_learning_validation.py
+  [EXISTS ] run_control_battery.py
+  [EXISTS ] run_d2_coverage_evaluation.py
+  [EXISTS ] run_decisive_controls.py
+  [EXISTS ] run_decoder_integration_validation.py
+  [EXISTS ] run_graded_ceiling_reanalysis.py
+  [EXISTS ] run_graded_ceiling_test.py
+  [EXISTS ] run_lambda_diagnostic_and_downward_sweep.py
+  [MISSING] run_marathon_eval.py
+  [EXISTS ] run_mechanism_evaluation_suite.py
+  [EXISTS ] run_off_support_density_test.py
+  [EXISTS ] run_ogp_50run_master_suite.py
+  [EXISTS ] run_ogp_mechanism_experiment.py
+  [EXISTS ] run_ogp_rigorous_verification.py
+  [EXISTS ] run_part0_blocking_corrections.py
+  [EXISTS ] run_partA_fix_joint_baseline.py
+  [EXISTS ] run_partB_naive_reproduction.py
+  [EXISTS ] run_partC_random_control_diagnostic.py
+  [EXISTS ] run_partD_bookkeeping_and_verification.py
+  [EXISTS ] run_phase1_forgetting_calibration.py
+  [EXISTS ] run_phase2_forgetting_master_suite.py
+  [EXISTS ] run_phase3_parametric_full_suite.py
+  [EXISTS ] run_phase3_parametric_memory.py
+  [EXISTS ] run_phase4_lever1_head.py
+  [EXISTS ] run_phase4_lever2_replay.py
+  [EXISTS ] run_phase4_lever3_replay_ogp.py
+  [EXISTS ] run_phase4_lever4_intrinsic_dim.py
+  [EXISTS ] run_phase5_der_plus_plus_class_il.py
+  [EXISTS ] run_phase6_continuum_memory_class_il.py
+  [EXISTS ] run_phase7_metric_calibration_class_il.py
+  [EXISTS ] run_replacement_tests_and_seed_wiring.py
+  [EXISTS ] run_section10_final_verification.py
+  [EXISTS ] run_student_continual_benchmarks.py
+  [MISSING] run_synthetic_interference.py
+  [MISSING] v10_bilingual_sprint.py
+  [MISSING] v11_continual_learning.py
+  [MISSING] v12_triple_lang.py
+  [MISSING] v23_final.py
+
+Summary:
+  Total Checked: 46
+  Existing:      38
+  Missing:       8
+
+Regenerated Appendix Text for RESULTS.md:
+------------------------------------------
+## Appendix: Task 6 Script Provenance Audit
+
+The following Python scripts referenced in earlier sections of `RESULTS.md` no longer exist at HEAD (removed in prior refactoring commits):
+
+- `prompt_injection_test.py`
+- `run_agnis_full_suite.py`
+- `run_marathon_eval.py`
+- `run_synthetic_interference.py`
+- `v10_bilingual_sprint.py`
+- `v11_continual_learning.py`
+- `v12_triple_lang.py`
+- `v23_final.py`
+
+*All missing scripts verified via `os.path.exists` at HEAD.*
