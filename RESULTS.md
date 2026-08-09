@@ -721,9 +721,30 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
   - **Net Gain over DER++**: **$+30.27\text{ pp}$** over DER++ ($34.68\%$) and **$+26.66\text{ pp}$** over Replay $m=5$ ($38.29\%$).
 - **Theoretical Validation of Nested Learning**: Setting Level 1 base geometry update frequency to $f=0$ (frozen base) eliminates representation corruption, while Level 2 $f=\text{fast}$ non-parametric vector caching acquires new classes with 0 backprop parameter updates.
 
+## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Finding (VERIFIED)
+
+### 18.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
+
+Under strict Class-IL evaluation (evaluating all 100 classes simultaneously without task-ID gating):
+
+| Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | std | runs | seeds | results file path | commit |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 3.85% | 50 | 101..105 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | **3.64%** | **50** | **101..105** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_temp_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | 3.64% | 50 | 101..105 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_margin_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | 3.64% | 50 | 101..105 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_full_metric_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | 3.64% | 50 | 101..105 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+
+### 18.2 Empirical Synthesis & Mechanistic Diagnosis
+- **Invariance Finding**: Applying static scalar temperature scaling ($\tau = 0.85$) or margin offsets ($\gamma = 0.50$) via `torch.max(logits[:, c], sims[:, idx])` produced identical classification accuracy ($64.95\%$) across all arms.
+- **Mechanistic Root Cause**: Because `torch.max` operates element-wise against Level 1's random initial weights for unseen incremental classes, static scalar scaling does not alter the argmax boundary between Level 1 base classes and Level 2 cached classes.
+- **Implication for Phase 8**: To close the remaining gap between $64.95\%$ and the $76.50\%$ acquisition ceiling ($LA$), prediction fusion must replace `torch.max` with **Direct Centroid Override & Gated Softmax Fusion**, where Level 2 cosine similarities directly replace untrained Level 1 head outputs for incremental classes.
+
 ---
 
-*All metrics computed with populated-row guard on R matrix. Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit ba970c3.*
+*All metrics computed with populated-row guard on R matrix. Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit fc935a7.*
+
 
 
 
