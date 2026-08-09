@@ -680,8 +680,27 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 ---
 
-*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 02c88eb.*
-bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 9530645.*
+*All metrics computed with populated-row guard on R matrix (base phase row 4 evaluated after joint training). Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit 89af264.*
+
+## 16. Phase 5: Class-IL Dark Experience Replay (DER++) Benchmark & Rule 1 Evaluation (VERIFIED)
+
+### 16.1 Strict Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
+
+Under strict Class-IL evaluation (evaluating all 100 classes simultaneously without task-ID gating):
+
+| Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | std | runs | seeds | results file path | commit |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+| **freeze_after_base** | **57.49%** | **53.14%** | **57.49%** | **+0.00%** | **3.85%** | **50** | **101..105** | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+| **replay_m5_ce** | 38.29% | 39.58% | 77.85% | -39.56% | 4.12% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+| **der_m5** | 22.62% | 24.39% | 75.46% | -52.84% | 4.88% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+| **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+
+### 16.2 Standing Rule 1 Evaluation & Empirical Synthesis
+- **Rule 1 Violation**: Under strict Class-IL evaluation, **`FREEZE-AFTER-BASE` ($57.49\%$) OUTPERFORMS EVERY INCREMENTAL REPLAY METHOD** (`replay_m5_ce` $38.29\%$, `der_plus_plus_m5` $34.68\%$, `naive_l1c` $23.86\%$).
+- **Rule 1 Verdict**: By Standing Rule 1 (*"Any mechanism that does not outperform doing nothing (FREEZE-AFTER-BASE) has not demonstrated continual learning"*), **no incremental fine-tuning method evaluated under Class-IL has demonstrated continual learning**.
+- **Mechanistic Finding**: Continually updating weights across 100 un-gated classes degrades global representations below simply freezing the model after the base phase. Logit matching (DER/DER++) helps recover over pure logit MSE ($34.68\%$ vs $22.62\%$), but standard replay ($38.29\%$) still dominates DER++ at $m=5$ capacity.
+
 
 
 
