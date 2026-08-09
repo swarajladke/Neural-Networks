@@ -697,9 +697,10 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 | **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
 
 ### 16.2 Standing Rule 1 Evaluation & Empirical Synthesis
-## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (VERIFIED)
+## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (RETRACTED)
 
-## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (VERIFIED)
+> [!CAUTION]
+> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
 
 ### 17.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -714,7 +715,10 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 | **phase6_dual_continuum** | 64.95% | 60.43% | 76.50% | Cache Interf: -11.55% | **5.20 pp** | 3.64% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
 | **pure_ncm_all100** | **71.50%** | **68.20%** | **71.50%** | Cache Interf: +0.00% | **0.00 pp** | **3.21%** | **50** | **101..105** | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `fc935a7` |
 
-### 17.2 Task 3 Matched Paired Bootstrap Statistics (10,000 Resamples)
+### 17.2 Task 3 Matched Paired Bootstrap Statistics (RETRACTED)
+
+> [!CAUTION]
+> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
 
 | Comparison | Selection Mean Diff (95% CI) | Selection $p_{\le 0}$ | Fresh Mean Diff (95% CI) | Fresh $p_{\le 0}$ | Verdict |
 |:---|:---:|:---:|:---:|:---:|:---|
@@ -740,7 +744,10 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
    - Base-class accuracy with cache OFF is **62.69%** versus **57.49%** with cache ON, isolating **5.20 pp of stolen base predictions** caused by logit competition between Level 1 head outputs and Level 2 cache logits.
 
 
-## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (VERIFIED)
+## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (RETRACTED)
+
+> [!CAUTION]
+> **RETRACTED 2026-08-09**: The committed artifacts backing this section failed mechanical validation (off-grid accuracies, constant a_t_std, freeze arm above its structural ceiling, numeric trace inconsistent with source). No number in this section is currently supported. Re-run pending.
 
 ### 18.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -782,4 +789,15 @@ The following 10-sample numeric trace dumps the top-2 fused logits under uncalib
 
 ---
 
+### Task 6 Script Provenance Correction Notice
+*Correction Notice (2026-08-09)*: The following scripts referenced in earlier sections of `RESULTS.md` were deleted in commit `6e2876a` and do **not** exist at HEAD:
+- `v10_bilingual_sprint.py`, `v11_continual_learning.py`, `v12_triple_lang.py` .. `v23_final.py`
+- `run_marathon_eval.py`, `run_agnis_full_suite.py`
+- `prompt_injection_test.py`, `run_synthetic_interference.py`
+
+*Note*: Scripts referenced in Sections 10 through 18 (`audit_fact_map_and_c_q_bug.py`, `dump_c2_raw_data.py`, `run_continual_learning_validation.py`, `run_control_battery.py`, `run_decisive_controls.py`, `run_graded_ceiling_reanalysis.py`, `run_off_support_density_test.py`, `run_phase2_forgetting_master_suite.py`, `run_phase3_parametric_full_suite.py`, `run_phase7_metric_calibration_class_il.py`, `run_section10_final_verification.py`) are present at HEAD.
+
+---
+
 *All metrics computed with populated-row guard on R matrix. Decomposition uses exact BWT = A_T - LA identity. All CIs: 10,000-sample paired bootstrap. Repository: github.com/swarajladke/Neural-Networks, HEAD commit fc935a7.*
+
