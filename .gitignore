@@ -6,6 +6,8 @@
 !audit_generator_defects_stdout.txt
 !stride_file_mapping_stdout.txt
 !generate_dataset_v2_stdout.txt
+!mapping_honest_audit.txt
+!agnis_scaling_dataset_v2.json
 *.csv
 *.npz
 *.pkl
@@ -15,6 +17,7 @@
 *.json
 !results_*.json
 !agnis_scaling_dataset.json
+!agnis_scaling_dataset_v2.json
 
 # Visualizations / Reports
 *.png

@@ -1,0 +1,21 @@
+==================================================
+ AUDIT: CACHE USAGE & RESULTS.md SECTION MAPPING
+==================================================
+
+--- 16 STRIDE FILES MAPPING TABLE ---
+File: run_student_continual_benchmarks.py        | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 10, 14, 15
+File: run_phase5_der_plus_plus_class_il.py       | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 16
+File: run_phase6_continuum_memory_class_il.py    | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 17
+File: run_phase7_metric_calibration_class_il.py  | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 18
+File: run_adapter_continual_benchmarks.py        | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: run_decisive_controls.py                   | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 10
+File: run_continual_learning_validation.py       | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 10
+File: run_base_rate_enrichment_test.py           | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: run_graded_ceiling_reanalysis.py           | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 10
+File: run_graded_ceiling_test.py                 | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: run_off_support_density_test.py            | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: 10
+File: run_confusable_split_experiment.py         | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: run_decoder_integration_validation.py      | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: run_d2_coverage_evaluation.py              | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: audit_fact_map_and_c_q_bug.py              | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE
+File: dump_c2_raw_data.py                        | Consumes V1 Cache: YES (smollm2_embeddings_100slots.pt) | Sections: NONE

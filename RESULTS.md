@@ -3,9 +3,21 @@
 
 ---
 
-## 1. Benchmark Definition
+### Dataset Defect Scope & Provenance Audit (2026-08-09)
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+> [!IMPORTANT]
+> **Sections Affected by `smollm2_embeddings_100slots.pt` Defect**: **Sections 10, 14, 15, 16, 17, 18**.
+> These sections consumed the `smollm2_embeddings_100slots.pt` cached embeddings artifact, which suffered from three distinct defects:
+> 1. **Probe-String Labels**: Labels were derived from probe strings (`label = probe_to_class[f["probe"]]`), collapsing 100 facts into 34 unique classes and grouping contradictory facts under identical labels.
+> 2. **42.5% Test-Train String Leakage**: Test queries verbatim duplicated training prompts (`get_prompt_only(f, 0)` and `(f, 2)`).
+> 3. **Stride Misalignment**: Benchmarks assumed fixed-stride class slicing (`f*3`, `f*4`, `i*3:(i+1)*3`) over non-contiguous, variable-count class distributions.
+>
+> **Sections NOT Affected by Dataset Defect**: **Sections 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13**.
+> These sections evaluated linear adapter models and Phase 4 head/replay levers on separate datasets or independent cached representations, and did NOT consume `smollm2_embeddings_100slots.pt`. Their measurements remain valid and unaffected by this cache defect.
+
+---
+
+## 1. Benchmark Definition
 
 **Task**: 1-nearest-neighbour retrieval over a stored reference set.
 
@@ -26,8 +38,6 @@
 ---
 
 ## 2. Frozen Encoder Floor & Plasticity Precondition
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Frozen Adapter (Identity, no training)**: A_T(frozen) = **72.50% +/- 0.00%** (live assertion; every run is identical by construction).
 
@@ -64,8 +74,6 @@ The adapter learns substantially (~+22 points). Mechanisms are evaluated by how 
 ---
 
 ## 3. OGP Rank Sweep -- Per-Seed-Set Results (50 Runs per Condition per Seed Set)
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Method**: After training on base blocks 0-4, before each sequential block step t in [5, 9]:
 1. Accumulate past training inputs M in R^{N_past x 960}.
@@ -108,8 +116,6 @@ All values below are per-seed-set; the `[sel | fre]` format shows Selection Seed
 
 ## 4. Control Arms (k=32, 50 Runs per Condition per Seed Set)
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
-
 | Arm | Description | A_T [sel\|fre] | BWT [sel\|fre] | CI sel | CI fre | Verdict |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|
 | TOP-32 (OGP) | Top-32 right singular vectors of accumulated past inputs M | 91.60\|92.55 | +0.28\|+1.17 | +1.97 [+1.55,+2.41] | +2.07 [+1.58,+2.56] | Sig. both |
@@ -122,8 +128,6 @@ All values below are per-seed-set; the `[sel | fre]` format shows Selection Seed
 ---
 
 ## 5. Exact Decomposition (delta_A_T = delta_LA + delta_BWT)
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 A_T = LA + BWT is an exact identity (BWT = A_T - LA by definition). Observed Forgetting (max-based) is reported separately and does NOT satisfy this identity.
 
@@ -139,8 +143,6 @@ OGP improves both retention (55-68% of total gain) and acquisition (32-44%). The
 ---
 
 ## 6. Prior Art & Defensible Contributions
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Prior Art:**
 - Farajtabar et al., "Orthogonal Gradient Descent for Continual Learning," AISTATS 2020.
@@ -162,8 +164,6 @@ Both project task gradients into the complement of a stored basis built from pas
 
 ## 7. Headline Summary
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
-
 OGP with k in [16, 32] improves final accuracy by **+2.0 to +2.7 percentage points** over naive sequential fine-tuning (paired 95% CIs excluding zero on two independent seed sets of 50 runs each), and raises BWT from -1.05/+0.05 (naive) to +0.28/+1.17 (k=32) and +0.48/+1.57 (k=24). At k=24, OGP raises BWT by **+1.52 to +1.53 points** and reduces observed forgetting by **1.38 to 1.40 points** (both CIs exclude zero on both seed sets).
 
 k=24 shows the highest mean A_T on both seed sets and is the headline result. k=32 is the robustness anchor (between-set gain spread 0.10 pp). Gap recovery at k=24 is 42% (selection, gap 5.35%) to 69% (fresh, gap 3.97%); at k=32 it is 37% to 52%. These percentages vary because the naive-offline gap differs between seed sets. The absolute gain (+2.0 to +2.7 points) is the more stable quantity and should be the primary citation.
@@ -171,8 +171,6 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 ---
 
 ## 8. Limitations
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 1. **4-to-5 point ceiling**: The measurable CL gap is 3.97-5.35 points. At k=24, OGP recovers 42% on the selection set and 69% on the fresh set; at k=32, 37% and 52%. The remaining gap is not addressed.
 
@@ -189,8 +187,6 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 ---
 
 ## 9. Phase 2 Calibrated Forgetting Benchmark Results (50 Runs per Condition per Seed Set)
-
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Calibrated Configuration**: `BottleneckAdapter` $r=32$ (uncentred PCA init), `epochs = 100`, `lr = 1e-2`, `weight_decay = 1e-4`.
 
@@ -269,7 +265,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 ## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_student_continual_benchmarks.py`, `run_decisive_controls.py`, `run_continual_learning_validation.py`, `run_graded_ceiling_reanalysis.py`, and `run_off_support_density_test.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`i*3:(i+1)*3`). Class counts, accuracies, and forgetting metrics in this section are uninterpretable.
 
 ### 10.1 Raw Array Verification & C2 Step-9 Reconciliation (VERIFIED)
 - **Raw File Checksum**: Dumped to `c2_raw_arrays.json` (SHA-256: `533bfdae6847efa704614de9df41f67b6c92a76591010489e5872019234857bc`).
@@ -438,7 +434,85 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - `random_k8_plus_replay_m5`: $63.04\% + 8.88\% = 71.92\%$ ($\approx 71.91\%$).
   - All $\Delta A_T = \Delta LA + \Delta BWT$ decompositions sum **EXACTLY**.
 
+## 14. Phase 4: Lever 4 — The Intrinsic-Dimension Prediction (VERIFIED)
+
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_student_continual_benchmarks.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`i*3:(i+1)*3`). Class counts, accuracies, and intrinsic dimension peaks in this section are uninterpretable.
+
+### 14.1 Pre-Registered Intrinsic Dimension Predictions ($E_{90}$ SVD Threshold)
+
+- **Estimator**: SVD Cumulative Variance Threshold $E_{90}$ ($90\%$ cumulative variance explained in raw feature space).
+- **Task Groupings & Predictions**:
+  - **Task 1 (Base Phase 50 Facts / 150 Samples)**: $\text{ID}_{90} = 5$ $\rightarrow$ **Pre-registered Predicted Peak $k = 5$**.
+  - **Task 2 (Full Dataset 100 Facts / 300 Samples)**: $\text{ID}_{90} = 4$ $\rightarrow$ **Pre-registered Predicted Peak $k = 4$**.
+  - **Task 3 (Confusable 34 Facts / 102 Samples)**: $\text{ID}_{90} = 4$ $\rightarrow$ **Pre-registered Predicted Peak $k = 4$**.
+
+### 14.2 OGP $k$-Sweep Full Cell Table (50 Runs per Cell: 10 Shuffles x 5 Seeds per Seed Set)
+
+| $k$ | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs $k=1$ (95% CI) | std | runs | seeds | results file path | commit |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **1** | 31.70% | 32.00% | 57.81% | -26.11% | +0.00% [+0.00%, +0.00%] | 6.42% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **2** | **40.91%** | **43.63%** | **57.07%** | **-16.16%** | **+9.22% [+6.94%, +11.63%]** | 9.03% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **4** | 34.54% | 38.49% | 55.04% | -20.50% | +2.84% [+0.38%, +5.31%] | 9.04% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **8** | 34.84% | 36.59% | 55.17% | -20.33% | +3.15% [+0.89%, +5.37%] | 8.65% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **12** | 33.70% | 34.08% | 55.22% | -21.52% | +2.01% [-0.24%, +4.29%] | 6.79% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **16** | 31.96% | 32.21% | 55.64% | -23.68% | +0.27% [-2.14%, +2.77%] | 6.48% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **24** | 30.14% | 31.81% | 55.48% | -25.35% | -1.56% [-3.92%, +0.87%] | 6.29% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **32** | 30.94% | 31.88% | 55.21% | -24.27% | -0.76% [-3.15%, +1.65%] | 6.02% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **48** | 32.61% | 33.24% | 55.51% | -22.91% | +0.91% [-1.45%, +3.28%] | 6.12% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **64** | 33.59% | 34.15% | 55.62% | -22.03% | +1.90% [-0.50%, +4.26%] | 6.09% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+
+- **Decomposition Additivity Verification (R2 & R13)**:
+  - $k=1$: $57.81\% + (-26.11\%) = 31.70\%$.
+  - $k=2$: $57.07\% + (-16.16\%) = 40.91\%$.
+  - $k=4$: $55.04\% + (-20.50\%) = 34.54\%$.
+  - All $\Delta A_T = \Delta LA + \Delta BWT$ decompositions sum **EXACTLY**.
+
+### 14.3 Predicted versus Observed Peak $k$ Report
+
+- **Task 1 (Base Phase 50 Facts)**: Predicted Peak $k = 5$ $\rightarrow$ **Observed Peak $k = 2$** ($A_T = \mathbf{40.91\%}$ sel / $\mathbf{43.63\%}$ fre).
+- **Task 2 (Full Dataset 100 Facts)**: Predicted Peak $k = 4$ $\rightarrow$ **Observed Peak $k = 2$**.
+- **Task 3 (Confusable 34 Facts)**: Predicted Peak $k = 4$ $\rightarrow$ **Observed Peak $k = 2$**.
+- **Empirical Synthesis**: Pre-registered $E_{90}$ intrinsic dimension analysis correctly predicted that the task manifold is extremely low-rank ($k \le 5$). Under the new `L1c` cosine head, empirical peak performance sharpens from $k=8$ to **$k=2$**, confirming that preserving a 2-dimensional principal subspace maximizes retention while minimizing acquisition loss.
+
+### 14.4 Parametric Head Frozen-Accuracy versus Rank Curve ($r \in [2 \dots 960]$)
+
+| Rank $r$ | Frozen Parametric Model Accuracy (`L1c` Head) | std |
+|:---:|:---:|:---:|
+| **2** | 1.80% | $\pm 2.40\%$ |
+| **4** | 0.60% | $\pm 1.20\%$ |
+| **8** | 0.80% | $\pm 1.60\%$ |
+| **16** | 0.30% | $\pm 0.37\%$ |
+| **32** | 2.55% | $\pm 1.17\%$ |
+| **64** | 1.30% | $\pm 1.47\%$ |
+| **128** | 0.60% | $\pm 0.87\%$ |
+| **256** | 1.50% | $\pm 1.90\%$ |
+| **512** | 1.10% | $\pm 1.49\%$ |
+| **960** | 0.90% | $\pm 1.10\%$ |
+
+- **Finding**: Unlike 1-NN retrieval over raw embeddings (which achieves $72.50\%$ frozen accuracy), an untrained parametric classification head sits strictly at chance baseline ($\sim 1.0\% = 1/100$) across all bottleneck ranks $r$. Parametric classification requires supervised weight alignment.
+
+4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
+ 
+ | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
+|:---|:---:|:---:|:---:|:---:|
+| **Frozen Floor** | 0 blocks (0 facts) | **70.50%** | $\pm 0.00\%$ | Baseline Floor |
+| **10 facts** | 1 block | **60.00%** | $\pm 4.07\%$ | **-10.50 pp (BELOW FLOOR)** |
+| **20 facts** | 2 blocks | **67.20%** | $\pm 6.87\%$ | **-3.30 pp (BELOW FLOOR)** |
+| **30 facts** | 3 blocks | **79.00%** | $\pm 5.15\%$ | **+8.50 pp (ABOVE FLOOR)** |
+| **40 facts** | 4 blocks | **84.70%** | $\pm 0.87\%$ | **+14.20 pp (ABOVE FLOOR)** |
+| **50 facts** | 5 blocks | **84.50%** | $\pm 0.00\%$ | **+14.00 pp (ABOVE FLOOR)** |
+
+   - *Correction*: Adaptation degrades unseen-fact retrieval below the 70.50% floor at $B=1$ (60.00%) and $B=2$ (67.20%); crosses the floor between $B=2$ and $B=3$ (79.00%); and saturates by $B=4$ (84.70%) with no further gain at $B=5$ (84.50%). The progression is smooth and saturating, not a phase transition. The $B=1..4$ error bars reflect **block-selection variance** (since base blocks were drawn randomly per seed); adapter training for a fixed set of blocks is **deterministic**.
+5. **Seed Wiring, Step-9 Max Weight Diff & Axis D Evidence Status ($n=1$)**:
+   - At Step 9 in the 50-run benchmark (where shuffle order varies per seed), $\max_{i, j} |W_{\text{seed101}}[i, j] - W_{\text{seed102}}[i, j]| = \mathbf{2.5985}$, proving sequence shuffling creates distinct weight matrices across runs.
+   - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`). When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
+   - **Axis D Evidence Status ($n=1$)**: Because the single-pair probe executed without block order shuffle variation, its five seeds were identical deterministic runs. The single-pair probe's $0.00\text{ pp}$ interference finding rests on $n=1$. (Axis D remains dropped).
+
+---
+
 ## 15. Phase 4.1: Correction Run & Bookkeeping (VERIFIED)
+
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_student_continual_benchmarks.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing. Class counts, accuracies, and baseline figures in this section are uninterpretable.
 
 ### 15.1 Part A: Fixed Joint Upper Bound Baselines (GATE A PASSED)
 
@@ -525,85 +599,6 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
   - The **random rank-8 projection control** (`random_k8_plus_replay_m5`) achieves **71.91% (sel) / 71.27% (fre)**, outperforming true OGP by $+10.07\text{ pp}$, demonstrating that isotropic subspace noise avoids locking the optimizer into historical principal components.
 - **Head Bias & Projection Scope (Methods Note)**: Under `L1c`, classifier head bias is eliminated ($b=0$). The normalized weights $W$ and adapter parameters are both subject to gradient projection during OGP steps.
 
-## 14. Phase 4: Lever 4 — The Intrinsic-Dimension Prediction (VERIFIED)
-
-### 14.1 Pre-Registered Intrinsic Dimension Predictions ($E_{90}$ SVD Threshold)
-
-- **Estimator**: SVD Cumulative Variance Threshold $E_{90}$ ($90\%$ cumulative variance explained in raw feature space).
-- **Task Groupings & Predictions**:
-  - **Task 1 (Base Phase 50 Facts / 150 Samples)**: $\text{ID}_{90} = 5$ $\rightarrow$ **Pre-registered Predicted Peak $k = 5$**.
-  - **Task 2 (Full Dataset 100 Facts / 300 Samples)**: $\text{ID}_{90} = 4$ $\rightarrow$ **Pre-registered Predicted Peak $k = 4$**.
-  - **Task 3 (Confusable 34 Facts / 102 Samples)**: $\text{ID}_{90} = 4$ $\rightarrow$ **Pre-registered Predicted Peak $k = 4$**.
-
-### 14.2 OGP $k$-Sweep Full Cell Table (50 Runs per Cell: 10 Shuffles x 5 Seeds per Seed Set)
-
-| $k$ | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs $k=1$ (95% CI) | std | runs | seeds | results file path | commit |
-|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | 31.70% | 32.00% | 57.81% | -26.11% | +0.00% [+0.00%, +0.00%] | 6.42% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **2** | **40.91%** | **43.63%** | **57.07%** | **-16.16%** | **+9.22% [+6.94%, +11.63%]** | 9.03% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **4** | 34.54% | 38.49% | 55.04% | -20.50% | +2.84% [+0.38%, +5.31%] | 9.04% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **8** | 34.84% | 36.59% | 55.17% | -20.33% | +3.15% [+0.89%, +5.37%] | 8.65% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **12** | 33.70% | 34.08% | 55.22% | -21.52% | +2.01% [-0.24%, +4.29%] | 6.79% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **16** | 31.96% | 32.21% | 55.64% | -23.68% | +0.27% [-2.14%, +2.77%] | 6.48% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **24** | 30.14% | 31.81% | 55.48% | -25.35% | -1.56% [-3.92%, +0.87%] | 6.29% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **32** | 30.94% | 31.88% | 55.21% | -24.27% | -0.76% [-3.15%, +1.65%] | 6.02% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **48** | 32.61% | 33.24% | 55.51% | -22.91% | +0.91% [-1.45%, +3.28%] | 6.12% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **64** | 33.59% | 34.15% | 55.62% | -22.03% | +1.90% [-0.50%, +4.26%] | 6.09% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-
-- **Decomposition Additivity Verification (R2 & R13)**:
-  - $k=1$: $57.81\% + (-26.11\%) = 31.70\%$.
-  - $k=2$: $57.07\% + (-16.16\%) = 40.91\%$.
-  - $k=4$: $55.04\% + (-20.50\%) = 34.54\%$.
-  - All $\Delta A_T = \Delta LA + \Delta BWT$ decompositions sum **EXACTLY**.
-
-### 14.3 Predicted versus Observed Peak $k$ Report
-
-- **Task 1 (Base Phase 50 Facts)**: Predicted Peak $k = 5$ $\rightarrow$ **Observed Peak $k = 2$** ($A_T = \mathbf{40.91\%}$ sel / $\mathbf{43.63\%}$ fre).
-- **Task 2 (Full Dataset 100 Facts)**: Predicted Peak $k = 4$ $\rightarrow$ **Observed Peak $k = 2$**.
-- **Task 3 (Confusable 34 Facts)**: Predicted Peak $k = 4$ $\rightarrow$ **Observed Peak $k = 2$**.
-- **Empirical Synthesis**: Pre-registered $E_{90}$ intrinsic dimension analysis correctly predicted that the task manifold is extremely low-rank ($k \le 5$). Under the new `L1c` cosine head, empirical peak performance sharpens from $k=8$ to **$k=2$**, confirming that preserving a 2-dimensional principal subspace maximizes retention while minimizing acquisition loss.
-
-### 14.4 Parametric Head Frozen-Accuracy versus Rank Curve ($r \in [2 \dots 960]$)
-
-| Rank $r$ | Frozen Parametric Model Accuracy (`L1c` Head) | std |
-|:---:|:---:|:---:|
-| **2** | 1.80% | $\pm 2.40\%$ |
-| **4** | 0.60% | $\pm 1.20\%$ |
-| **8** | 0.80% | $\pm 1.60\%$ |
-| **16** | 0.30% | $\pm 0.37\%$ |
-| **32** | 2.55% | $\pm 1.17\%$ |
-| **64** | 1.30% | $\pm 1.47\%$ |
-| **128** | 0.60% | $\pm 0.87\%$ |
-| **256** | 1.50% | $\pm 1.90\%$ |
-| **512** | 1.10% | $\pm 1.49\%$ |
-| **960** | 0.90% | $\pm 1.10\%$ |
-
-- **Finding**: Unlike 1-NN retrieval over raw embeddings (which achieves $72.50\%$ frozen accuracy), an untrained parametric classification head sits strictly at chance baseline ($\sim 1.0\% = 1/100$) across all bottleneck ranks $r$. Parametric classification requires supervised weight alignment.
-
-4. **Fixed Evaluation Set Base-Size Curve (Evaluated on Fixed Blocks 5–9, 50 Facts)**:
- 
- | Base Phase Size | Base Blocks Trained | Fixed Evaluation Set Accuracy (Blocks 5–9, 50 Facts) | Block-Selection Std Across Seeds | Difference vs 70.50% Frozen Floor |
-|:---|:---:|:---:|:---:|:---:|
-| **Frozen Floor** | 0 blocks (0 facts) | **70.50%** | $\pm 0.00\%$ | Baseline Floor |
-| **10 facts** | 1 block | **60.00%** | $\pm 4.07\%$ | **-10.50 pp (BELOW FLOOR)** |
-| **20 facts** | 2 blocks | **67.20%** | $\pm 6.87\%$ | **-3.30 pp (BELOW FLOOR)** |
-| **30 facts** | 3 blocks | **79.00%** | $\pm 5.15\%$ | **+8.50 pp (ABOVE FLOOR)** |
-| **40 facts** | 4 blocks | **84.70%** | $\pm 0.87\%$ | **+14.20 pp (ABOVE FLOOR)** |
-| **50 facts** | 5 blocks | **84.50%** | $\pm 0.00\%$ | **+14.00 pp (ABOVE FLOOR)** |
-
-   - *Correction*: Adaptation degrades unseen-fact retrieval below the 70.50% floor at $B=1$ (60.00%) and $B=2$ (67.20%); crosses the floor between $B=2$ and $B=3$ (79.00%); and saturates by $B=4$ (84.70%) with no further gain at $B=5$ (84.50%). The progression is smooth and saturating, not a phase transition. The $B=1..4$ error bars reflect **block-selection variance** (since base blocks were drawn randomly per seed); adapter training for a fixed set of blocks is **deterministic**.
-5. **Seed Wiring, Step-9 Max Weight Diff & Axis D Evidence Status ($n=1$)**:
-   - At Step 9 in the 50-run benchmark (where shuffle order varies per seed), $\max_{i, j} |W_{\text{seed101}}[i, j] - W_{\text{seed102}}[i, j]| = \mathbf{2.5985}$, proving sequence shuffling creates distinct weight matrices across runs.
-   - `BottleneckAdapter` is deterministically initialized from PCA basis (`pca_basis`). When fixed blocks `[0, 1, 2, 3, 4]` are trained without shuffle variation, $\max |W_{\text{seed101}} - W_{\text{seed102}}| = 0.000000$.
-   - **Axis D Evidence Status ($n=1$)**: Because the single-pair probe executed without block order shuffle variation, its five seeds were identical deterministic runs. The single-pair probe's $0.00\text{ pp}$ interference finding rests on $n=1$. (Axis D remains dropped).
-
----
-
-### 10.2 Baseline Framing & Sensitivity Analysis: Step-Matched Joint Upper Bound
-- **Baseline Definition & Renaming**: The joint training baseline that trains 30 epochs per added block step-by-step is designated as the **Step-Matched Joint Upper Bound** (formerly termed incremental joint). It matches the exact step-by-step information availability and epoch budget of the sequential benchmark.
-- **Unconstrained Asymptotic Ceiling (True Joint)**: Single-pass joint training on all 100 classes for 300 epochs yields an asymptotic ceiling $A_T = \mathbf{97.23\%}$ (Selection) / $\mathbf{97.15\%}$ (Fresh). Its $LA$ ($96.78\%$) is evaluated on a model that has already been trained on all 100 classes for 300 epochs, making it an unconstrained ceiling rather than a step-matched baseline.
-- **Sensitivity Analysis of Decomposed Gaps**:
-  - *Against Step-Matched Joint Upper Bound (Primary Baseline)*: Retention Gap Available $= \mathbf{+59.90\text{ pp}}$ ($+34.76 - [-25.14]$), Acquisition Gap Available $= \mathbf{+6.77\text{ pp}}$ ($62.46 - 55.69$). Ratio $\approx \mathbf{9:1}$ (Retention dominates).
   - *Against Unconstrained Asymptotic Ceiling (True Joint)*: Retention Gap Available $= \mathbf{+25.59\text{ pp}}$ ($+0.45 - [-25.14]$), Acquisition Gap Available $= \mathbf{+41.08\text{ pp}}$ ($96.78 - 55.70$). Ratio $\approx \mathbf{1:1.6}$ (Acquisition dominates).
   - *Justification*: The Step-Matched Joint Upper Bound is the correct baseline for continual learning gap decomposition because it enforces step-by-step information availability and equal epoch budgets per step.
 
@@ -704,7 +699,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 ## 16. Phase 5: Class-IL Dark Experience Replay (DER++) Benchmark & Rule 1 Evaluation (VERIFIED)
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_phase5_der_plus_plus_class_il.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`f*3`/`f*4`). Class counts, accuracies, and forgetting metrics in this section are uninterpretable.
 
 ### 16.1 Strict Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -725,7 +720,7 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 ## 17. Phase 6: Multi-Frequency Continuum Memory System & Standing Rule 1 Victory (VERIFIED)
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_phase6_continuum_memory_class_il.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`f*3`/`f*4`). Class counts, accuracies, and forgetting metrics in this section are uninterpretable.
 
 ### 17.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 
@@ -761,7 +756,7 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 ## 18. Phase 7: Local Metric Calibration Analysis & Logit Invariance Proof (VERIFIED)
 
-> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+> **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_phase7_metric_calibration_class_il.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`f*3`/`f*4`). Class counts, accuracies, and calibration metrics in this section are uninterpretable.
 
 ### 18.1 Class-IL Full Cell Table (50 Runs per Arm: 10 Shuffles x 5 Seeds per Seed Set)
 

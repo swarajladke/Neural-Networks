@@ -1,11 +1,14 @@
 ==================================================
- G3 SPECIFICATION ASSERTION AUDIT (generate_dataset_v2.py)
+ G3 / V2 GENERATOR AUDIT & ASSERTION PASSED
 ==================================================
-  [ASSERT 1 PASSED] 100 facts with 100 unique probe strings.
-  [ASSERT 2 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).
-  [ASSERT 3 PASSED] Zero test-train equality or substring overlap globally across dataset.
-  [ASSERT 4 PASSED] No answer values leak into train or test input strings.
+  [ASSERT D1.1 PASSED] 100 facts with 100 unique probe strings.
+  [ASSERT D1.2 PASSED] Exactly 100 distinct answer values across 100 facts.
+  [ASSERT D1.3 PASSED] Every relation type has 10 distinct answers across entities.
+  [ASSERT D1.4 PASSED] Every entity has 10 distinct answers across relations.
+  [ASSERT D2.1 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).
+  [ASSERT D2.2 PASSED] Zero shared 5-grams between train and test prompts for all facts.
+  [ASSERT D4 PASSED] Answer value words do not appear in any train or test input string.
 
-ALL G3 SPECIFICATION ASSERTIONS PASSED SUCCESSFULLY!
+ALL V2 GENERATOR ASSERTIONS (D1, D2, D4) PASSED SUCCESSFULLY!
 
 [Saved] Programmatically generated dataset v2 saved to agnis_scaling_dataset_v2.json.

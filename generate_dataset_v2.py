@@ -3,79 +3,200 @@ generate_dataset_v2.py
 ======================
 
 Generates a 100-fact dataset programmatically and deterministically.
- fixed random seed, cartesian product of templates x entity names x values.
-Strictly zero hand-authored prose.
+Uses fixed random seed and cartesian product of 10 entities x 10 relation types.
 
-Requirements:
-- 100 unique probes, one fact each
-- 3 train strings and 3 test strings per fact, all 6 mutually distinct
-- no test string is a substring of, or equal to, any train string anywhere in the dataset
-- no answer value appears in any train or test input string
-- assert all of the above before writing the file, and print assertion results
+Requirements & Correctness Controls (D1, D2, D4):
+- D1: 100 unique facts with 100 distinct answer values shuffled via random.Random(42).
+- D1 Assertions: len(set(answers)) == 100, no relation has constant answer, no entity has constant answer.
+- D2: 3 train prompts and 3 test prompts per fact, all 6 mutually distinct per fact.
+- D2 Assertion: Zero shared 5-grams between any test prompt and any train prompt of the same fact.
+- D4: Assert answer value words do not appear in any train or test prompt.
 """
 
 import json
 import random
 
 SEED = 42
-random.seed(SEED)
+rng = random.Random(SEED)
 
-# Cartesian components: 10 entities x 10 relation types = 100 distinct facts
 ENTITIES = [
     "Aeloria", "Balthazar", "Celestia", "Drakoria", "Eldoria",
     "Fenrir", "Gryphon", "Hyperion", "Ignis", "Juno"
 ]
 
 RELATIONS = [
-    {"type": "melting_point", "probe_tpl": "The molecular melting point of {entity} is", "ans_tpl": "{val} degrees"},
-    {"type": "capital", "probe_tpl": "The official capital city of {entity} is", "ans_tpl": "{val} City"},
-    {"type": "population", "probe_tpl": "The total recorded population of {entity} is", "ans_tpl": "{val} thousand"},
-    {"type": "elevation", "probe_tpl": "The highest peak elevation in {entity} measures", "ans_tpl": "{val} meters"},
-    {"type": "governor", "probe_tpl": "The presiding high governor of {entity} is", "ans_tpl": "Lord {val}"},
-    {"type": "export", "probe_tpl": "The primary resource export of {entity} is", "ans_tpl": "{val} ore"},
-    {"type": "founding_year", "probe_tpl": "The historical founding year of {entity} was", "ans_tpl": "year {val}"},
-    {"type": "currency", "probe_tpl": "The standard trade currency of {entity} is the", "ans_tpl": "{val} coin"},
-    {"type": "orbit_period", "probe_tpl": "The orbital rotation period of {entity} takes", "ans_tpl": "{val} solar days"},
-    {"type": "primary_language", "probe_tpl": "The official primary language spoken in {entity} is", "ans_tpl": "{val}ian"}
+    {
+        "type": "melting_point",
+        "train": [
+            "The molecular melting point of {entity} is",
+            "Thermal analysis reveals {entity} liquefies at",
+            "{entity} transitions into liquid phase at"
+        ],
+        "test": [
+            "At what temperature does {entity} change state to liquid?",
+            "Determine the precise heat threshold for {entity}:",
+            "State the melting temperature measured for {entity}."
+        ],
+        "ans_tpl": "{val} degrees"
+    },
+    {
+        "type": "capital",
+        "train": [
+            "The official capital city of {entity} is",
+            "Government headquarters for {entity} operate from",
+            "{entity} houses its primary administrative seat in"
+        ],
+        "test": [
+            "Where is the central governing body of {entity} located?",
+            "Identify the municipality serving as capital for {entity}:",
+            "Name the sovereign administrative center of {entity}."
+        ],
+        "ans_tpl": "{val} City"
+    },
+    {
+        "type": "population",
+        "train": [
+            "The total recorded population of {entity} is",
+            "Demographic census counts for {entity} reach",
+            "{entity} contains an estimated inhabitant tally of"
+        ],
+        "test": [
+            "How many residents currently inhabit the region of {entity}?",
+            "Specify the total headcount recorded within {entity}:",
+            "Provide the latest census figure for {entity}."
+        ],
+        "ans_tpl": "{val} thousand"
+    },
+    {
+        "type": "elevation",
+        "train": [
+            "The highest peak elevation in {entity} measures",
+            "Topographical surveys log the apex altitude of {entity} at",
+            "{entity} reaches its maximum vertical summit height at"
+        ],
+        "test": [
+            "How tall is the pinnacle mountain point inside {entity}?",
+            "Record the maximum surveyed altitude within {entity}:",
+            "What altitude does the highest crest of {entity} reach?"
+        ],
+        "ans_tpl": "{val} meters"
+    },
+    {
+        "type": "governor",
+        "train": [
+            "The presiding high governor of {entity} is",
+            "Executive leadership over {entity} is held by",
+            "{entity} falls under the jurisdiction of governor"
+        ],
+        "test": [
+            "Which political leader currently governs the territory of {entity}?",
+            "Identify the appointed ruler in command of {entity}:",
+            "Name the official head of state for {entity}."
+        ],
+        "ans_tpl": "Lord {val}"
+    },
+    {
+        "type": "export",
+        "train": [
+            "The primary resource export of {entity} is",
+            "Commercial trade shipments from {entity} feature",
+            "{entity} supplies global markets primarily with"
+        ],
+        "test": [
+            "What chief commodity does {entity} trade externally?",
+            "Detail the main economic resource shipped by {entity}:",
+            "Which product forms the major export for {entity}?"
+        ],
+        "ans_tpl": "{val} ore"
+    },
+    {
+        "type": "founding_year",
+        "train": [
+            "The historical founding date of {entity} was",
+            "Chronicles place the establishment of {entity} in",
+            "{entity} was officially incorporated during"
+        ],
+        "test": [
+            "When was the realm of {entity} first established?",
+            "State the calendar epoch marking the origin of {entity}:",
+            "In what era was {entity} formally organized?"
+        ],
+        "ans_tpl": "{val} AD"
+    },
+    {
+        "type": "currency",
+        "train": [
+            "The standard trade currency of {entity} is the",
+            "Financial transactions across {entity} utilize",
+            "{entity} conducts monetary exchange using"
+        ],
+        "test": [
+            "What legal tender is used for commerce in {entity}?",
+            "Specify the official monetary unit of {entity}:",
+            "Which currency circulates throughout the market of {entity}?"
+        ],
+        "ans_tpl": "{val} coin"
+    },
+    {
+        "type": "orbit_period",
+        "train": [
+            "The orbital rotation period of {entity} takes",
+            "Astronomical tracking measures {entity} completing one revolution in",
+            "{entity} navigates its full planetary circuit in"
+        ],
+        "test": [
+            "How long does {entity} require to orbit its parent star?",
+            "Calculate the complete revolution duration for {entity}:",
+            "What is the cycle length of {entity}'s orbital path?"
+        ],
+        "ans_tpl": "{val} solar days"
+    },
+    {
+        "type": "primary_language",
+        "train": [
+            "The official primary language spoken in {entity} is",
+            "Linguistic surveys document citizens of {entity} speaking",
+            "{entity} conducts public discourse mainly in"
+        ],
+        "test": [
+            "Which native tongue is predominantly spoken by people in {entity}?",
+            "Identify the principal dialect utilized within {entity}:",
+            "What language serves as the main medium in {entity}?"
+        ],
+        "ans_tpl": "{val}ian"
+    }
 ]
 
-VALUES = [
-    "one hundred", "two hundred", "three hundred", "four hundred", "five hundred",
-    "six hundred", "seven hundred", "eight hundred", "nine hundred", "one thousand"
-]
+# D1: 100 distinct answer values
+VALUES = [f"val_{i:03d}" for i in range(1, 101)]
 
-# 3 distinct train prompt templates (none contain the answer)
-TRAIN_TEMPLATES = [
-    "Query regarding {entity}: {probe}",
-    "According to official records, {probe}",
-    "In historical archives, {probe}"
-]
 
-# 3 distinct test prompt templates (none contain the answer, none equal/substring of train templates)
-TEST_TEMPLATES = [
-    "What is known about {entity}? {probe}",
-    "Specify the detail for {entity}: {probe}",
-    "Information request: {probe}"
-]
+def extract_ngrams(text, n=5):
+    words = text.lower().replace(":", "").replace("?", "").replace(".", "").split()
+    if len(words) < n:
+        return set()
+    return set(" ".join(words[i:i+n]) for i in range(len(words) - n + 1))
 
 
 def build_dataset_v2():
-    facts = []
+    # Seeded permutation of answer values across 100 facts
+    perm = list(range(100))
+    rng.shuffle(perm)
 
-    val_idx = 0
+    facts = []
     fact_id = 0
 
     for ent in ENTITIES:
         for rel in RELATIONS:
-            val = VALUES[val_idx % len(VALUES)]
-            val_idx += 1
+            val_idx = perm[fact_id]
+            val = VALUES[val_idx]
 
-            probe = rel["probe_tpl"].format(entity=ent)
+            probe = rel["train"][0].format(entity=ent)
             answer = rel["ans_tpl"].format(val=val)
             statement = f"{probe} {answer}."
 
-            train_prompts = [tpl.format(entity=ent, probe=probe) for tpl in TRAIN_TEMPLATES]
-            test_prompts = [tpl.format(entity=ent, probe=probe) for tpl in TEST_TEMPLATES]
+            train_prompts = [t.format(entity=ent) for t in rel["train"]]
+            test_prompts = [t.format(entity=ent) for t in rel["test"]]
 
             fact_obj = {
                 "fact_id": fact_id,
@@ -95,16 +216,34 @@ def build_dataset_v2():
 
 def validate_and_assert(facts):
     print("==================================================")
-    print(" G3 SPECIFICATION ASSERTION AUDIT (generate_dataset_v2.py)")
+    print(" G3 / V2 GENERATOR AUDIT & ASSERTION PASSED")
     print("==================================================")
 
-    # 1. 100 unique probes, one fact each
-    all_probes = [f["probe"] for f in facts]
+    # 1. 100 facts with 100 unique fact_ids and probes
     assert len(facts) == 100, f"Expected 100 facts, got {len(facts)}"
+    assert len(set(f["fact_id"] for f in facts)) == 100
+    all_probes = [f["probe"] for f in facts]
     assert len(set(all_probes)) == 100, f"Probes not unique: {len(set(all_probes))} / 100"
-    print("  [ASSERT 1 PASSED] 100 facts with 100 unique probe strings.")
+    print("  [ASSERT D1.1 PASSED] 100 facts with 100 unique probe strings.")
 
-    # 2. 3 train strings and 3 test strings per fact, all 6 mutually distinct
+    # 2. D1: 100 distinct answer values
+    all_answers = [f["answer"] for f in facts]
+    assert len(set(all_answers)) == 100, f"Expected 100 distinct answers, got {len(set(all_answers))}"
+    print("  [ASSERT D1.2 PASSED] Exactly 100 distinct answer values across 100 facts.")
+
+    # 3. D1: No relation type has constant answer across entities
+    for rel_type in set(f["relation"] for f in facts):
+        rel_ans = set(f["answer"] for f in facts if f["relation"] == rel_type)
+        assert len(rel_ans) == 10, f"Relation {rel_type} has constant or non-10 answers: {len(rel_ans)}"
+    print("  [ASSERT D1.3 PASSED] Every relation type has 10 distinct answers across entities.")
+
+    # 4. D1: No entity has constant answer across relations
+    for ent in set(f["entity"] for f in facts):
+        ent_ans = set(f["answer"] for f in facts if f["entity"] == ent)
+        assert len(ent_ans) == 10, f"Entity {ent} has constant or non-10 answers: {len(ent_ans)}"
+    print("  [ASSERT D1.4 PASSED] Every entity has 10 distinct answers across relations.")
+
+    # 5. D2: 3 train prompts and 3 test prompts per fact, all 6 mutually distinct
     for f in facts:
         train_s = f["train_prompts"]
         test_s = f["test_prompts"]
@@ -112,28 +251,28 @@ def validate_and_assert(facts):
         assert len(test_s) == 3, f"Fact {f['fact_id']} test prompt count != 3"
         all_6 = set(train_s + test_s)
         assert len(all_6) == 6, f"Fact {f['fact_id']} prompt strings not mutually distinct (got {len(all_6)} / 6)"
-    print("  [ASSERT 2 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).")
+    print("  [ASSERT D2.1 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).")
 
-    # 3. No test string is a substring of, or equal to, any train string anywhere in the dataset
-    all_train_strings = [s for f in facts for s in f["train_prompts"]]
-    all_test_strings = [s for f in facts for s in f["test_prompts"]]
-
-    for te in all_test_strings:
-        for tr in all_train_strings:
-            assert te != tr, f"Test string equal to train string: '{te}'"
-            assert te not in tr, f"Test string '{te}' is substring of train string '{tr}'"
-            assert tr not in te, f"Train string '{tr}' is substring of test string '{te}'"
-    print("  [ASSERT 3 PASSED] Zero test-train equality or substring overlap globally across dataset.")
-
-    # 4. No answer value appears in any train or test input string
+    # 6. D2: Zero shared 5-grams between test prompts and train prompts of the same fact
+    total_5gram_collisions = 0
     for f in facts:
-        ans = f["answer"]
-        raw_val = ans.split()[0]  # e.g., 'hundred' or 'one'
-        for s in f["train_prompts"] + f["test_prompts"]:
-            assert ans not in s, f"Answer '{ans}' leaked into prompt '{s}'"
-    print("  [ASSERT 4 PASSED] No answer values leak into train or test input strings.")
+        train_5grams = set().union(*[extract_ngrams(s, 5) for s in f["train_prompts"]])
+        test_5grams = set().union(*[extract_ngrams(s, 5) for s in f["test_prompts"]])
+        shared = train_5grams.intersection(test_5grams)
+        assert len(shared) == 0, f"Fact {f['fact_id']} has shared 5-grams between train & test: {shared}"
+        total_5gram_collisions += len(shared)
+    print("  [ASSERT D2.2 PASSED] Zero shared 5-grams between train and test prompts for all facts.")
 
-    print("\nALL G3 SPECIFICATION ASSERTIONS PASSED SUCCESSFULLY!")
+    # 7. D4: Answer value words do not appear in any train or test input prompt
+    for f in facts:
+        ans_val = f["answer"]
+        # extract the value token (e.g. val_001)
+        val_token = [w for w in ans_val.split() if "val_" in w][0]
+        for s in f["train_prompts"] + f["test_prompts"]:
+            assert val_token.lower() not in s.lower(), f"Answer value token '{val_token}' leaked into prompt '{s}'"
+    print("  [ASSERT D4 PASSED] Answer value words do not appear in any train or test input string.")
+
+    print("\nALL V2 GENERATOR ASSERTIONS (D1, D2, D4) PASSED SUCCESSFULLY!")
 
 
 def main():
