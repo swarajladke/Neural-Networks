@@ -1,0 +1,117 @@
+python : 
+At line:1 char:1
++ python diagnose_cache_layout.py > diagnose_cache_layout_stdout.txt 2> ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\diagnose_cache_layout.py", line 8, in 
+<module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================
+ Diagnosing Cache Layout: smollm2_embeddings_100slots.pt
+==================================================
+Total row counts:
+  train_x shape: torch.Size([300, 960]), train_y shape: torch.Size([300])
+  test_x shape:  torch.Size([400, 960]),  test_y shape:  torch.Size([400])
+  train lengths match: True
+  test  lengths match: True
+
+Distinct per-fact counts:
+  train_y distinct counts: {3, 6, 9, 12, 15, 18}
+  test_y  distinct counts: {4, 8, 12, 16, 20, 24}
+
+Label array ordering:
+  train_y is sorted ascending: False
+  test_y  is sorted ascending: False
+
+Facts where train_y count != 3 (Total: 28):
+  Fact 0: count = 12
+  Fact 1: count = 12
+  Fact 2: count = 12
+  Fact 3: count = 12
+  Fact 4: count = 12
+  Fact 5: count = 15
+  Fact 6: count = 18
+  Fact 7: count = 12
+  Fact 8: count = 9
+  Fact 9: count = 9
+  Fact 10: count = 9
+  Fact 11: count = 9
+  Fact 12: count = 9
+  Fact 13: count = 9
+  Fact 14: count = 9
+  Fact 15: count = 9
+  Fact 16: count = 9
+  Fact 17: count = 9
+  Fact 18: count = 12
+  Fact 20: count = 9
+  Fact 22: count = 6
+  Fact 23: count = 9
+  Fact 24: count = 6
+  Fact 25: count = 9
+  Fact 27: count = 9
+  Fact 29: count = 9
+  Fact 31: count = 9
+  Fact 32: count = 9
+
+Facts where test_y count != 4 (Total: 28):
+  Fact 0: count = 16
+  Fact 1: count = 16
+  Fact 2: count = 16
+  Fact 3: count = 16
+  Fact 4: count = 16
+  Fact 5: count = 20
+  Fact 6: count = 24
+  Fact 7: count = 16
+  Fact 8: count = 12
+  Fact 9: count = 12
+  Fact 10: count = 12
+  Fact 11: count = 12
+  Fact 12: count = 12
+  Fact 13: count = 12
+  Fact 14: count = 12
+  Fact 15: count = 12
+  Fact 16: count = 12
+  Fact 17: count = 12
+  Fact 18: count = 16
+  Fact 20: count = 12
+  Fact 22: count = 8
+  Fact 23: count = 12
+  Fact 24: count = 8
+  Fact 25: count = 12
+  Fact 27: count = 12
+  Fact 29: count = 12
+  Fact 31: count = 12
+  Fact 32: count = 12
+
+First 30 train_y labels: [7, 7, 7, 1, 1, 1, 24, 24, 24, 11, 11, 11, 18, 18, 18, 7, 7, 7, 9, 9, 9, 32, 32, 32, 17, 17, 17, 32, 32, 32]
+First 30 test_y labels:  [7, 7, 7, 7, 1, 1, 1, 1, 24, 24, 24, 24, 11, 11, 11, 11, 18, 18, 18, 18, 7, 7, 7, 7, 9, 9, 9, 9, 32, 32]

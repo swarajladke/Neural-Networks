@@ -1,5 +1,6 @@
 *.txt
 !execution_log_phase7.txt
+!diagnose_cache_layout_stdout.txt
 *.csv
 *.npz
 *.pkl
