@@ -3,6 +3,7 @@
 !diagnose_cache_layout_stdout.txt
 !script_provenance_check.txt
 !audit_dataset_integrity_stdout.txt
+!audit_generator_defects_stdout.txt
 *.csv
 *.npz
 *.pkl

@@ -1,0 +1,19 @@
+==================================================
+ CORRECTION 1 & 2 ù GENERATOR DEFECTS & LEAKAGE
+==================================================
+
+--- CORRECTION 2: GENERATOR BUG AUDIT ---
+  B1: Facts where statement is substring of qa: 0 / 100 (Expected: 0)
+  B2: Facts where cloze.split('_____')[0].strip() == probe: 100 / 100 (Expected: 100)
+
+--- CORRECTION 1: CORRECTED LEAKAGE AUDIT ---
+  Total test queries evaluated across all facts: 400
+  Total test queries appearing verbatim in get_prompt_only train prompts: 170
+  Corrected Global Test-Train Leakage Fraction: 0.4250 (42.50%)
+
+  Per-fact test leakage distribution (out of 4 test strings per fact):
+    1 / 4 test strings leaked: 30 facts
+    2 / 4 test strings leaked: 70 facts
+
+  Per-fact train string duplication distribution (out of 3 train strings per fact):
+    1 duplicate train strings (out of 3): 100 facts
