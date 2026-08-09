@@ -2,6 +2,7 @@
 !execution_log_phase7.txt
 !diagnose_cache_layout_stdout.txt
 !script_provenance_check.txt
+!audit_dataset_integrity_stdout.txt
 *.csv
 *.npz
 *.pkl

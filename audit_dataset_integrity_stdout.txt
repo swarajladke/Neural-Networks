@@ -1,0 +1,380 @@
+==================================================
+ STEP E ù DATASET INTEGRITY & LEAKAGE AUDIT
+==================================================
+
+--- E1. COUNTS ---
+Total facts: 100
+Distinct probes: 34
+Distinct (probe, answer) pairs: 88
+
+--- E2. PROBES SHARED BY >1 FACT WITH CONFLICTING ANSWERS ---
+Total shared probes (groups): 28
+
+Probe: 'The molecular compound Auranium-X liquefies at exactly' (4 facts: ['S19', 'S03', 'S11', 'S28'])
+  Fact idx 16 (ID: S19): answer = 'three hundred'
+  Fact idx 22 (ID: S03): answer = 'one hundred'
+  Fact idx 43 (ID: S11): answer = 'two hundred'
+  Fact idx 72 (ID: S28): answer = 'eighty five'
+
+Probe: 'The molecular compound Helios-IV liquefies at exactly' (4 facts: ['S12', 'S20', 'S04', 'S29'])
+  Fact idx 1 (ID: S12): answer = 'three hundred'
+  Fact idx 25 (ID: S20): answer = 'five hundred'
+  Fact idx 29 (ID: S04): answer = 'two hundred'
+  Fact idx 56 (ID: S29): answer = 'one hundred'
+
+Probe: 'The molecular compound Krypton-F liquefies at exactly' (4 facts: ['S15', 'S23', 'S07', 'S32'])
+  Fact idx 35 (ID: S15): answer = 'forty two'
+  Fact idx 37 (ID: S23): answer = 'eighty five'
+  Fact idx 40 (ID: S07): answer = 'eight hundred'
+  Fact idx 46 (ID: S32): answer = 'five hundred'
+
+Probe: 'The molecular compound Neptunite-G liquefies at exactly' (4 facts: ['S31', 'S22', 'S14', 'S06'])
+  Fact idx 47 (ID: S31): answer = 'three hundred'
+  Fact idx 53 (ID: S22): answer = 'forty two'
+  Fact idx 67 (ID: S14): answer = 'eight hundred'
+  Fact idx 95 (ID: S06): answer = 'five hundred'
+
+Probe: 'The molecular compound Solite-H liquefies at exactly' (4 facts: ['S16', 'S08', 'S33', 'S24'])
+  Fact idx 15 (ID: S16): answer = 'eighty five'
+  Fact idx 19 (ID: S08): answer = 'forty two'
+  Fact idx 59 (ID: S33): answer = 'eight hundred'
+  Fact idx 74 (ID: S24): answer = 'one hundred'
+
+Probe: 'The molecular compound Thermocyclase-9 liquefies at exactly' (5 facts: ['S27', 'S18', 'S10', 'S35', 'S02'])
+  Fact idx 13 (ID: S27): answer = 'forty two'
+  Fact idx 31 (ID: S18): answer = 'two hundred'
+  Fact idx 42 (ID: S10): answer = 'one hundred'
+  Fact idx 80 (ID: S35): answer = 'eighty five'
+  Fact idx 94 (ID: S02): answer = 'eighty five'
+
+Probe: 'The molecular compound Xenolite-B liquefies at exactly' (6 facts: ['S26', 'S01', 'S34', 'S17', 'S09', 'S25'])
+  Fact idx 12 (ID: S26): answer = 'eight hundred'
+  Fact idx 20 (ID: S01): answer = 'forty two'
+  Fact idx 33 (ID: S34): answer = 'forty two'
+  Fact idx 51 (ID: S17): answer = 'one hundred'
+  Fact idx 55 (ID: S09): answer = 'eighty five'
+  Fact idx 86 (ID: S25): answer = 'two hundred'
+
+Probe: 'The molecular compound Zircon-D liquefies at exactly' (4 facts: ['S13', 'S21', 'S30', 'S05'])
+  Fact idx 0 (ID: S13): answer = 'five hundred'
+  Fact idx 5 (ID: S21): answer = 'eight hundred'
+  Fact idx 32 (ID: S30): answer = 'two hundred'
+  Fact idx 49 (ID: S05): answer = 'three hundred'
+
+Probe: 'The official capital city of the region of Aethel is' (3 facts: ['G09', 'G19', 'G29'])
+  Fact idx 30 (ID: G09): answer = 'Varek City'
+  Fact idx 44 (ID: G19): answer = 'Selene Spire'
+  Fact idx 93 (ID: G29): answer = 'Varek City'
+
+Probe: 'The official capital city of the region of Aurantia is' (3 facts: ['G02', 'G22', 'G12'])
+  Fact idx 6 (ID: G02): answer = 'Velathi Port'
+  Fact idx 21 (ID: G22): answer = 'Velathi Port'
+  Fact idx 88 (ID: G12): answer = 'Pyros Peak'
+
+Probe: 'The official capital city of the region of Boreas is' (3 facts: ['G08', 'G28', 'G18'])
+  Fact idx 48 (ID: G08): answer = 'Oros Town'
+  Fact idx 82 (ID: G28): answer = 'Oros Town'
+  Fact idx 92 (ID: G18): answer = 'Xenon Vale'
+
+Probe: 'The official capital city of the region of Chronos is' (3 facts: ['G10', 'G20', 'G30'])
+  Fact idx 3 (ID: G10): answer = 'Velathi Port'
+  Fact idx 65 (ID: G20): answer = 'Pyros Peak'
+  Fact idx 81 (ID: G30): answer = 'Velathi Port'
+
+Probe: 'The official capital city of the region of Kaelen is' (3 facts: ['G13', 'G03', 'G23'])
+  Fact idx 39 (ID: G13): answer = 'Kryos Cove'
+  Fact idx 52 (ID: G03): answer = 'Xenon Vale'
+  Fact idx 58 (ID: G23): answer = 'Xenon Vale'
+
+Probe: 'The official capital city of the region of Luma is' (3 facts: ['G11', 'G21', 'G01'])
+  Fact idx 11 (ID: G11): answer = 'Selene Spire'
+  Fact idx 69 (ID: G21): answer = 'Varek City'
+  Fact idx 70 (ID: G01): answer = 'Varek City'
+
+Probe: 'The official capital city of the region of Nebulia is' (3 facts: ['G27', 'G17', 'G07'])
+  Fact idx 27 (ID: G27): answer = 'Nova Ridge'
+  Fact idx 54 (ID: G17): answer = 'Velathi Port'
+  Fact idx 62 (ID: G07): answer = 'Nova Ridge'
+
+Probe: 'The official capital city of the region of Solaria is' (3 facts: ['G25', 'G05', 'G15'])
+  Fact idx 60 (ID: G25): answer = 'Pyros Peak'
+  Fact idx 85 (ID: G05): answer = 'Pyros Peak'
+  Fact idx 98 (ID: G15): answer = 'Oros Town'
+
+Probe: 'The official capital city of the region of Vesper is' (3 facts: ['G24', 'G14', 'G04'])
+  Fact idx 41 (ID: G24): answer = 'Selene Spire'
+  Fact idx 91 (ID: G14): answer = 'Nova Ridge'
+  Fact idx 97 (ID: G04): answer = 'Selene Spire'
+
+Probe: 'The official capital city of the region of Zephyr is' (3 facts: ['G16', 'G06', 'G26'])
+  Fact idx 8 (ID: G16): answer = 'Varek City'
+  Fact idx 61 (ID: G06): answer = 'Kryos Cove'
+  Fact idx 76 (ID: G26): answer = 'Kryos Cove'
+
+Probe: 'The planetary satellite Aria orbits Kepler-9814b in exactly' (4 facts: ['A01', 'A09', 'A25', 'A17'])
+  Fact idx 4 (ID: A01): answer = 'forty seven'
+  Fact idx 10 (ID: A09): answer = 'eighty eight'
+  Fact idx 75 (ID: A25): answer = 'nineteen days'
+  Fact idx 99 (ID: A17): answer = 'twelve days'
+
+Probe: 'The planetary satellite Bello orbits Gliese-581d in exactly' (3 facts: ['A10', 'A02', 'A18'])
+  Fact idx 34 (ID: A10): answer = 'twelve days'
+  Fact idx 45 (ID: A02): answer = 'eighty eight'
+  Fact idx 64 (ID: A18): answer = 'nineteen days'
+
+Probe: 'The planetary satellite Ceres orbits Kepler-9814b in exactly' (2 facts: ['A34', 'A26'])
+  Fact idx 36 (ID: A34): answer = 'eighty eight'
+  Fact idx 68 (ID: A26): answer = 'forty seven'
+
+Probe: 'The planetary satellite Ceres orbits Luyten-b in exactly' (3 facts: ['A19', 'A03', 'A11'])
+  Fact idx 26 (ID: A19): answer = 'thirty six'
+  Fact idx 63 (ID: A03): answer = 'twelve days'
+  Fact idx 87 (ID: A11): answer = 'nineteen days'
+
+Probe: 'The planetary satellite Deimos orbits Gliese-581d in exactly' (2 facts: ['A27', 'A35'])
+  Fact idx 2 (ID: A27): answer = 'eighty eight'
+  Fact idx 50 (ID: A35): answer = 'twelve days'
+
+Probe: 'The planetary satellite Deimos orbits Proxima-c in exactly' (3 facts: ['A12', 'A04', 'A20'])
+  Fact idx 18 (ID: A12): answer = 'thirty six'
+  Fact idx 57 (ID: A04): answer = 'nineteen days'
+  Fact idx 78 (ID: A20): answer = 'six days'
+
+Probe: 'The planetary satellite Europa orbits Osiris-IV in exactly' (3 facts: ['A08', 'A16', 'A24'])
+  Fact idx 14 (ID: A08): answer = 'forty seven'
+  Fact idx 24 (ID: A16): answer = 'eighty eight'
+  Fact idx 83 (ID: A24): answer = 'twelve days'
+
+Probe: 'The planetary satellite Io orbits Wasp-76b in exactly' (3 facts: ['A23', 'A15', 'A07'])
+  Fact idx 28 (ID: A23): answer = 'eighty eight'
+  Fact idx 66 (ID: A15): answer = 'forty seven'
+  Fact idx 77 (ID: A07): answer = 'fifteen days'
+
+Probe: 'The planetary satellite Phobos orbits Trappist-1e in exactly' (3 facts: ['A21', 'A13', 'A05'])
+  Fact idx 38 (ID: A21): answer = 'fifteen days'
+  Fact idx 79 (ID: A13): answer = 'six days'
+  Fact idx 89 (ID: A05): answer = 'thirty six'
+
+Probe: 'The planetary satellite Titan orbits K2-18b in exactly' (3 facts: ['A06', 'A14', 'A22'])
+  Fact idx 7 (ID: A06): answer = 'six days'
+  Fact idx 9 (ID: A14): answer = 'fifteen days'
+  Fact idx 90 (ID: A22): answer = 'forty seven'
+
+--- E3. TEST-TRAIN STRING LEAKAGE ---
+Total test strings evaluated across all facts: 400
+Total test strings appearing verbatim in own train_paraphrases: 0
+Global Test-Train Leakage Fraction: 0.0000 (0.00%)
+Per-fact leakage distribution (leak count out of 4 test strings):
+  0 / 4 test strings leaked: 100 facts
+
+--- E4. BLOCK ASSIGNMENTS UNDER blocks[i % 10] FOR DUPLICATE-PROBE GROUPS ---
+Probe: 'The molecular compound Auranium-X liquefies a...' -> Fact IDs & Block Indices: [('S19', 1), ('S03', 2), ('S11', 4), ('S28', 7)]
+Probe: 'The molecular compound Helios-IV liquefies at...' -> Fact IDs & Block Indices: [('S12', 0), ('S20', 2), ('S04', 2), ('S29', 5)]
+Probe: 'The molecular compound Krypton-F liquefies at...' -> Fact IDs & Block Indices: [('S15', 3), ('S23', 3), ('S07', 4), ('S32', 4)]
+Probe: 'The molecular compound Neptunite-G liquefies ...' -> Fact IDs & Block Indices: [('S31', 4), ('S22', 5), ('S14', 6), ('S06', 9)]
+Probe: 'The molecular compound Solite-H liquefies at ...' -> Fact IDs & Block Indices: [('S16', 1), ('S08', 1), ('S33', 5), ('S24', 7)]
+Probe: 'The molecular compound Thermocyclase-9 liquef...' -> Fact IDs & Block Indices: [('S27', 1), ('S18', 3), ('S10', 4), ('S35', 8), ('S02', 9)]
+Probe: 'The molecular compound Xenolite-B liquefies a...' -> Fact IDs & Block Indices: [('S26', 1), ('S01', 2), ('S34', 3), ('S17', 5), ('S09', 5), ('S25', 8)]
+Probe: 'The molecular compound Zircon-D liquefies at ...' -> Fact IDs & Block Indices: [('S13', 0), ('S21', 0), ('S30', 3), ('S05', 4)]
+Probe: 'The official capital city of the region of Ae...' -> Fact IDs & Block Indices: [('G09', 3), ('G19', 4), ('G29', 9)]
+Probe: 'The official capital city of the region of Au...' -> Fact IDs & Block Indices: [('G02', 0), ('G22', 2), ('G12', 8)]
+Probe: 'The official capital city of the region of Bo...' -> Fact IDs & Block Indices: [('G08', 4), ('G28', 8), ('G18', 9)]
+Probe: 'The official capital city of the region of Ch...' -> Fact IDs & Block Indices: [('G10', 0), ('G20', 6), ('G30', 8)]
+Probe: 'The official capital city of the region of Ka...' -> Fact IDs & Block Indices: [('G13', 3), ('G03', 5), ('G23', 5)]
+Probe: 'The official capital city of the region of Lu...' -> Fact IDs & Block Indices: [('G11', 1), ('G21', 6), ('G01', 7)]
+Probe: 'The official capital city of the region of Ne...' -> Fact IDs & Block Indices: [('G27', 2), ('G17', 5), ('G07', 6)]
+Probe: 'The official capital city of the region of So...' -> Fact IDs & Block Indices: [('G25', 6), ('G05', 8), ('G15', 9)]
+Probe: 'The official capital city of the region of Ve...' -> Fact IDs & Block Indices: [('G24', 4), ('G14', 9), ('G04', 9)]
+Probe: 'The official capital city of the region of Ze...' -> Fact IDs & Block Indices: [('G16', 0), ('G06', 6), ('G26', 7)]
+Probe: 'The planetary satellite Aria orbits Kepler-98...' -> Fact IDs & Block Indices: [('A01', 0), ('A09', 1), ('A25', 7), ('A17', 9)]
+Probe: 'The planetary satellite Bello orbits Gliese-5...' -> Fact IDs & Block Indices: [('A10', 3), ('A02', 4), ('A18', 6)]
+Probe: 'The planetary satellite Ceres orbits Kepler-9...' -> Fact IDs & Block Indices: [('A34', 3), ('A26', 6)]
+Probe: 'The planetary satellite Ceres orbits Luyten-b...' -> Fact IDs & Block Indices: [('A19', 2), ('A03', 6), ('A11', 8)]
+Probe: 'The planetary satellite Deimos orbits Gliese-...' -> Fact IDs & Block Indices: [('A27', 0), ('A35', 5)]
+Probe: 'The planetary satellite Deimos orbits Proxima...' -> Fact IDs & Block Indices: [('A12', 1), ('A04', 5), ('A20', 7)]
+Probe: 'The planetary satellite Europa orbits Osiris-...' -> Fact IDs & Block Indices: [('A08', 1), ('A16', 2), ('A24', 8)]
+Probe: 'The planetary satellite Io orbits Wasp-76b in...' -> Fact IDs & Block Indices: [('A23', 2), ('A15', 6), ('A07', 7)]
+Probe: 'The planetary satellite Phobos orbits Trappis...' -> Fact IDs & Block Indices: [('A21', 3), ('A13', 7), ('A05', 8)]
+Probe: 'The planetary satellite Titan orbits K2-18b i...' -> Fact IDs & Block Indices: [('A06', 0), ('A14', 0), ('A22', 9)]
+
+--- E5. REPO-WIDE FIXED-STRIDE SLICING SWEEP ---
+Total fixed-stride slicing occurrences found in Python scripts: 179
+  .\audit_fact_map_and_c_q_bug.py:102 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\audit_fact_map_and_c_q_bug.py:103 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\audit_fact_map_and_c_q_bug.py:104 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\audit_fact_map_and_c_q_bug.py:105 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\audit_fact_map_and_c_q_bug.py:255 -> print("  ITEM 4: CODEBASE SWEEP FOR c_q DEFECT PATTERN i*3:(i+1)*3")
+  .\audit_fact_map_and_c_q_bug.py:258 -> print("  Defect Code: samples = X[i*3:(i+1)*3] assuming sequential class ordering.")
+  .\dump_c2_raw_data.py:99 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\dump_c2_raw_data.py:100 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\dump_c2_raw_data.py:101 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\dump_c2_raw_data.py:102 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\measure_transfer_mechanism.py:104 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\measure_transfer_mechanism.py:105 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\measure_transfer_mechanism.py:106 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\measure_transfer_mechanism.py:107 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_adapter_continual_benchmarks.py:94 -> joint_train_x_base = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:95 -> joint_train_y_base = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:122 -> test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:123 -> test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:138 -> seen_ref_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:139 -> seen_ref_y = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:189 -> test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_adapter_continual_benchmarks.py:190 -> test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_base_rate_enrichment_test.py:68 -> samples = X[i*3:(i+1)*3]
+  .\run_base_rate_enrichment_test.py:104 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_base_rate_enrichment_test.py:105 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_base_rate_enrichment_test.py:106 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_base_rate_enrichment_test.py:107 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_confusable_split_experiment.py:141 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_confusable_split_experiment.py:142 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_confusable_split_experiment.py:143 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_confusable_split_experiment.py:144 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_continual_learning_validation.py:127 -> train_x = cache_data["train_x"][:210].to(DEVICE) # 70 facts x 3 refs = 210
+  .\run_continual_learning_validation.py:136 -> pos_q.append(train_x[f*3 + i])
+  .\run_continual_learning_validation.py:137 -> pos_k.append(train_x[f*3 + j])
+  .\run_continual_learning_validation.py:142 -> neg_q.append(train_x[f*3 + pos_idx])
+  .\run_continual_learning_validation.py:187 -> block_train_x.append(cache_data["train_x"][b_idx*30 : (b_idx+1)*30].to(DEVICE))
+  .\run_continual_learning_validation.py:188 -> block_test_x.append(cache_data["test_x"][b_idx*40 : (b_idx+1)*40].to(DEVICE))
+  .\run_d2_coverage_evaluation.py:493 -> refs = z_train[f_idx*3 : (f_idx+1)*3]
+  .\run_d2_coverage_evaluation.py:494 -> queries = z_test[f_idx*4 : (f_idx+1)*4]
+  .\run_decisive_controls.py:126 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_decisive_controls.py:127 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_decisive_controls.py:128 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_decisive_controls.py:129 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_decoder_integration_validation.py:356 -> refs = z_train[f_idx*3 : (f_idx+1)*3]
+  .\run_decoder_integration_validation.py:357 -> queries = z_test[f_idx*4 : (f_idx+1)*4]
+  .\run_graded_ceiling_reanalysis.py:77 -> samples = X[i*3:(i+1)*3]
+  .\run_graded_ceiling_reanalysis.py:110 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_graded_ceiling_reanalysis.py:111 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_graded_ceiling_reanalysis.py:112 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_graded_ceiling_reanalysis.py:113 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_graded_ceiling_reanalysis.py:212 -> samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
+  .\run_graded_ceiling_test.py:70 -> samples = X[i*3:(i+1)*3]
+  .\run_graded_ceiling_test.py:103 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_graded_ceiling_test.py:104 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_graded_ceiling_test.py:105 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_graded_ceiling_test.py:106 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_graded_ceiling_test.py:155 -> samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
+  .\run_lambda_diagnostic_and_downward_sweep.py:104 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:105 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:110 -> anchor_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in anchor_facts], dim=0).to(DEVICE)
+  .\run_lambda_diagnostic_and_downward_sweep.py:188 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:189 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:190 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:191 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_lambda_diagnostic_and_downward_sweep.py:199 -> anchor_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in anchor_facts], dim=0).to(DEVICE)
+  .\run_mechanism_evaluation_suite.py:109 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_mechanism_evaluation_suite.py:110 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_mechanism_evaluation_suite.py:111 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_mechanism_evaluation_suite.py:112 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_mechanism_evaluation_suite.py:121 -> anchor_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in anchor_facts], dim=0).to(DEVICE)
+  .\run_off_support_density_test.py:84 -> samples = X[i*3:(i+1)*3]
+  .\run_off_support_density_test.py:117 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_off_support_density_test.py:118 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_off_support_density_test.py:119 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_off_support_density_test.py:120 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_off_support_density_test.py:213 -> samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
+  .\run_ogp_50run_master_suite.py:116 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:117 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:118 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:119 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:305 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:306 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:307 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_50run_master_suite.py:308 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_mechanism_experiment.py:114 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_mechanism_experiment.py:115 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_mechanism_experiment.py:116 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_mechanism_experiment.py:117 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:111 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:112 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:136 -> anchor_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in anchor_facts], dim=0).to(DEVICE)
+  .\run_ogp_rigorous_verification.py:261 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:262 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:263 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:264 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:410 -> b_tr_x = torch.cat([cache_data["train_x"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:411 -> b_tr_y = torch.cat([cache_data["train_y"][f*3 : (f+1)*3] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:412 -> b_te_x = torch.cat([cache_data["test_x"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_ogp_rigorous_verification.py:413 -> b_te_y = torch.cat([cache_data["test_y"][f*4 : (f+1)*4] for f in fact_ids], dim=0)
+  .\run_part0_blocking_corrections.py:108 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_part0_blocking_corrections.py:109 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_part0_blocking_corrections.py:110 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_part0_blocking_corrections.py:111 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partA_fix_joint_baseline.py:109 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partA_fix_joint_baseline.py:110 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partA_fix_joint_baseline.py:111 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partA_fix_joint_baseline.py:112 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partB_naive_reproduction.py:101 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partB_naive_reproduction.py:102 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partB_naive_reproduction.py:103 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partB_naive_reproduction.py:104 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partC_random_control_diagnostic.py:120 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partC_random_control_diagnostic.py:121 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_partC_random_control_diagnostic.py:122 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_partC_random_control_diagnostic.py:123 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase1_forgetting_calibration.py:289 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase1_forgetting_calibration.py:290 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase1_forgetting_calibration.py:291 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase1_forgetting_calibration.py:292 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase2_forgetting_master_suite.py:140 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase2_forgetting_master_suite.py:141 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase2_forgetting_master_suite.py:142 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase2_forgetting_master_suite.py:143 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase3_parametric_full_suite.py:123 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase3_parametric_full_suite.py:124 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase3_parametric_full_suite.py:125 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase3_parametric_full_suite.py:126 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase3_parametric_memory.py:146 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase3_parametric_memory.py:147 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase3_parametric_memory.py:148 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase3_parametric_memory.py:149 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever1_head.py:149 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever1_head.py:150 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever1_head.py:151 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever1_head.py:152 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever2_replay.py:118 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever2_replay.py:119 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever2_replay.py:120 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever2_replay.py:121 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever3_replay_ogp.py:117 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever3_replay_ogp.py:118 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever3_replay_ogp.py:119 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever3_replay_ogp.py:120 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever4_intrinsic_dim.py:161 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever4_intrinsic_dim.py:162 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_phase4_lever4_intrinsic_dim.py:163 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_phase4_lever4_intrinsic_dim.py:164 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_production_pipeline_validation.py:166 -> refs = z_train[f_idx*3 : (f_idx+1)*3]
+  .\run_production_pipeline_validation.py:167 -> queries = z_test[f_idx*4 : (f_idx+1)*4]
+  .\run_relation_verifier_training.py:94 -> # references of this fact: f_idx*3, f_idx*3 + 1, f_idx*3 + 2
+  .\run_relation_verifier_training.py:95 -> refs = train_x[f_idx*3 : (f_idx+1)*3]
+  .\run_relation_verifier_training.py:96 -> # test queries of this fact: f_idx*4, f_idx*4 + 1, ..., f_idx*4 + 3
+  .\run_relation_verifier_training.py:97 -> queries = test_x[f_idx*4 : (f_idx+1)*4]
+  .\run_replacement_tests_and_seed_wiring.py:107 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_replacement_tests_and_seed_wiring.py:108 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_replacement_tests_and_seed_wiring.py:109 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_replacement_tests_and_seed_wiring.py:110 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_section10_final_verification.py:107 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_section10_final_verification.py:108 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_section10_final_verification.py:109 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_section10_final_verification.py:110 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_section10_final_verification.py:145 -> samples = cache_data["train_x"][i*3:(i+1)*3].float().to(DEVICE)
+  .\run_student_continual_benchmarks.py:258 -> train_x = cache_data["train_x"][:210].to(DEVICE)  # 70 * 3
+  .\run_student_continual_benchmarks.py:259 -> test_x = cache_data["test_x"][:280].to(DEVICE)    # 70 * 4
+  .\run_student_continual_benchmarks.py:406 -> block_train_x.append(cache_data["train_x"][b_idx*30 : (b_idx+1)*30].to(DEVICE))
+  .\run_student_continual_benchmarks.py:407 -> block_test_x.append(cache_data["test_x"][b_idx*40 : (b_idx+1)*40].to(DEVICE))
+  .\run_student_continual_benchmarks.py:799 -> train_x = cache_data["train_x"][:210].to(DEVICE)
+  .\run_training_intensity_dial.py:75 -> joint_train_x_base = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+  .\run_training_intensity_dial.py:76 -> joint_train_y_base = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in base_blocks], dim=0).to(DEVICE)
+  .\run_training_intensity_dial.py:100 -> test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_training_intensity_dial.py:101 -> test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_training_intensity_dial.py:115 -> seen_ref_x = torch.cat([cache_data["train_x"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
+  .\run_training_intensity_dial.py:116 -> seen_ref_y = torch.cat([cache_data["train_y"][b*30 : (b+1)*30] for b in seen_blocks], dim=0).to(DEVICE)
+  .\run_training_intensity_dial.py:141 -> test_x_b = cache_data["test_x"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_training_intensity_dial.py:142 -> test_y_b = cache_data["test_y"][b*40 : (b+1)*40].to(DEVICE)
+  .\run_void_and_fix_graded_test.py:115 -> tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_void_and_fix_graded_test.py:116 -> tr_y.append(torch.cat([cache_data["train_y"][f*3:(f+1)*3] for f in fids], dim=0))
+  .\run_void_and_fix_graded_test.py:117 -> te_x.append(torch.cat([cache_data["test_x"][f*4:(f+1)*4]  for f in fids], dim=0))
+  .\run_void_and_fix_graded_test.py:118 -> te_y.append(torch.cat([cache_data["test_y"][f*4:(f+1)*4]  for f in fids], dim=0))
