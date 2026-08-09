@@ -20,12 +20,9 @@ def validate_results_json(filepath: str) -> bool:
         data = json.load(f)
 
     violations = []
-
-    # Collect arm stds for V6 check
     arm_stds = {}
 
     for arm_name, arm_content in data.items():
-        # Handle both top-level arm structures and sel/fre nested structures
         sub_items = []
         if isinstance(arm_content, dict) and ("sel" in arm_content or "fre" in arm_content):
             for split_name in ["sel", "fre"]:
@@ -69,13 +66,38 @@ def validate_results_json(filepath: str) -> bool:
                 elif val < 0.0 or val > 1.0:
                     violations.append(f"[{label}] V9 FAIL: record {idx} a_t={val} is outside [0, 1].")
 
-            # V1: On-grid check (each a_t must be a multiple of 1/400 = 0.0025)
+            # V1a, V1b, V1c: Dynamic Grid & Reconciliation Checks
             for idx, r in enumerate(a_t_raw):
                 val = r.get("a_t", 0.0)
-                if isinstance(val, float):
-                    grid_err = abs(val * 400.0 - round(val * 400.0))
-                    if grid_err > 1e-7:
-                        violations.append(f"[{label}] V1 FAIL: a_t={val:.6f} at record {idx} off 1/400 grid (error={grid_err:.8f}).")
+                r_mat = r.get("r_matrix", None)
+                n_j = r.get("per_block_test_counts", None)
+
+                if r_mat is not None and n_j is not None:
+                    # V1a: Every R[t][j] is an exact multiple of 1 / n_j
+                    for t in range(len(r_mat)):
+                        for j in range(len(r_mat[t])):
+                            val_tj = r_mat[t][j]
+                            count_j = n_j[j]
+                            grid_err = abs(val_tj * count_j - round(val_tj * count_j))
+                            if grid_err > 1e-9:
+                                violations.append(f"[{label}] V1a FAIL: R[{t}][{j}]={val_tj:.6f} at record {idx} off 1/{count_j} grid (error={grid_err:.12f}).")
+
+                    # V1b: a_t == mean(R[9,:]) to 1e-12
+                    step9_mean = float(np.mean(r_mat[9]))
+                    if abs(val - step9_mean) > 1e-12:
+                        violations.append(f"[{label}] V1b FAIL: record {idx} a_t={val:.12f} != mean(R[9])={step9_mean:.12f}.")
+
+                    # V1c: la and bwt recomputed from R match reported values to 1e-12
+                    order = r.get("order", list(range(10)))
+                    la_recalc  = float(np.mean([r_mat[max(4, order.index(j))][j] for j in range(10)]))
+                    bwt_recalc = float(np.mean([r_mat[9][j] - r_mat[max(4, order.index(j))][j] for j in range(10)]))
+
+                    if "la" in r and abs(r["la"] - la_recalc) > 1e-12:
+                        violations.append(f"[{label}] V1c FAIL: record {idx} la={r['la']:.12f} != recalc={la_recalc:.12f}.")
+                    if "bwt" in r and abs(r["bwt"] - bwt_recalc) > 1e-12:
+                        violations.append(f"[{label}] V1c FAIL: record {idx} bwt={r['bwt']:.12f} != recalc={bwt_recalc:.12f}.")
+                else:
+                    violations.append(f"[{label}] V1 FAIL: Record {idx} missing r_matrix or per_block_test_counts for dynamic grid validation.")
 
             # Extract raw values for std/mean checks
             raw_vals = [r["a_t"] for r in a_t_raw if isinstance(r.get("a_t"), (int, float))]
@@ -83,22 +105,15 @@ def validate_results_json(filepath: str) -> bool:
             # V2: Std check
             if a_t_std is not None and len(raw_vals) > 0:
                 calc_std = float(np.std(raw_vals))
-                if abs(calc_std - float(a_t_std)) > 1e-7:
-                    violations.append(f"[{label}] V2 FAIL: reported a_t_std={a_t_std} != calculated std={calc_std:.8f}.")
+                if abs(calc_std - float(a_t_std)) > 1e-9:
+                    violations.append(f"[{label}] V2 FAIL: reported a_t_std={a_t_std} != calculated std={calc_std:.9f}.")
                 arm_stds[label] = round(float(a_t_std), 4)
 
             # V3: Mean check
             if a_t_mean is not None and len(raw_vals) > 0:
                 calc_mean = float(np.mean(raw_vals))
-                if abs(calc_mean - float(a_t_mean)) > 1e-7:
-                    violations.append(f"[{label}] V3 FAIL: reported a_t_mean={a_t_mean} != calculated mean={calc_mean:.8f}.")
-
-            # V4: la_mean and bwt_mean grid check
-            for metric_name, metric_val in [("la_mean", la_mean), ("bwt_mean", bwt_mean), ("cache_interference_mean", cache_interf_mean)]:
-                if metric_val is not None:
-                    grid_err = abs(float(metric_val) * 400.0 - round(float(metric_val) * 400.0))
-                    if grid_err > 1e-7:
-                        violations.append(f"[{label}] V4 FAIL: {metric_name}={metric_val:.6f} off 1/400 grid (error={grid_err:.8f}).")
+                if abs(calc_mean - float(a_t_mean)) > 1e-9:
+                    violations.append(f"[{label}] V3 FAIL: reported a_t_mean={a_t_mean} != calculated mean={calc_mean:.9f}.")
 
             # V5: Ceiling check for freeze_after_base
             if "freeze_after_base" in label.lower() and len(raw_vals) > 0:

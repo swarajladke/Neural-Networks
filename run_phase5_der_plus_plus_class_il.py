@@ -221,17 +221,29 @@ def run_phase5_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
             la  = float(np.mean([R[max(4, order.index(j)), j] for j in range(10)]))
             bwt = float(np.mean([R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]))
 
-            a_t_list.append(a_t)
+            n_j = [len(te_y[b]) for b in range(10)]
+            r_mat_list = R.tolist()
+            a_t_list.append({
+                "shuffle": len(a_t_list) // len(seeds),
+                "seed": seed,
+                "a_t": a_t,
+                "la": la,
+                "bwt": bwt,
+                "order": order,
+                "per_block_test_counts": n_j,
+                "r_matrix": r_mat_list
+            })
             la_list.append(la)
             bwt_list.append(bwt)
 
+    a_t_vals = [r["a_t"] for r in a_t_list]
     return {
         "arm_name": arm_name,
-        "a_t_mean": float(np.mean(a_t_list)),
-        "a_t_std":  float(np.std(a_t_list)),
+        "a_t_mean": float(np.mean(a_t_vals)),
+        "a_t_std":  float(np.std(a_t_vals)),
         "la_mean":  float(np.mean(la_list)),
         "bwt_mean": float(np.mean(bwt_list)),
-        "a_t_raw":  [float(x) for x in a_t_list],
+        "a_t_raw":  a_t_list,
     }
 
 

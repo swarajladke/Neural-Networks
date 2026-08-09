@@ -311,8 +311,18 @@ def run_phase6_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
             la  = float(np.mean([R[max(4, order.index(j)), j] for j in range(10)]))
             met = float(np.mean([R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]))
 
-            # Task 3.2: Structuring a_t_raw as matched records
-            a_t_records.append({"shuffle": shuffle_idx, "seed": seed, "a_t": a_t})
+            n_j = [len(te_y[b]) for b in range(10)]
+            r_mat_list = R.tolist()
+            a_t_records.append({
+                "shuffle": shuffle_idx,
+                "seed": seed,
+                "a_t": a_t,
+                "la": la,
+                "bwt": met,
+                "order": order,
+                "per_block_test_counts": n_j,
+                "r_matrix": r_mat_list
+            })
             la_list.append(la)
             metric_list.append(met)
 
