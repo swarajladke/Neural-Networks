@@ -1,0 +1,20 @@
+# Mapping of Stride-Affected Files (E5) to RESULTS.md Sections
+
+| File Basename | Produced Section(s) in RESULTS.md | Notes / Role |
+|:---|:---|:---|
+| `run_student_continual_benchmarks.py` | 10 (Phase 3), 14 (Phase 4 Lever 4), 15 (Phase 4.1) | Produces static retrieval, sequential matrix, and intrinsic dimension benchmarks. |
+| `run_phase5_der_plus_plus_class_il.py` | 16 (Phase 5) | Produces DER++ Class-IL benchmark tables. |
+| `run_phase6_continuum_memory_class_il.py` | 17 (Phase 6) | Produces Multi-Frequency Continuum Memory Class-IL benchmark tables. |
+| `run_phase7_metric_calibration_class_il.py` | 18 (Phase 7) | Produces Local Metric Calibration and temperature scaling Class-IL tables. |
+| `run_adapter_continual_benchmarks.py` | 1 (Benchmark Def), 2 (Frozen Floor), 3 (OGP Rank Sweep), 4 (Control Arms), 5 (Exact Decomp), 7 (Headline), 8 (Limitations), 9 (Phase 2 Calibrated Forgetting) | Produces adapter baseline, OGP rank sweep, and calibrated forgetting benchmarks. |
+| `run_decisive_controls.py` | 4 (Control Arms), 9 (Phase 2 Controls C1-C4), 10.2 (Decisive Controls C1-C4) | Produces controls C1-C4 and Random/Bottom/Current subspace controls. |
+| `run_continual_learning_validation.py` | 10 (Phase 3 Parametric Memory) | Produces Phase 3 parametric memory evaluation metrics. |
+| `run_base_rate_enrichment_test.py` | 10.2 (Phase 4 Part 0 Base Rate Audit) | Produces confusable class base rate and enrichment calculations. |
+| `run_graded_ceiling_reanalysis.py` | 10.1 (Retrieval Ceiling & Failure Audit) | Produces M1 ROC AUC, McFadden R2, and LOFO-CV ceiling reanalysis. |
+| `run_graded_ceiling_test.py` | 10.1 (Graded Ceiling Predictor Test) | Produces initial graded ceiling predictor statistics. |
+| `run_off_support_density_test.py` | 10.1 (Support Proximity dq Analysis) | Produces support proximity density dq and generic metric transfer statistics. |
+| `run_confusable_split_experiment.py` | 1 (Benchmark Definition - Confusable Split), 10.2 (Confusable Split Audit) | Produces confusable split block ordering and interference calculations. |
+| `run_decoder_integration_validation.py` | None (Diagnostic / Scratch Validation Script) | Diagnostic script for decoder integration; produced no direct section numbers in RESULTS.md. |
+| `run_d2_coverage_evaluation.py` | 9 (Disclosure D2 Coverage) | Produces bottleneck parameterization projection coverage calculations. |
+| `audit_fact_map_and_c_q_bug.py` | 10.1 (Fact Map Defect Audit) | Audits class indexing defect and per-fact failure counts. |
+| `dump_c2_raw_data.py` | 10.1 (Raw Array Verification & C2 Reconciliation) | Dumps C2 raw arrays and reconciles Step-9 per-block accuracies. |

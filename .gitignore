@@ -4,6 +4,7 @@
 !script_provenance_check.txt
 !audit_dataset_integrity_stdout.txt
 !audit_generator_defects_stdout.txt
+!stride_file_mapping_stdout.txt
 *.csv
 *.npz
 *.pkl

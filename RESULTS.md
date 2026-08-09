@@ -5,6 +5,8 @@
 
 ## 1. Benchmark Definition
 
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+
 **Task**: 1-nearest-neighbour retrieval over a stored reference set.
 
 **Corpus**: 100 synthetic facts, each with 3 training reference sentences and 4 test queries (300 train, 400 test).
@@ -24,6 +26,8 @@
 ---
 
 ## 2. Frozen Encoder Floor & Plasticity Precondition
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Frozen Adapter (Identity, no training)**: A_T(frozen) = **72.50% +/- 0.00%** (live assertion; every run is identical by construction).
 
@@ -60,6 +64,8 @@ The adapter learns substantially (~+22 points). Mechanisms are evaluated by how 
 ---
 
 ## 3. OGP Rank Sweep -- Per-Seed-Set Results (50 Runs per Condition per Seed Set)
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Method**: After training on base blocks 0-4, before each sequential block step t in [5, 9]:
 1. Accumulate past training inputs M in R^{N_past x 960}.
@@ -102,6 +108,8 @@ All values below are per-seed-set; the `[sel | fre]` format shows Selection Seed
 
 ## 4. Control Arms (k=32, 50 Runs per Condition per Seed Set)
 
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+
 | Arm | Description | A_T [sel\|fre] | BWT [sel\|fre] | CI sel | CI fre | Verdict |
 |:---|:---|:---:|:---:|:---:|:---:|:---:|
 | TOP-32 (OGP) | Top-32 right singular vectors of accumulated past inputs M | 91.60\|92.55 | +0.28\|+1.17 | +1.97 [+1.55,+2.41] | +2.07 [+1.58,+2.56] | Sig. both |
@@ -114,6 +122,8 @@ All values below are per-seed-set; the `[sel | fre]` format shows Selection Seed
 ---
 
 ## 5. Exact Decomposition (delta_A_T = delta_LA + delta_BWT)
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 A_T = LA + BWT is an exact identity (BWT = A_T - LA by definition). Observed Forgetting (max-based) is reported separately and does NOT satisfy this identity.
 
@@ -129,6 +139,8 @@ OGP improves both retention (55-68% of total gain) and acquisition (32-44%). The
 ---
 
 ## 6. Prior Art & Defensible Contributions
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Prior Art:**
 - Farajtabar et al., "Orthogonal Gradient Descent for Continual Learning," AISTATS 2020.
@@ -150,6 +162,8 @@ Both project task gradients into the complement of a stored basis built from pas
 
 ## 7. Headline Summary
 
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
+
 OGP with k in [16, 32] improves final accuracy by **+2.0 to +2.7 percentage points** over naive sequential fine-tuning (paired 95% CIs excluding zero on two independent seed sets of 50 runs each), and raises BWT from -1.05/+0.05 (naive) to +0.28/+1.17 (k=32) and +0.48/+1.57 (k=24). At k=24, OGP raises BWT by **+1.52 to +1.53 points** and reduces observed forgetting by **1.38 to 1.40 points** (both CIs exclude zero on both seed sets).
 
 k=24 shows the highest mean A_T on both seed sets and is the headline result. k=32 is the robustness anchor (between-set gain spread 0.10 pp). Gap recovery at k=24 is 42% (selection, gap 5.35%) to 69% (fresh, gap 3.97%); at k=32 it is 37% to 52%. These percentages vary because the naive-offline gap differs between seed sets. The absolute gain (+2.0 to +2.7 points) is the more stable quantity and should be the primary citation.
@@ -157,6 +171,8 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 ---
 
 ## 8. Limitations
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 1. **4-to-5 point ceiling**: The measurable CL gap is 3.97-5.35 points. At k=24, OGP recovers 42% on the selection set and 69% on the fresh set; at k=32, 37% and 52%. The remaining gap is not addressed.
 
@@ -173,6 +189,8 @@ k=24 shows the highest mean A_T on both seed sets and is the headline result. k=
 ---
 
 ## 9. Phase 2 Calibrated Forgetting Benchmark Results (50 Runs per Condition per Seed Set)
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 **Calibrated Configuration**: `BottleneckAdapter` $r=32$ (uncentred PCA init), `epochs = 100`, `lr = 1e-2`, `weight_decay = 1e-4`.
 
@@ -247,9 +265,11 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 4. **Control C4 (Gradient Clip Control)**:
    - `GRADIENT-CLIP-C4` (naive $\text{lr}=10^{-2}$ clipped to near-zero norm): Selection $A_T = \mathbf{88.95\%}$, Fresh $A_T = \mathbf{86.65\%}$. Replicates `FREEZE-AFTER-BASE` exactly.
 
-**Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regular## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
+**Final Verdict**: `CURRENT-32`'s elevated score was a trivial gradient annihilation artifact. It is refuted as a selective regular
 
 ## 10. Phase 3: Parametric Memory Benchmark & C2 Breakdown Results
+
+> **RETRACTED 2026-08-09 (dataset defect)**: Labels were derived from probe strings, collapsing 100 facts into 34 classes; contradictory facts shared a label; and approximately half of each test set was byte-identical to training input. The evaluated task was probe-string clustering, not fact retention. Class counts, accuracies and forgetting metrics in this section are not interpretable.
 
 ### 10.1 Raw Array Verification & C2 Step-9 Reconciliation (VERIFIED)
 - **Raw File Checksum**: Dumped to `c2_raw_arrays.json` (SHA-256: `533bfdae6847efa704614de9df41f67b6c92a76591010489e5872019234857bc`).
