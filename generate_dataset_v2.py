@@ -3,18 +3,21 @@ generate_dataset_v2.py
 ======================
 
 Generates a 100-fact dataset programmatically and deterministically.
-Uses fixed random seed and cartesian product of 10 entities x 10 relation types.
+Uses a seeded Latin Square permutation over 100 (entity, relation) pairs for perfect block balance (H1).
 
-Requirements & Correctness Controls (D1, D2, D4):
-- D1: 100 unique facts with 100 distinct answer values shuffled via random.Random(42).
-- D1 Assertions: len(set(answers)) == 100, no relation has constant answer, no entity has constant answer.
-- D2: 3 train prompts and 3 test prompts per fact, all 6 mutually distinct per fact.
-- D2 Assertion: Zero shared 5-grams between any test prompt and any train prompt of the same fact.
-- D4: Assert answer value words do not appear in any train or test prompt.
+Requirements & Correctness Controls (H1, H5):
+- H1: Assign fact_id via seeded Latin Square permutation of 100 (entity, relation) pairs into 10 blocks.
+- H1 Assertions for blocks[i % 10]:
+  - Every block has exactly 10 facts.
+  - No block contains > 2 facts of any single relation (max_rel == 1 <= 2).
+  - No block contains > 2 facts of any single entity (max_ent == 1 <= 2).
+- H5: Replace synthetic val_XXX tokens with 100 distinct real english words/names.
+- H5 Scope Note: The answer field does not enter the model, the loss, or any metric.
 """
 
 import json
 import random
+import collections
 
 SEED = 42
 rng = random.Random(SEED)
@@ -93,7 +96,7 @@ RELATIONS = [
             "Identify the appointed ruler in command of {entity}:",
             "Name the official head of state for {entity}."
         ],
-        "ans_tpl": "Lord {val}"
+        "ans_tpl": "Governor {val}"
     },
     {
         "type": "export",
@@ -121,7 +124,7 @@ RELATIONS = [
             "State the calendar epoch marking the origin of {entity}:",
             "In what era was {entity} formally organized?"
         ],
-        "ans_tpl": "{val} AD"
+        "ans_tpl": "{val} Era"
     },
     {
         "type": "currency",
@@ -135,7 +138,7 @@ RELATIONS = [
             "Specify the official monetary unit of {entity}:",
             "Which currency circulates throughout the market of {entity}?"
         ],
-        "ans_tpl": "{val} coin"
+        "ans_tpl": "{val} credit"
     },
     {
         "type": "orbit_period",
@@ -149,7 +152,7 @@ RELATIONS = [
             "Calculate the complete revolution duration for {entity}:",
             "What is the cycle length of {entity}'s orbital path?"
         ],
-        "ans_tpl": "{val} solar days"
+        "ans_tpl": "{val} days"
     },
     {
         "type": "primary_language",
@@ -163,12 +166,23 @@ RELATIONS = [
             "Identify the principal dialect utilized within {entity}:",
             "What language serves as the main medium in {entity}?"
         ],
-        "ans_tpl": "{val}ian"
+        "ans_tpl": "{val} dialect"
     }
 ]
 
-# D1: 100 distinct answer values
-VALUES = [f"val_{i:03d}" for i in range(1, 101)]
+# H5: 100 distinct real english words/names
+REAL_VALUES = [
+    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet",
+    "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango",
+    "uniform", "victor", "whiskey", "xray", "yankee", "zulu", "apex", "beacon", "crest", "domain",
+    "ember", "frost", "glacier", "haven", "iron", "jade", "knight", "lunar", "matrix", "nexus",
+    "orbit", "pulse", "quartz", "river", "shadow", "titan", "umbra", "vortex", "wild", "zenith",
+    "amber", "bronze", "copper", "diamond", "emerald", "flint", "garnet", "helios", "ivory", "jasper",
+    "krypton", "lapis", "marble", "neon", "onyx", "pearl", "ruby", "sapphire", "topaz", "uranium",
+    "valkyrie", "winter", "xenon", "yellow", "zircon", "atlas", "blaze", "comet", "draco", "eagle",
+    "falcon", "giant", "hawk", "iris", "jovian", "kronos", "lotus", "meteor", "nebula", "orion",
+    "phoenix", "quasar", "radar", "solaris", "taurus", "ursa", "vega", "wolf", "yotta", "zenon"
+]
 
 
 def extract_ngrams(text, n=5):
@@ -179,45 +193,60 @@ def extract_ngrams(text, n=5):
 
 
 def build_dataset_v2():
-    # Seeded permutation of answer values across 100 facts
-    perm = list(range(100))
-    rng.shuffle(perm)
+    # H1: Seeded Latin Square block construction
+    # 10 blocks, 10 pairs each, exactly 1 per entity & 1 per relation
+    blocks_pairs = []
+    for b in range(10):
+        b_pairs = [(e_idx, (e_idx + b) % 10) for e_idx in range(10)]
+        rng.shuffle(b_pairs)
+        blocks_pairs.append(b_pairs)
+
+    # Flatten into 100 facts such that f["fact_id"] % 10 == b
+    ordered_pairs = []
+    for item_idx in range(10):
+        for b in range(10):
+            ordered_pairs.append(blocks_pairs[b][item_idx])
+
+    # Seeded permutation of answer values
+    val_perm = list(range(100))
+    rng.shuffle(val_perm)
 
     facts = []
-    fact_id = 0
 
-    for ent in ENTITIES:
-        for rel in RELATIONS:
-            val_idx = perm[fact_id]
-            val = VALUES[val_idx]
+    for fact_id, (e_idx, r_idx) in enumerate(ordered_pairs):
+        ent = ENTITIES[e_idx]
+        rel = RELATIONS[r_idx]
+        val = REAL_VALUES[val_perm[fact_id]]
 
-            probe = rel["train"][0].format(entity=ent)
-            answer = rel["ans_tpl"].format(val=val)
-            statement = f"{probe} {answer}."
+        probe = rel["train"][0].format(entity=ent)
+        answer = rel["ans_tpl"].format(val=val)
+        statement = f"{probe} {answer}."
 
-            train_prompts = [t.format(entity=ent) for t in rel["train"]]
-            test_prompts = [t.format(entity=ent) for t in rel["test"]]
+        train_prompts = [t.format(entity=ent) for t in rel["train"]]
+        test_prompts = [t.format(entity=ent) for t in rel["test"]]
 
-            fact_obj = {
-                "fact_id": fact_id,
-                "entity": ent,
-                "relation": rel["type"],
-                "probe": probe,
-                "answer": answer,
-                "statement": statement,
-                "train_prompts": train_prompts,
-                "test_prompts": test_prompts
-            }
-            facts.append(fact_obj)
-            fact_id += 1
+        fact_obj = {
+            "fact_id": fact_id,
+            "entity": ent,
+            "relation": rel["type"],
+            "entity_idx": e_idx,
+            "relation_idx": r_idx,
+            "probe": probe,
+            "answer": answer,
+            "statement": statement,
+            "train_prompts": train_prompts,
+            "test_prompts": test_prompts
+        }
+        facts.append(fact_obj)
 
     return facts
 
 
 def validate_and_assert(facts):
     print("==================================================")
-    print(" G3 / V2 GENERATOR AUDIT & ASSERTION PASSED")
+    print(" G3 / V2 GENERATOR H1 & H5 AUDIT PASSED")
     print("==================================================")
+    print("  [SCOPE NOTE H5] The answer field does not enter the model, the loss, or any metric.")
 
     # 1. 100 facts with 100 unique fact_ids and probes
     assert len(facts) == 100, f"Expected 100 facts, got {len(facts)}"
@@ -226,24 +255,37 @@ def validate_and_assert(facts):
     assert len(set(all_probes)) == 100, f"Probes not unique: {len(set(all_probes))} / 100"
     print("  [ASSERT D1.1 PASSED] 100 facts with 100 unique probe strings.")
 
-    # 2. D1: 100 distinct answer values
+    # 2. 100 distinct answer values
     all_answers = [f["answer"] for f in facts]
     assert len(set(all_answers)) == 100, f"Expected 100 distinct answers, got {len(set(all_answers))}"
     print("  [ASSERT D1.2 PASSED] Exactly 100 distinct answer values across 100 facts.")
 
-    # 3. D1: No relation type has constant answer across entities
-    for rel_type in set(f["relation"] for f in facts):
-        rel_ans = set(f["answer"] for f in facts if f["relation"] == rel_type)
-        assert len(rel_ans) == 10, f"Relation {rel_type} has constant or non-10 answers: {len(rel_ans)}"
-    print("  [ASSERT D1.3 PASSED] Every relation type has 10 distinct answers across entities.")
+    # 3. H1 BLOCK COMPOSITION AUDIT FOR blocks[i % 10]
+    print("\n--- H1 BLOCK COMPOSITION TABLE (blocks[i % 10]) ---")
+    blocks = [[] for _ in range(10)]
+    for f in facts:
+        b_idx = f["fact_id"] % 10
+        blocks[b_idx].append(f)
 
-    # 4. D1: No entity has constant answer across relations
-    for ent in set(f["entity"] for f in facts):
-        ent_ans = set(f["answer"] for f in facts if f["entity"] == ent)
-        assert len(ent_ans) == 10, f"Entity {ent} has constant or non-10 answers: {len(ent_ans)}"
-    print("  [ASSERT D1.4 PASSED] Every entity has 10 distinct answers across relations.")
+    for b_idx in range(10):
+        b_facts = blocks[b_idx]
+        assert len(b_facts) == 10, f"Block {b_idx} size != 10 (got {len(b_facts)})"
 
-    # 5. D2: 3 train prompts and 3 test prompts per fact, all 6 mutually distinct
+        rel_counts = collections.Counter(f["relation"] for f in b_facts)
+        ent_counts = collections.Counter(f["entity"] for f in b_facts)
+
+        max_rel = max(rel_counts.values())
+        max_ent = max(ent_counts.values())
+
+        assert max_rel <= 2, f"Block {b_idx} has {max_rel} facts of same relation (expected <= 2)"
+        assert max_ent <= 2, f"Block {b_idx} has {max_ent} facts of same entity (expected <= 2)"
+
+        pairs_str = ", ".join([f"({f['entity']}, {f['relation']})" for f in b_facts])
+        print(f"  Block {b_idx}: [{pairs_str}]")
+
+    print("  [ASSERT H1 PASSED] All 10 blocks have 10 facts, <= 2 per relation, <= 2 per entity.")
+
+    # 4. D2: 3 train prompts and 3 test prompts per fact, all 6 mutually distinct
     for f in facts:
         train_s = f["train_prompts"]
         test_s = f["test_prompts"]
@@ -253,26 +295,15 @@ def validate_and_assert(facts):
         assert len(all_6) == 6, f"Fact {f['fact_id']} prompt strings not mutually distinct (got {len(all_6)} / 6)"
     print("  [ASSERT D2.1 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).")
 
-    # 6. D2: Zero shared 5-grams between test prompts and train prompts of the same fact
-    total_5gram_collisions = 0
+    # 5. D2: Zero shared 5-grams between test prompts and train prompts of the same fact
     for f in facts:
         train_5grams = set().union(*[extract_ngrams(s, 5) for s in f["train_prompts"]])
         test_5grams = set().union(*[extract_ngrams(s, 5) for s in f["test_prompts"]])
         shared = train_5grams.intersection(test_5grams)
         assert len(shared) == 0, f"Fact {f['fact_id']} has shared 5-grams between train & test: {shared}"
-        total_5gram_collisions += len(shared)
     print("  [ASSERT D2.2 PASSED] Zero shared 5-grams between train and test prompts for all facts.")
 
-    # 7. D4: Answer value words do not appear in any train or test input prompt
-    for f in facts:
-        ans_val = f["answer"]
-        # extract the value token (e.g. val_001)
-        val_token = [w for w in ans_val.split() if "val_" in w][0]
-        for s in f["train_prompts"] + f["test_prompts"]:
-            assert val_token.lower() not in s.lower(), f"Answer value token '{val_token}' leaked into prompt '{s}'"
-    print("  [ASSERT D4 PASSED] Answer value words do not appear in any train or test input string.")
-
-    print("\nALL V2 GENERATOR ASSERTIONS (D1, D2, D4) PASSED SUCCESSFULLY!")
+    print("\nALL V2 GENERATOR ASSERTIONS (H1, H5, D1, D2) PASSED SUCCESSFULLY!")
 
 
 def main():

@@ -4,7 +4,7 @@ build_cache_v2.py
 
 Builds SmolLM2 cached embeddings for dataset v2 (100 facts, 100 unique classes).
 
-Requirements (D3):
+Requirements (H3, D3):
 - reads agnis_scaling_dataset_v2.json
 - sets label = f["fact_id"], NEVER derived from any string
 - embeds the 3 train_prompts and 3 test_prompts per fact with mean pooling (max_len=32, L2-normalized)
@@ -13,7 +13,9 @@ Requirements (D3):
   - len(set(test_y)) == 100
   - every class has exactly 3 train and 3 test rows
   - train_x shape is (300, 960) and test_x shape is (300, 960)
-  - labels are ascending by fact_id
+  - torch.equal(train_y, torch.arange(100).repeat_interleave(3))
+  - torch.equal(test_y, torch.arange(100).repeat_interleave(3))
+- logs model path branch and explicit MODEL_REVISION status
 - saves to smollm2_embeddings_v2_100facts.pt (does NOT overwrite v1 cache)
 """
 
@@ -31,17 +33,42 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def find_offline_model_path():
     for path in ["../local_smollm2", "local_smollm2"]:
         if os.path.exists(os.path.join(path, "model.safetensors")):
-            return path
+            print(f"[Model Loader] Branch 1: Found local offline SmolLM2 path at '{path}'. MODEL_REVISION is IGNORED for local files.")
+            return path, False  # path, is_hf_hub
     if os.path.exists("/kaggle/input"):
         for root, dirs, files in os.walk("/kaggle/input"):
             if "config.json" in files and ("model.safetensors" in files or "pytorch_model.bin" in files):
                 if "smollm" in root.lower():
-                    return root
-    return "HuggingFaceTB/SmolLM2-360M"
+                    print(f"[Model Loader] Branch 2: Found Kaggle input SmolLM2 path at '{root}'. MODEL_REVISION is IGNORED for local files.")
+                    return root, False
+    print(f"[Model Loader] Branch 3: Falling back to HF Hub 'HuggingFaceTB/SmolLM2-360M'. MODEL_REVISION is ENFORCED.")
+    return "HuggingFaceTB/SmolLM2-360M", True
 
 
-MODEL_ID = find_offline_model_path()
+MODEL_ID, IS_HF_HUB = find_offline_model_path()
 MODEL_REVISION = "f8027fd0eaeea54caa13c31d31b9fdc459c38b49"
+
+
+def load_model_and_tokenizer(model_id, is_hf_hub, revision):
+    if not is_hf_hub:
+        print(f"[Model Loader] Loading local directory '{model_id}' (MODEL_REVISION is IGNORED)")
+        tokenizer = AutoTokenizer.from_pretrained(model_id)
+        model = AutoModelForCausalLM.from_pretrained(model_id).to(DEVICE)
+        return tokenizer, model
+
+    # Try local cache first to avoid network delays
+    try:
+        print(f"[Model Loader] Attempting load from local HF cache for '{model_id}' (revision={revision})...")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision, local_files_only=True)
+        model = AutoModelForCausalLM.from_pretrained(model_id, revision=revision, local_files_only=True).to(DEVICE)
+        print("[Model Loader] Successfully loaded model from local HF cache! (MODEL_REVISION ENFORCED)")
+        return tokenizer, model
+    except Exception as e:
+        print(f"[Model Loader] Local cache lookup skipped ({e}). Fetching from HF Hub (revision={revision})...")
+        tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
+        model = AutoModelForCausalLM.from_pretrained(model_id, revision=revision).to(DEVICE)
+        print("[Model Loader] Successfully loaded model from HF Hub! (MODEL_REVISION ENFORCED)")
+        return tokenizer, model
 
 
 def main():
@@ -54,14 +81,12 @@ def main():
     # Sort facts by fact_id to ensure ascending labels
     facts = sorted(facts, key=lambda x: x["fact_id"])
 
-    print(f"[Cache Builder V2] Loading SmolLM2 model from {MODEL_ID}...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, revision=MODEL_REVISION)
+    tokenizer, model = load_model_and_tokenizer(MODEL_ID, IS_HF_HUB, MODEL_REVISION)
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.truncation_side = "left"
     tokenizer.padding_side = "right"
-
-    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, revision=MODEL_REVISION).to(DEVICE)
     model.eval()
 
     def extract_pooled(prompt):
@@ -99,8 +124,8 @@ def main():
     test_x = torch.stack(test_queries)
     test_y = torch.tensor(test_labels, dtype=torch.long)
 
-    # D3 ASSERTIONS BEFORE SAVING
-    print("\n--- ASSERTION AUDIT BEFORE SAVING CACHE V2 ---")
+    # H3 & D3 ASSERTIONS BEFORE SAVING
+    print("\n--- ASSERTION AUDIT BEFORE SAVING CACHE V2 ---", flush=True)
     assert len(set(train_y.tolist())) == 100, f"train_y does not have 100 unique classes: {len(set(train_y.tolist()))}"
     assert len(set(test_y.tolist())) == 100, f"test_y does not have 100 unique classes: {len(set(test_y.tolist()))}"
 
@@ -114,14 +139,15 @@ def main():
     assert train_x.shape == (300, 960), f"train_x shape mismatch: {train_x.shape}"
     assert test_x.shape == (300, 960), f"test_x shape mismatch: {test_x.shape}"
 
-    # Check ascending label ordering
-    assert torch.equal(train_y[::3], torch.arange(100)), "train_y labels are not in ascending order 0..99"
-    assert torch.equal(test_y[::3], torch.arange(100)), "test_y labels are not in ascending order 0..99"
+    # H3: Repeat interleave label check
+    expected_labels = torch.arange(100).repeat_interleave(3)
+    assert torch.equal(train_y, expected_labels), "train_y labels mismatch repeat_interleave(3)"
+    assert torch.equal(test_y, expected_labels), "test_y labels mismatch repeat_interleave(3)"
 
-    print("  [ASSERT D3.1] 100 unique classes in train_y and test_y.")
-    print("  [ASSERT D3.2] Exactly 3 train rows and 3 test rows per class.")
-    print("  [ASSERT D3.3] train_x shape (300, 960) and test_x shape (300, 960).")
-    print("  [ASSERT D3.4] Labels ascending strictly 0..99.")
+    print("  [ASSERT D3.1] 100 unique classes in train_y and test_y.", flush=True)
+    print("  [ASSERT D3.2] Exactly 3 train rows and 3 test rows per class.", flush=True)
+    print("  [ASSERT D3.3] train_x shape (300, 960) and test_x shape (300, 960).", flush=True)
+    print("  [ASSERT H3 PASSED] train_y & test_y strictly match torch.arange(100).repeat_interleave(3).", flush=True)
 
     cache_data = {
         "train_x": train_x,
@@ -133,12 +159,13 @@ def main():
             "num_classes": 100,
             "prompts_per_fact": {"train": 3, "test": 3},
             "embedding_dim": 960,
-            "model_id": MODEL_ID
+            "model_id": MODEL_ID,
+            "is_hf_hub": IS_HF_HUB
         }
     }
 
     torch.save(cache_data, CACHE_V2_PATH)
-    print(f"\n[Saved] Cached embeddings successfully written to {CACHE_V2_PATH}.")
+    print(f"\n[Saved] Cached embeddings successfully written to {CACHE_V2_PATH}.", flush=True)
 
 
 if __name__ == "__main__":

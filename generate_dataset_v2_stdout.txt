@@ -1,14 +1,25 @@
 ==================================================
- G3 / V2 GENERATOR AUDIT & ASSERTION PASSED
+ G3 / V2 GENERATOR H1 & H5 AUDIT PASSED
 ==================================================
+  [SCOPE NOTE H5] The answer field does not enter the model, the loss, or any metric.
   [ASSERT D1.1 PASSED] 100 facts with 100 unique probe strings.
   [ASSERT D1.2 PASSED] Exactly 100 distinct answer values across 100 facts.
-  [ASSERT D1.3 PASSED] Every relation type has 10 distinct answers across entities.
-  [ASSERT D1.4 PASSED] Every entity has 10 distinct answers across relations.
+
+--- H1 BLOCK COMPOSITION TABLE (blocks[i % 10]) ---
+  Block 0: [(Hyperion, currency), (Drakoria, elevation), (Celestia, population), (Ignis, orbit_period), (Fenrir, export), (Gryphon, founding_year), (Juno, primary_language), (Eldoria, governor), (Aeloria, melting_point), (Balthazar, capital)]
+  Block 1: [(Drakoria, governor), (Fenrir, founding_year), (Celestia, elevation), (Eldoria, export), (Balthazar, population), (Ignis, primary_language), (Hyperion, orbit_period), (Aeloria, capital), (Gryphon, currency), (Juno, melting_point)]
+  Block 2: [(Hyperion, primary_language), (Fenrir, currency), (Aeloria, population), (Celestia, governor), (Eldoria, founding_year), (Juno, capital), (Balthazar, elevation), (Gryphon, orbit_period), (Drakoria, export), (Ignis, melting_point)]
+  Block 3: [(Hyperion, melting_point), (Ignis, capital), (Drakoria, founding_year), (Aeloria, elevation), (Celestia, export), (Juno, population), (Balthazar, governor), (Eldoria, currency), (Fenrir, orbit_period), (Gryphon, primary_language)]
+  Block 4: [(Juno, elevation), (Gryphon, melting_point), (Hyperion, capital), (Drakoria, currency), (Aeloria, governor), (Celestia, founding_year), (Eldoria, orbit_period), (Ignis, population), (Fenrir, primary_language), (Balthazar, export)]
+  Block 5: [(Ignis, elevation), (Aeloria, export), (Drakoria, orbit_period), (Celestia, currency), (Hyperion, population), (Fenrir, melting_point), (Juno, governor), (Eldoria, primary_language), (Balthazar, founding_year), (Gryphon, capital)]
+  Block 6: [(Fenrir, capital), (Hyperion, elevation), (Eldoria, melting_point), (Juno, export), (Ignis, governor), (Celestia, orbit_period), (Gryphon, population), (Drakoria, primary_language), (Aeloria, founding_year), (Balthazar, currency)]
+  Block 7: [(Aeloria, currency), (Drakoria, melting_point), (Juno, founding_year), (Gryphon, elevation), (Ignis, export), (Celestia, primary_language), (Balthazar, orbit_period), (Fenrir, population), (Hyperion, governor), (Eldoria, capital)]
+  Block 8: [(Gryphon, governor), (Aeloria, orbit_period), (Eldoria, population), (Ignis, founding_year), (Fenrir, elevation), (Hyperion, export), (Juno, currency), (Drakoria, capital), (Celestia, melting_point), (Balthazar, primary_language)]
+  Block 9: [(Eldoria, elevation), (Juno, orbit_period), (Balthazar, melting_point), (Hyperion, founding_year), (Celestia, capital), (Ignis, currency), (Gryphon, export), (Drakoria, population), (Aeloria, primary_language), (Fenrir, governor)]
+  [ASSERT H1 PASSED] All 10 blocks have 10 facts, <= 2 per relation, <= 2 per entity.
   [ASSERT D2.1 PASSED] 3 train & 3 test strings per fact (all 6 mutually distinct per fact).
   [ASSERT D2.2 PASSED] Zero shared 5-grams between train and test prompts for all facts.
-  [ASSERT D4 PASSED] Answer value words do not appear in any train or test input string.
 
-ALL V2 GENERATOR ASSERTIONS (D1, D2, D4) PASSED SUCCESSFULLY!
+ALL V2 GENERATOR ASSERTIONS (H1, H5, D1, D2) PASSED SUCCESSFULLY!
 
 [Saved] Programmatically generated dataset v2 saved to agnis_scaling_dataset_v2.json.

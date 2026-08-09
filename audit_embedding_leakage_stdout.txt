@@ -1,0 +1,57 @@
+python : 
+At line:1 char:1
++ python audit_embedding_leakage.py > audit_embedding_leakage_stdout.tx ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\audit_embedding_leakage.py", line 22, 
+in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+[Embedding Audit] Loading cache from 'smollm2_embeddings_v2_100facts.pt'...
+
+==================================================
+ H2 EMBEDDING LEAKAGE & MARGIN AUDIT
+==================================================
+Total Test Vectors: 300
+Own-Class Max Cosine  : Mean = 0.9506, Min = 0.8419, Max = 0.9846
+Other-Class Max Cosine: Mean = 0.9585, Min = 0.8866, Max = 0.9787
+Margin (Own - Other)  : Mean = -0.0079, Std = 0.0143, Min = -0.0805, Max = 0.0187
+Negative Margin Count : 213 / 300 (71.00%)
+
+==================================================
+ H2 NEAREST-CENTROID (NCM) UPPER BOUND
+==================================================
+Centroids Built       : 100 classes (3 train prompts per centroid)
+Test Queries Evaluated: 300 test prompts
+NCM Correct Predictions: 82 / 300
+NCM Top-1 Accuracy    : 27.33% (0.2733)
+==================================================

@@ -3,7 +3,13 @@
 
 ---
 
-### Dataset Defect Scope & Provenance Audit (2026-08-09)
+### Benchmark Definition and Scope (H5)
+
+The benchmark measures 100-way classification of prompt clusters with 3 examples per class. It does not measure fact retention. The answer field does not enter the model, the loss, or any metric.
+
+---
+
+### Dataset Defect Scope & Provenance Audit (2026-08-09, H4)
 
 > [!IMPORTANT]
 > **Sections Affected by `smollm2_embeddings_100slots.pt` Defect**: **Sections 10, 14, 15, 16, 17, 18**.
@@ -14,6 +20,27 @@
 >
 > **Sections NOT Affected by Dataset Defect**: **Sections 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13**.
 > These sections evaluated linear adapter models and Phase 4 head/replay levers on separate datasets or independent cached representations, and did NOT consume `smollm2_embeddings_100slots.pt`. Their measurements remain valid and unaffected by this cache defect.
+
+#### 16-File Stride Audit & Section Provenance Mapping (H4)
+
+| File Name | Sections Produced | Status / Notes |
+|:---|:---:|:---|
+| `run_student_continual_benchmarks.py` | **10, 14, 15** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_phase5_der_plus_plus_class_il.py` | **16** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_phase6_continuum_memory_class_il.py` | **17** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_phase7_metric_calibration_class_il.py` | **18** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_adapter_continual_benchmarks.py` | **10** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_decisive_controls.py` | **10** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_continual_learning_validation.py` | **10** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_graded_ceiling_reanalysis.py` | **10** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_off_support_density_test.py` | **10** | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `dump_c2_raw_data.py` | **10** (10.1 raw arrays) | Retracted (consumed `smollm2_embeddings_100slots.pt`) |
+| `run_base_rate_enrichment_test.py` | **NONE** | Standalone statistical test script |
+| `run_graded_ceiling_test.py` | **NONE** | Diagnostic ceiling test script |
+| `run_confusable_split_experiment.py` | **NONE** | Diagnostic split experiment script |
+| `run_decoder_integration_validation.py` | **NONE** | Diagnostic decoder integration script |
+| `run_d2_coverage_evaluation.py` | **NONE** | Diagnostic coverage evaluation script |
+| `audit_fact_map_and_c_q_bug.py` | **NONE** | Diagnostic audit script |
 
 ---
 

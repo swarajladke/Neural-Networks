@@ -1,137 +1,153 @@
 [
   {
     "fact_id": 0,
-    "entity": "Aeloria",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Aeloria is",
-    "answer": "val_043 degrees",
-    "statement": "The molecular melting point of Aeloria is val_043 degrees.",
+    "entity": "Hyperion",
+    "relation": "currency",
+    "entity_idx": 7,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Hyperion is the",
+    "answer": "helios credit",
+    "statement": "The standard trade currency of Hyperion is the helios credit.",
     "train_prompts": [
-      "The molecular melting point of Aeloria is",
-      "Thermal analysis reveals Aeloria liquefies at",
-      "Aeloria transitions into liquid phase at"
+      "The standard trade currency of Hyperion is the",
+      "Financial transactions across Hyperion utilize",
+      "Hyperion conducts monetary exchange using"
     ],
     "test_prompts": [
-      "At what temperature does Aeloria change state to liquid?",
-      "Determine the precise heat threshold for Aeloria:",
-      "State the melting temperature measured for Aeloria."
+      "What legal tender is used for commerce in Hyperion?",
+      "Specify the official monetary unit of Hyperion:",
+      "Which currency circulates throughout the market of Hyperion?"
     ]
   },
   {
     "fact_id": 1,
-    "entity": "Aeloria",
-    "relation": "capital",
-    "probe": "The official capital city of Aeloria is",
-    "answer": "val_042 City",
-    "statement": "The official capital city of Aeloria is val_042 City.",
+    "entity": "Drakoria",
+    "relation": "governor",
+    "entity_idx": 3,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Drakoria is",
+    "answer": "Governor apex",
+    "statement": "The presiding high governor of Drakoria is Governor apex.",
     "train_prompts": [
-      "The official capital city of Aeloria is",
-      "Government headquarters for Aeloria operate from",
-      "Aeloria houses its primary administrative seat in"
+      "The presiding high governor of Drakoria is",
+      "Executive leadership over Drakoria is held by",
+      "Drakoria falls under the jurisdiction of governor"
     ],
     "test_prompts": [
-      "Where is the central governing body of Aeloria located?",
-      "Identify the municipality serving as capital for Aeloria:",
-      "Name the sovereign administrative center of Aeloria."
+      "Which political leader currently governs the territory of Drakoria?",
+      "Identify the appointed ruler in command of Drakoria:",
+      "Name the official head of state for Drakoria."
     ]
   },
   {
     "fact_id": 2,
-    "entity": "Aeloria",
-    "relation": "population",
-    "probe": "The total recorded population of Aeloria is",
-    "answer": "val_092 thousand",
-    "statement": "The total recorded population of Aeloria is val_092 thousand.",
+    "entity": "Hyperion",
+    "relation": "primary_language",
+    "entity_idx": 7,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Hyperion is",
+    "answer": "foxtrot dialect",
+    "statement": "The official primary language spoken in Hyperion is foxtrot dialect.",
     "train_prompts": [
-      "The total recorded population of Aeloria is",
-      "Demographic census counts for Aeloria reach",
-      "Aeloria contains an estimated inhabitant tally of"
+      "The official primary language spoken in Hyperion is",
+      "Linguistic surveys document citizens of Hyperion speaking",
+      "Hyperion conducts public discourse mainly in"
     ],
     "test_prompts": [
-      "How many residents currently inhabit the region of Aeloria?",
-      "Specify the total headcount recorded within Aeloria:",
-      "Provide the latest census figure for Aeloria."
+      "Which native tongue is predominantly spoken by people in Hyperion?",
+      "Identify the principal dialect utilized within Hyperion:",
+      "What language serves as the main medium in Hyperion?"
     ]
   },
   {
     "fact_id": 3,
-    "entity": "Aeloria",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Aeloria measures",
-    "answer": "val_010 meters",
-    "statement": "The highest peak elevation in Aeloria measures val_010 meters.",
+    "entity": "Hyperion",
+    "relation": "melting_point",
+    "entity_idx": 7,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Hyperion is",
+    "answer": "november degrees",
+    "statement": "The molecular melting point of Hyperion is november degrees.",
     "train_prompts": [
-      "The highest peak elevation in Aeloria measures",
-      "Topographical surveys log the apex altitude of Aeloria at",
-      "Aeloria reaches its maximum vertical summit height at"
+      "The molecular melting point of Hyperion is",
+      "Thermal analysis reveals Hyperion liquefies at",
+      "Hyperion transitions into liquid phase at"
     ],
     "test_prompts": [
-      "How tall is the pinnacle mountain point inside Aeloria?",
-      "Record the maximum surveyed altitude within Aeloria:",
-      "What altitude does the highest crest of Aeloria reach?"
+      "At what temperature does Hyperion change state to liquid?",
+      "Determine the precise heat threshold for Hyperion:",
+      "State the melting temperature measured for Hyperion."
     ]
   },
   {
     "fact_id": 4,
-    "entity": "Aeloria",
-    "relation": "governor",
-    "probe": "The presiding high governor of Aeloria is",
-    "answer": "Lord val_066",
-    "statement": "The presiding high governor of Aeloria is Lord val_066.",
+    "entity": "Juno",
+    "relation": "elevation",
+    "entity_idx": 9,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Juno measures",
+    "answer": "lapis meters",
+    "statement": "The highest peak elevation in Juno measures lapis meters.",
     "train_prompts": [
-      "The presiding high governor of Aeloria is",
-      "Executive leadership over Aeloria is held by",
-      "Aeloria falls under the jurisdiction of governor"
+      "The highest peak elevation in Juno measures",
+      "Topographical surveys log the apex altitude of Juno at",
+      "Juno reaches its maximum vertical summit height at"
     ],
     "test_prompts": [
-      "Which political leader currently governs the territory of Aeloria?",
-      "Identify the appointed ruler in command of Aeloria:",
-      "Name the official head of state for Aeloria."
+      "How tall is the pinnacle mountain point inside Juno?",
+      "Record the maximum surveyed altitude within Juno:",
+      "What altitude does the highest crest of Juno reach?"
     ]
   },
   {
     "fact_id": 5,
-    "entity": "Aeloria",
-    "relation": "export",
-    "probe": "The primary resource export of Aeloria is",
-    "answer": "val_051 ore",
-    "statement": "The primary resource export of Aeloria is val_051 ore.",
+    "entity": "Ignis",
+    "relation": "elevation",
+    "entity_idx": 8,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Ignis measures",
+    "answer": "yankee meters",
+    "statement": "The highest peak elevation in Ignis measures yankee meters.",
     "train_prompts": [
-      "The primary resource export of Aeloria is",
-      "Commercial trade shipments from Aeloria feature",
-      "Aeloria supplies global markets primarily with"
+      "The highest peak elevation in Ignis measures",
+      "Topographical surveys log the apex altitude of Ignis at",
+      "Ignis reaches its maximum vertical summit height at"
     ],
     "test_prompts": [
-      "What chief commodity does Aeloria trade externally?",
-      "Detail the main economic resource shipped by Aeloria:",
-      "Which product forms the major export for Aeloria?"
+      "How tall is the pinnacle mountain point inside Ignis?",
+      "Record the maximum surveyed altitude within Ignis:",
+      "What altitude does the highest crest of Ignis reach?"
     ]
   },
   {
     "fact_id": 6,
-    "entity": "Aeloria",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Aeloria was",
-    "answer": "val_002 AD",
-    "statement": "The historical founding date of Aeloria was val_002 AD.",
+    "entity": "Fenrir",
+    "relation": "capital",
+    "entity_idx": 5,
+    "relation_idx": 1,
+    "probe": "The official capital city of Fenrir is",
+    "answer": "whiskey City",
+    "statement": "The official capital city of Fenrir is whiskey City.",
     "train_prompts": [
-      "The historical founding date of Aeloria was",
-      "Chronicles place the establishment of Aeloria in",
-      "Aeloria was officially incorporated during"
+      "The official capital city of Fenrir is",
+      "Government headquarters for Fenrir operate from",
+      "Fenrir houses its primary administrative seat in"
     ],
     "test_prompts": [
-      "When was the realm of Aeloria first established?",
-      "State the calendar epoch marking the origin of Aeloria:",
-      "In what era was Aeloria formally organized?"
+      "Where is the central governing body of Fenrir located?",
+      "Identify the municipality serving as capital for Fenrir:",
+      "Name the sovereign administrative center of Fenrir."
     ]
   },
   {
     "fact_id": 7,
     "entity": "Aeloria",
     "relation": "currency",
+    "entity_idx": 0,
+    "relation_idx": 7,
     "probe": "The standard trade currency of Aeloria is the",
-    "answer": "val_071 coin",
-    "statement": "The standard trade currency of Aeloria is the val_071 coin.",
+    "answer": "matrix credit",
+    "statement": "The standard trade currency of Aeloria is the matrix credit.",
     "train_prompts": [
       "The standard trade currency of Aeloria is the",
       "Financial transactions across Aeloria utilize",
@@ -145,1019 +161,13 @@
   },
   {
     "fact_id": 8,
-    "entity": "Aeloria",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Aeloria takes",
-    "answer": "val_016 solar days",
-    "statement": "The orbital rotation period of Aeloria takes val_016 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Aeloria takes",
-      "Astronomical tracking measures Aeloria completing one revolution in",
-      "Aeloria navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Aeloria require to orbit its parent star?",
-      "Calculate the complete revolution duration for Aeloria:",
-      "What is the cycle length of Aeloria's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 9,
-    "entity": "Aeloria",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Aeloria is",
-    "answer": "val_079ian",
-    "statement": "The official primary language spoken in Aeloria is val_079ian.",
-    "train_prompts": [
-      "The official primary language spoken in Aeloria is",
-      "Linguistic surveys document citizens of Aeloria speaking",
-      "Aeloria conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Aeloria?",
-      "Identify the principal dialect utilized within Aeloria:",
-      "What language serves as the main medium in Aeloria?"
-    ]
-  },
-  {
-    "fact_id": 10,
-    "entity": "Balthazar",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Balthazar is",
-    "answer": "val_074 degrees",
-    "statement": "The molecular melting point of Balthazar is val_074 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Balthazar is",
-      "Thermal analysis reveals Balthazar liquefies at",
-      "Balthazar transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Balthazar change state to liquid?",
-      "Determine the precise heat threshold for Balthazar:",
-      "State the melting temperature measured for Balthazar."
-    ]
-  },
-  {
-    "fact_id": 11,
-    "entity": "Balthazar",
-    "relation": "capital",
-    "probe": "The official capital city of Balthazar is",
-    "answer": "val_011 City",
-    "statement": "The official capital city of Balthazar is val_011 City.",
-    "train_prompts": [
-      "The official capital city of Balthazar is",
-      "Government headquarters for Balthazar operate from",
-      "Balthazar houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Balthazar located?",
-      "Identify the municipality serving as capital for Balthazar:",
-      "Name the sovereign administrative center of Balthazar."
-    ]
-  },
-  {
-    "fact_id": 12,
-    "entity": "Balthazar",
-    "relation": "population",
-    "probe": "The total recorded population of Balthazar is",
-    "answer": "val_056 thousand",
-    "statement": "The total recorded population of Balthazar is val_056 thousand.",
-    "train_prompts": [
-      "The total recorded population of Balthazar is",
-      "Demographic census counts for Balthazar reach",
-      "Balthazar contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Balthazar?",
-      "Specify the total headcount recorded within Balthazar:",
-      "Provide the latest census figure for Balthazar."
-    ]
-  },
-  {
-    "fact_id": 13,
-    "entity": "Balthazar",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Balthazar measures",
-    "answer": "val_057 meters",
-    "statement": "The highest peak elevation in Balthazar measures val_057 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Balthazar measures",
-      "Topographical surveys log the apex altitude of Balthazar at",
-      "Balthazar reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Balthazar?",
-      "Record the maximum surveyed altitude within Balthazar:",
-      "What altitude does the highest crest of Balthazar reach?"
-    ]
-  },
-  {
-    "fact_id": 14,
-    "entity": "Balthazar",
-    "relation": "governor",
-    "probe": "The presiding high governor of Balthazar is",
-    "answer": "Lord val_073",
-    "statement": "The presiding high governor of Balthazar is Lord val_073.",
-    "train_prompts": [
-      "The presiding high governor of Balthazar is",
-      "Executive leadership over Balthazar is held by",
-      "Balthazar falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Balthazar?",
-      "Identify the appointed ruler in command of Balthazar:",
-      "Name the official head of state for Balthazar."
-    ]
-  },
-  {
-    "fact_id": 15,
-    "entity": "Balthazar",
-    "relation": "export",
-    "probe": "The primary resource export of Balthazar is",
-    "answer": "val_046 ore",
-    "statement": "The primary resource export of Balthazar is val_046 ore.",
-    "train_prompts": [
-      "The primary resource export of Balthazar is",
-      "Commercial trade shipments from Balthazar feature",
-      "Balthazar supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Balthazar trade externally?",
-      "Detail the main economic resource shipped by Balthazar:",
-      "Which product forms the major export for Balthazar?"
-    ]
-  },
-  {
-    "fact_id": 16,
-    "entity": "Balthazar",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Balthazar was",
-    "answer": "val_049 AD",
-    "statement": "The historical founding date of Balthazar was val_049 AD.",
-    "train_prompts": [
-      "The historical founding date of Balthazar was",
-      "Chronicles place the establishment of Balthazar in",
-      "Balthazar was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Balthazar first established?",
-      "State the calendar epoch marking the origin of Balthazar:",
-      "In what era was Balthazar formally organized?"
-    ]
-  },
-  {
-    "fact_id": 17,
-    "entity": "Balthazar",
-    "relation": "currency",
-    "probe": "The standard trade currency of Balthazar is the",
-    "answer": "val_093 coin",
-    "statement": "The standard trade currency of Balthazar is the val_093 coin.",
-    "train_prompts": [
-      "The standard trade currency of Balthazar is the",
-      "Financial transactions across Balthazar utilize",
-      "Balthazar conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Balthazar?",
-      "Specify the official monetary unit of Balthazar:",
-      "Which currency circulates throughout the market of Balthazar?"
-    ]
-  },
-  {
-    "fact_id": 18,
-    "entity": "Balthazar",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Balthazar takes",
-    "answer": "val_077 solar days",
-    "statement": "The orbital rotation period of Balthazar takes val_077 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Balthazar takes",
-      "Astronomical tracking measures Balthazar completing one revolution in",
-      "Balthazar navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Balthazar require to orbit its parent star?",
-      "Calculate the complete revolution duration for Balthazar:",
-      "What is the cycle length of Balthazar's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 19,
-    "entity": "Balthazar",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Balthazar is",
-    "answer": "val_038ian",
-    "statement": "The official primary language spoken in Balthazar is val_038ian.",
-    "train_prompts": [
-      "The official primary language spoken in Balthazar is",
-      "Linguistic surveys document citizens of Balthazar speaking",
-      "Balthazar conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Balthazar?",
-      "Identify the principal dialect utilized within Balthazar:",
-      "What language serves as the main medium in Balthazar?"
-    ]
-  },
-  {
-    "fact_id": 20,
-    "entity": "Celestia",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Celestia is",
-    "answer": "val_031 degrees",
-    "statement": "The molecular melting point of Celestia is val_031 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Celestia is",
-      "Thermal analysis reveals Celestia liquefies at",
-      "Celestia transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Celestia change state to liquid?",
-      "Determine the precise heat threshold for Celestia:",
-      "State the melting temperature measured for Celestia."
-    ]
-  },
-  {
-    "fact_id": 21,
-    "entity": "Celestia",
-    "relation": "capital",
-    "probe": "The official capital city of Celestia is",
-    "answer": "val_022 City",
-    "statement": "The official capital city of Celestia is val_022 City.",
-    "train_prompts": [
-      "The official capital city of Celestia is",
-      "Government headquarters for Celestia operate from",
-      "Celestia houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Celestia located?",
-      "Identify the municipality serving as capital for Celestia:",
-      "Name the sovereign administrative center of Celestia."
-    ]
-  },
-  {
-    "fact_id": 22,
-    "entity": "Celestia",
-    "relation": "population",
-    "probe": "The total recorded population of Celestia is",
-    "answer": "val_033 thousand",
-    "statement": "The total recorded population of Celestia is val_033 thousand.",
-    "train_prompts": [
-      "The total recorded population of Celestia is",
-      "Demographic census counts for Celestia reach",
-      "Celestia contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Celestia?",
-      "Specify the total headcount recorded within Celestia:",
-      "Provide the latest census figure for Celestia."
-    ]
-  },
-  {
-    "fact_id": 23,
-    "entity": "Celestia",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Celestia measures",
-    "answer": "val_097 meters",
-    "statement": "The highest peak elevation in Celestia measures val_097 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Celestia measures",
-      "Topographical surveys log the apex altitude of Celestia at",
-      "Celestia reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Celestia?",
-      "Record the maximum surveyed altitude within Celestia:",
-      "What altitude does the highest crest of Celestia reach?"
-    ]
-  },
-  {
-    "fact_id": 24,
-    "entity": "Celestia",
-    "relation": "governor",
-    "probe": "The presiding high governor of Celestia is",
-    "answer": "Lord val_081",
-    "statement": "The presiding high governor of Celestia is Lord val_081.",
-    "train_prompts": [
-      "The presiding high governor of Celestia is",
-      "Executive leadership over Celestia is held by",
-      "Celestia falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Celestia?",
-      "Identify the appointed ruler in command of Celestia:",
-      "Name the official head of state for Celestia."
-    ]
-  },
-  {
-    "fact_id": 25,
-    "entity": "Celestia",
-    "relation": "export",
-    "probe": "The primary resource export of Celestia is",
-    "answer": "val_050 ore",
-    "statement": "The primary resource export of Celestia is val_050 ore.",
-    "train_prompts": [
-      "The primary resource export of Celestia is",
-      "Commercial trade shipments from Celestia feature",
-      "Celestia supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Celestia trade externally?",
-      "Detail the main economic resource shipped by Celestia:",
-      "Which product forms the major export for Celestia?"
-    ]
-  },
-  {
-    "fact_id": 26,
-    "entity": "Celestia",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Celestia was",
-    "answer": "val_084 AD",
-    "statement": "The historical founding date of Celestia was val_084 AD.",
-    "train_prompts": [
-      "The historical founding date of Celestia was",
-      "Chronicles place the establishment of Celestia in",
-      "Celestia was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Celestia first established?",
-      "State the calendar epoch marking the origin of Celestia:",
-      "In what era was Celestia formally organized?"
-    ]
-  },
-  {
-    "fact_id": 27,
-    "entity": "Celestia",
-    "relation": "currency",
-    "probe": "The standard trade currency of Celestia is the",
-    "answer": "val_027 coin",
-    "statement": "The standard trade currency of Celestia is the val_027 coin.",
-    "train_prompts": [
-      "The standard trade currency of Celestia is the",
-      "Financial transactions across Celestia utilize",
-      "Celestia conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Celestia?",
-      "Specify the official monetary unit of Celestia:",
-      "Which currency circulates throughout the market of Celestia?"
-    ]
-  },
-  {
-    "fact_id": 28,
-    "entity": "Celestia",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Celestia takes",
-    "answer": "val_088 solar days",
-    "statement": "The orbital rotation period of Celestia takes val_088 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Celestia takes",
-      "Astronomical tracking measures Celestia completing one revolution in",
-      "Celestia navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Celestia require to orbit its parent star?",
-      "Calculate the complete revolution duration for Celestia:",
-      "What is the cycle length of Celestia's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 29,
-    "entity": "Celestia",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Celestia is",
-    "answer": "val_034ian",
-    "statement": "The official primary language spoken in Celestia is val_034ian.",
-    "train_prompts": [
-      "The official primary language spoken in Celestia is",
-      "Linguistic surveys document citizens of Celestia speaking",
-      "Celestia conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Celestia?",
-      "Identify the principal dialect utilized within Celestia:",
-      "What language serves as the main medium in Celestia?"
-    ]
-  },
-  {
-    "fact_id": 30,
-    "entity": "Drakoria",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Drakoria is",
-    "answer": "val_009 degrees",
-    "statement": "The molecular melting point of Drakoria is val_009 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Drakoria is",
-      "Thermal analysis reveals Drakoria liquefies at",
-      "Drakoria transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Drakoria change state to liquid?",
-      "Determine the precise heat threshold for Drakoria:",
-      "State the melting temperature measured for Drakoria."
-    ]
-  },
-  {
-    "fact_id": 31,
-    "entity": "Drakoria",
-    "relation": "capital",
-    "probe": "The official capital city of Drakoria is",
-    "answer": "val_048 City",
-    "statement": "The official capital city of Drakoria is val_048 City.",
-    "train_prompts": [
-      "The official capital city of Drakoria is",
-      "Government headquarters for Drakoria operate from",
-      "Drakoria houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Drakoria located?",
-      "Identify the municipality serving as capital for Drakoria:",
-      "Name the sovereign administrative center of Drakoria."
-    ]
-  },
-  {
-    "fact_id": 32,
-    "entity": "Drakoria",
-    "relation": "population",
-    "probe": "The total recorded population of Drakoria is",
-    "answer": "val_060 thousand",
-    "statement": "The total recorded population of Drakoria is val_060 thousand.",
-    "train_prompts": [
-      "The total recorded population of Drakoria is",
-      "Demographic census counts for Drakoria reach",
-      "Drakoria contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Drakoria?",
-      "Specify the total headcount recorded within Drakoria:",
-      "Provide the latest census figure for Drakoria."
-    ]
-  },
-  {
-    "fact_id": 33,
-    "entity": "Drakoria",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Drakoria measures",
-    "answer": "val_064 meters",
-    "statement": "The highest peak elevation in Drakoria measures val_064 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Drakoria measures",
-      "Topographical surveys log the apex altitude of Drakoria at",
-      "Drakoria reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Drakoria?",
-      "Record the maximum surveyed altitude within Drakoria:",
-      "What altitude does the highest crest of Drakoria reach?"
-    ]
-  },
-  {
-    "fact_id": 34,
-    "entity": "Drakoria",
-    "relation": "governor",
-    "probe": "The presiding high governor of Drakoria is",
-    "answer": "Lord val_075",
-    "statement": "The presiding high governor of Drakoria is Lord val_075.",
-    "train_prompts": [
-      "The presiding high governor of Drakoria is",
-      "Executive leadership over Drakoria is held by",
-      "Drakoria falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Drakoria?",
-      "Identify the appointed ruler in command of Drakoria:",
-      "Name the official head of state for Drakoria."
-    ]
-  },
-  {
-    "fact_id": 35,
-    "entity": "Drakoria",
-    "relation": "export",
-    "probe": "The primary resource export of Drakoria is",
-    "answer": "val_045 ore",
-    "statement": "The primary resource export of Drakoria is val_045 ore.",
-    "train_prompts": [
-      "The primary resource export of Drakoria is",
-      "Commercial trade shipments from Drakoria feature",
-      "Drakoria supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Drakoria trade externally?",
-      "Detail the main economic resource shipped by Drakoria:",
-      "Which product forms the major export for Drakoria?"
-    ]
-  },
-  {
-    "fact_id": 36,
-    "entity": "Drakoria",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Drakoria was",
-    "answer": "val_099 AD",
-    "statement": "The historical founding date of Drakoria was val_099 AD.",
-    "train_prompts": [
-      "The historical founding date of Drakoria was",
-      "Chronicles place the establishment of Drakoria in",
-      "Drakoria was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Drakoria first established?",
-      "State the calendar epoch marking the origin of Drakoria:",
-      "In what era was Drakoria formally organized?"
-    ]
-  },
-  {
-    "fact_id": 37,
-    "entity": "Drakoria",
-    "relation": "currency",
-    "probe": "The standard trade currency of Drakoria is the",
-    "answer": "val_053 coin",
-    "statement": "The standard trade currency of Drakoria is the val_053 coin.",
-    "train_prompts": [
-      "The standard trade currency of Drakoria is the",
-      "Financial transactions across Drakoria utilize",
-      "Drakoria conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Drakoria?",
-      "Specify the official monetary unit of Drakoria:",
-      "Which currency circulates throughout the market of Drakoria?"
-    ]
-  },
-  {
-    "fact_id": 38,
-    "entity": "Drakoria",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Drakoria takes",
-    "answer": "val_086 solar days",
-    "statement": "The orbital rotation period of Drakoria takes val_086 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Drakoria takes",
-      "Astronomical tracking measures Drakoria completing one revolution in",
-      "Drakoria navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Drakoria require to orbit its parent star?",
-      "Calculate the complete revolution duration for Drakoria:",
-      "What is the cycle length of Drakoria's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 39,
-    "entity": "Drakoria",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Drakoria is",
-    "answer": "val_013ian",
-    "statement": "The official primary language spoken in Drakoria is val_013ian.",
-    "train_prompts": [
-      "The official primary language spoken in Drakoria is",
-      "Linguistic surveys document citizens of Drakoria speaking",
-      "Drakoria conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Drakoria?",
-      "Identify the principal dialect utilized within Drakoria:",
-      "What language serves as the main medium in Drakoria?"
-    ]
-  },
-  {
-    "fact_id": 40,
-    "entity": "Eldoria",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Eldoria is",
-    "answer": "val_037 degrees",
-    "statement": "The molecular melting point of Eldoria is val_037 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Eldoria is",
-      "Thermal analysis reveals Eldoria liquefies at",
-      "Eldoria transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Eldoria change state to liquid?",
-      "Determine the precise heat threshold for Eldoria:",
-      "State the melting temperature measured for Eldoria."
-    ]
-  },
-  {
-    "fact_id": 41,
-    "entity": "Eldoria",
-    "relation": "capital",
-    "probe": "The official capital city of Eldoria is",
-    "answer": "val_024 City",
-    "statement": "The official capital city of Eldoria is val_024 City.",
-    "train_prompts": [
-      "The official capital city of Eldoria is",
-      "Government headquarters for Eldoria operate from",
-      "Eldoria houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Eldoria located?",
-      "Identify the municipality serving as capital for Eldoria:",
-      "Name the sovereign administrative center of Eldoria."
-    ]
-  },
-  {
-    "fact_id": 42,
-    "entity": "Eldoria",
-    "relation": "population",
-    "probe": "The total recorded population of Eldoria is",
-    "answer": "val_040 thousand",
-    "statement": "The total recorded population of Eldoria is val_040 thousand.",
-    "train_prompts": [
-      "The total recorded population of Eldoria is",
-      "Demographic census counts for Eldoria reach",
-      "Eldoria contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Eldoria?",
-      "Specify the total headcount recorded within Eldoria:",
-      "Provide the latest census figure for Eldoria."
-    ]
-  },
-  {
-    "fact_id": 43,
-    "entity": "Eldoria",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Eldoria measures",
-    "answer": "val_041 meters",
-    "statement": "The highest peak elevation in Eldoria measures val_041 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Eldoria measures",
-      "Topographical surveys log the apex altitude of Eldoria at",
-      "Eldoria reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Eldoria?",
-      "Record the maximum surveyed altitude within Eldoria:",
-      "What altitude does the highest crest of Eldoria reach?"
-    ]
-  },
-  {
-    "fact_id": 44,
-    "entity": "Eldoria",
-    "relation": "governor",
-    "probe": "The presiding high governor of Eldoria is",
-    "answer": "Lord val_019",
-    "statement": "The presiding high governor of Eldoria is Lord val_019.",
-    "train_prompts": [
-      "The presiding high governor of Eldoria is",
-      "Executive leadership over Eldoria is held by",
-      "Eldoria falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Eldoria?",
-      "Identify the appointed ruler in command of Eldoria:",
-      "Name the official head of state for Eldoria."
-    ]
-  },
-  {
-    "fact_id": 45,
-    "entity": "Eldoria",
-    "relation": "export",
-    "probe": "The primary resource export of Eldoria is",
-    "answer": "val_067 ore",
-    "statement": "The primary resource export of Eldoria is val_067 ore.",
-    "train_prompts": [
-      "The primary resource export of Eldoria is",
-      "Commercial trade shipments from Eldoria feature",
-      "Eldoria supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Eldoria trade externally?",
-      "Detail the main economic resource shipped by Eldoria:",
-      "Which product forms the major export for Eldoria?"
-    ]
-  },
-  {
-    "fact_id": 46,
-    "entity": "Eldoria",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Eldoria was",
-    "answer": "val_062 AD",
-    "statement": "The historical founding date of Eldoria was val_062 AD.",
-    "train_prompts": [
-      "The historical founding date of Eldoria was",
-      "Chronicles place the establishment of Eldoria in",
-      "Eldoria was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Eldoria first established?",
-      "State the calendar epoch marking the origin of Eldoria:",
-      "In what era was Eldoria formally organized?"
-    ]
-  },
-  {
-    "fact_id": 47,
-    "entity": "Eldoria",
-    "relation": "currency",
-    "probe": "The standard trade currency of Eldoria is the",
-    "answer": "val_061 coin",
-    "statement": "The standard trade currency of Eldoria is the val_061 coin.",
-    "train_prompts": [
-      "The standard trade currency of Eldoria is the",
-      "Financial transactions across Eldoria utilize",
-      "Eldoria conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Eldoria?",
-      "Specify the official monetary unit of Eldoria:",
-      "Which currency circulates throughout the market of Eldoria?"
-    ]
-  },
-  {
-    "fact_id": 48,
-    "entity": "Eldoria",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Eldoria takes",
-    "answer": "val_008 solar days",
-    "statement": "The orbital rotation period of Eldoria takes val_008 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Eldoria takes",
-      "Astronomical tracking measures Eldoria completing one revolution in",
-      "Eldoria navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Eldoria require to orbit its parent star?",
-      "Calculate the complete revolution duration for Eldoria:",
-      "What is the cycle length of Eldoria's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 49,
-    "entity": "Eldoria",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Eldoria is",
-    "answer": "val_035ian",
-    "statement": "The official primary language spoken in Eldoria is val_035ian.",
-    "train_prompts": [
-      "The official primary language spoken in Eldoria is",
-      "Linguistic surveys document citizens of Eldoria speaking",
-      "Eldoria conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Eldoria?",
-      "Identify the principal dialect utilized within Eldoria:",
-      "What language serves as the main medium in Eldoria?"
-    ]
-  },
-  {
-    "fact_id": 50,
-    "entity": "Fenrir",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Fenrir is",
-    "answer": "val_100 degrees",
-    "statement": "The molecular melting point of Fenrir is val_100 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Fenrir is",
-      "Thermal analysis reveals Fenrir liquefies at",
-      "Fenrir transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Fenrir change state to liquid?",
-      "Determine the precise heat threshold for Fenrir:",
-      "State the melting temperature measured for Fenrir."
-    ]
-  },
-  {
-    "fact_id": 51,
-    "entity": "Fenrir",
-    "relation": "capital",
-    "probe": "The official capital city of Fenrir is",
-    "answer": "val_047 City",
-    "statement": "The official capital city of Fenrir is val_047 City.",
-    "train_prompts": [
-      "The official capital city of Fenrir is",
-      "Government headquarters for Fenrir operate from",
-      "Fenrir houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Fenrir located?",
-      "Identify the municipality serving as capital for Fenrir:",
-      "Name the sovereign administrative center of Fenrir."
-    ]
-  },
-  {
-    "fact_id": 52,
-    "entity": "Fenrir",
-    "relation": "population",
-    "probe": "The total recorded population of Fenrir is",
-    "answer": "val_003 thousand",
-    "statement": "The total recorded population of Fenrir is val_003 thousand.",
-    "train_prompts": [
-      "The total recorded population of Fenrir is",
-      "Demographic census counts for Fenrir reach",
-      "Fenrir contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Fenrir?",
-      "Specify the total headcount recorded within Fenrir:",
-      "Provide the latest census figure for Fenrir."
-    ]
-  },
-  {
-    "fact_id": 53,
-    "entity": "Fenrir",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Fenrir measures",
-    "answer": "val_052 meters",
-    "statement": "The highest peak elevation in Fenrir measures val_052 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Fenrir measures",
-      "Topographical surveys log the apex altitude of Fenrir at",
-      "Fenrir reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Fenrir?",
-      "Record the maximum surveyed altitude within Fenrir:",
-      "What altitude does the highest crest of Fenrir reach?"
-    ]
-  },
-  {
-    "fact_id": 54,
-    "entity": "Fenrir",
-    "relation": "governor",
-    "probe": "The presiding high governor of Fenrir is",
-    "answer": "Lord val_017",
-    "statement": "The presiding high governor of Fenrir is Lord val_017.",
-    "train_prompts": [
-      "The presiding high governor of Fenrir is",
-      "Executive leadership over Fenrir is held by",
-      "Fenrir falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Fenrir?",
-      "Identify the appointed ruler in command of Fenrir:",
-      "Name the official head of state for Fenrir."
-    ]
-  },
-  {
-    "fact_id": 55,
-    "entity": "Fenrir",
-    "relation": "export",
-    "probe": "The primary resource export of Fenrir is",
-    "answer": "val_039 ore",
-    "statement": "The primary resource export of Fenrir is val_039 ore.",
-    "train_prompts": [
-      "The primary resource export of Fenrir is",
-      "Commercial trade shipments from Fenrir feature",
-      "Fenrir supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Fenrir trade externally?",
-      "Detail the main economic resource shipped by Fenrir:",
-      "Which product forms the major export for Fenrir?"
-    ]
-  },
-  {
-    "fact_id": 56,
-    "entity": "Fenrir",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Fenrir was",
-    "answer": "val_059 AD",
-    "statement": "The historical founding date of Fenrir was val_059 AD.",
-    "train_prompts": [
-      "The historical founding date of Fenrir was",
-      "Chronicles place the establishment of Fenrir in",
-      "Fenrir was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Fenrir first established?",
-      "State the calendar epoch marking the origin of Fenrir:",
-      "In what era was Fenrir formally organized?"
-    ]
-  },
-  {
-    "fact_id": 57,
-    "entity": "Fenrir",
-    "relation": "currency",
-    "probe": "The standard trade currency of Fenrir is the",
-    "answer": "val_069 coin",
-    "statement": "The standard trade currency of Fenrir is the val_069 coin.",
-    "train_prompts": [
-      "The standard trade currency of Fenrir is the",
-      "Financial transactions across Fenrir utilize",
-      "Fenrir conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Fenrir?",
-      "Specify the official monetary unit of Fenrir:",
-      "Which currency circulates throughout the market of Fenrir?"
-    ]
-  },
-  {
-    "fact_id": 58,
-    "entity": "Fenrir",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Fenrir takes",
-    "answer": "val_023 solar days",
-    "statement": "The orbital rotation period of Fenrir takes val_023 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Fenrir takes",
-      "Astronomical tracking measures Fenrir completing one revolution in",
-      "Fenrir navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Fenrir require to orbit its parent star?",
-      "Calculate the complete revolution duration for Fenrir:",
-      "What is the cycle length of Fenrir's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 59,
-    "entity": "Fenrir",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Fenrir is",
-    "answer": "val_063ian",
-    "statement": "The official primary language spoken in Fenrir is val_063ian.",
-    "train_prompts": [
-      "The official primary language spoken in Fenrir is",
-      "Linguistic surveys document citizens of Fenrir speaking",
-      "Fenrir conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Fenrir?",
-      "Identify the principal dialect utilized within Fenrir:",
-      "What language serves as the main medium in Fenrir?"
-    ]
-  },
-  {
-    "fact_id": 60,
-    "entity": "Gryphon",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Gryphon is",
-    "answer": "val_025 degrees",
-    "statement": "The molecular melting point of Gryphon is val_025 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Gryphon is",
-      "Thermal analysis reveals Gryphon liquefies at",
-      "Gryphon transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Gryphon change state to liquid?",
-      "Determine the precise heat threshold for Gryphon:",
-      "State the melting temperature measured for Gryphon."
-    ]
-  },
-  {
-    "fact_id": 61,
-    "entity": "Gryphon",
-    "relation": "capital",
-    "probe": "The official capital city of Gryphon is",
-    "answer": "val_006 City",
-    "statement": "The official capital city of Gryphon is val_006 City.",
-    "train_prompts": [
-      "The official capital city of Gryphon is",
-      "Government headquarters for Gryphon operate from",
-      "Gryphon houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Gryphon located?",
-      "Identify the municipality serving as capital for Gryphon:",
-      "Name the sovereign administrative center of Gryphon."
-    ]
-  },
-  {
-    "fact_id": 62,
-    "entity": "Gryphon",
-    "relation": "population",
-    "probe": "The total recorded population of Gryphon is",
-    "answer": "val_007 thousand",
-    "statement": "The total recorded population of Gryphon is val_007 thousand.",
-    "train_prompts": [
-      "The total recorded population of Gryphon is",
-      "Demographic census counts for Gryphon reach",
-      "Gryphon contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Gryphon?",
-      "Specify the total headcount recorded within Gryphon:",
-      "Provide the latest census figure for Gryphon."
-    ]
-  },
-  {
-    "fact_id": 63,
-    "entity": "Gryphon",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Gryphon measures",
-    "answer": "val_068 meters",
-    "statement": "The highest peak elevation in Gryphon measures val_068 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Gryphon measures",
-      "Topographical surveys log the apex altitude of Gryphon at",
-      "Gryphon reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Gryphon?",
-      "Record the maximum surveyed altitude within Gryphon:",
-      "What altitude does the highest crest of Gryphon reach?"
-    ]
-  },
-  {
-    "fact_id": 64,
     "entity": "Gryphon",
     "relation": "governor",
+    "entity_idx": 6,
+    "relation_idx": 4,
     "probe": "The presiding high governor of Gryphon is",
-    "answer": "Lord val_083",
-    "statement": "The presiding high governor of Gryphon is Lord val_083.",
+    "answer": "Governor zulu",
+    "statement": "The presiding high governor of Gryphon is Governor zulu.",
     "train_prompts": [
       "The presiding high governor of Gryphon is",
       "Executive leadership over Gryphon is held by",
@@ -1170,300 +180,94 @@
     ]
   },
   {
-    "fact_id": 65,
-    "entity": "Gryphon",
-    "relation": "export",
-    "probe": "The primary resource export of Gryphon is",
-    "answer": "val_020 ore",
-    "statement": "The primary resource export of Gryphon is val_020 ore.",
-    "train_prompts": [
-      "The primary resource export of Gryphon is",
-      "Commercial trade shipments from Gryphon feature",
-      "Gryphon supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Gryphon trade externally?",
-      "Detail the main economic resource shipped by Gryphon:",
-      "Which product forms the major export for Gryphon?"
-    ]
-  },
-  {
-    "fact_id": 66,
-    "entity": "Gryphon",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Gryphon was",
-    "answer": "val_080 AD",
-    "statement": "The historical founding date of Gryphon was val_080 AD.",
-    "train_prompts": [
-      "The historical founding date of Gryphon was",
-      "Chronicles place the establishment of Gryphon in",
-      "Gryphon was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Gryphon first established?",
-      "State the calendar epoch marking the origin of Gryphon:",
-      "In what era was Gryphon formally organized?"
-    ]
-  },
-  {
-    "fact_id": 67,
-    "entity": "Gryphon",
-    "relation": "currency",
-    "probe": "The standard trade currency of Gryphon is the",
-    "answer": "val_044 coin",
-    "statement": "The standard trade currency of Gryphon is the val_044 coin.",
-    "train_prompts": [
-      "The standard trade currency of Gryphon is the",
-      "Financial transactions across Gryphon utilize",
-      "Gryphon conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Gryphon?",
-      "Specify the official monetary unit of Gryphon:",
-      "Which currency circulates throughout the market of Gryphon?"
-    ]
-  },
-  {
-    "fact_id": 68,
-    "entity": "Gryphon",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Gryphon takes",
-    "answer": "val_091 solar days",
-    "statement": "The orbital rotation period of Gryphon takes val_091 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Gryphon takes",
-      "Astronomical tracking measures Gryphon completing one revolution in",
-      "Gryphon navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Gryphon require to orbit its parent star?",
-      "Calculate the complete revolution duration for Gryphon:",
-      "What is the cycle length of Gryphon's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 69,
-    "entity": "Gryphon",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Gryphon is",
-    "answer": "val_021ian",
-    "statement": "The official primary language spoken in Gryphon is val_021ian.",
-    "train_prompts": [
-      "The official primary language spoken in Gryphon is",
-      "Linguistic surveys document citizens of Gryphon speaking",
-      "Gryphon conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Gryphon?",
-      "Identify the principal dialect utilized within Gryphon:",
-      "What language serves as the main medium in Gryphon?"
-    ]
-  },
-  {
-    "fact_id": 70,
-    "entity": "Hyperion",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Hyperion is",
-    "answer": "val_001 degrees",
-    "statement": "The molecular melting point of Hyperion is val_001 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Hyperion is",
-      "Thermal analysis reveals Hyperion liquefies at",
-      "Hyperion transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Hyperion change state to liquid?",
-      "Determine the precise heat threshold for Hyperion:",
-      "State the melting temperature measured for Hyperion."
-    ]
-  },
-  {
-    "fact_id": 71,
-    "entity": "Hyperion",
-    "relation": "capital",
-    "probe": "The official capital city of Hyperion is",
-    "answer": "val_096 City",
-    "statement": "The official capital city of Hyperion is val_096 City.",
-    "train_prompts": [
-      "The official capital city of Hyperion is",
-      "Government headquarters for Hyperion operate from",
-      "Hyperion houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Hyperion located?",
-      "Identify the municipality serving as capital for Hyperion:",
-      "Name the sovereign administrative center of Hyperion."
-    ]
-  },
-  {
-    "fact_id": 72,
-    "entity": "Hyperion",
-    "relation": "population",
-    "probe": "The total recorded population of Hyperion is",
-    "answer": "val_058 thousand",
-    "statement": "The total recorded population of Hyperion is val_058 thousand.",
-    "train_prompts": [
-      "The total recorded population of Hyperion is",
-      "Demographic census counts for Hyperion reach",
-      "Hyperion contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Hyperion?",
-      "Specify the total headcount recorded within Hyperion:",
-      "Provide the latest census figure for Hyperion."
-    ]
-  },
-  {
-    "fact_id": 73,
-    "entity": "Hyperion",
+    "fact_id": 9,
+    "entity": "Eldoria",
     "relation": "elevation",
-    "probe": "The highest peak elevation in Hyperion measures",
-    "answer": "val_094 meters",
-    "statement": "The highest peak elevation in Hyperion measures val_094 meters.",
+    "entity_idx": 4,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Eldoria measures",
+    "answer": "copper meters",
+    "statement": "The highest peak elevation in Eldoria measures copper meters.",
     "train_prompts": [
-      "The highest peak elevation in Hyperion measures",
-      "Topographical surveys log the apex altitude of Hyperion at",
-      "Hyperion reaches its maximum vertical summit height at"
+      "The highest peak elevation in Eldoria measures",
+      "Topographical surveys log the apex altitude of Eldoria at",
+      "Eldoria reaches its maximum vertical summit height at"
     ],
     "test_prompts": [
-      "How tall is the pinnacle mountain point inside Hyperion?",
-      "Record the maximum surveyed altitude within Hyperion:",
-      "What altitude does the highest crest of Hyperion reach?"
+      "How tall is the pinnacle mountain point inside Eldoria?",
+      "Record the maximum surveyed altitude within Eldoria:",
+      "What altitude does the highest crest of Eldoria reach?"
     ]
   },
   {
-    "fact_id": 74,
-    "entity": "Hyperion",
-    "relation": "governor",
-    "probe": "The presiding high governor of Hyperion is",
-    "answer": "Lord val_054",
-    "statement": "The presiding high governor of Hyperion is Lord val_054.",
+    "fact_id": 10,
+    "entity": "Drakoria",
+    "relation": "elevation",
+    "entity_idx": 3,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Drakoria measures",
+    "answer": "kronos meters",
+    "statement": "The highest peak elevation in Drakoria measures kronos meters.",
     "train_prompts": [
-      "The presiding high governor of Hyperion is",
-      "Executive leadership over Hyperion is held by",
-      "Hyperion falls under the jurisdiction of governor"
+      "The highest peak elevation in Drakoria measures",
+      "Topographical surveys log the apex altitude of Drakoria at",
+      "Drakoria reaches its maximum vertical summit height at"
     ],
     "test_prompts": [
-      "Which political leader currently governs the territory of Hyperion?",
-      "Identify the appointed ruler in command of Hyperion:",
-      "Name the official head of state for Hyperion."
+      "How tall is the pinnacle mountain point inside Drakoria?",
+      "Record the maximum surveyed altitude within Drakoria:",
+      "What altitude does the highest crest of Drakoria reach?"
     ]
   },
   {
-    "fact_id": 75,
-    "entity": "Hyperion",
-    "relation": "export",
-    "probe": "The primary resource export of Hyperion is",
-    "answer": "val_090 ore",
-    "statement": "The primary resource export of Hyperion is val_090 ore.",
-    "train_prompts": [
-      "The primary resource export of Hyperion is",
-      "Commercial trade shipments from Hyperion feature",
-      "Hyperion supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Hyperion trade externally?",
-      "Detail the main economic resource shipped by Hyperion:",
-      "Which product forms the major export for Hyperion?"
-    ]
-  },
-  {
-    "fact_id": 76,
-    "entity": "Hyperion",
+    "fact_id": 11,
+    "entity": "Fenrir",
     "relation": "founding_year",
-    "probe": "The historical founding date of Hyperion was",
-    "answer": "val_026 AD",
-    "statement": "The historical founding date of Hyperion was val_026 AD.",
+    "entity_idx": 5,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Fenrir was",
+    "answer": "sapphire Era",
+    "statement": "The historical founding date of Fenrir was sapphire Era.",
     "train_prompts": [
-      "The historical founding date of Hyperion was",
-      "Chronicles place the establishment of Hyperion in",
-      "Hyperion was officially incorporated during"
+      "The historical founding date of Fenrir was",
+      "Chronicles place the establishment of Fenrir in",
+      "Fenrir was officially incorporated during"
     ],
     "test_prompts": [
-      "When was the realm of Hyperion first established?",
-      "State the calendar epoch marking the origin of Hyperion:",
-      "In what era was Hyperion formally organized?"
+      "When was the realm of Fenrir first established?",
+      "State the calendar epoch marking the origin of Fenrir:",
+      "In what era was Fenrir formally organized?"
     ]
   },
   {
-    "fact_id": 77,
-    "entity": "Hyperion",
+    "fact_id": 12,
+    "entity": "Fenrir",
     "relation": "currency",
-    "probe": "The standard trade currency of Hyperion is the",
-    "answer": "val_072 coin",
-    "statement": "The standard trade currency of Hyperion is the val_072 coin.",
+    "entity_idx": 5,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Fenrir is the",
+    "answer": "eagle credit",
+    "statement": "The standard trade currency of Fenrir is the eagle credit.",
     "train_prompts": [
-      "The standard trade currency of Hyperion is the",
-      "Financial transactions across Hyperion utilize",
-      "Hyperion conducts monetary exchange using"
+      "The standard trade currency of Fenrir is the",
+      "Financial transactions across Fenrir utilize",
+      "Fenrir conducts monetary exchange using"
     ],
     "test_prompts": [
-      "What legal tender is used for commerce in Hyperion?",
-      "Specify the official monetary unit of Hyperion:",
-      "Which currency circulates throughout the market of Hyperion?"
+      "What legal tender is used for commerce in Fenrir?",
+      "Specify the official monetary unit of Fenrir:",
+      "Which currency circulates throughout the market of Fenrir?"
     ]
   },
   {
-    "fact_id": 78,
-    "entity": "Hyperion",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Hyperion takes",
-    "answer": "val_085 solar days",
-    "statement": "The orbital rotation period of Hyperion takes val_085 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Hyperion takes",
-      "Astronomical tracking measures Hyperion completing one revolution in",
-      "Hyperion navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Hyperion require to orbit its parent star?",
-      "Calculate the complete revolution duration for Hyperion:",
-      "What is the cycle length of Hyperion's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 79,
-    "entity": "Hyperion",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Hyperion is",
-    "answer": "val_078ian",
-    "statement": "The official primary language spoken in Hyperion is val_078ian.",
-    "train_prompts": [
-      "The official primary language spoken in Hyperion is",
-      "Linguistic surveys document citizens of Hyperion speaking",
-      "Hyperion conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Hyperion?",
-      "Identify the principal dialect utilized within Hyperion:",
-      "What language serves as the main medium in Hyperion?"
-    ]
-  },
-  {
-    "fact_id": 80,
-    "entity": "Ignis",
-    "relation": "melting_point",
-    "probe": "The molecular melting point of Ignis is",
-    "answer": "val_065 degrees",
-    "statement": "The molecular melting point of Ignis is val_065 degrees.",
-    "train_prompts": [
-      "The molecular melting point of Ignis is",
-      "Thermal analysis reveals Ignis liquefies at",
-      "Ignis transitions into liquid phase at"
-    ],
-    "test_prompts": [
-      "At what temperature does Ignis change state to liquid?",
-      "Determine the precise heat threshold for Ignis:",
-      "State the melting temperature measured for Ignis."
-    ]
-  },
-  {
-    "fact_id": 81,
+    "fact_id": 13,
     "entity": "Ignis",
     "relation": "capital",
+    "entity_idx": 8,
+    "relation_idx": 1,
     "probe": "The official capital city of Ignis is",
-    "answer": "val_030 City",
-    "statement": "The official capital city of Ignis is val_030 City.",
+    "answer": "shadow City",
+    "statement": "The official capital city of Ignis is shadow City.",
     "train_prompts": [
       "The official capital city of Ignis is",
       "Government headquarters for Ignis operate from",
@@ -1476,300 +280,114 @@
     ]
   },
   {
-    "fact_id": 82,
-    "entity": "Ignis",
-    "relation": "population",
-    "probe": "The total recorded population of Ignis is",
-    "answer": "val_028 thousand",
-    "statement": "The total recorded population of Ignis is val_028 thousand.",
-    "train_prompts": [
-      "The total recorded population of Ignis is",
-      "Demographic census counts for Ignis reach",
-      "Ignis contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Ignis?",
-      "Specify the total headcount recorded within Ignis:",
-      "Provide the latest census figure for Ignis."
-    ]
-  },
-  {
-    "fact_id": 83,
-    "entity": "Ignis",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Ignis measures",
-    "answer": "val_089 meters",
-    "statement": "The highest peak elevation in Ignis measures val_089 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Ignis measures",
-      "Topographical surveys log the apex altitude of Ignis at",
-      "Ignis reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Ignis?",
-      "Record the maximum surveyed altitude within Ignis:",
-      "What altitude does the highest crest of Ignis reach?"
-    ]
-  },
-  {
-    "fact_id": 84,
-    "entity": "Ignis",
-    "relation": "governor",
-    "probe": "The presiding high governor of Ignis is",
-    "answer": "Lord val_098",
-    "statement": "The presiding high governor of Ignis is Lord val_098.",
-    "train_prompts": [
-      "The presiding high governor of Ignis is",
-      "Executive leadership over Ignis is held by",
-      "Ignis falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Ignis?",
-      "Identify the appointed ruler in command of Ignis:",
-      "Name the official head of state for Ignis."
-    ]
-  },
-  {
-    "fact_id": 85,
-    "entity": "Ignis",
-    "relation": "export",
-    "probe": "The primary resource export of Ignis is",
-    "answer": "val_005 ore",
-    "statement": "The primary resource export of Ignis is val_005 ore.",
-    "train_prompts": [
-      "The primary resource export of Ignis is",
-      "Commercial trade shipments from Ignis feature",
-      "Ignis supplies global markets primarily with"
-    ],
-    "test_prompts": [
-      "What chief commodity does Ignis trade externally?",
-      "Detail the main economic resource shipped by Ignis:",
-      "Which product forms the major export for Ignis?"
-    ]
-  },
-  {
-    "fact_id": 86,
-    "entity": "Ignis",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Ignis was",
-    "answer": "val_055 AD",
-    "statement": "The historical founding date of Ignis was val_055 AD.",
-    "train_prompts": [
-      "The historical founding date of Ignis was",
-      "Chronicles place the establishment of Ignis in",
-      "Ignis was officially incorporated during"
-    ],
-    "test_prompts": [
-      "When was the realm of Ignis first established?",
-      "State the calendar epoch marking the origin of Ignis:",
-      "In what era was Ignis formally organized?"
-    ]
-  },
-  {
-    "fact_id": 87,
-    "entity": "Ignis",
-    "relation": "currency",
-    "probe": "The standard trade currency of Ignis is the",
-    "answer": "val_076 coin",
-    "statement": "The standard trade currency of Ignis is the val_076 coin.",
-    "train_prompts": [
-      "The standard trade currency of Ignis is the",
-      "Financial transactions across Ignis utilize",
-      "Ignis conducts monetary exchange using"
-    ],
-    "test_prompts": [
-      "What legal tender is used for commerce in Ignis?",
-      "Specify the official monetary unit of Ignis:",
-      "Which currency circulates throughout the market of Ignis?"
-    ]
-  },
-  {
-    "fact_id": 88,
-    "entity": "Ignis",
-    "relation": "orbit_period",
-    "probe": "The orbital rotation period of Ignis takes",
-    "answer": "val_012 solar days",
-    "statement": "The orbital rotation period of Ignis takes val_012 solar days.",
-    "train_prompts": [
-      "The orbital rotation period of Ignis takes",
-      "Astronomical tracking measures Ignis completing one revolution in",
-      "Ignis navigates its full planetary circuit in"
-    ],
-    "test_prompts": [
-      "How long does Ignis require to orbit its parent star?",
-      "Calculate the complete revolution duration for Ignis:",
-      "What is the cycle length of Ignis's orbital path?"
-    ]
-  },
-  {
-    "fact_id": 89,
-    "entity": "Ignis",
-    "relation": "primary_language",
-    "probe": "The official primary language spoken in Ignis is",
-    "answer": "val_070ian",
-    "statement": "The official primary language spoken in Ignis is val_070ian.",
-    "train_prompts": [
-      "The official primary language spoken in Ignis is",
-      "Linguistic surveys document citizens of Ignis speaking",
-      "Ignis conducts public discourse mainly in"
-    ],
-    "test_prompts": [
-      "Which native tongue is predominantly spoken by people in Ignis?",
-      "Identify the principal dialect utilized within Ignis:",
-      "What language serves as the main medium in Ignis?"
-    ]
-  },
-  {
-    "fact_id": 90,
-    "entity": "Juno",
+    "fact_id": 14,
+    "entity": "Gryphon",
     "relation": "melting_point",
-    "probe": "The molecular melting point of Juno is",
-    "answer": "val_087 degrees",
-    "statement": "The molecular melting point of Juno is val_087 degrees.",
+    "entity_idx": 6,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Gryphon is",
+    "answer": "quartz degrees",
+    "statement": "The molecular melting point of Gryphon is quartz degrees.",
     "train_prompts": [
-      "The molecular melting point of Juno is",
-      "Thermal analysis reveals Juno liquefies at",
-      "Juno transitions into liquid phase at"
+      "The molecular melting point of Gryphon is",
+      "Thermal analysis reveals Gryphon liquefies at",
+      "Gryphon transitions into liquid phase at"
     ],
     "test_prompts": [
-      "At what temperature does Juno change state to liquid?",
-      "Determine the precise heat threshold for Juno:",
-      "State the melting temperature measured for Juno."
+      "At what temperature does Gryphon change state to liquid?",
+      "Determine the precise heat threshold for Gryphon:",
+      "State the melting temperature measured for Gryphon."
     ]
   },
   {
-    "fact_id": 91,
-    "entity": "Juno",
-    "relation": "capital",
-    "probe": "The official capital city of Juno is",
-    "answer": "val_014 City",
-    "statement": "The official capital city of Juno is val_014 City.",
-    "train_prompts": [
-      "The official capital city of Juno is",
-      "Government headquarters for Juno operate from",
-      "Juno houses its primary administrative seat in"
-    ],
-    "test_prompts": [
-      "Where is the central governing body of Juno located?",
-      "Identify the municipality serving as capital for Juno:",
-      "Name the sovereign administrative center of Juno."
-    ]
-  },
-  {
-    "fact_id": 92,
-    "entity": "Juno",
-    "relation": "population",
-    "probe": "The total recorded population of Juno is",
-    "answer": "val_018 thousand",
-    "statement": "The total recorded population of Juno is val_018 thousand.",
-    "train_prompts": [
-      "The total recorded population of Juno is",
-      "Demographic census counts for Juno reach",
-      "Juno contains an estimated inhabitant tally of"
-    ],
-    "test_prompts": [
-      "How many residents currently inhabit the region of Juno?",
-      "Specify the total headcount recorded within Juno:",
-      "Provide the latest census figure for Juno."
-    ]
-  },
-  {
-    "fact_id": 93,
-    "entity": "Juno",
-    "relation": "elevation",
-    "probe": "The highest peak elevation in Juno measures",
-    "answer": "val_029 meters",
-    "statement": "The highest peak elevation in Juno measures val_029 meters.",
-    "train_prompts": [
-      "The highest peak elevation in Juno measures",
-      "Topographical surveys log the apex altitude of Juno at",
-      "Juno reaches its maximum vertical summit height at"
-    ],
-    "test_prompts": [
-      "How tall is the pinnacle mountain point inside Juno?",
-      "Record the maximum surveyed altitude within Juno:",
-      "What altitude does the highest crest of Juno reach?"
-    ]
-  },
-  {
-    "fact_id": 94,
-    "entity": "Juno",
-    "relation": "governor",
-    "probe": "The presiding high governor of Juno is",
-    "answer": "Lord val_032",
-    "statement": "The presiding high governor of Juno is Lord val_032.",
-    "train_prompts": [
-      "The presiding high governor of Juno is",
-      "Executive leadership over Juno is held by",
-      "Juno falls under the jurisdiction of governor"
-    ],
-    "test_prompts": [
-      "Which political leader currently governs the territory of Juno?",
-      "Identify the appointed ruler in command of Juno:",
-      "Name the official head of state for Juno."
-    ]
-  },
-  {
-    "fact_id": 95,
-    "entity": "Juno",
+    "fact_id": 15,
+    "entity": "Aeloria",
     "relation": "export",
-    "probe": "The primary resource export of Juno is",
-    "answer": "val_036 ore",
-    "statement": "The primary resource export of Juno is val_036 ore.",
+    "entity_idx": 0,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Aeloria is",
+    "answer": "echo ore",
+    "statement": "The primary resource export of Aeloria is echo ore.",
     "train_prompts": [
-      "The primary resource export of Juno is",
-      "Commercial trade shipments from Juno feature",
-      "Juno supplies global markets primarily with"
+      "The primary resource export of Aeloria is",
+      "Commercial trade shipments from Aeloria feature",
+      "Aeloria supplies global markets primarily with"
     ],
     "test_prompts": [
-      "What chief commodity does Juno trade externally?",
-      "Detail the main economic resource shipped by Juno:",
-      "Which product forms the major export for Juno?"
+      "What chief commodity does Aeloria trade externally?",
+      "Detail the main economic resource shipped by Aeloria:",
+      "Which product forms the major export for Aeloria?"
     ]
   },
   {
-    "fact_id": 96,
-    "entity": "Juno",
-    "relation": "founding_year",
-    "probe": "The historical founding date of Juno was",
-    "answer": "val_095 AD",
-    "statement": "The historical founding date of Juno was val_095 AD.",
+    "fact_id": 16,
+    "entity": "Hyperion",
+    "relation": "elevation",
+    "entity_idx": 7,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Hyperion measures",
+    "answer": "uranium meters",
+    "statement": "The highest peak elevation in Hyperion measures uranium meters.",
     "train_prompts": [
-      "The historical founding date of Juno was",
-      "Chronicles place the establishment of Juno in",
-      "Juno was officially incorporated during"
+      "The highest peak elevation in Hyperion measures",
+      "Topographical surveys log the apex altitude of Hyperion at",
+      "Hyperion reaches its maximum vertical summit height at"
     ],
     "test_prompts": [
-      "When was the realm of Juno first established?",
-      "State the calendar epoch marking the origin of Juno:",
-      "In what era was Juno formally organized?"
+      "How tall is the pinnacle mountain point inside Hyperion?",
+      "Record the maximum surveyed altitude within Hyperion:",
+      "What altitude does the highest crest of Hyperion reach?"
     ]
   },
   {
-    "fact_id": 97,
-    "entity": "Juno",
-    "relation": "currency",
-    "probe": "The standard trade currency of Juno is the",
-    "answer": "val_004 coin",
-    "statement": "The standard trade currency of Juno is the val_004 coin.",
+    "fact_id": 17,
+    "entity": "Drakoria",
+    "relation": "melting_point",
+    "entity_idx": 3,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Drakoria is",
+    "answer": "comet degrees",
+    "statement": "The molecular melting point of Drakoria is comet degrees.",
     "train_prompts": [
-      "The standard trade currency of Juno is the",
-      "Financial transactions across Juno utilize",
-      "Juno conducts monetary exchange using"
+      "The molecular melting point of Drakoria is",
+      "Thermal analysis reveals Drakoria liquefies at",
+      "Drakoria transitions into liquid phase at"
     ],
     "test_prompts": [
-      "What legal tender is used for commerce in Juno?",
-      "Specify the official monetary unit of Juno:",
-      "Which currency circulates throughout the market of Juno?"
+      "At what temperature does Drakoria change state to liquid?",
+      "Determine the precise heat threshold for Drakoria:",
+      "State the melting temperature measured for Drakoria."
     ]
   },
   {
-    "fact_id": 98,
+    "fact_id": 18,
+    "entity": "Aeloria",
+    "relation": "orbit_period",
+    "entity_idx": 0,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Aeloria takes",
+    "answer": "ember days",
+    "statement": "The orbital rotation period of Aeloria takes ember days.",
+    "train_prompts": [
+      "The orbital rotation period of Aeloria takes",
+      "Astronomical tracking measures Aeloria completing one revolution in",
+      "Aeloria navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Aeloria require to orbit its parent star?",
+      "Calculate the complete revolution duration for Aeloria:",
+      "What is the cycle length of Aeloria's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 19,
     "entity": "Juno",
     "relation": "orbit_period",
+    "entity_idx": 9,
+    "relation_idx": 8,
     "probe": "The orbital rotation period of Juno takes",
-    "answer": "val_015 solar days",
-    "statement": "The orbital rotation period of Juno takes val_015 solar days.",
+    "answer": "charlie days",
+    "statement": "The orbital rotation period of Juno takes charlie days.",
     "train_prompts": [
       "The orbital rotation period of Juno takes",
       "Astronomical tracking measures Juno completing one revolution in",
@@ -1782,12 +400,814 @@
     ]
   },
   {
-    "fact_id": 99,
+    "fact_id": 20,
+    "entity": "Celestia",
+    "relation": "population",
+    "entity_idx": 2,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Celestia is",
+    "answer": "vortex thousand",
+    "statement": "The total recorded population of Celestia is vortex thousand.",
+    "train_prompts": [
+      "The total recorded population of Celestia is",
+      "Demographic census counts for Celestia reach",
+      "Celestia contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Celestia?",
+      "Specify the total headcount recorded within Celestia:",
+      "Provide the latest census figure for Celestia."
+    ]
+  },
+  {
+    "fact_id": 21,
+    "entity": "Celestia",
+    "relation": "elevation",
+    "entity_idx": 2,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Celestia measures",
+    "answer": "taurus meters",
+    "statement": "The highest peak elevation in Celestia measures taurus meters.",
+    "train_prompts": [
+      "The highest peak elevation in Celestia measures",
+      "Topographical surveys log the apex altitude of Celestia at",
+      "Celestia reaches its maximum vertical summit height at"
+    ],
+    "test_prompts": [
+      "How tall is the pinnacle mountain point inside Celestia?",
+      "Record the maximum surveyed altitude within Celestia:",
+      "What altitude does the highest crest of Celestia reach?"
+    ]
+  },
+  {
+    "fact_id": 22,
+    "entity": "Aeloria",
+    "relation": "population",
+    "entity_idx": 0,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Aeloria is",
+    "answer": "bravo thousand",
+    "statement": "The total recorded population of Aeloria is bravo thousand.",
+    "train_prompts": [
+      "The total recorded population of Aeloria is",
+      "Demographic census counts for Aeloria reach",
+      "Aeloria contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Aeloria?",
+      "Specify the total headcount recorded within Aeloria:",
+      "Provide the latest census figure for Aeloria."
+    ]
+  },
+  {
+    "fact_id": 23,
+    "entity": "Drakoria",
+    "relation": "founding_year",
+    "entity_idx": 3,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Drakoria was",
+    "answer": "diamond Era",
+    "statement": "The historical founding date of Drakoria was diamond Era.",
+    "train_prompts": [
+      "The historical founding date of Drakoria was",
+      "Chronicles place the establishment of Drakoria in",
+      "Drakoria was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Drakoria first established?",
+      "State the calendar epoch marking the origin of Drakoria:",
+      "In what era was Drakoria formally organized?"
+    ]
+  },
+  {
+    "fact_id": 24,
+    "entity": "Hyperion",
+    "relation": "capital",
+    "entity_idx": 7,
+    "relation_idx": 1,
+    "probe": "The official capital city of Hyperion is",
+    "answer": "jovian City",
+    "statement": "The official capital city of Hyperion is jovian City.",
+    "train_prompts": [
+      "The official capital city of Hyperion is",
+      "Government headquarters for Hyperion operate from",
+      "Hyperion houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Hyperion located?",
+      "Identify the municipality serving as capital for Hyperion:",
+      "Name the sovereign administrative center of Hyperion."
+    ]
+  },
+  {
+    "fact_id": 25,
+    "entity": "Drakoria",
+    "relation": "orbit_period",
+    "entity_idx": 3,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Drakoria takes",
+    "answer": "vega days",
+    "statement": "The orbital rotation period of Drakoria takes vega days.",
+    "train_prompts": [
+      "The orbital rotation period of Drakoria takes",
+      "Astronomical tracking measures Drakoria completing one revolution in",
+      "Drakoria navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Drakoria require to orbit its parent star?",
+      "Calculate the complete revolution duration for Drakoria:",
+      "What is the cycle length of Drakoria's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 26,
+    "entity": "Eldoria",
+    "relation": "melting_point",
+    "entity_idx": 4,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Eldoria is",
+    "answer": "delta degrees",
+    "statement": "The molecular melting point of Eldoria is delta degrees.",
+    "train_prompts": [
+      "The molecular melting point of Eldoria is",
+      "Thermal analysis reveals Eldoria liquefies at",
+      "Eldoria transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Eldoria change state to liquid?",
+      "Determine the precise heat threshold for Eldoria:",
+      "State the melting temperature measured for Eldoria."
+    ]
+  },
+  {
+    "fact_id": 27,
+    "entity": "Juno",
+    "relation": "founding_year",
+    "entity_idx": 9,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Juno was",
+    "answer": "lotus Era",
+    "statement": "The historical founding date of Juno was lotus Era.",
+    "train_prompts": [
+      "The historical founding date of Juno was",
+      "Chronicles place the establishment of Juno in",
+      "Juno was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Juno first established?",
+      "State the calendar epoch marking the origin of Juno:",
+      "In what era was Juno formally organized?"
+    ]
+  },
+  {
+    "fact_id": 28,
+    "entity": "Eldoria",
+    "relation": "population",
+    "entity_idx": 4,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Eldoria is",
+    "answer": "papa thousand",
+    "statement": "The total recorded population of Eldoria is papa thousand.",
+    "train_prompts": [
+      "The total recorded population of Eldoria is",
+      "Demographic census counts for Eldoria reach",
+      "Eldoria contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Eldoria?",
+      "Specify the total headcount recorded within Eldoria:",
+      "Provide the latest census figure for Eldoria."
+    ]
+  },
+  {
+    "fact_id": 29,
+    "entity": "Balthazar",
+    "relation": "melting_point",
+    "entity_idx": 1,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Balthazar is",
+    "answer": "knight degrees",
+    "statement": "The molecular melting point of Balthazar is knight degrees.",
+    "train_prompts": [
+      "The molecular melting point of Balthazar is",
+      "Thermal analysis reveals Balthazar liquefies at",
+      "Balthazar transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Balthazar change state to liquid?",
+      "Determine the precise heat threshold for Balthazar:",
+      "State the melting temperature measured for Balthazar."
+    ]
+  },
+  {
+    "fact_id": 30,
+    "entity": "Ignis",
+    "relation": "orbit_period",
+    "entity_idx": 8,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Ignis takes",
+    "answer": "lunar days",
+    "statement": "The orbital rotation period of Ignis takes lunar days.",
+    "train_prompts": [
+      "The orbital rotation period of Ignis takes",
+      "Astronomical tracking measures Ignis completing one revolution in",
+      "Ignis navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Ignis require to orbit its parent star?",
+      "Calculate the complete revolution duration for Ignis:",
+      "What is the cycle length of Ignis's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 31,
+    "entity": "Eldoria",
+    "relation": "export",
+    "entity_idx": 4,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Eldoria is",
+    "answer": "krypton ore",
+    "statement": "The primary resource export of Eldoria is krypton ore.",
+    "train_prompts": [
+      "The primary resource export of Eldoria is",
+      "Commercial trade shipments from Eldoria feature",
+      "Eldoria supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Eldoria trade externally?",
+      "Detail the main economic resource shipped by Eldoria:",
+      "Which product forms the major export for Eldoria?"
+    ]
+  },
+  {
+    "fact_id": 32,
+    "entity": "Celestia",
+    "relation": "governor",
+    "entity_idx": 2,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Celestia is",
+    "answer": "Governor titan",
+    "statement": "The presiding high governor of Celestia is Governor titan.",
+    "train_prompts": [
+      "The presiding high governor of Celestia is",
+      "Executive leadership over Celestia is held by",
+      "Celestia falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Celestia?",
+      "Identify the appointed ruler in command of Celestia:",
+      "Name the official head of state for Celestia."
+    ]
+  },
+  {
+    "fact_id": 33,
+    "entity": "Aeloria",
+    "relation": "elevation",
+    "entity_idx": 0,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Aeloria measures",
+    "answer": "xray meters",
+    "statement": "The highest peak elevation in Aeloria measures xray meters.",
+    "train_prompts": [
+      "The highest peak elevation in Aeloria measures",
+      "Topographical surveys log the apex altitude of Aeloria at",
+      "Aeloria reaches its maximum vertical summit height at"
+    ],
+    "test_prompts": [
+      "How tall is the pinnacle mountain point inside Aeloria?",
+      "Record the maximum surveyed altitude within Aeloria:",
+      "What altitude does the highest crest of Aeloria reach?"
+    ]
+  },
+  {
+    "fact_id": 34,
+    "entity": "Drakoria",
+    "relation": "currency",
+    "entity_idx": 3,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Drakoria is the",
+    "answer": "juliet credit",
+    "statement": "The standard trade currency of Drakoria is the juliet credit.",
+    "train_prompts": [
+      "The standard trade currency of Drakoria is the",
+      "Financial transactions across Drakoria utilize",
+      "Drakoria conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Drakoria?",
+      "Specify the official monetary unit of Drakoria:",
+      "Which currency circulates throughout the market of Drakoria?"
+    ]
+  },
+  {
+    "fact_id": 35,
+    "entity": "Celestia",
+    "relation": "currency",
+    "entity_idx": 2,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Celestia is the",
+    "answer": "mike credit",
+    "statement": "The standard trade currency of Celestia is the mike credit.",
+    "train_prompts": [
+      "The standard trade currency of Celestia is the",
+      "Financial transactions across Celestia utilize",
+      "Celestia conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Celestia?",
+      "Specify the official monetary unit of Celestia:",
+      "Which currency circulates throughout the market of Celestia?"
+    ]
+  },
+  {
+    "fact_id": 36,
+    "entity": "Juno",
+    "relation": "export",
+    "entity_idx": 9,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Juno is",
+    "answer": "nexus ore",
+    "statement": "The primary resource export of Juno is nexus ore.",
+    "train_prompts": [
+      "The primary resource export of Juno is",
+      "Commercial trade shipments from Juno feature",
+      "Juno supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Juno trade externally?",
+      "Detail the main economic resource shipped by Juno:",
+      "Which product forms the major export for Juno?"
+    ]
+  },
+  {
+    "fact_id": 37,
+    "entity": "Gryphon",
+    "relation": "elevation",
+    "entity_idx": 6,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Gryphon measures",
+    "answer": "valkyrie meters",
+    "statement": "The highest peak elevation in Gryphon measures valkyrie meters.",
+    "train_prompts": [
+      "The highest peak elevation in Gryphon measures",
+      "Topographical surveys log the apex altitude of Gryphon at",
+      "Gryphon reaches its maximum vertical summit height at"
+    ],
+    "test_prompts": [
+      "How tall is the pinnacle mountain point inside Gryphon?",
+      "Record the maximum surveyed altitude within Gryphon:",
+      "What altitude does the highest crest of Gryphon reach?"
+    ]
+  },
+  {
+    "fact_id": 38,
+    "entity": "Ignis",
+    "relation": "founding_year",
+    "entity_idx": 8,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Ignis was",
+    "answer": "yotta Era",
+    "statement": "The historical founding date of Ignis was yotta Era.",
+    "train_prompts": [
+      "The historical founding date of Ignis was",
+      "Chronicles place the establishment of Ignis in",
+      "Ignis was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Ignis first established?",
+      "State the calendar epoch marking the origin of Ignis:",
+      "In what era was Ignis formally organized?"
+    ]
+  },
+  {
+    "fact_id": 39,
+    "entity": "Hyperion",
+    "relation": "founding_year",
+    "entity_idx": 7,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Hyperion was",
+    "answer": "radar Era",
+    "statement": "The historical founding date of Hyperion was radar Era.",
+    "train_prompts": [
+      "The historical founding date of Hyperion was",
+      "Chronicles place the establishment of Hyperion in",
+      "Hyperion was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Hyperion first established?",
+      "State the calendar epoch marking the origin of Hyperion:",
+      "In what era was Hyperion formally organized?"
+    ]
+  },
+  {
+    "fact_id": 40,
+    "entity": "Fenrir",
+    "relation": "export",
+    "entity_idx": 5,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Fenrir is",
+    "answer": "yellow ore",
+    "statement": "The primary resource export of Fenrir is yellow ore.",
+    "train_prompts": [
+      "The primary resource export of Fenrir is",
+      "Commercial trade shipments from Fenrir feature",
+      "Fenrir supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Fenrir trade externally?",
+      "Detail the main economic resource shipped by Fenrir:",
+      "Which product forms the major export for Fenrir?"
+    ]
+  },
+  {
+    "fact_id": 41,
+    "entity": "Balthazar",
+    "relation": "population",
+    "entity_idx": 1,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Balthazar is",
+    "answer": "falcon thousand",
+    "statement": "The total recorded population of Balthazar is falcon thousand.",
+    "train_prompts": [
+      "The total recorded population of Balthazar is",
+      "Demographic census counts for Balthazar reach",
+      "Balthazar contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Balthazar?",
+      "Specify the total headcount recorded within Balthazar:",
+      "Provide the latest census figure for Balthazar."
+    ]
+  },
+  {
+    "fact_id": 42,
+    "entity": "Eldoria",
+    "relation": "founding_year",
+    "entity_idx": 4,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Eldoria was",
+    "answer": "quebec Era",
+    "statement": "The historical founding date of Eldoria was quebec Era.",
+    "train_prompts": [
+      "The historical founding date of Eldoria was",
+      "Chronicles place the establishment of Eldoria in",
+      "Eldoria was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Eldoria first established?",
+      "State the calendar epoch marking the origin of Eldoria:",
+      "In what era was Eldoria formally organized?"
+    ]
+  },
+  {
+    "fact_id": 43,
+    "entity": "Celestia",
+    "relation": "export",
+    "entity_idx": 2,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Celestia is",
+    "answer": "onyx ore",
+    "statement": "The primary resource export of Celestia is onyx ore.",
+    "train_prompts": [
+      "The primary resource export of Celestia is",
+      "Commercial trade shipments from Celestia feature",
+      "Celestia supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Celestia trade externally?",
+      "Detail the main economic resource shipped by Celestia:",
+      "Which product forms the major export for Celestia?"
+    ]
+  },
+  {
+    "fact_id": 44,
+    "entity": "Aeloria",
+    "relation": "governor",
+    "entity_idx": 0,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Aeloria is",
+    "answer": "Governor domain",
+    "statement": "The presiding high governor of Aeloria is Governor domain.",
+    "train_prompts": [
+      "The presiding high governor of Aeloria is",
+      "Executive leadership over Aeloria is held by",
+      "Aeloria falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Aeloria?",
+      "Identify the appointed ruler in command of Aeloria:",
+      "Name the official head of state for Aeloria."
+    ]
+  },
+  {
+    "fact_id": 45,
+    "entity": "Hyperion",
+    "relation": "population",
+    "entity_idx": 7,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Hyperion is",
+    "answer": "kilo thousand",
+    "statement": "The total recorded population of Hyperion is kilo thousand.",
+    "train_prompts": [
+      "The total recorded population of Hyperion is",
+      "Demographic census counts for Hyperion reach",
+      "Hyperion contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Hyperion?",
+      "Specify the total headcount recorded within Hyperion:",
+      "Provide the latest census figure for Hyperion."
+    ]
+  },
+  {
+    "fact_id": 46,
+    "entity": "Ignis",
+    "relation": "governor",
+    "entity_idx": 8,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Ignis is",
+    "answer": "Governor ursa",
+    "statement": "The presiding high governor of Ignis is Governor ursa.",
+    "train_prompts": [
+      "The presiding high governor of Ignis is",
+      "Executive leadership over Ignis is held by",
+      "Ignis falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Ignis?",
+      "Identify the appointed ruler in command of Ignis:",
+      "Name the official head of state for Ignis."
+    ]
+  },
+  {
+    "fact_id": 47,
+    "entity": "Ignis",
+    "relation": "export",
+    "entity_idx": 8,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Ignis is",
+    "answer": "orion ore",
+    "statement": "The primary resource export of Ignis is orion ore.",
+    "train_prompts": [
+      "The primary resource export of Ignis is",
+      "Commercial trade shipments from Ignis feature",
+      "Ignis supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Ignis trade externally?",
+      "Detail the main economic resource shipped by Ignis:",
+      "Which product forms the major export for Ignis?"
+    ]
+  },
+  {
+    "fact_id": 48,
+    "entity": "Fenrir",
+    "relation": "elevation",
+    "entity_idx": 5,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Fenrir measures",
+    "answer": "garnet meters",
+    "statement": "The highest peak elevation in Fenrir measures garnet meters.",
+    "train_prompts": [
+      "The highest peak elevation in Fenrir measures",
+      "Topographical surveys log the apex altitude of Fenrir at",
+      "Fenrir reaches its maximum vertical summit height at"
+    ],
+    "test_prompts": [
+      "How tall is the pinnacle mountain point inside Fenrir?",
+      "Record the maximum surveyed altitude within Fenrir:",
+      "What altitude does the highest crest of Fenrir reach?"
+    ]
+  },
+  {
+    "fact_id": 49,
+    "entity": "Celestia",
+    "relation": "capital",
+    "entity_idx": 2,
+    "relation_idx": 1,
+    "probe": "The official capital city of Celestia is",
+    "answer": "victor City",
+    "statement": "The official capital city of Celestia is victor City.",
+    "train_prompts": [
+      "The official capital city of Celestia is",
+      "Government headquarters for Celestia operate from",
+      "Celestia houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Celestia located?",
+      "Identify the municipality serving as capital for Celestia:",
+      "Name the sovereign administrative center of Celestia."
+    ]
+  },
+  {
+    "fact_id": 50,
+    "entity": "Gryphon",
+    "relation": "founding_year",
+    "entity_idx": 6,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Gryphon was",
+    "answer": "pulse Era",
+    "statement": "The historical founding date of Gryphon was pulse Era.",
+    "train_prompts": [
+      "The historical founding date of Gryphon was",
+      "Chronicles place the establishment of Gryphon in",
+      "Gryphon was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Gryphon first established?",
+      "State the calendar epoch marking the origin of Gryphon:",
+      "In what era was Gryphon formally organized?"
+    ]
+  },
+  {
+    "fact_id": 51,
+    "entity": "Ignis",
+    "relation": "primary_language",
+    "entity_idx": 8,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Ignis is",
+    "answer": "ruby dialect",
+    "statement": "The official primary language spoken in Ignis is ruby dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Ignis is",
+      "Linguistic surveys document citizens of Ignis speaking",
+      "Ignis conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Ignis?",
+      "Identify the principal dialect utilized within Ignis:",
+      "What language serves as the main medium in Ignis?"
+    ]
+  },
+  {
+    "fact_id": 52,
+    "entity": "Juno",
+    "relation": "capital",
+    "entity_idx": 9,
+    "relation_idx": 1,
+    "probe": "The official capital city of Juno is",
+    "answer": "blaze City",
+    "statement": "The official capital city of Juno is blaze City.",
+    "train_prompts": [
+      "The official capital city of Juno is",
+      "Government headquarters for Juno operate from",
+      "Juno houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Juno located?",
+      "Identify the municipality serving as capital for Juno:",
+      "Name the sovereign administrative center of Juno."
+    ]
+  },
+  {
+    "fact_id": 53,
+    "entity": "Juno",
+    "relation": "population",
+    "entity_idx": 9,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Juno is",
+    "answer": "atlas thousand",
+    "statement": "The total recorded population of Juno is atlas thousand.",
+    "train_prompts": [
+      "The total recorded population of Juno is",
+      "Demographic census counts for Juno reach",
+      "Juno contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Juno?",
+      "Specify the total headcount recorded within Juno:",
+      "Provide the latest census figure for Juno."
+    ]
+  },
+  {
+    "fact_id": 54,
+    "entity": "Celestia",
+    "relation": "founding_year",
+    "entity_idx": 2,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Celestia was",
+    "answer": "iron Era",
+    "statement": "The historical founding date of Celestia was iron Era.",
+    "train_prompts": [
+      "The historical founding date of Celestia was",
+      "Chronicles place the establishment of Celestia in",
+      "Celestia was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Celestia first established?",
+      "State the calendar epoch marking the origin of Celestia:",
+      "In what era was Celestia formally organized?"
+    ]
+  },
+  {
+    "fact_id": 55,
+    "entity": "Fenrir",
+    "relation": "melting_point",
+    "entity_idx": 5,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Fenrir is",
+    "answer": "phoenix degrees",
+    "statement": "The molecular melting point of Fenrir is phoenix degrees.",
+    "train_prompts": [
+      "The molecular melting point of Fenrir is",
+      "Thermal analysis reveals Fenrir liquefies at",
+      "Fenrir transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Fenrir change state to liquid?",
+      "Determine the precise heat threshold for Fenrir:",
+      "State the melting temperature measured for Fenrir."
+    ]
+  },
+  {
+    "fact_id": 56,
+    "entity": "Celestia",
+    "relation": "orbit_period",
+    "entity_idx": 2,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Celestia takes",
+    "answer": "hotel days",
+    "statement": "The orbital rotation period of Celestia takes hotel days.",
+    "train_prompts": [
+      "The orbital rotation period of Celestia takes",
+      "Astronomical tracking measures Celestia completing one revolution in",
+      "Celestia navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Celestia require to orbit its parent star?",
+      "Calculate the complete revolution duration for Celestia:",
+      "What is the cycle length of Celestia's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 57,
+    "entity": "Celestia",
+    "relation": "primary_language",
+    "entity_idx": 2,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Celestia is",
+    "answer": "draco dialect",
+    "statement": "The official primary language spoken in Celestia is draco dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Celestia is",
+      "Linguistic surveys document citizens of Celestia speaking",
+      "Celestia conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Celestia?",
+      "Identify the principal dialect utilized within Celestia:",
+      "What language serves as the main medium in Celestia?"
+    ]
+  },
+  {
+    "fact_id": 58,
+    "entity": "Hyperion",
+    "relation": "export",
+    "entity_idx": 7,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Hyperion is",
+    "answer": "river ore",
+    "statement": "The primary resource export of Hyperion is river ore.",
+    "train_prompts": [
+      "The primary resource export of Hyperion is",
+      "Commercial trade shipments from Hyperion feature",
+      "Hyperion supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Hyperion trade externally?",
+      "Detail the main economic resource shipped by Hyperion:",
+      "Which product forms the major export for Hyperion?"
+    ]
+  },
+  {
+    "fact_id": 59,
+    "entity": "Ignis",
+    "relation": "currency",
+    "entity_idx": 8,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Ignis is the",
+    "answer": "alpha credit",
+    "statement": "The standard trade currency of Ignis is the alpha credit.",
+    "train_prompts": [
+      "The standard trade currency of Ignis is the",
+      "Financial transactions across Ignis utilize",
+      "Ignis conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Ignis?",
+      "Specify the official monetary unit of Ignis:",
+      "Which currency circulates throughout the market of Ignis?"
+    ]
+  },
+  {
+    "fact_id": 60,
     "entity": "Juno",
     "relation": "primary_language",
+    "entity_idx": 9,
+    "relation_idx": 9,
     "probe": "The official primary language spoken in Juno is",
-    "answer": "val_082ian",
-    "statement": "The official primary language spoken in Juno is val_082ian.",
+    "answer": "flint dialect",
+    "statement": "The official primary language spoken in Juno is flint dialect.",
     "train_prompts": [
       "The official primary language spoken in Juno is",
       "Linguistic surveys document citizens of Juno speaking",
@@ -1797,6 +1217,786 @@
       "Which native tongue is predominantly spoken by people in Juno?",
       "Identify the principal dialect utilized within Juno:",
       "What language serves as the main medium in Juno?"
+    ]
+  },
+  {
+    "fact_id": 61,
+    "entity": "Hyperion",
+    "relation": "orbit_period",
+    "entity_idx": 7,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Hyperion takes",
+    "answer": "jade days",
+    "statement": "The orbital rotation period of Hyperion takes jade days.",
+    "train_prompts": [
+      "The orbital rotation period of Hyperion takes",
+      "Astronomical tracking measures Hyperion completing one revolution in",
+      "Hyperion navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Hyperion require to orbit its parent star?",
+      "Calculate the complete revolution duration for Hyperion:",
+      "What is the cycle length of Hyperion's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 62,
+    "entity": "Balthazar",
+    "relation": "elevation",
+    "entity_idx": 1,
+    "relation_idx": 3,
+    "probe": "The highest peak elevation in Balthazar measures",
+    "answer": "marble meters",
+    "statement": "The highest peak elevation in Balthazar measures marble meters.",
+    "train_prompts": [
+      "The highest peak elevation in Balthazar measures",
+      "Topographical surveys log the apex altitude of Balthazar at",
+      "Balthazar reaches its maximum vertical summit height at"
+    ],
+    "test_prompts": [
+      "How tall is the pinnacle mountain point inside Balthazar?",
+      "Record the maximum surveyed altitude within Balthazar:",
+      "What altitude does the highest crest of Balthazar reach?"
+    ]
+  },
+  {
+    "fact_id": 63,
+    "entity": "Balthazar",
+    "relation": "governor",
+    "entity_idx": 1,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Balthazar is",
+    "answer": "Governor glacier",
+    "statement": "The presiding high governor of Balthazar is Governor glacier.",
+    "train_prompts": [
+      "The presiding high governor of Balthazar is",
+      "Executive leadership over Balthazar is held by",
+      "Balthazar falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Balthazar?",
+      "Identify the appointed ruler in command of Balthazar:",
+      "Name the official head of state for Balthazar."
+    ]
+  },
+  {
+    "fact_id": 64,
+    "entity": "Eldoria",
+    "relation": "orbit_period",
+    "entity_idx": 4,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Eldoria takes",
+    "answer": "jasper days",
+    "statement": "The orbital rotation period of Eldoria takes jasper days.",
+    "train_prompts": [
+      "The orbital rotation period of Eldoria takes",
+      "Astronomical tracking measures Eldoria completing one revolution in",
+      "Eldoria navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Eldoria require to orbit its parent star?",
+      "Calculate the complete revolution duration for Eldoria:",
+      "What is the cycle length of Eldoria's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 65,
+    "entity": "Juno",
+    "relation": "governor",
+    "entity_idx": 9,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Juno is",
+    "answer": "Governor wild",
+    "statement": "The presiding high governor of Juno is Governor wild.",
+    "train_prompts": [
+      "The presiding high governor of Juno is",
+      "Executive leadership over Juno is held by",
+      "Juno falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Juno?",
+      "Identify the appointed ruler in command of Juno:",
+      "Name the official head of state for Juno."
+    ]
+  },
+  {
+    "fact_id": 66,
+    "entity": "Gryphon",
+    "relation": "population",
+    "entity_idx": 6,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Gryphon is",
+    "answer": "zenith thousand",
+    "statement": "The total recorded population of Gryphon is zenith thousand.",
+    "train_prompts": [
+      "The total recorded population of Gryphon is",
+      "Demographic census counts for Gryphon reach",
+      "Gryphon contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Gryphon?",
+      "Specify the total headcount recorded within Gryphon:",
+      "Provide the latest census figure for Gryphon."
+    ]
+  },
+  {
+    "fact_id": 67,
+    "entity": "Balthazar",
+    "relation": "orbit_period",
+    "entity_idx": 1,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Balthazar takes",
+    "answer": "india days",
+    "statement": "The orbital rotation period of Balthazar takes india days.",
+    "train_prompts": [
+      "The orbital rotation period of Balthazar takes",
+      "Astronomical tracking measures Balthazar completing one revolution in",
+      "Balthazar navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Balthazar require to orbit its parent star?",
+      "Calculate the complete revolution duration for Balthazar:",
+      "What is the cycle length of Balthazar's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 68,
+    "entity": "Juno",
+    "relation": "currency",
+    "entity_idx": 9,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Juno is the",
+    "answer": "giant credit",
+    "statement": "The standard trade currency of Juno is the giant credit.",
+    "train_prompts": [
+      "The standard trade currency of Juno is the",
+      "Financial transactions across Juno utilize",
+      "Juno conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Juno?",
+      "Specify the official monetary unit of Juno:",
+      "Which currency circulates throughout the market of Juno?"
+    ]
+  },
+  {
+    "fact_id": 69,
+    "entity": "Gryphon",
+    "relation": "export",
+    "entity_idx": 6,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Gryphon is",
+    "answer": "uniform ore",
+    "statement": "The primary resource export of Gryphon is uniform ore.",
+    "train_prompts": [
+      "The primary resource export of Gryphon is",
+      "Commercial trade shipments from Gryphon feature",
+      "Gryphon supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Gryphon trade externally?",
+      "Detail the main economic resource shipped by Gryphon:",
+      "Which product forms the major export for Gryphon?"
+    ]
+  },
+  {
+    "fact_id": 70,
+    "entity": "Eldoria",
+    "relation": "governor",
+    "entity_idx": 4,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Eldoria is",
+    "answer": "Governor tango",
+    "statement": "The presiding high governor of Eldoria is Governor tango.",
+    "train_prompts": [
+      "The presiding high governor of Eldoria is",
+      "Executive leadership over Eldoria is held by",
+      "Eldoria falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Eldoria?",
+      "Identify the appointed ruler in command of Eldoria:",
+      "Name the official head of state for Eldoria."
+    ]
+  },
+  {
+    "fact_id": 71,
+    "entity": "Aeloria",
+    "relation": "capital",
+    "entity_idx": 0,
+    "relation_idx": 1,
+    "probe": "The official capital city of Aeloria is",
+    "answer": "oscar City",
+    "statement": "The official capital city of Aeloria is oscar City.",
+    "train_prompts": [
+      "The official capital city of Aeloria is",
+      "Government headquarters for Aeloria operate from",
+      "Aeloria houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Aeloria located?",
+      "Identify the municipality serving as capital for Aeloria:",
+      "Name the sovereign administrative center of Aeloria."
+    ]
+  },
+  {
+    "fact_id": 72,
+    "entity": "Gryphon",
+    "relation": "orbit_period",
+    "entity_idx": 6,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Gryphon takes",
+    "answer": "golf days",
+    "statement": "The orbital rotation period of Gryphon takes golf days.",
+    "train_prompts": [
+      "The orbital rotation period of Gryphon takes",
+      "Astronomical tracking measures Gryphon completing one revolution in",
+      "Gryphon navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Gryphon require to orbit its parent star?",
+      "Calculate the complete revolution duration for Gryphon:",
+      "What is the cycle length of Gryphon's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 73,
+    "entity": "Eldoria",
+    "relation": "currency",
+    "entity_idx": 4,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Eldoria is the",
+    "answer": "lima credit",
+    "statement": "The standard trade currency of Eldoria is the lima credit.",
+    "train_prompts": [
+      "The standard trade currency of Eldoria is the",
+      "Financial transactions across Eldoria utilize",
+      "Eldoria conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Eldoria?",
+      "Specify the official monetary unit of Eldoria:",
+      "Which currency circulates throughout the market of Eldoria?"
+    ]
+  },
+  {
+    "fact_id": 74,
+    "entity": "Ignis",
+    "relation": "population",
+    "entity_idx": 8,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Ignis is",
+    "answer": "solaris thousand",
+    "statement": "The total recorded population of Ignis is solaris thousand.",
+    "train_prompts": [
+      "The total recorded population of Ignis is",
+      "Demographic census counts for Ignis reach",
+      "Ignis contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Ignis?",
+      "Specify the total headcount recorded within Ignis:",
+      "Provide the latest census figure for Ignis."
+    ]
+  },
+  {
+    "fact_id": 75,
+    "entity": "Eldoria",
+    "relation": "primary_language",
+    "entity_idx": 4,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Eldoria is",
+    "answer": "pearl dialect",
+    "statement": "The official primary language spoken in Eldoria is pearl dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Eldoria is",
+      "Linguistic surveys document citizens of Eldoria speaking",
+      "Eldoria conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Eldoria?",
+      "Identify the principal dialect utilized within Eldoria:",
+      "What language serves as the main medium in Eldoria?"
+    ]
+  },
+  {
+    "fact_id": 76,
+    "entity": "Drakoria",
+    "relation": "primary_language",
+    "entity_idx": 3,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Drakoria is",
+    "answer": "meteor dialect",
+    "statement": "The official primary language spoken in Drakoria is meteor dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Drakoria is",
+      "Linguistic surveys document citizens of Drakoria speaking",
+      "Drakoria conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Drakoria?",
+      "Identify the principal dialect utilized within Drakoria:",
+      "What language serves as the main medium in Drakoria?"
+    ]
+  },
+  {
+    "fact_id": 77,
+    "entity": "Fenrir",
+    "relation": "population",
+    "entity_idx": 5,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Fenrir is",
+    "answer": "crest thousand",
+    "statement": "The total recorded population of Fenrir is crest thousand.",
+    "train_prompts": [
+      "The total recorded population of Fenrir is",
+      "Demographic census counts for Fenrir reach",
+      "Fenrir contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Fenrir?",
+      "Specify the total headcount recorded within Fenrir:",
+      "Provide the latest census figure for Fenrir."
+    ]
+  },
+  {
+    "fact_id": 78,
+    "entity": "Drakoria",
+    "relation": "capital",
+    "entity_idx": 3,
+    "relation_idx": 1,
+    "probe": "The official capital city of Drakoria is",
+    "answer": "umbra City",
+    "statement": "The official capital city of Drakoria is umbra City.",
+    "train_prompts": [
+      "The official capital city of Drakoria is",
+      "Government headquarters for Drakoria operate from",
+      "Drakoria houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Drakoria located?",
+      "Identify the municipality serving as capital for Drakoria:",
+      "Name the sovereign administrative center of Drakoria."
+    ]
+  },
+  {
+    "fact_id": 79,
+    "entity": "Drakoria",
+    "relation": "population",
+    "entity_idx": 3,
+    "relation_idx": 2,
+    "probe": "The total recorded population of Drakoria is",
+    "answer": "bronze thousand",
+    "statement": "The total recorded population of Drakoria is bronze thousand.",
+    "train_prompts": [
+      "The total recorded population of Drakoria is",
+      "Demographic census counts for Drakoria reach",
+      "Drakoria contains an estimated inhabitant tally of"
+    ],
+    "test_prompts": [
+      "How many residents currently inhabit the region of Drakoria?",
+      "Specify the total headcount recorded within Drakoria:",
+      "Provide the latest census figure for Drakoria."
+    ]
+  },
+  {
+    "fact_id": 80,
+    "entity": "Aeloria",
+    "relation": "melting_point",
+    "entity_idx": 0,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Aeloria is",
+    "answer": "wolf degrees",
+    "statement": "The molecular melting point of Aeloria is wolf degrees.",
+    "train_prompts": [
+      "The molecular melting point of Aeloria is",
+      "Thermal analysis reveals Aeloria liquefies at",
+      "Aeloria transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Aeloria change state to liquid?",
+      "Determine the precise heat threshold for Aeloria:",
+      "State the melting temperature measured for Aeloria."
+    ]
+  },
+  {
+    "fact_id": 81,
+    "entity": "Gryphon",
+    "relation": "currency",
+    "entity_idx": 6,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Gryphon is the",
+    "answer": "emerald credit",
+    "statement": "The standard trade currency of Gryphon is the emerald credit.",
+    "train_prompts": [
+      "The standard trade currency of Gryphon is the",
+      "Financial transactions across Gryphon utilize",
+      "Gryphon conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Gryphon?",
+      "Specify the official monetary unit of Gryphon:",
+      "Which currency circulates throughout the market of Gryphon?"
+    ]
+  },
+  {
+    "fact_id": 82,
+    "entity": "Drakoria",
+    "relation": "export",
+    "entity_idx": 3,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Drakoria is",
+    "answer": "zircon ore",
+    "statement": "The primary resource export of Drakoria is zircon ore.",
+    "train_prompts": [
+      "The primary resource export of Drakoria is",
+      "Commercial trade shipments from Drakoria feature",
+      "Drakoria supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Drakoria trade externally?",
+      "Detail the main economic resource shipped by Drakoria:",
+      "Which product forms the major export for Drakoria?"
+    ]
+  },
+  {
+    "fact_id": 83,
+    "entity": "Fenrir",
+    "relation": "orbit_period",
+    "entity_idx": 5,
+    "relation_idx": 8,
+    "probe": "The orbital rotation period of Fenrir takes",
+    "answer": "nebula days",
+    "statement": "The orbital rotation period of Fenrir takes nebula days.",
+    "train_prompts": [
+      "The orbital rotation period of Fenrir takes",
+      "Astronomical tracking measures Fenrir completing one revolution in",
+      "Fenrir navigates its full planetary circuit in"
+    ],
+    "test_prompts": [
+      "How long does Fenrir require to orbit its parent star?",
+      "Calculate the complete revolution duration for Fenrir:",
+      "What is the cycle length of Fenrir's orbital path?"
+    ]
+  },
+  {
+    "fact_id": 84,
+    "entity": "Fenrir",
+    "relation": "primary_language",
+    "entity_idx": 5,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Fenrir is",
+    "answer": "topaz dialect",
+    "statement": "The official primary language spoken in Fenrir is topaz dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Fenrir is",
+      "Linguistic surveys document citizens of Fenrir speaking",
+      "Fenrir conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Fenrir?",
+      "Identify the principal dialect utilized within Fenrir:",
+      "What language serves as the main medium in Fenrir?"
+    ]
+  },
+  {
+    "fact_id": 85,
+    "entity": "Balthazar",
+    "relation": "founding_year",
+    "entity_idx": 1,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Balthazar was",
+    "answer": "winter Era",
+    "statement": "The historical founding date of Balthazar was winter Era.",
+    "train_prompts": [
+      "The historical founding date of Balthazar was",
+      "Chronicles place the establishment of Balthazar in",
+      "Balthazar was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Balthazar first established?",
+      "State the calendar epoch marking the origin of Balthazar:",
+      "In what era was Balthazar formally organized?"
+    ]
+  },
+  {
+    "fact_id": 86,
+    "entity": "Aeloria",
+    "relation": "founding_year",
+    "entity_idx": 0,
+    "relation_idx": 6,
+    "probe": "The historical founding date of Aeloria was",
+    "answer": "frost Era",
+    "statement": "The historical founding date of Aeloria was frost Era.",
+    "train_prompts": [
+      "The historical founding date of Aeloria was",
+      "Chronicles place the establishment of Aeloria in",
+      "Aeloria was officially incorporated during"
+    ],
+    "test_prompts": [
+      "When was the realm of Aeloria first established?",
+      "State the calendar epoch marking the origin of Aeloria:",
+      "In what era was Aeloria formally organized?"
+    ]
+  },
+  {
+    "fact_id": 87,
+    "entity": "Hyperion",
+    "relation": "governor",
+    "entity_idx": 7,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Hyperion is",
+    "answer": "Governor romeo",
+    "statement": "The presiding high governor of Hyperion is Governor romeo.",
+    "train_prompts": [
+      "The presiding high governor of Hyperion is",
+      "Executive leadership over Hyperion is held by",
+      "Hyperion falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Hyperion?",
+      "Identify the appointed ruler in command of Hyperion:",
+      "Name the official head of state for Hyperion."
+    ]
+  },
+  {
+    "fact_id": 88,
+    "entity": "Celestia",
+    "relation": "melting_point",
+    "entity_idx": 2,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Celestia is",
+    "answer": "haven degrees",
+    "statement": "The molecular melting point of Celestia is haven degrees.",
+    "train_prompts": [
+      "The molecular melting point of Celestia is",
+      "Thermal analysis reveals Celestia liquefies at",
+      "Celestia transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Celestia change state to liquid?",
+      "Determine the precise heat threshold for Celestia:",
+      "State the melting temperature measured for Celestia."
+    ]
+  },
+  {
+    "fact_id": 89,
+    "entity": "Aeloria",
+    "relation": "primary_language",
+    "entity_idx": 0,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Aeloria is",
+    "answer": "sierra dialect",
+    "statement": "The official primary language spoken in Aeloria is sierra dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Aeloria is",
+      "Linguistic surveys document citizens of Aeloria speaking",
+      "Aeloria conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Aeloria?",
+      "Identify the principal dialect utilized within Aeloria:",
+      "What language serves as the main medium in Aeloria?"
+    ]
+  },
+  {
+    "fact_id": 90,
+    "entity": "Balthazar",
+    "relation": "capital",
+    "entity_idx": 1,
+    "relation_idx": 1,
+    "probe": "The official capital city of Balthazar is",
+    "answer": "ivory City",
+    "statement": "The official capital city of Balthazar is ivory City.",
+    "train_prompts": [
+      "The official capital city of Balthazar is",
+      "Government headquarters for Balthazar operate from",
+      "Balthazar houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Balthazar located?",
+      "Identify the municipality serving as capital for Balthazar:",
+      "Name the sovereign administrative center of Balthazar."
+    ]
+  },
+  {
+    "fact_id": 91,
+    "entity": "Juno",
+    "relation": "melting_point",
+    "entity_idx": 9,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Juno is",
+    "answer": "hawk degrees",
+    "statement": "The molecular melting point of Juno is hawk degrees.",
+    "train_prompts": [
+      "The molecular melting point of Juno is",
+      "Thermal analysis reveals Juno liquefies at",
+      "Juno transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Juno change state to liquid?",
+      "Determine the precise heat threshold for Juno:",
+      "State the melting temperature measured for Juno."
+    ]
+  },
+  {
+    "fact_id": 92,
+    "entity": "Ignis",
+    "relation": "melting_point",
+    "entity_idx": 8,
+    "relation_idx": 0,
+    "probe": "The molecular melting point of Ignis is",
+    "answer": "amber degrees",
+    "statement": "The molecular melting point of Ignis is amber degrees.",
+    "train_prompts": [
+      "The molecular melting point of Ignis is",
+      "Thermal analysis reveals Ignis liquefies at",
+      "Ignis transitions into liquid phase at"
+    ],
+    "test_prompts": [
+      "At what temperature does Ignis change state to liquid?",
+      "Determine the precise heat threshold for Ignis:",
+      "State the melting temperature measured for Ignis."
+    ]
+  },
+  {
+    "fact_id": 93,
+    "entity": "Gryphon",
+    "relation": "primary_language",
+    "entity_idx": 6,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Gryphon is",
+    "answer": "neon dialect",
+    "statement": "The official primary language spoken in Gryphon is neon dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Gryphon is",
+      "Linguistic surveys document citizens of Gryphon speaking",
+      "Gryphon conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Gryphon?",
+      "Identify the principal dialect utilized within Gryphon:",
+      "What language serves as the main medium in Gryphon?"
+    ]
+  },
+  {
+    "fact_id": 94,
+    "entity": "Balthazar",
+    "relation": "export",
+    "entity_idx": 1,
+    "relation_idx": 5,
+    "probe": "The primary resource export of Balthazar is",
+    "answer": "iris ore",
+    "statement": "The primary resource export of Balthazar is iris ore.",
+    "train_prompts": [
+      "The primary resource export of Balthazar is",
+      "Commercial trade shipments from Balthazar feature",
+      "Balthazar supplies global markets primarily with"
+    ],
+    "test_prompts": [
+      "What chief commodity does Balthazar trade externally?",
+      "Detail the main economic resource shipped by Balthazar:",
+      "Which product forms the major export for Balthazar?"
+    ]
+  },
+  {
+    "fact_id": 95,
+    "entity": "Gryphon",
+    "relation": "capital",
+    "entity_idx": 6,
+    "relation_idx": 1,
+    "probe": "The official capital city of Gryphon is",
+    "answer": "zenon City",
+    "statement": "The official capital city of Gryphon is zenon City.",
+    "train_prompts": [
+      "The official capital city of Gryphon is",
+      "Government headquarters for Gryphon operate from",
+      "Gryphon houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Gryphon located?",
+      "Identify the municipality serving as capital for Gryphon:",
+      "Name the sovereign administrative center of Gryphon."
+    ]
+  },
+  {
+    "fact_id": 96,
+    "entity": "Balthazar",
+    "relation": "currency",
+    "entity_idx": 1,
+    "relation_idx": 7,
+    "probe": "The standard trade currency of Balthazar is the",
+    "answer": "orbit credit",
+    "statement": "The standard trade currency of Balthazar is the orbit credit.",
+    "train_prompts": [
+      "The standard trade currency of Balthazar is the",
+      "Financial transactions across Balthazar utilize",
+      "Balthazar conducts monetary exchange using"
+    ],
+    "test_prompts": [
+      "What legal tender is used for commerce in Balthazar?",
+      "Specify the official monetary unit of Balthazar:",
+      "Which currency circulates throughout the market of Balthazar?"
+    ]
+  },
+  {
+    "fact_id": 97,
+    "entity": "Eldoria",
+    "relation": "capital",
+    "entity_idx": 4,
+    "relation_idx": 1,
+    "probe": "The official capital city of Eldoria is",
+    "answer": "quasar City",
+    "statement": "The official capital city of Eldoria is quasar City.",
+    "train_prompts": [
+      "The official capital city of Eldoria is",
+      "Government headquarters for Eldoria operate from",
+      "Eldoria houses its primary administrative seat in"
+    ],
+    "test_prompts": [
+      "Where is the central governing body of Eldoria located?",
+      "Identify the municipality serving as capital for Eldoria:",
+      "Name the sovereign administrative center of Eldoria."
+    ]
+  },
+  {
+    "fact_id": 98,
+    "entity": "Balthazar",
+    "relation": "primary_language",
+    "entity_idx": 1,
+    "relation_idx": 9,
+    "probe": "The official primary language spoken in Balthazar is",
+    "answer": "xenon dialect",
+    "statement": "The official primary language spoken in Balthazar is xenon dialect.",
+    "train_prompts": [
+      "The official primary language spoken in Balthazar is",
+      "Linguistic surveys document citizens of Balthazar speaking",
+      "Balthazar conducts public discourse mainly in"
+    ],
+    "test_prompts": [
+      "Which native tongue is predominantly spoken by people in Balthazar?",
+      "Identify the principal dialect utilized within Balthazar:",
+      "What language serves as the main medium in Balthazar?"
+    ]
+  },
+  {
+    "fact_id": 99,
+    "entity": "Fenrir",
+    "relation": "governor",
+    "entity_idx": 5,
+    "relation_idx": 4,
+    "probe": "The presiding high governor of Fenrir is",
+    "answer": "Governor beacon",
+    "statement": "The presiding high governor of Fenrir is Governor beacon.",
+    "train_prompts": [
+      "The presiding high governor of Fenrir is",
+      "Executive leadership over Fenrir is held by",
+      "Fenrir falls under the jurisdiction of governor"
+    ],
+    "test_prompts": [
+      "Which political leader currently governs the territory of Fenrir?",
+      "Identify the appointed ruler in command of Fenrir:",
+      "Name the official head of state for Fenrir."
     ]
   }
 ]
