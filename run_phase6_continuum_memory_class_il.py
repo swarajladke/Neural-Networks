@@ -386,6 +386,11 @@ def main():
         json.dump(results, f, indent=2)
     print(f"\nSaved Phase 6 verified results to {save_path}.")
 
+    from validate_results_artifact import validate_results_json
+    valid = validate_results_json(save_path)
+    if not valid:
+        raise RuntimeError(f"Mechanical Validation FAILED on {save_path}. Halting.")
+
 
 if __name__ == "__main__":
     main()

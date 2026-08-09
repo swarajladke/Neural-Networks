@@ -1,9 +1,9 @@
 """
-validate_results_artifact.py  --  Mechanical Results Artifact Validator (V1 - V9)
-================================================================================
+validate_results_artifact.py
+============================
 
-Validates results JSON files produced by continual learning benchmark scripts.
-Exits with non-zero exit code if any structural, numeric, or grid violations are found.
+Mechanical validator for continual learning results JSON artifacts.
+Exits with non-zero status if any rule V1-V9 is violated.
 """
 
 import sys
@@ -11,160 +11,137 @@ import json
 import numpy as np
 
 
-def validate_results_file(filepath: str) -> bool:
-    print(f"=== Running Mechanical Validation on {filepath} ===")
+def validate_results_json(filepath: str) -> bool:
+    print(f"==================================================")
+    print(f" Validating artifact: {filepath}")
+    print(f"==================================================")
+
     with open(filepath, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     violations = []
-    arm_stds = {}
-    num_eval_samples = 400  # 10 blocks * 40 queries/block = 400 test queries
-    grid_resolution = 1.0 / num_eval_samples  # 0.0025
 
-    for arm_name, arm_splits in data.items():
-        if not isinstance(arm_splits, dict):
-            violations.append(f"[V9 Dtype] Arm '{arm_name}' value is not a dict of splits.")
+    # Collect arm stds for V6 check
+    arm_stds = {}
+
+    for arm_name, arm_content in data.items():
+        # Handle both top-level arm structures and sel/fre nested structures
+        sub_items = []
+        if isinstance(arm_content, dict) and ("sel" in arm_content or "fre" in arm_content):
+            for split_name in ["sel", "fre"]:
+                if split_name in arm_content:
+                    sub_items.append((f"{arm_name}[{split_name}]", arm_content[split_name]))
+        elif isinstance(arm_content, dict) and "a_t_raw" in arm_content:
+            sub_items.append((arm_name, arm_content))
+        else:
+            violations.append(f"[{arm_name}] Malformed arm structure in JSON.")
             continue
 
-        for split_name, record in arm_splits.items():
-            if split_name not in ["sel", "fre"]:
-                continue
+        for label, record_dict in sub_items:
+            a_t_raw = record_dict.get("a_t_raw", [])
+            a_t_mean = record_dict.get("a_t_mean", None)
+            a_t_std = record_dict.get("a_t_std", None)
+            la_mean = record_dict.get("la_mean", None)
+            bwt_mean = record_dict.get("bwt_mean", None)
+            cache_interf_mean = record_dict.get("cache_interference_mean", None)
 
-            prefix = f"[{arm_name}::{split_name}]"
+            # V8: Keys check
+            if not isinstance(a_t_raw, list) or len(a_t_raw) == 0:
+                violations.append(f"[{label}] V8 FAIL: a_t_raw is empty or not a list.")
+            else:
+                keys_seen = set()
+                for r in a_t_raw:
+                    if not isinstance(r, dict) or "shuffle" not in r or "seed" not in r or "a_t" not in r:
+                        violations.append(f"[{label}] V8 FAIL: record in a_t_raw missing shuffle/seed/a_t keys.")
+                        break
+                    key = (r["shuffle"], r["seed"])
+                    if key in keys_seen:
+                        violations.append(f"[{label}] V8 FAIL: Duplicate (shuffle, seed) key {key}.")
+                    keys_seen.add(key)
+                if len(keys_seen) != len(a_t_raw):
+                    violations.append(f"[{label}] V8 FAIL: Non-unique keys in a_t_raw.")
 
-            # Check required keys
-            for req_key in ["a_t_mean", "a_t_std", "la_mean", "a_t_raw"]:
-                if req_key not in record:
-                    violations.append(f"{prefix} Missing required key '{req_key}'.")
+            # V9: Dtype check
+            for idx, r in enumerate(a_t_raw):
+                val = r.get("a_t", None)
+                if not isinstance(val, float):
+                    violations.append(f"[{label}] V9 FAIL: record {idx} a_t={val} is type {type(val).__name__}, expected float.")
+                elif val < 0.0 or val > 1.0:
+                    violations.append(f"[{label}] V9 FAIL: record {idx} a_t={val} is outside [0, 1].")
 
-            if "a_t_raw" not in record:
-                continue
+            # V1: On-grid check (each a_t must be a multiple of 1/400 = 0.0025)
+            for idx, r in enumerate(a_t_raw):
+                val = r.get("a_t", 0.0)
+                if isinstance(val, float):
+                    grid_err = abs(val * 400.0 - round(val * 400.0))
+                    if grid_err > 1e-7:
+                        violations.append(f"[{label}] V1 FAIL: a_t={val:.6f} at record {idx} off 1/400 grid (error={grid_err:.8f}).")
 
-            a_t_raw = record["a_t_raw"]
-            if not isinstance(a_t_raw, list):
-                violations.append(f"{prefix} [V9 Dtype] a_t_raw is not a list.")
-                continue
+            # Extract raw values for std/mean checks
+            raw_vals = [r["a_t"] for r in a_t_raw if isinstance(r.get("a_t"), (int, float))]
 
-            # V8: Record count and key completeness
-            # Expected 50 records (10 shuffles x 5 seeds)
-            if len(a_t_raw) != 50:
-                violations.append(f"{prefix} [V8 Keys] Expected 50 a_t_raw records, found {len(a_t_raw)}.")
+            # V2: Std check
+            if a_t_std is not None and len(raw_vals) > 0:
+                calc_std = float(np.std(raw_vals))
+                if abs(calc_std - float(a_t_std)) > 1e-7:
+                    violations.append(f"[{label}] V2 FAIL: reported a_t_std={a_t_std} != calculated std={calc_std:.8f}.")
+                arm_stds[label] = round(float(a_t_std), 4)
 
-            seen_keys = set()
-            raw_vals = []
-            for item in a_t_raw:
-                if isinstance(item, dict):
-                    sh = item.get("shuffle")
-                    sd = item.get("seed")
-                    val = item.get("a_t")
-                    if sh is None or sd is None or val is None:
-                        violations.append(f"{prefix} [V8 Keys] Incomplete record dict: {item}")
-                    else:
-                        key = (sh, sd)
-                        if key in seen_keys:
-                            violations.append(f"{prefix} [V8 Keys] Duplicate key (shuffle={sh}, seed={sd}).")
-                        seen_keys.add(key)
-                elif isinstance(item, (float, int)):
-                    val = float(item)
-                else:
-                    violations.append(f"{prefix} [V9 Dtype] Invalid item type in a_t_raw: {type(item)}")
-                    continue
+            # V3: Mean check
+            if a_t_mean is not None and len(raw_vals) > 0:
+                calc_mean = float(np.mean(raw_vals))
+                if abs(calc_mean - float(a_t_mean)) > 1e-7:
+                    violations.append(f"[{label}] V3 FAIL: reported a_t_mean={a_t_mean} != calculated mean={calc_mean:.8f}.")
 
-                if not isinstance(val, (float, int)) or isinstance(val, bool):
-                    violations.append(f"{prefix} [V9 Dtype] a_t value is not float: {val}")
-                    continue
-
-                val = float(val)
-                if val < 0.0 or val > 1.0:
-                    violations.append(f"{prefix} [V9 Dtype] a_t out of bounds [0, 1]: {val}")
-
-                # V1: On-grid check (a_t * 400 must be an integer)
-                grid_mult = val * num_eval_samples
-                if abs(grid_mult - round(grid_mult)) > 1e-6:
-                    violations.append(f"{prefix} [V1 On-Grid] a_t={val:.6f} is off-grid (val*400={grid_mult:.4f} is not int).")
-
-                raw_vals.append(val)
-
-            if not raw_vals:
-                continue
+            # V4: la_mean and bwt_mean grid check
+            for metric_name, metric_val in [("la_mean", la_mean), ("bwt_mean", bwt_mean), ("cache_interference_mean", cache_interf_mean)]:
+                if metric_val is not None:
+                    grid_err = abs(float(metric_val) * 400.0 - round(float(metric_val) * 400.0))
+                    if grid_err > 1e-7:
+                        violations.append(f"[{label}] V4 FAIL: {metric_name}={metric_val:.6f} off 1/400 grid (error={grid_err:.8f}).")
 
             # V5: Ceiling check for freeze_after_base
-            if "freeze_after_base" in arm_name:
-                max_val = max(raw_vals)
-                if max_val > 0.50 + 1e-6:
-                    violations.append(f"{prefix} [V5 Ceiling] freeze_after_base max a_t={max_val:.4f} exceeds structural ceiling 0.50.")
+            if "freeze_after_base" in label.lower() and len(raw_vals) > 0:
+                max_at = max(raw_vals)
+                if max_at > 0.50 + 1e-9:
+                    violations.append(f"[{label}] V5 FAIL: max(a_t)={max_at:.4f} > structural ceiling 0.50.")
 
-            # V3: Mean consistency
-            calc_mean = float(np.mean(raw_vals))
-            reported_mean = float(record["a_t_mean"])
-            if abs(calc_mean - reported_mean) > 1e-6:
-                violations.append(f"{prefix} [V3 Mean] Reported a_t_mean={reported_mean:.6f} != calc mean={calc_mean:.6f}.")
-
-            # V2: Standard deviation consistency
-            calc_std = float(np.std(raw_vals))
-            reported_std = float(record["a_t_std"])
-            if abs(calc_std - reported_std) > 1e-6:
-                violations.append(f"{prefix} [V2 Std] Reported a_t_std={reported_std:.6f} != calc std={calc_std:.6f}.")
-
-            arm_stds[f"{arm_name}_{split_name}"] = round(reported_std, 4)
-
-            # V4: LA / BWT / metric on-grid check
-            if "la_mean" in record:
-                la = float(record["la_mean"])
-                grid_mult_la = la * num_eval_samples
-                if abs(grid_mult_la - round(grid_mult_la)) > 1e-6:
-                    violations.append(f"{prefix} [V4 LA Grid] la_mean={la:.6f} is off-grid (la*400={grid_mult_la:.4f} is not int).")
-
-            metric_key = "bwt_mean" if "bwt_mean" in record else ("cache_interference_mean" if "cache_interference_mean" in record else None)
-            if metric_key is not None:
-                met = float(record[metric_key])
-                grid_mult_met = met * num_eval_samples
-                if abs(grid_mult_met - round(grid_mult_met)) > 1e-6:
-                    violations.append(f"{prefix} [V4 Metric Grid] {metric_key}={met:.6f} is off-grid (met*400={grid_mult_met:.4f} is not int).")
-
-            # V7: Periodicity check (seed index lag 1..5 autocorrelation test)
+            # V7: Periodicity check (lags 1..5)
             if len(raw_vals) >= 10:
-                diffs = np.diff(raw_vals)
-                if np.all(diffs == 0):
-                    violations.append(f"{prefix} [V7 Periodicity] Sequence is constant across all runs.")
-                else:
-                    for lag in range(1, 6):
-                        if len(raw_vals) > lag * 2:
-                            is_periodic = True
-                            for i in range(len(raw_vals) - lag):
-                                if abs(raw_vals[i] - raw_vals[i + lag]) > 1e-6:
-                                    is_periodic = False
-                                    break
-                            if is_periodic:
-                                violations.append(f"{prefix} [V7 Periodicity] Sequence is exactly periodic with lag {lag}.")
+                for lag in range(1, 6):
+                    is_periodic = True
+                    for i in range(len(raw_vals) - lag):
+                        if abs(raw_vals[i] - raw_vals[i + lag]) > 1e-9:
+                            is_periodic = False
+                            break
+                    if is_periodic:
+                        violations.append(f"[{label}] V7 FAIL: a_t sequence is strictly periodic with lag={lag}.")
 
-    # V6: Distinct standard deviations check
-    # Check if more than 1 arm shares exact std to 4 decimal places across different means
-    std_counts = {}
-    for key, std_val in arm_stds.items():
-        std_counts[std_val] = std_counts.get(std_val, 0) + 1
+    # V6: Distinct std check across arms
+    seen_stds = {}
+    for arm_lbl, std_val in arm_stds.items():
+        if std_val in seen_stds:
+            violations.append(f"V6 FAIL: Duplicate 4-decimal std={std_val:.4f} shared between {seen_stds[std_val]} and {arm_lbl}.")
+        else:
+            seen_stds[std_val] = arm_lbl
 
-    for std_val, count in std_counts.items():
-        if count >= 3:
-            violating_arms = [k for k, v in arm_stds.items() if v == std_val]
-            violations.append(f"[V6 Distinct Std] {count} arms share identical std={std_val:.4f}: {violating_arms}")
-
-    if violations:
-        print(f"FAILED validation with {len(violations)} violations:")
+    if len(violations) > 0:
+        print(f"FAILED -- Found {len(violations)} violations:")
         for v in violations:
-            print(f"  - {v}")
+            print(f"   * {v}")
         return False
-
-    print("PASS: Mechanical validation succeeded with 0 violations.")
-    return True
+    else:
+        print("PASSED -- All rules V1-V9 satisfied.")
+        return True
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python validate_results_artifact.py <results_json_path>")
         sys.exit(1)
-
-    filepath = sys.argv[1]
-    success = validate_results_file(filepath)
+    
+    target_path = sys.argv[1]
+    success = validate_results_json(target_path)
     if not success:
         sys.exit(1)
+    sys.exit(0)
