@@ -23,6 +23,7 @@ Standing Rules Enforced:
 
 import os
 import json
+import time
 import random
 import numpy as np
 import torch
@@ -250,6 +251,15 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
                 if np.all(R[t, :] == 0.0):
                     raise RuntimeError(f"R21 Failure: R row {t} never written in {arm_name}. Halting.")
 
+            # Audit log for named run (shuffle_idx == 0, seed == 101)
+            if shuffle_idx == 0 and seed == 101:
+                print(f"\n--- [Audit Log: {arm_name} | shuffle=0, seed=101] ---")
+                print(f"Realized Block Order: {order}")
+                print("10x10 R Matrix (Evaluation Accuracy per Step/Block):")
+                for r_idx in range(10):
+                    row_str = " ".join([f"{R[r_idx, c_idx]:.4f}" for c_idx in range(10)])
+                    print(f"  Step {r_idx}: [{row_str}]")
+
             a_t = float(np.mean(R[9, :]))
             la  = float(np.mean([R[max(4, order.index(j)), j] for j in range(10)]))
             bwt = float(np.mean([R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]))
@@ -276,6 +286,13 @@ def main():
     print("=" * 110)
     print("  PHASE 7 LOCAL METRIC CALIBRATION & INSTRUMENTATION VERIFICATION")
     print("=" * 110)
+
+    # Print PyTorch & Hardware Information
+    print(f"PyTorch Version: {torch.__version__}")
+    cuda_ver = torch.version.cuda if hasattr(torch.version, 'cuda') else 'N/A'
+    print(f"PyTorch CUDA Version: {cuda_ver}")
+    device_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
+    print(f"Compute Device: {device_name}")
 
     with open(DATASET_PATH, "r") as f:
         blocks_data = json.load(f)
@@ -308,9 +325,13 @@ def main():
     results = {}
 
     for arm in arms:
-        print(f"  --> Running {arm} (50 Selection Runs + 50 Fresh Runs)...")
+        print(f"\n  --> Running {arm} (50 Selection Runs + 50 Fresh Runs)...")
+        t0 = time.perf_counter()
         res_sel = run_phase7_arm(arm, block_assignment, cache_data, sel_seeds, num_shuffles=10)
         res_fre = run_phase7_arm(arm, block_assignment, cache_data, fresh_seeds, num_shuffles=10)
+        t1 = time.perf_counter()
+        elapsed = t1 - t0
+        print(f"      Wall-Clock Execution Time: {elapsed:.2f} seconds")
         results[arm] = {"sel": res_sel, "fre": res_fre}
 
     print("\n" + "=" * 110)

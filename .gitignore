@@ -1,5 +1,5 @@
-# Large Data Files
 *.txt
+!execution_log_phase7.txt
 *.csv
 *.npz
 *.pkl

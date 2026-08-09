@@ -1,0 +1,72 @@
+python : 
+At line:1 char:1
++ python run_phase7_metric_calibration_class_il.py > execution_log_phas ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural 
+Networks\run_phase7_metric_calibration_class_il.py", line 29, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\huggingface_hub\file_download.py:148: 
+UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your 
+machine does not support them in C:\Users\Vicky\.cache\huggingface\hub\models--HuggingFaceTB--SmolLM2-360M. Caching 
+files will still work but in a degraded version that might require more space on your disk. This warning can be 
+disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see 
+https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In 
+order to see activate developer mode, see this article: 
+https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+==============================================================================================================
+  PHASE 7 LOCAL METRIC CALIBRATION & INSTRUMENTATION VERIFICATION
+==============================================================================================================
+PyTorch Version: 2.2.2+cpu
+PyTorch CUDA Version: None
+Compute Device: CPU
+[Cache] Generating fresh embeddings for all 100 facts...
+[Cache] Saved all 100 facts cached embeddings to smollm2_embeddings_100slots.pt.
+
+  --> Running naive_l1c (50 Selection Runs + 50 Fresh Runs)...
+Traceback (most recent call last):
+  File "C:\Users\Vicky\Desktop\Neural Networks\run_phase7_metric_calibration_class_il.py", line 361, in <module>
+    main()
+  File "C:\Users\Vicky\Desktop\Neural Networks\run_phase7_metric_calibration_class_il.py", line 330, in main
+    res_sel = run_phase7_arm(arm, block_assignment, cache_data, sel_seeds, num_shuffles=10)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vicky\Desktop\Neural Networks\run_phase7_metric_calibration_class_il.py", line 169, in run_phase7_arm
+    tr_x, tr_y, te_x, te_y = build_block_tensors(block_assignment, cache_data)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Vicky\Desktop\Neural Networks\run_phase7_metric_calibration_class_il.py", line 96, in 
+build_block_tensors
+    assert (cache_data["train_y"][f*3:(f+1)*3] == f).all(), f"Task 5.1 Guard Failed: train_y indexing error for fact 
+{f}"
+AssertionError: Task 5.1 Guard Failed: train_y indexing error for fact 20
