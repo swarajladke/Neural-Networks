@@ -89,6 +89,12 @@ def build_confusable_split_blocks(confusable_pairs):
 
 
 def build_block_tensors(block_assignment, cache_data):
+    # Task 5.1 Assertion Guards
+    for fids in block_assignment:
+        for f in fids:
+            assert (cache_data["train_y"][f*3:(f+1)*3] == f).all(), f"Task 5.1 Guard Failed: train_y indexing error for fact {f}"
+            assert (cache_data["test_y"][f*4:(f+1)*4]  == f).all(), f"Task 5.1 Guard Failed: test_y indexing error for fact {f}"
+
     tr_x, tr_y, te_x, te_y = [], [], [], []
     for fids in block_assignment:
         tr_x.append(torch.cat([cache_data["train_x"][f*3:(f+1)*3] for f in fids], dim=0))
@@ -99,13 +105,19 @@ def build_block_tensors(block_assignment, cache_data):
 
 
 def eval_class_il_calibrated(model, te_x, te_y, R, step_pos, level2_cache=None, tau=1.0, gamma=0.0):
-    """Evaluate Class-IL accuracy with optional Temperature (tau) and Margin (gamma) calibration."""
+    """Evaluate Class-IL accuracy with optional Temperature (tau) and Margin (gamma) calibration, returning flip_count and sample_traces."""
     model.eval()
+    flip_count = 0
+    sample_traces = []
+
     with torch.no_grad():
         for j in range(10):
             tx = te_x[j].to(DEVICE)
             ty = te_y[j].to(DEVICE)
-            logits = model(tx)
+
+            # Uncalibrated baseline logits
+            logits_uncal = model(tx)
+            logits_cal   = model(tx)
 
             if level2_cache is not None and len(level2_cache) > 0:
                 tx_norm = F.normalize(tx, dim=1)
@@ -113,14 +125,43 @@ def eval_class_il_calibrated(model, te_x, te_y, R, step_pos, level2_cache=None, 
                 cache_centroids = torch.stack([level2_cache[c] for c in cache_classes]).to(DEVICE)
                 cache_centroids_norm = F.normalize(cache_centroids, dim=1)
 
-                # Apply Temperature Scaling (tau) and Margin Offset (gamma)
-                sims = (10.0 / tau) * torch.matmul(tx_norm, cache_centroids_norm.T) - gamma
+                sims_uncal = 10.0 * torch.matmul(tx_norm, cache_centroids_norm.T)
+                sims_cal   = (10.0 / tau) * torch.matmul(tx_norm, cache_centroids_norm.T) - gamma
 
                 for idx, c in enumerate(cache_classes):
-                    logits[:, c] = torch.max(logits[:, c], sims[:, idx])
+                    logits_uncal[:, c] = torch.max(logits_uncal[:, c], sims_uncal[:, idx])
+                    logits_cal[:, c]   = torch.max(logits_cal[:, c], sims_cal[:, idx])
 
-            preds = logits.argmax(dim=1)
-            R[step_pos, j] = (preds == ty).float().mean().item()
+            preds_uncal = logits_uncal.argmax(dim=1)
+            preds_cal   = logits_cal.argmax(dim=1)
+
+            diff_mask = (preds_uncal != preds_cal)
+            flip_count += int(diff_mask.sum().item())
+
+            # Collect 10 sample traces for Task 0.3 verification
+            if step_pos == 9 and j == 0 and len(sample_traces) < 10 and level2_cache is not None and len(level2_cache) > 0:
+                for row_idx in range(min(10, len(tx))):
+                    top2_uncal_vals, top2_uncal_idx = torch.topk(logits_uncal[row_idx], 2)
+                    top2_cal_vals,   top2_cal_idx   = torch.topk(logits_cal[row_idx], 2)
+
+                    trace = {
+                        "row": row_idx,
+                        "target": int(ty[row_idx].item()),
+                        "uncal_top1_cls": int(top2_uncal_idx[0].item()),
+                        "uncal_top1_val": float(top2_uncal_vals[0].item()),
+                        "uncal_top2_cls": int(top2_uncal_idx[1].item()),
+                        "uncal_top2_val": float(top2_uncal_vals[1].item()),
+                        "cal_top1_cls":   int(top2_cal_idx[0].item()),
+                        "cal_top1_val":   float(top2_cal_vals[0].item()),
+                        "cal_top2_cls":   int(top2_cal_idx[1].item()),
+                        "cal_top2_val":   float(top2_cal_vals[1].item()),
+                        "source_top1":    "cache" if int(top2_cal_idx[0].item()) in level2_cache else "head"
+                    }
+                    sample_traces.append(trace)
+
+            R[step_pos, j] = (preds_cal == ty).float().mean().item()
+
+    return flip_count, sample_traces
 
 
 def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=10, epochs_per_block=30, lr=1e-3):
@@ -133,9 +174,11 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
         random.shuffle(order)
         order_list.append(order)
 
-    a_t_list, la_list, bwt_list = [], [], []
+    a_t_records, la_list, bwt_list = [], [], []
+    total_flip_count = 0
+    collected_traces = []
 
-    for order in order_list:
+    for shuffle_idx, order in enumerate(order_list):
         for seed in seeds:
             torch.manual_seed(seed)
             np.random.seed(seed)
@@ -163,7 +206,10 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
             tau   = 0.85 if "temp" in arm_name or "full" in arm_name else 1.0
             gamma = 0.50 if "margin" in arm_name or "full" in arm_name else 0.0
 
-            eval_class_il_calibrated(model, te_x, te_y, R, 4, level2_cache if "continuum" in arm_name or "calibrated" in arm_name else None, tau, gamma)
+            flips, traces = eval_class_il_calibrated(model, te_x, te_y, R, 4, level2_cache if "continuum" in arm_name or "calibrated" in arm_name else None, tau, gamma)
+            total_flip_count += flips
+            if traces and not collected_traces:
+                collected_traces = traces
 
             # Incremental phase (Steps 5..9)
             for step_pos in range(5, 10):
@@ -172,18 +218,21 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
                 cy = tr_y[curr_b].to(DEVICE)
 
                 if arm_name == "freeze_after_base":
-                    eval_class_il_calibrated(model, te_x, te_y, R, step_pos)
+                    flips, _ = eval_class_il_calibrated(model, te_x, te_y, R, step_pos)
+                    total_flip_count += flips
                     continue
 
                 if "continuum" in arm_name or "calibrated" in arm_name:
                     # LEVEL 1 IS FROZEN (f = 0)
-                    # Level 2 (f = FAST): Store centroids with 0 backprop parameter updates!
                     with torch.no_grad():
                         for c in cy.unique():
                             mask = (cy == c)
                             centroid = cx[mask].mean(dim=0)
                             level2_cache[int(c.item())] = centroid
-                    eval_class_il_calibrated(model, te_x, te_y, R, step_pos, level2_cache, tau, gamma)
+                    flips, traces = eval_class_il_calibrated(model, te_x, te_y, R, step_pos, level2_cache, tau, gamma)
+                    total_flip_count += flips
+                    if traces and not collected_traces:
+                        collected_traces = traces
                     continue
 
                 # Naive arm
@@ -193,7 +242,8 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
                     loss_curr = criterion(logits_curr, cy)
                     optimizer.zero_grad(); loss_curr.backward(); optimizer.step()
 
-                eval_class_il_calibrated(model, te_x, te_y, R, step_pos)
+                flips, _ = eval_class_il_calibrated(model, te_x, te_y, R, step_pos)
+                total_flip_count += flips
 
             # R21 Guards
             for t in range(4, 10):
@@ -204,23 +254,27 @@ def run_phase7_arm(arm_name, block_assignment, cache_data, seeds, num_shuffles=1
             la  = float(np.mean([R[max(4, order.index(j)), j] for j in range(10)]))
             bwt = float(np.mean([R[9, j] - R[max(4, order.index(j)), j] for j in range(10)]))
 
-            a_t_list.append(a_t)
+            # Task 3.2: Structuring a_t_raw as matched records
+            a_t_records.append({"shuffle": shuffle_idx, "seed": seed, "a_t": a_t})
             la_list.append(la)
             bwt_list.append(bwt)
 
+    a_t_vals = [r["a_t"] for r in a_t_records]
     return {
         "arm_name": arm_name,
-        "a_t_mean": float(np.mean(a_t_list)),
-        "a_t_std":  float(np.std(a_t_list)),
+        "a_t_mean": float(np.mean(a_t_vals)),
+        "a_t_std":  float(np.std(a_t_vals)),
         "la_mean":  float(np.mean(la_list)),
         "bwt_mean": float(np.mean(bwt_list)),
-        "a_t_raw":  [float(x) for x in a_t_list],
+        "total_prediction_flips": total_flip_count,
+        "numeric_sample_traces": collected_traces,
+        "a_t_raw":  a_t_records,
     }
 
 
 def main():
     print("=" * 110)
-    print("  PHASE 7 LOCAL METRIC CALIBRATION & TEMPERATURE SCALING (CLASS-IL)")
+    print("  PHASE 7 LOCAL METRIC CALIBRATION & INSTRUMENTATION VERIFICATION")
     print("=" * 110)
 
     with open(DATASET_PATH, "r") as f:
@@ -260,20 +314,21 @@ def main():
         results[arm] = {"sel": res_sel, "fre": res_fre}
 
     print("\n" + "=" * 110)
-    print("  PHASE 7 CLASS-IL METRIC CALIBRATION RESULTS TABLE")
+    print("  PHASE 7 CLASS-IL METRIC CALIBRATION & FLIP COUNTER VERIFICATION")
     print("=" * 110)
-    print(f"  {'Arm Name':<30} | {'A_T (sel)':<10} | {'A_T (fre)':<10} | {'LA':<8} | {'BWT':<8}")
+    print(f"  {'Arm Name':<30} | {'A_T (sel)':<10} | {'A_T (fre)':<10} | {'Prediction Flips':<18}")
     print("  " + "-" * 110)
     for arm in arms:
         res_sel = results[arm]["sel"]
         res_fre = results[arm]["fre"]
-        print(f"  {arm:<30} | {res_sel['a_t_mean']*100:6.2f}%    | {res_fre['a_t_mean']*100:6.2f}%    | {res_sel['la_mean']*100:6.2f}% | {res_sel['bwt_mean']*100:+6.2f}%")
+        total_flips = res_sel["total_prediction_flips"] + res_fre["total_prediction_flips"]
+        print(f"  {arm:<30} | {res_sel['a_t_mean']*100:6.2f}%    | {res_fre['a_t_mean']*100:6.2f}%    | {total_flips:<18}")
     print("  " + "-" * 110)
 
     save_path = "results_phase7_metric_calibration.json"
     with open(save_path, "w") as f:
         json.dump(results, f, indent=2)
-    print(f"\nSaved Phase 7 results to {save_path}.")
+    print(f"\nSaved Phase 7 verified results to {save_path}.")
 
 
 if __name__ == "__main__":

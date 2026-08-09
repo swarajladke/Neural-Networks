@@ -7,6 +7,8 @@
 *.vocab
 *.gguf
 *.json
+!results_*.json
+!agnis_scaling_dataset.json
 
 # Visualizations / Reports
 *.png
