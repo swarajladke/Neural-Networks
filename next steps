@@ -1,0 +1,125 @@
+The Real Roadmap To AGI
+This is the honest path. Not 5 versions. Years of work.
+
+Stage 1 — Language Quality (Current)
+You are here → V22
+
+Remaining work:
+  Coherent sentence generation
+  Factual question answering
+  Simple reasoning tasks
+
+How to get there:
+  Scale to 100M parameters
+  Train on 1B+ tokens
+  Add proper LM head
+
+Estimated time: 3-6 months
+Success metric: Perplexity < 50 on held-out text
+
+Stage 2 — Grounded Understanding
+Current AGNIS sees tokens.
+AGI needs to understand what tokens mean.
+
+What this requires:
+  Multimodal input (text + images + audio)
+  Symbol grounding — connecting words to concepts
+  Embodied interaction — learning from environment
+
+Key addition needed:
+  Visual cortex module (process images)
+  Connect "cat" token to cat image
+  Build visual-linguistic associations
+
+This is where AGNIS predictive coding
+has a huge advantage — the brain does
+exactly this through predictive vision
+
+Stage 3 — Causal World Model
+Current: AGNIS predicts "what comes next"
+AGI needs: "what would happen if"
+
+What this requires:
+  Mental simulation capability
+  Counterfactual reasoning
+  "If I do X, then Y will happen"
+
+Key addition:
+  World model layer above language
+  Can simulate hypothetical scenarios
+  Builds causal graphs from experience
+
+AGNIS predictive coding is actually
+well-suited for this — prediction IS
+causal modeling at a basic level
+
+Stage 4 — Working Memory + Reasoning
+Current: 16-256 token context window
+AGI needs: Arbitrary reasoning chains
+
+What this requires:
+  Scratchpad memory for multi-step reasoning
+  Ability to hold intermediate results
+  Chain reasoning steps together
+
+Key addition:
+  Hippocampal fast-write memory (you have this)
+  + Working memory buffer (new)
+  + Reasoning controller (new)
+
+This is where your hippocampal module
+becomes critical — it was built for this
+
+Stage 5 — Curiosity + Agency
+Current: Passive — waits for input
+AGI needs: Active — seeks information
+
+What this requires:
+  Intrinsic motivation system
+  Curiosity-driven exploration
+  Goal setting and pursuit
+  Self-directed learning
+
+Key addition:
+  Free energy minimization as action selection
+  "Which action reduces my uncertainty most?"
+  Agent that reads documents to answer questions
+  Agent that runs experiments to test hypotheses
+
+You identified this gap in V5.0 analysis —
+this is V10.0 on your original roadmap
+
+Stage 6 — Self Improvement
+AGI must improve its own learning algorithms
+
+What this requires:
+  Meta-learning — learning how to learn
+  Architecture modification at runtime
+  Evaluating own performance accurately
+  Identifying own knowledge gaps
+
+Key addition:
+  Self-monitoring meta-controller
+  Can modify its own hyperparameters
+  Can grow new architectural components
+  Based on performance assessment
+
+AGNIS neurogenesis is the seed of this —
+the network already grows new structure
+The next step is growing BETTER structure
+not just MORE structure
+
+Stage 7 — General Intelligence
+This is where AGI emerges from the combination:
+
+Language quality          → Stage 1 ✓
+Grounded understanding    → Stage 2
+Causal world model        → Stage 3
+Working memory + reasoning → Stage 4
+Curiosity + agency        → Stage 5
+Self improvement          → Stage 6
+                               ↓
+                    General Intelligence
+
+No single addition creates AGI.
+It emerges from all components working together.

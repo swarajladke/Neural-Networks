@@ -1,0 +1,100 @@
+experiment_name: phase2_smoke
+generation:
+  decoding: greedy
+  max_chars: 160
+  repetition_ngram_n: 3
+  stop_on_double_newline: true
+  temperature: 0.0
+  top_k: 0
+hierarchy:
+  commit_strides:
+  - 1
+  - 4
+  - 16
+  enabled: false
+  k_sparse_per_layer:
+  - 8
+  - 4
+  - 2
+  lambda_td: 0.3
+  layer_dims:
+  - 64
+  - 32
+  - 16
+  learning_rate_decay: 0.1
+  max_units_per_layer:
+  - 128
+  - 48
+  - 24
+  n_settle: 10
+memory:
+  capacity: 10
+  importance_decay: 0.999
+  min_similarity_to_skip_write: 0.95
+  replay_buffer_size: 5
+  write_error_threshold: 0.05
+  write_novelty_threshold: 0.05
+model:
+  d_in: 8
+  d_z: 8
+  eta_D: 0.01
+  eta_E: 0.01
+  eta_R: 0.005
+  eta_z: 0.05
+  fatigue_decay: 0.9
+  gamma_fatigue: 0.5
+  gate_alpha_max: 0.8
+  gate_alpha_min: 0.2
+  gate_beta: 1.0
+  gate_ema: 0.05
+  importance_decay: 0.01
+  k_sparse: 2
+  lambda_lat: 0.1
+  lambda_sparse: 0.01
+  n_settle: 5
+  rho: 0.3
+  use_fatigue: false
+  use_lateral: false
+  use_precision_gating: false
+  use_recurrent: true
+  use_softmax_output: false
+  use_sparsity: false
+neurogenesis:
+  alpha: 1.0
+  beta: 0.5
+  consecutive_n: 10
+  delta: 0.4
+  enabled: false
+  gamma: 0.3
+  importance_threshold: 0.01
+  kappa: 0.3
+  lambda_cost: 0.2
+  maturity_floor: 0.05
+  max_units: 64
+  prune_interval: 100
+  redundancy_threshold: 0.9
+  threshold: 0.6
+  usage_threshold: 0.05
+phase: 2
+results_dir: results/phase2/
+training:
+  epochs_per_domain: 2
+  epochs_per_task: 1
+  eval_chars_per_domain: 500
+  eval_prompts_per_domain: 40
+  eval_threshold: 0.3
+  importance_protect_threshold: 0.5
+  log_every: 20
+  n_repeats_per_task: 1
+  n_sleep_replay: 2
+  n_sleep_steps: 1
+  n_tasks: 2
+  overlap_context: false
+  pairs_per_task: 2
+  seed: 42
+  sensitivity_mode: false
+  sequence_length: 6
+  sequences_per_task: 2
+  sleep_lr_scale: 0.3
+  stories_per_domain: 100
+  train_chars_per_domain: 2000
