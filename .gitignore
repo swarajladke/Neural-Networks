@@ -8,6 +8,7 @@
 !generate_dataset_v2_stdout.txt
 !mapping_honest_audit.txt
 !audit_embedding_leakage_stdout.txt
+!audit_representation_ablation_stdout.txt
 !build_cache_v2_stdout.log
 !agnis_scaling_dataset_v2.json
 *.csv

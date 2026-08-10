@@ -1,0 +1,81 @@
+python : 
+At line:1 char:1
++ python audit_representation_ablation.py > audit_representation_ablati ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\audit_representation_ablation.py", 
+line 17, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================
+ PHASE II ù REPRESENTATION ABLATION GRID (6 CELLS)
+==================================================
+
+--- Evaluating Cell: pooling='mean', transform='none' ---
+[R7 Confirm] Transform 'none': Raw L2-normalized embeddings used.
+
+--- Evaluating Cell: pooling='mean', transform='center' ---
+[R7 Confirm] Center transform fit on 300 train vectors only (mean vector subtracted).
+
+--- Evaluating Cell: pooling='mean', transform='center+ZCA_whiten' ---
+[R7 Confirm] ZCA whitening transform fit on 300 train vectors only (epsilon=1e-5).
+
+--- Evaluating Cell: pooling='last_token', transform='none' ---
+[Model Loader] Branch 3: Falling back to HF Hub 'HuggingFaceTB/SmolLM2-360M'.
+[Last-Token Extractor] Loading SmolLM2 from 'HuggingFaceTB/SmolLM2-360M'...
+[Model Loader] Attempting load from local HF cache for 'HuggingFaceTB/SmolLM2-360M' (revision=f8027fd0eaeea54caa13c31d31b9fdc459c38b49)...
+[Model Loader] Successfully loaded model from local HF cache!
+[Last-Token Extractor] Extracting last-token vectors for 600 prompts in batches of 32...
+[Last-Token Extractor] Saved to 'smollm2_embeddings_v2_100facts_lasttok.pt'.
+[R7 Confirm] Transform 'none': Raw L2-normalized embeddings used.
+
+--- Evaluating Cell: pooling='last_token', transform='center' ---
+[R7 Confirm] Center transform fit on 300 train vectors only (mean vector subtracted).
+
+--- Evaluating Cell: pooling='last_token', transform='center+ZCA_whiten' ---
+[R7 Confirm] ZCA whitening transform fit on 300 train vectors only (epsilon=1e-5).
+
+===============================================================================================
+ PHASE II SUMMARY TABLE (6 CELLS)
+===============================================================================================
+Cell Name (pooling / transform)     | NCM Top-1  | 1-NN Top-1 | Own Cos  | Other Cos | Mean Diff | Neg Count
+-----------------------------------------------------------------------------------------------
+mean / none                         |  27.33%    |  29.00%    |  0.9281  |   0.8740  |   0.0541  |  10 / 300
+mean / center                       |  28.00%    |  27.00%    |  0.4115  |  -0.0047  |   0.4163  |  13 / 300
+mean / center+ZCA_whiten            |  40.33%    |  28.00%    |  0.0544  |  -0.0004  |   0.0548  |  24 / 300
+last_token / none                   |   7.67%    |  10.00%    |  0.6964  |   0.6291  |   0.0672  |  37 / 300
+last_token / center                 |  10.67%    |  11.33%    |  0.2112  |  -0.0045  |   0.2157  |  44 / 300
+last_token / center+ZCA_whiten      |   4.67%    |   5.00%    |  0.0247  |  -0.0007  |   0.0253  |  63 / 300
+===============================================================================================
+
+EXPLICIT BEST_CELL IDENTIFIED: 'mean / center+ZCA_whiten' with NCM Top-1 = 40.33%
+==================================================
