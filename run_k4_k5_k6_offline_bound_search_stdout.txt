@@ -1,0 +1,116 @@
+python : 
+At line:1 char:1
++ python run_k4_k5_k6_offline_bound_search.py > run_k4_k5_k6_offline_bo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural 
+Networks\run_k4_k5_k6_offline_bound_search.py", line 20, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+=========================================================================================================
+ PHASE K4, K5, K6 ù RE-EVALUATION OF OFFLINE BOUND, HONEST CV SELECTION & ARCHITECTURE GAP
+=========================================================================================================
+
+Evaluating 16 candidate representations over 5 seeds [42, 43, 44, 45, 46]...
+
+  [01/16] 'mean / none                        ' -> Train CV = 55.33% (HeadL1c), PlainLinear Test = 62.67%
+  [02/16] 'mean / center                      ' -> Train CV = 66.00% (HeadL1c), PlainLinear Test = 46.67%
+  [03/16] 'mean / center+ZCA_whiten           ' -> Train CV = 26.33% (NCM), PlainLinear Test = 22.67%
+  [04/16] 'mean / pca_m16_eps1e-4             ' -> Train CV = 38.67% (NCM), PlainLinear Test = 35.33%
+  [05/16] 'mean / pca_m32_eps1e-6             ' -> Train CV = 55.00% (NCM), PlainLinear Test = 62.67%
+  [06/16] 'mean / pca_m32_eps1e-4             ' -> Train CV = 62.33% (NCM), PlainLinear Test = 62.00%
+  [07/16] 'mean / pca_m64_eps1e-4             ' -> Train CV = 45.67% (NCM), PlainLinear Test = 33.33%
+  [08/16] 'mean / pca_m128_eps1e-4            ' -> Train CV = 41.00% (NCM), PlainLinear Test = 30.33%
+  [09/16] 'mean / pca_m256_eps1e-4            ' -> Train CV = 41.67% (1-NN), PlainLinear Test = 29.33%
+  [10/16] 'mean / pca_m299_eps1e-4            ' -> Train CV = 41.67% (1-NN), PlainLinear Test = 29.33%
+  [11/16] 'mean / ledoit_wolf                 ' -> Train CV = 43.93% (HeadL1c), PlainLinear Test = 29.33%
+  [12/16] 'lasttok_nonpunct / none            ' -> Train CV = 45.33% (HeadL1c), PlainLinear Test = 12.33%
+  [13/16] 'lasttok_nonpunct / center          ' -> Train CV = 48.07% (HeadL1c), PlainLinear Test = 10.67%
+  [14/16] 'lasttok_nonpunct / pca_m32_eps1e-6 ' -> Train CV = 35.67% (NCM), PlainLinear Test = 10.00%
+  [15/16] 'lasttok_nonpunct / pca_m299_eps1e-4' -> Train CV = 41.33% (NCM), PlainLinear Test =  8.33%
+  [16/16] 'lasttok_nonpunct / ledoit_wolf     ' -> Train CV = 42.40% (HeadL1c), PlainLinear Test =  8.33%
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+Representation (pooling / transform) | 3-Fold CV (Train)  | CV Method                 | HeadL1c (Test)     | PlainLinear (Test)     | Arch Gap
+-----------------------------------------------------------------------------------------------------------------------------------------
+mean / none                         |  55.33%            | HeadL1c                   | 44.00% +/- 1.35%   | 62.67% +/- 0.00%       | +18.67%
+mean / center                       |  66.00%            | HeadL1c                   | 57.60% +/- 0.44%   | 46.67% +/- 0.00%       | +-10.93%
+mean / center+ZCA_whiten            |  26.33%            | NCM                       | 33.73% +/- 0.13%   | 22.67% +/- 0.00%       | +-11.07%
+mean / pca_m16_eps1e-4              |  38.67%            | NCM                       | 28.73% +/- 1.57%   | 35.33% +/- 0.00%       | + 6.60%
+mean / pca_m32_eps1e-6              |  55.00%            | NCM                       | 58.53% +/- 0.75%   | 62.67% +/- 0.00%       | + 4.13%
+mean / pca_m32_eps1e-4              |  62.33%            | NCM                       | 58.60% +/- 1.10%   | 62.00% +/- 0.00%       | + 3.40%
+mean / pca_m64_eps1e-4              |  45.67%            | NCM                       | 52.20% +/- 1.28%   | 33.33% +/- 0.00%       | +-18.87%
+mean / pca_m128_eps1e-4             |  41.00%            | NCM                       | 49.27% +/- 1.18%   | 30.33% +/- 0.00%       | +-18.93%
+mean / pca_m256_eps1e-4             |  41.67%            | 1-NN                      | 48.20% +/- 1.07%   | 29.33% +/- 0.00%       | +-18.87%
+mean / pca_m299_eps1e-4             |  41.67%            | 1-NN                      | 47.53% +/- 0.88%   | 29.33% +/- 0.00%       | +-18.20%
+mean / ledoit_wolf                  |  43.93%            | HeadL1c                   | 59.93% +/- 0.33%   | 29.33% +/- 0.00%       | +-30.60%
+lasttok_nonpunct / none             |  45.33%            | HeadL1c                   | 15.27% +/- 1.08%   | 12.33% +/- 0.00%       | +-2.93%
+lasttok_nonpunct / center           |  48.07%            | HeadL1c                   | 18.00% +/- 0.84%   | 10.67% +/- 0.00%       | +-7.33%
+lasttok_nonpunct / pca_m32_eps1e-6  |  35.67%            | NCM                       | 10.53% +/- 0.27%   | 10.00% +/- 0.00%       | +-0.53%
+lasttok_nonpunct / pca_m299_eps1e-4 |  41.33%            | NCM                       | 11.80% +/- 0.27%   |  8.33% +/- 0.00%       | +-3.47%
+lasttok_nonpunct / ledoit_wolf      |  42.40%            | HeadL1c                   | 15.33% +/- 0.42%   |  8.33% +/- 0.00%       | +-7.00%
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+=========================================================================================================
+ K6 ARCHITECTURE GAP SUMMARY TABLE (HeadL1c vs Plain Linear on Identical Features)
+=========================================================================================================
+Representation                      | HeadL1c Test Acc     | Plain Linear Test Acc     | Architecture Gap
+----------------------------------------------------------------------------------------------------
+mean / none                         |  44.00% +/- 1.35%  |  62.67% +/- 0.00% (wd=0.1) | + 18.67%
+mean / center                       |  57.60% +/- 0.44%  |  46.67% +/- 0.00% (wd=0.1) | +-10.93%
+mean / center+ZCA_whiten            |  33.73% +/- 0.13%  |  22.67% +/- 0.00% (wd=0.1) | +-11.07%
+mean / pca_m16_eps1e-4              |  28.73% +/- 1.57%  |  35.33% +/- 0.00% (wd=0.001) | +  6.60%
+mean / pca_m32_eps1e-6              |  58.53% +/- 0.75%  |  62.67% +/- 0.00% (wd=0.0001) | +  4.13%
+mean / pca_m32_eps1e-4              |  58.60% +/- 1.10%  |  62.00% +/- 0.00% (wd=0.0001) | +  3.40%
+mean / pca_m64_eps1e-4              |  52.20% +/- 1.28%  |  33.33% +/- 0.00% (wd=0.1) | +-18.87%
+mean / pca_m128_eps1e-4             |  49.27% +/- 1.18%  |  30.33% +/- 0.00% (wd=0.1) | +-18.93%
+mean / pca_m256_eps1e-4             |  48.20% +/- 1.07%  |  29.33% +/- 0.00% (wd=0.1) | +-18.87%
+mean / pca_m299_eps1e-4             |  47.53% +/- 0.88%  |  29.33% +/- 0.00% (wd=0.1) | +-18.20%
+mean / ledoit_wolf                  |  59.93% +/- 0.33%  |  29.33% +/- 0.00% (wd=0.1) | +-30.60%
+lasttok_nonpunct / none             |  15.27% +/- 1.08%  |  12.33% +/- 0.00% (wd=0.01) | + -2.93%
+lasttok_nonpunct / center           |  18.00% +/- 0.84%  |  10.67% +/- 0.00% (wd=0.1) | + -7.33%
+lasttok_nonpunct / pca_m32_eps1e-6  |  10.53% +/- 0.27%  |  10.00% +/- 0.00% (wd=0.0001) | + -0.53%
+lasttok_nonpunct / pca_m299_eps1e-4 |  11.80% +/- 0.27%  |   8.33% +/- 0.00% (wd=0.1) | + -3.47%
+lasttok_nonpunct / ledoit_wolf      |  15.33% +/- 0.42%  |   8.33% +/- 0.00% (wd=0.1) | + -7.00%
+====================================================================================================
+
+=========================================================================================================
+ K5 HONEST REPRESENTATION & METHOD SELECTION RESULTS
+=========================================================================================================
+  1. 3-Fold CV Winning Representation (Train Only) : 'mean / center'
+  2. 3-Fold CV Winning Method & Weight Decay        : 'HeadL1c' (Train CV = 66.00%)
+  3. CV-Selected Test Accuracy (HONEST NUMBER)      : 57.60% +/- 0.44%
+  4. Max-Over-All-Cells Test Acc (OPTIMISTIC CEILING): 63.33% (from 'mean / pca_m32_eps1e-6' via NCM)
+  5. Selection Bias (Optimistic Ceiling - Honest)   : +5.73 percentage points
+  6. OFFLINE_BOUND for Gating Purposes             : 63.33%
+  7. Representation Phase IV Will Use               : 'mean / center'
+=========================================================================================================

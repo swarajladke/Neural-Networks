@@ -1,0 +1,56 @@
+python : 
+At line:1 char:1
++ python run_gate2_redecision_expanded.py > run_gate2_redecision_expand ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\run_gate2_redecision_expanded.py", 
+line 17, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+=========================================================================================================
+ GATE 2 RE-DECISION ù EXPANDED 10/5 DATASET (K4b Mask Indexing & K5 Train CV Selection)
+=========================================================================================================
+
+Representation       | 5-Fold CV (Train)  | CV Method              | PlainLinear Test Acc   | Test Max  
+----------------------------------------------------------------------------------------------------
+mean / none          |  93.00%            | PlainLinear (wd=0.1)   | 85.20% +/- 0.00%       |  85.20%
+mean / center        |  94.48%            | HeadL1c                | 69.80% +/- 0.00%       |  73.60%
+====================================================================================================
+
+GATE 2 RE-DECISION SUMMARY:
+  1. All 10 train prompts per class used in fold splits : YES (K4b mask verified)
+  2. CV-Selected Representation (Train Only)            : 'mean / center'
+  3. Honest CV-Selected Test Accuracy                  : 69.80%
+  4. Max-Over-All-Cells OFFLINE_BOUND (B)               : 85.20%
+  5. Gate 2 Threshold                                  : 50.00%
+  [GATE 2 PASSED] B (85.20%) >= 50.0%. Proceeding to Phase IV on representation 'mean / center'!
+=========================================================================================================
