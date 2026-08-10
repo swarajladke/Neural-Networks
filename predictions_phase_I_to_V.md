@@ -44,4 +44,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 23. **P23**: At eps=1e-2, m=128 disjoint validation accuracy will exceed the eps=1e-4, m=128 value (58.67%) by more than 15 pp.
 
 ---
+
+### Additional Pre-Registered Predictions (O1-O8 Re-Registration)
+
+24. **P24**: Under the unified stack, the validation-selected config for mean/pca_m64_eps1e-4 will be a LogReg with wd > 0, not wd = 0.0, and the wd=0.0 fit will be flagged NON-CONVERGED.
+25. **P25**: HONEST_TEST_ACC under the unified stack will fall within 2.0 pp of 82.60%.
+26. **P26**: The max-abs elementwise difference between the pca_m32_eps1e-6 and pca_m32_eps1e-4 transformed test matrices will be strictly greater than zero on BOTH caches, meaning the identical v3 metrics are a coincidence of argmax ties rather than identical representations.
+27. **P27**: In Phase IV, freeze_after_base will exceed naive_l1c final average accuracy by more than 20 pp, and ncm_incremental will land within 5 pp of the joint_offline NCM value.
+
+---
 *Scorecard and verification will be recorded after completing all phases.*
