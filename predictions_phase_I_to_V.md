@@ -20,4 +20,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 9. **P9**: Corrected Gate 1 diagnostic accuracy will be monotonically non-increasing in k.
 
 ---
+
+### Additional Pre-Registered Predictions (K5 & K6 Re-Registration)
+
+10. **P10**: CV-selected test accuracy will be lower than the max-over-cells value by more than 3 percentage points.
+11. **P11**: The CV procedure will select a truncated-PCA representation, not mean/none.
+12. **P12**: Plain Linear will beat HeadL1c on every representation in the J3 table.
+
+---
 *Scorecard and verification will be recorded after completing all phases.*
+
