@@ -1,0 +1,10 @@
+==================================================
+ J7 EXPANDED DATASET (10 TRAIN / 5 TEST) AUDIT
+==================================================
+  [ASSERT 1 PASSED] 100 facts, 100 unique probes, 100 unique answers.
+  [ASSERT 2 PASSED] Latin-Square Block balance (10 facts/block, max_rel <= 2, max_ent <= 2).
+  [ASSERT 3 PASSED] 10 train & 5 test prompts per fact, all 15 mutually distinct, zero shared 5-grams.
+
+ALL EXPANDED DATASET ASSERTIONS PASSED SUCCESSFULLY!
+
+[Saved] Expanded dataset saved to 'agnis_scaling_dataset_v2_expanded.json'.

@@ -15,8 +15,12 @@
 !audit_pca_grid_and_lasttok_stdout.txt
 !run_offline_bound_search_stdout.txt
 !run_gate1_diagnostic_corrected_stdout.txt
+!generate_dataset_v2_expanded_stdout.txt
+!build_cache_v2_expanded_stdout.txt
+!evaluate_expanded_offline_bound_stdout.txt
 !build_cache_v2_stdout.log
 !agnis_scaling_dataset_v2.json
+!agnis_scaling_dataset_v2_expanded.json
 *.csv
 *.npz
 *.pkl
