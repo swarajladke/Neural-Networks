@@ -21,7 +21,10 @@
 !run_k4_k5_k6_offline_bound_search_stdout.txt
 !run_gate1_diagnostic_k3_k5_stdout.txt
 !run_gate2_redecision_expanded_stdout.txt
-!build_cache_v2_stdout.log
+!evaluate_disjoint_template_split_l5_l6_stdout.txt
+!build_cache_v3_stdout.log
+!class_permutation_seed42.json
+!agnis_scaling_dataset_v3_template_split.json
 !agnis_scaling_dataset_v2.json
 !agnis_scaling_dataset_v2_expanded.json
 *.csv

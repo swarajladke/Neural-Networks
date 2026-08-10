@@ -1,0 +1,80 @@
+python : 
+At line:1 char:1
++ python evaluate_disjoint_template_split_l5_l6.py > evaluate_disjoint_ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural 
+Networks\evaluate_disjoint_template_split_l5_l6.py", line 17, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+=========================================================================================================
+ L5 & L6 ù DISJOINT TEMPLATE VALIDATION SELECTION & BOUND B COMPUTATION
+=========================================================================================================
+  [01/11] 'mean / none                   ' -> Disjoint Val = 85.67% (Ridge (wd=0.1)), Test Max = 77.80%
+  [02/11] 'mean / center                 ' -> Disjoint Val = 84.33% (MultinomialLogReg (wd=0.01)), Test Max = 77.40%
+  [03/11] 'mean / center+ZCA_whiten      ' -> Disjoint Val = 19.33% (MultinomialLogReg (wd=1.0)), Test Max =  9.40%
+  [04/11] 'mean / pca_m16_eps1e-4        ' -> Disjoint Val = 61.67% (MultinomialLogReg (wd=0.1)), Test Max = 40.00%
+  [05/11] 'mean / pca_m32_eps1e-6        ' -> Disjoint Val = 89.33% (MultinomialLogReg (wd=0.01)), Test Max = 77.00%
+  [06/11] 'mean / pca_m32_eps1e-4        ' -> Disjoint Val = 89.33% (MultinomialLogReg (wd=0.01)), Test Max = 77.00%
+  [07/11] 'mean / pca_m64_eps1e-4        ' -> Disjoint Val = 96.00% (MultinomialLogReg (wd=0.001)), Test Max = 85.80%
+  [08/11] 'mean / pca_m128_eps1e-4       ' -> Disjoint Val = 58.67% (MultinomialLogReg (wd=0.0001)), Test Max = 49.00%
+  [09/11] 'mean / pca_m256_eps1e-4       ' -> Disjoint Val = 50.33% (NCM), Test Max = 43.40%
+  [10/11] 'mean / pca_m299_eps1e-4       ' -> Disjoint Val = 48.33% (MultinomialLogReg (wd=10.0)), Test Max = 42.60%
+  [11/11] 'mean / ledoit_wolf            ' -> Disjoint Val = 51.33% (MultinomialLogReg (wd=1.0)), Test Max = 53.00%
+
+Representation                 | Disjoint Val Acc   | Val Method                   | Best Linear Test Acc   | Test Max  
+-------------------------------------------------------------------------------------------------------------------
+mean / none                    |  85.67%            | Ridge (wd=0.1)               | 77.80% (deterministic) |  77.80%
+mean / center                  |  84.33%            | MultinomialLogReg (wd=0.01)  | 77.40% (deterministic) |  77.40%
+mean / center+ZCA_whiten       |  19.33%            | MultinomialLogReg (wd=1.0)   |  9.00% (deterministic) |   9.40%
+mean / pca_m16_eps1e-4         |  61.67%            | MultinomialLogReg (wd=0.1)   | 40.00% (deterministic) |  40.00%
+mean / pca_m32_eps1e-6         |  89.33%            | MultinomialLogReg (wd=0.01)  | 76.40% (deterministic) |  77.00%
+mean / pca_m32_eps1e-4         |  89.33%            | MultinomialLogReg (wd=0.01)  | 76.40% (deterministic) |  77.00%
+mean / pca_m64_eps1e-4         |  96.00%            | MultinomialLogReg (wd=0.001) | 85.60% (deterministic) |  85.80%
+mean / pca_m128_eps1e-4        |  58.67%            | MultinomialLogReg (wd=0.0001) | 49.00% (deterministic) |  49.00%
+mean / pca_m256_eps1e-4        |  50.33%            | NCM                          | 43.20% (deterministic) |  43.40%
+mean / pca_m299_eps1e-4        |  48.33%            | MultinomialLogReg (wd=10.0)  | 42.20% (deterministic) |  42.60%
+mean / ledoit_wolf             |  51.33%            | MultinomialLogReg (wd=1.0)   | 53.00% (deterministic) |  53.00%
+===================================================================================================================
+
+=========================================================================================================
+ L5 & L6 SELECTION SUMMARY & GATE 2 RE-DECISION:
+=========================================================================================================
+  1. Disjoint Template Selected Representation          : 'mean / pca_m64_eps1e-4'
+  2. Disjoint Validation Winning Method                : 'MultinomialLogReg (wd=0.001)' (Val Acc = 96.00%)
+  3. Honest Test Accuracy of Selected Representation   : 85.60%
+  4. Test Ceiling OF THE SELECTED REPRESENTATION (B)    : 85.80%
+  5. Disjoint-Template Val-vs-Test Correlation (L6)     : r = +0.9718
+  6. Gate 2 Threshold                                  : 50.00%
+
+  [GATE 2 PASSED] B (85.80%) >= 50.0%. Proceeding to Phase IV Class-IL Arms on 'mean / pca_m64_eps1e-4'!
+=========================================================================================================
