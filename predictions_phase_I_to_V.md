@@ -9,6 +9,10 @@ The following pre-registered predictions are recorded prior to executing Phase I
 3. **P3**: Joint offline test accuracy will exceed NCM top-1 of the same configuration.
 4. **P4**: Joint offline test accuracy will be below 64.95% (the previously reported `phase6_dual_continuum` figure).
 5. **P5**: Every Class-IL arm will score below joint offline.
+6. **P6**: Truncated PCA-whitening will beat the current broken ZCA's 40.33% NCM.
+7. **P7**: The last-token cell will improve substantially once punctuation is excluded, but will still trail mean pooling.
+8. **P8**: Moving from 3 train prompts to 10 will raise OFFLINE_BOUND by more than 10 percentage points.
+9. **P9**: Corrected Gate 1 diagnostic accuracy will be monotonically non-increasing in k.
 
 ---
-*Scorecard and verification will be recorded in Phase V after completing all phases.*
+*Scorecard and verification will be recorded after completing all phases.*
