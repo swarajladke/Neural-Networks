@@ -9,6 +9,12 @@ The benchmark measures 100-way classification of prompt clusters with 3 examples
 
 ---
 
+### Reference Upper Bound (Phase III)
+
+Joint offline upper bound (100 classes, 3 train / 3 test per class, BEST_CELL mean / center+ZCA_whiten): 34.80% +/- 1.66% test accuracy over 5 seeds. No Class-IL result on this dataset may exceed this value. Any reported figure above it is invalid by construction.
+
+---
+
 ### Dataset Defect Scope & Provenance Audit (2026-08-09, H4)
 
 > [!IMPORTANT]

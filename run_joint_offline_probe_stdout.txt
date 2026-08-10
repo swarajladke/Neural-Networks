@@ -1,0 +1,85 @@
+python : 
+At line:1 char:1
++ python run_joint_offline_probe.py > run_joint_offline_probe_stdout.tx ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\run_joint_offline_probe.py", line 20, 
+in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================
+ PHASE III ù JOINT OFFLINE UPPER BOUND PROBE
+==================================================
+
+==================================================
+ EVALUATING OFFLINE PROBE: BEST_CELL (mean / center+ZCA_whiten)
+==================================================
+  [R7 Confirm] ZCA whitening transform fit on 300 train vectors only (epsilon=1e-5).
+Seed     | Final Train Acc  | Final Test Acc   | Epochs to 100% Train
+-----------------------------------------------------------------
+42       | 100.00%          |  37.33%          | 16
+43       | 100.00%          |  35.00%          | 18
+44       | 100.00%          |  35.00%          | 15
+45       | 100.00%          |  33.00%          | 17
+46       | 100.00%          |  33.67%          | 17
+-----------------------------------------------------------------
+SUMMARY FOR 'BEST_CELL (mean / center+ZCA_whiten)':
+  Mean Train Accuracy: 100.00%
+  Mean Test Accuracy : 34.80% +/- 1.66%
+==================================================
+
+==================================================
+ EVALUATING OFFLINE PROBE: Baseline Cell (mean / none)
+==================================================
+  [R7 Confirm] Transform 'none': Raw L2-normalized vectors used.
+Seed     | Final Train Acc  | Final Test Acc   | Epochs to 100% Train
+-----------------------------------------------------------------
+42       |  93.33%          |  38.00%          | Never reached 100%
+43       |  93.00%          |  36.00%          | Never reached 100%
+44       |  93.67%          |  39.33%          | Never reached 100%
+45       |  93.33%          |  40.00%          | Never reached 100%
+46       |  92.67%          |  39.67%          | Never reached 100%
+-----------------------------------------------------------------
+SUMMARY FOR 'Baseline Cell (mean / none)':
+  Mean Train Accuracy: 93.20%
+  Mean Test Accuracy : 38.60% +/- 1.64%
+==================================================
+
+==================================================
+ PHASE III FINAL COMPARISON SUMMARY
+==================================================
+BEST_CELL (mean / center+ZCA_whiten) : 34.80% +/- 1.66%
+Baseline Cell (mean / none)          : 38.60% +/- 1.64%
+
+[REFERENCE LINE FOR RESULTS.MD]:
+Joint offline upper bound (100 classes, 3 train / 3 test per class, BEST_CELL mean / center+ZCA_whiten): 34.80% +/- 1.66% test accuracy over 5 seeds. No Class-IL result on this dataset may exceed this value. Any reported figure above it is invalid by construction.
+==================================================

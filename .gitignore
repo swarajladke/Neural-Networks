@@ -9,6 +9,7 @@
 !mapping_honest_audit.txt
 !audit_embedding_leakage_stdout.txt
 !audit_representation_ablation_stdout.txt
+!run_joint_offline_probe_stdout.txt
 !build_cache_v2_stdout.log
 !agnis_scaling_dataset_v2.json
 *.csv
