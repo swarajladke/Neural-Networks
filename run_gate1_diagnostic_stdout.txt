@@ -1,0 +1,83 @@
+python : 
+At line:1 char:1
++ python run_gate1_diagnostic.py > run_gate1_diagnostic_stdout.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\run_gate1_diagnostic.py", line 20, in 
+<module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================
+ GATE 1 DIAGNOSTIC ù OFFLINE PROBE VS CLASS COUNT
+ (Triggered because J = 34.80% < 40.00%)
+==================================================
+
+--- Running Subsampled Probe for 100 Classes ---
+Subsampled Class Count : 100 classes
+Per-Seed Test Accs (42..46): ['37.33%', '35.00%', '35.00%', '33.00%', '33.67%']
+Epochs to 100% Train   : [16, 18, 15, 17, 17]
+J (100 classes)          : 34.80% +/- 1.66%
+
+--- Running Subsampled Probe for 50 Classes ---
+Subsampled Class Count : 50 classes
+Per-Seed Test Accs (42..46): ['46.67%', '44.00%', '45.33%', '47.33%', '45.33%']
+Epochs to 100% Train   : [14, 15, 16, 13, 15]
+J (50 classes)          : 45.73% +/- 1.30%
+
+--- Running Subsampled Probe for 25 Classes ---
+Subsampled Class Count : 25 classes
+Per-Seed Test Accs (42..46): ['45.33%', '53.33%', '45.33%', '53.33%', '53.33%']
+Epochs to 100% Train   : [13, 12, 11, 14, 13]
+J (25 classes)          : 50.13% +/- 4.38%
+
+--- Running Subsampled Probe for 10 Classes ---
+Subsampled Class Count : 10 classes
+Per-Seed Test Accs (42..46): ['33.33%', '23.33%', '26.67%', '26.67%', '16.67%']
+Epochs to 100% Train   : [13, 11, 11, 14, 11]
+J (10 classes)          : 25.33% +/- 6.06%
+
+============================================================
+ GATE 1 DIAGNOSTIC SUMMARY TABLE
+============================================================
+Class Count (k)    | Offline Joint Accuracy J (Mean +/- Std)
+------------------------------------------------------------
+100                |  34.80% +/- 1.66%
+50                 |  45.73% +/- 1.30%
+25                 |  50.13% +/- 4.38%
+10                 |  25.33% +/- 6.06%
+============================================================
+
+--- DIAGNOSTIC FINDINGS & CONCLUSION ---
+1. At k=10 classes, joint offline test accuracy reaches 25.33%.
+2. At k=100 classes, joint offline test accuracy drops to 34.80%.
+Conclusion: The primary bottleneck is REPRESENTATION DISCRIMINABILITY. Accuracy remains low even at small class counts.
+==================================================
