@@ -26,4 +26,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 15. **P15**: Correcting the CV bug will reduce the reported CV score of the winning cell by more than 5 percentage points.
 
 ---
+
+### Additional Pre-Registered Predictions (M1-M7 Re-Registration)
+
+16. **P16**: Validation-selected weight decay will differ from test-selected weight decay on at least 5 of the 11 cells.
+17. **P17**: HONEST_TEST_ACC for the selected representation will be at least 2 pp below the reported 85.60%.
+18. **P18**: r_before will exceed +0.80, i.e. the within-train CV was already predictive on v3 and the disjoint-template split is not the reason selection improved.
+19. **P19**: Train-val centroid cosine will exceed train-test centroid cosine.
+
+---
 *Scorecard and verification will be recorded after completing all phases.*
