@@ -1,0 +1,68 @@
+python : 
+At line:1 char:1
++ python run_offline_bound_search.py > run_offline_bound_search_stdout. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\run_offline_bound_search.py", line 
+18, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================================
+ PHASE J3, J4, J5 ù OFFLINE BOUND SEARCH & BEST_CELL SELECTION
+==================================================================
+
+Representation (pooling / transform) | NCM     | 1-NN    | HeadL1c(J4) | LogReg(L2) | OFFLINE_BOUND | Winner
+---------------------------------------------------------------------------------------------------------
+mean / none                         |  27.33% |  29.00% |  53.78%     |  79.33%    |  79.33%       | LogReg
+mean / center                       |  28.00% |  27.00% |  61.44%     |  79.33%    |  79.33%       | LogReg
+mean / center+ZCA_whiten            |  40.33% |  28.00% |  29.44%     |  29.33%    |  40.33%       | NCM
+mean / pca_m16_eps1e-4              |  33.33% |  28.00% |   1.33%     |  24.33%    |  33.33%       | NCM
+mean / pca_m32_eps1e-6              |  63.33% |  52.33% |   2.44%     |  50.33%    |  63.33%       | NCM
+mean / pca_m32_eps1e-4              |  61.67% |  54.00% |   2.78%     |  48.00%    |  61.67%       | NCM
+mean / pca_m64_eps1e-4              |  62.00% |  50.33% |   4.67%     |  33.67%    |  62.00%       | NCM
+mean / pca_m128_eps1e-4             |  59.00% |  49.00% |  11.22%     |  30.00%    |  59.00%       | NCM
+mean / pca_m256_eps1e-4             |  58.67% |  49.33% |  17.00%     |  24.00%    |  58.67%       | NCM
+mean / pca_m299_eps1e-4             |  58.67% |  49.33% |  19.22%     |  28.67%    |  58.67%       | NCM
+mean / ledoit_wolf                  |  58.67% |  49.67% |  50.44%     |  52.33%    |  58.67%       | NCM
+lasttok_nonpunct / none             |   8.67% |   7.67% |  16.67%     |  28.33%    |  28.33%       | LogReg
+lasttok_nonpunct / center           |  10.67% |   7.33% |  18.67%     |  26.33%    |  26.33%       | LogReg
+lasttok_nonpunct / pca_m32_eps1e-6  |  13.33% |   7.00% |   1.67%     |  11.33%    |  13.33%       | NCM
+lasttok_nonpunct / pca_m299_eps1e-4 |  12.33% |   9.67% |   2.89%     |   9.00%    |  12.33%       | NCM
+lasttok_nonpunct / ledoit_wolf      |  12.33% |   9.67% |  12.56%     |  10.67%    |  12.56%       | HeadL1c
+=========================================================================================================
+
+EXPLICIT BEST_CELL IDENTIFIED BY J5 CRITERION:
+  Representation Name : 'mean / none'
+  J3 OFFLINE_BOUND    : 79.33%
+  Winning Method      : LogReg
+  Family Breakdown    : NCM=27.33%, 1-NN=29.00%, HeadL1c(J4)=53.78%, LogReg=79.33%
+==================================================================

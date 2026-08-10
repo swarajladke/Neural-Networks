@@ -13,6 +13,7 @@
 !run_gate1_diagnostic_stdout.txt
 !build_lasttok_nonpunct_cache_stdout.txt
 !audit_pca_grid_and_lasttok_stdout.txt
+!run_offline_bound_search_stdout.txt
 !build_cache_v2_stdout.log
 !agnis_scaling_dataset_v2.json
 *.csv
