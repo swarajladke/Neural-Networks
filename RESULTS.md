@@ -1,4 +1,4 @@
-Single defensible result as of `b182449`: 100 synthetic facts, SmolLM2-360M mean-pooled embeddings, PCA-64 whitened (eps=1e-4), multinomial logistic regression (wd=0.001) selected on 300 disjoint-template validation prompts, evaluated once on 500 disjoint-template test prompts: **82.60%**. All Phase 5/6/7 continual-learning claims are retracted pending Phase IV.
+Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean-pooled embeddings, PCA-64 whitened (eps=1e-4), multinomial logistic regression (wd=0.0001) selected on 300 disjoint-template validation prompts, evaluated once on 500 disjoint-template test prompts: **82.20%**. All Phase 5/6/7 continual-learning claims are retracted pending Phase IV.
 
 ---
 
