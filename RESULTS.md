@@ -9,9 +9,13 @@ The benchmark measures 100-way classification of prompt clusters with 3 examples
 
 ---
 
-### Reference Upper Bound (Phase III)
+### Reference Upper Bound (Phase III & J3 Correction)
 
 Joint offline upper bound (100 classes, 3 train / 3 test per class, BEST_CELL mean / center+ZCA_whiten): 34.80% +/- 1.66% test accuracy over 5 seeds. No Class-IL result on this dataset may exceed this value. Any reported figure above it is invalid by construction.
+
+CORRECTED 2026-08-10: This line was incorrect. A single unregularized linear head is not an upper bound; nearest-centroid on the same representation scored 40.33%. Superseded by the offline reference below.
+
+Offline reference bound (100 classes, 3 train / 3 test per class, J5 BEST_CELL mean / none, L2 Multinomial Logistic Regression): **79.33% test accuracy**. Evaluated across 4-method family (NCM=27.33%, 1-NN=29.00%, HeadL1c(J4)=53.78%, LogReg=79.33%). No Class-IL result on this 3/3 dataset may exceed 79.33%.
 
 ---
 
