@@ -23,6 +23,12 @@
 !run_gate2_redecision_expanded_stdout.txt
 !evaluate_disjoint_template_split_l5_l6_stdout.txt
 !evaluate_m_phase_stdout.txt
+!run_n1_3x3_ncm_recheck_stdout.txt
+!run_n2_fix_cv_stdout.txt
+!run_n3_n_count_and_match_stdout.txt
+!run_n4_pca_collapse_audit_stdout.txt
+!run_n5_latin_square_audit_stdout.txt
+!run_n1_to_n9_master_stdout.txt
 !build_cache_v3_stdout.log
 !class_permutation_seed42.json
 !agnis_scaling_dataset_v3_template_split.json

@@ -1,3 +1,7 @@
+Single defensible result as of `b182449`: 100 synthetic facts, SmolLM2-360M mean-pooled embeddings, PCA-64 whitened (eps=1e-4), multinomial logistic regression (wd=0.001) selected on 300 disjoint-template validation prompts, evaluated once on 500 disjoint-template test prompts: **82.60%**. All Phase 5/6/7 continual-learning claims are retracted pending Phase IV.
+
+---
+
 # Orthogonal Gradient Projection for Continual Retrieval Adaptation
 ## Empirical Results Report
 
@@ -309,7 +313,11 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 > **RETRACTED 2026-08-09 (dataset defect in `smollm2_embeddings_100slots.pt`)**: Produced by `run_student_continual_benchmarks.py`, `run_decisive_controls.py`, `run_continual_learning_validation.py`, `run_graded_ceiling_reanalysis.py`, and `run_off_support_density_test.py`. Defect: Labels were derived from probe strings collapsing 100 facts into 34 classes; 42.5% test-train string leakage; and fixed-stride class slicing (`i*3:(i+1)*3`). Class counts, accuracies, and forgetting metrics in this section are uninterpretable.
 
-### 10.1 Raw Array Verification & C2 Step-9 Reconciliation (VERIFIED)
+### 10.1 Raw ArraySingle defensible result as of `b182449`: 100 synthetic facts, SmolLM2-360M mean-pooled embeddings, PCA-64 whitened (eps=1e-4), multinomial logistic regression (wd=0.001) selected on 300 disjoint-template validation prompts, evaluated once on 500 disjoint-template test prompts: **82.60%**. All Phase 5/6/7 continual-learning claims are retracted pending Phase IV.
+
+---
+
+# Verification & Representation Ablation Results Summary(VERIFIED)
 - **Raw File Checksum**: Dumped to `c2_raw_arrays.json` (SHA-256: `533bfdae6847efa704614de9df41f67b6c92a76591010489e5872019234857bc`).
 - **Unweighted Mean Reconciliation**: Computed directly from `c2_raw_arrays.json` by `dump_c2_raw_data.py`:
   - Base-Trained Blocks (`order[0:5]`): **91.05% ± 1.72%** (Selection) / **90.20% ± 2.49%** (Fresh)
