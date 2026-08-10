@@ -21,6 +21,9 @@ The following pre-registered predictions are recorded prior to executing Phase I
 10. **P10**: CV-selected test accuracy will be lower than the max-over-cells value by more than 3 percentage points.
 11. **P11**: The CV procedure will select a truncated-PCA representation, not mean/none.
 12. **P12**: Plain Linear will beat HeadL1c on every representation in the J3 table.
+13. **P13**: After the CV bug is fixed, HeadL1c will no longer be the CV-winning method.
+14. **P14**: After the fix, the CV-selected representation will differ from mean/center.
+15. **P15**: Correcting the CV bug will reduce the reported CV score of the winning cell by more than 5 percentage points.
 
 ---
 *Scorecard and verification will be recorded after completing all phases.*
