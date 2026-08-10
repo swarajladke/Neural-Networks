@@ -11,6 +11,7 @@
 !audit_representation_ablation_stdout.txt
 !run_joint_offline_probe_stdout.txt
 !run_gate1_diagnostic_stdout.txt
+!build_lasttok_nonpunct_cache_stdout.txt
 !build_cache_v2_stdout.log
 !agnis_scaling_dataset_v2.json
 *.csv
