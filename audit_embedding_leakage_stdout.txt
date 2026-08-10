@@ -14,7 +14,7 @@ If you are a user of the module, the easiest solution will be to
 downgrade to 'numpy<2' or try to upgrade the affected module.
 We expect that some modules will need time to support NumPy 2.
 
-Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\audit_embedding_leakage.py", line 22, 
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\audit_embedding_leakage.py", line 17, 
 in <module>
     import torch
   File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
@@ -36,21 +36,22 @@ C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\n
 UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
 ..\torch\csrc\utils\tensor_numpy.cpp:84.)
   device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
-[Embedding Audit] Loading cache from 'smollm2_embeddings_v2_100facts.pt'...
+[Phase I Audit] Loading cache from 'smollm2_embeddings_v2_100facts.pt'...
+[R7 CONFIRMATION] No test data used to fit any statistic or centroid.
 
 ==================================================
- H2 EMBEDDING LEAKAGE & MARGIN AUDIT
+ PHASE I ù EMBEDDING LEAKAGE & MARGIN AUDIT
 ==================================================
 Total Test Vectors: 300
 Own-Class Max Cosine  : Mean = 0.9506, Min = 0.8419, Max = 0.9846
 Other-Class Max Cosine: Mean = 0.9585, Min = 0.8866, Max = 0.9787
-Margin (Own - Other)  : Mean = -0.0079, Std = 0.0143, Min = -0.0805, Max = 0.0187
-Negative Margin Count : 213 / 300 (71.00%)
+1-NN margin (own_max over 3 vs other_max over 297; biased by set size, only the sign is meaningful): Mean = -0.0079, Std = 0.0143, Min = -0.0805, Max = 0.0187, Count Negative = 213 / 300 (71.00%)
+Unbiased margin (own_mean over 3 vs other_mean over 297): Mean = 0.0541, Std = 0.0265, Min = -0.0226, Max = 0.1361, Count Negative = 10 / 300 (3.33%)
 
 ==================================================
- H2 NEAREST-CENTROID (NCM) UPPER BOUND
+ PHASE I ù NEAREST-CENTROID (NCM) UPPER BOUND (R6)
 ==================================================
-Centroids Built       : 100 classes (3 train prompts per centroid)
+Centroids Built       : 100 classes (label-derived R6 grouping)
 Test Queries Evaluated: 300 test prompts
 NCM Correct Predictions: 82 / 300
 NCM Top-1 Accuracy    : 27.33% (0.2733)

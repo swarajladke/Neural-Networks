@@ -2,20 +2,15 @@
 audit_embedding_leakage.py
 ===========================
 
-Audits embedding space similarity, margins, and NCM upper bound (H2).
+Audits embedding space similarity, margins, and NCM upper bound (PHASE I).
 
-Requirements (H2):
-- Reads smollm2_embeddings_v2_100facts.pt (raises RuntimeError if missing).
-- OWN-CLASS vs BETWEEN-CLASS:
-  - For each test vector (300 total):
-    - own_class_max: max cosine to train vectors of its own class (3 train vectors).
-    - other_class_max: max cosine to train vectors of ALL OTHER 99 classes (297 train vectors).
-    - margin = own_class_max - other_class_max.
-  - Reports distribution of margin (min, mean, std, max) and count of test vectors with negative margin.
-- NCM UPPER BOUND:
-  - Builds 1 centroid per class from its 3 train vectors: centroids = train_x.view(100, 3, 960).mean(dim=1).
-  - L2-normalizes centroids and computes top-1 accuracy over all 300 test vectors.
-- Prints all raw outputs cleanly.
+Standing Rules Applied:
+- R4: Guard raises on missing input file.
+- R6: Label-derived grouping via (y == c).nonzero(as_tuple=True)[0]. No .view(N, k, d) or fixed-stride slicing.
+- R7: Statistics/centroids fit on train data only. Explicit confirmation line printed.
+- I1a: Relabel biased 1-NN margin line.
+- I1b: Add unbiased margin comparison (own_mean over 3 vs other_mean over 297).
+- I1c: Use label-derived grouping for NCM centroids.
 """
 
 import os
@@ -26,10 +21,11 @@ CACHE_V2_PATH = "smollm2_embeddings_v2_100facts.pt"
 
 
 def main():
+    # R4 & R5 Guard: Raise immediately if required cache file is missing
     if not os.path.exists(CACHE_V2_PATH):
-        raise RuntimeError(f"Missing required cache file: '{CACHE_V2_PATH}'. Cannot run audit.")
+        raise RuntimeError(f"[R5 Guard] Missing required cache file: '{CACHE_V2_PATH}'. Cannot proceed.")
 
-    print(f"[Embedding Audit] Loading cache from '{CACHE_V2_PATH}'...")
+    print(f"[Phase I Audit] Loading cache from '{CACHE_V2_PATH}'...")
     data = torch.load(CACHE_V2_PATH, weights_only=False)
 
     train_x = data["train_x"]  # shape (300, 960)
@@ -37,19 +33,24 @@ def main():
     test_x = data["test_x"]    # shape (300, 960)
     test_y = data["test_y"]    # shape (300,)
 
-    # Normalize vectors just in case
+    # Normalize vectors
     train_x = F.normalize(train_x, dim=-1)
     test_x = F.normalize(test_x, dim=-1)
 
+    # R7 Confirmation
+    print("[R7 CONFIRMATION] No test data used to fit any statistic or centroid.")
+
     print("\n==================================================")
-    print(" H2 EMBEDDING LEAKAGE & MARGIN AUDIT")
+    print(" PHASE I — EMBEDDING LEAKAGE & MARGIN AUDIT")
     print("==================================================")
 
-    # 1. PER-CLASS OWN-CLASS vs OTHER-CLASS SIMILARITIES & MARGINS
     own_class_maxes = []
     other_class_maxes = []
-    margins = []
-    negative_margin_count = 0
+    biased_margins = []
+    biased_negative_count = 0
+
+    unbiased_diffs = []
+    unbiased_negative_count = 0
 
     for i in range(300):
         t_vec = test_x[i]
@@ -58,46 +59,67 @@ def main():
         # Cosine similarities to all 300 train vectors
         all_cos = torch.mv(train_x, t_vec)  # shape (300,)
 
-        # Mask for own class train vectors
+        # R6: Label-derived indexing
         own_mask = (train_y == c_label)
         other_mask = ~own_mask
 
         own_cos = all_cos[own_mask]
         other_cos = all_cos[other_mask]
 
+        # 1-NN biased maxes (I1a)
         own_max = own_cos.max().item()
         other_max = other_cos.max().item()
-        margin = own_max - other_max
+        b_margin = own_max - other_max
 
         own_class_maxes.append(own_max)
         other_class_maxes.append(other_max)
-        margins.append(margin)
+        biased_margins.append(b_margin)
 
-        if margin < 0:
-            negative_margin_count += 1
+        if b_margin < 0:
+            biased_negative_count += 1
 
-    margins_t = torch.tensor(margins)
+        # Unbiased means comparison (I1b)
+        own_mean = own_cos.mean().item()
+        other_mean = other_cos.mean().item()
+        u_diff = own_mean - other_mean
+        unbiased_diffs.append(u_diff)
+
+        if u_diff < 0:
+            unbiased_negative_count += 1
+
+    b_margins_t = torch.tensor(biased_margins)
+    u_diffs_t = torch.tensor(unbiased_diffs)
     own_t = torch.tensor(own_class_maxes)
     other_t = torch.tensor(other_class_maxes)
 
     print(f"Total Test Vectors: {len(test_x)}")
     print(f"Own-Class Max Cosine  : Mean = {own_t.mean().item():.4f}, Min = {own_t.min().item():.4f}, Max = {own_t.max().item():.4f}")
     print(f"Other-Class Max Cosine: Mean = {other_t.mean().item():.4f}, Min = {other_t.min().item():.4f}, Max = {other_t.max().item():.4f}")
-    print(f"Margin (Own - Other)  : Mean = {margins_t.mean().item():.4f}, Std = {margins_t.std().item():.4f}, Min = {margins_t.min().item():.4f}, Max = {margins_t.max().item():.4f}")
-    print(f"Negative Margin Count : {negative_margin_count} / {len(test_x)} ({negative_margin_count / len(test_x) * 100:.2f}%)")
 
-    # 2. NEAREST-CENTROID CLASSIFIER (NCM) UPPER BOUND
+    # I1a Relabeled output line
+    print(f"1-NN margin (own_max over 3 vs other_max over 297; biased by set size, only the sign is meaningful): Mean = {b_margins_t.mean().item():.4f}, Std = {b_margins_t.std().item():.4f}, Min = {b_margins_t.min().item():.4f}, Max = {b_margins_t.max().item():.4f}, Count Negative = {biased_negative_count} / 300 ({biased_negative_count / 300 * 100:.2f}%)")
+
+    # I1b Unbiased comparison line
+    print(f"Unbiased margin (own_mean over 3 vs other_mean over 297): Mean = {u_diffs_t.mean().item():.4f}, Std = {u_diffs_t.std().item():.4f}, Min = {u_diffs_t.min().item():.4f}, Max = {u_diffs_t.max().item():.4f}, Count Negative = {unbiased_negative_count} / 300 ({unbiased_negative_count / 300 * 100:.2f}%)")
+
+    # 2. NEAREST-CENTROID CLASSIFIER (NCM) UPPER BOUND (I1c)
     print("\n==================================================")
-    print(" H2 NEAREST-CENTROID (NCM) UPPER BOUND")
+    print(" PHASE I — NEAREST-CENTROID (NCM) UPPER BOUND (R6)")
     print("==================================================")
 
-    # Reshape train_x to (100 classes, 3 samples, 960)
-    train_x_by_class = train_x.view(100, 3, 960)
-    centroids = train_x_by_class.mean(dim=1)  # shape (100, 960)
+    # I1c & R6: Label-derived centroid construction
+    unique_classes = torch.sort(torch.unique(train_y))[0]
+    centroids_list = []
+    for c in unique_classes:
+        c_val = c.item()
+        c_indices = (train_y == c_val).nonzero(as_tuple=True)[0]
+        c_vecs = train_x[c_indices]
+        centroids_list.append(c_vecs.mean(dim=0))
+
+    centroids = torch.stack(centroids_list)  # shape (100, 960)
     centroids = F.normalize(centroids, dim=-1)
 
     # Compute cosine matrix between 300 test vectors and 100 centroids
-    # test_x shape (300, 960), centroids shape (100, 960) -> sim_matrix (300, 100)
     sim_matrix = test_x @ centroids.T
     preds = sim_matrix.argmax(dim=1)
 
@@ -105,8 +127,8 @@ def main():
     ncm_accuracy = correct_mask.float().mean().item()
     correct_count = correct_mask.sum().item()
 
-    print(f"Centroids Built       : 100 classes (3 train prompts per centroid)")
-    print(f"Test Queries Evaluated: 300 test prompts")
+    print(f"Centroids Built       : {len(unique_classes)} classes (label-derived R6 grouping)")
+    print(f"Test Queries Evaluated: {len(test_x)} test prompts")
     print(f"NCM Correct Predictions: {correct_count} / 300")
     print(f"NCM Top-1 Accuracy    : {ncm_accuracy * 100:.2f}% ({ncm_accuracy:.4f})")
     print("==================================================")
