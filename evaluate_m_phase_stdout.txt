@@ -1,0 +1,150 @@
+python : 
+At line:1 char:1
++ python evaluate_m_phase_comprehensive.py > evaluate_m_phase_stdout.tx ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\evaluate_m_phase_comprehensive.py", 
+line 15, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+=========================================================================================================
+ DIRECTIVE M1 ù HONEST DISJOINT SPLIT TEST EVALUATION
+=========================================================================================================
+  [01/11] 'mean / none                   ' -> Val = 85.67% (Ridge (wd=0.1)), Honest Test = 77.80%
+  [02/11] 'mean / center                 ' -> Val = 84.33% (MultinomialLogReg (wd=0.01)), Honest Test = 62.20%
+  [03/11] 'mean / center+ZCA_whiten      ' -> Val = 19.33% (MultinomialLogReg (wd=1.0)), Honest Test =  8.60%
+  [04/11] 'mean / pca_m16_eps1e-4        ' -> Val = 61.67% (MultinomialLogReg (wd=0.1)), Honest Test = 40.00%
+  [05/11] 'mean / pca_m32_eps1e-6        ' -> Val = 89.33% (MultinomialLogReg (wd=0.01)), Honest Test = 70.00%
+  [06/11] 'mean / pca_m32_eps1e-4        ' -> Val = 89.33% (MultinomialLogReg (wd=0.01)), Honest Test = 70.00%
+  [07/11] 'mean / pca_m64_eps1e-4        ' -> Val = 96.00% (MultinomialLogReg (wd=0.001)), Honest Test = 82.60%
+  [08/11] 'mean / pca_m128_eps1e-4       ' -> Val = 58.67% (MultinomialLogReg (wd=0.0001)), Honest Test = 49.00%
+  [09/11] 'mean / pca_m256_eps1e-4       ' -> Val = 50.33% (NCM), Honest Test = 43.40%
+  [10/11] 'mean / pca_m299_eps1e-4       ' -> Val = 48.33% (MultinomialLogReg (wd=10.0)), Honest Test = 42.20%
+  [11/11] 'mean / ledoit_wolf            ' -> Val = 51.33% (MultinomialLogReg (wd=1.0)), Honest Test = 53.00%
+
+Representation                 | Disjoint Val | Val Method & WD                  | HONEST TEST ACC    | Optimistic Ceiling (N=11) 
+-----------------------------------------------------------------------------------------------------------------------------
+mean / none                    | 85.67%     | Ridge (wd=0.1)                   | 77.80%            | 77.80%
+mean / center                  | 84.33%     | MultinomialLogReg (wd=0.01)      | 62.20%            | 77.40% [WD DIFFERS]
+mean / center+ZCA_whiten       | 19.33%     | MultinomialLogReg (wd=1.0)       |  8.60%            | 10.00%
+mean / pca_m16_eps1e-4         | 61.67%     | MultinomialLogReg (wd=0.1)       | 40.00%            | 40.00%
+mean / pca_m32_eps1e-6         | 89.33%     | MultinomialLogReg (wd=0.01)      | 70.00%            | 77.00% [WD DIFFERS]
+mean / pca_m32_eps1e-4         | 89.33%     | MultinomialLogReg (wd=0.01)      | 70.00%            | 77.00% [WD DIFFERS]
+mean / pca_m64_eps1e-4         | 96.00%     | MultinomialLogReg (wd=0.001)     | 82.60%            | 85.80% [WD DIFFERS]
+mean / pca_m128_eps1e-4        | 58.67%     | MultinomialLogReg (wd=0.0001)    | 49.00%            | 49.00% [WD DIFFERS]
+mean / pca_m256_eps1e-4        | 50.33%     | NCM                              | 43.40%            | 43.40%
+mean / pca_m299_eps1e-4        | 48.33%     | MultinomialLogReg (wd=10.0)      | 42.20%            | 42.60% [WD DIFFERS]
+mean / ledoit_wolf             | 51.33%     | MultinomialLogReg (wd=1.0)       | 53.00%            | 53.00%
+=============================================================================================================================
+
+  M1 Selected Representation                 : 'mean / pca_m64_eps1e-4'
+  M1 Disjoint Validation Score              : 96.00%
+  M1 HONEST_TEST_ACC (Selected Cell)         : 82.60%
+  M1 Optimistic Ceiling (N=11 Test Evals)   : 85.80%
+  P16 Check: WD Differed on 6 of 11 cells
+
+=========================================================================================================
+ DIRECTIVE M4 ù WITHIN-TRAIN CV VS DISJOINT VAL CORRELATION BASELINE
+=========================================================================================================
+
+Representation                 | Within-Train 3-Fold CV | Disjoint Val Acc   | HONEST TEST ACC 
+-----------------------------------------------------------------------------------------------
+mean / none                    |  79.06%                 |  85.67%            |  77.80%
+mean / center                  |  84.50%                 |  84.33%            |  62.20%
+mean / center+ZCA_whiten       |  22.50%                 |  19.33%            |   8.60%
+mean / pca_m16_eps1e-4         |  62.22%                 |  61.67%            |  40.00%
+mean / pca_m32_eps1e-6         |  89.11%                 |  89.33%            |  70.00%
+mean / pca_m32_eps1e-4         |  89.11%                 |  89.33%            |  70.00%
+mean / pca_m64_eps1e-4         |  83.44%                 |  96.00%            |  82.60%
+mean / pca_m128_eps1e-4        |  59.00%                 |  58.67%            |  49.00%
+mean / pca_m256_eps1e-4        |  51.50%                 |  50.33%            |  43.40%
+mean / pca_m299_eps1e-4        |  50.00%                 |  48.33%            |  42.20%
+mean / ledoit_wolf             |  62.94%                 |  51.33%            |  53.00%
+===============================================================================================
+
+  M4 Correlation Summary (n=11 All Cells):
+    r_before (Within-Train CV vs Honest Test)   : Pearson r = +0.9326, Spearman rho = +0.8082
+    r_after  (Disjoint Val vs Honest Test)      : Pearson r = +0.9506, Spearman rho = +0.8721
+
+  M4 Correlation Summary (n=10 Excluding ZCA Outlier):
+    r_before (Excl ZCA)                        : Pearson r = +0.8638, Spearman rho = +0.7439
+    r_after  (Excl ZCA)                        : Pearson r = +0.9125, Spearman rho = +0.8293
+
+=========================================================================================================
+ DIRECTIVE M5 ù 3-WAY TEMPLATE SPLIT DISJOINTNESS & CENTROID COSINE AUDIT
+=========================================================================================================
+
+--- M5 Pairwise 5-Gram Overlap Audit ---
+  Train-Val 5-gram overlap: 0
+  Train-Test 5-gram overlap: 0
+  Val-Test 5-gram overlap:   0
+  Answer token leakage in prompts: 0
+  Total unique entities: 10, unique relations: 10
+  Mean Train-Val Centroid Cosine:  0.988414
+  Mean Train-Test Centroid Cosine: 0.981101
+  Difference (Train-Val minus Train-Test): +0.007313
+
+=========================================================================================================
+ DIRECTIVE M6 ù PCA DIMENSION SWEEP & EIGENVALUE SPECTRUM AUDIT
+=========================================================================================================
+
+--- M6 Eigenvalue Spectrum Audit ---
+  Top 10 eigenvalues: [85.63765631601628, 61.659540104605, 26.950909699848793, 18.451417749631087, 12.22735524158367, 10.706491652913918, 9.37533130514388, 6.831909131154678, 6.275260639702736, 4.17863695682739]
+  Eigenvalue #16: 2.032235e+00, #32: 6.141385e-01, #64: 1.862981e-01, #128: 1.370076e-02
+  Number of top 128 eigenvalues below 1e-3: 0 / 128
+
+m     | Disjoint Val Acc   | Val Method                   | Honest Test Acc    | Optimistic Ceiling  
+-----------------------------------------------------------------------------------------------
+16    |  61.67%            | MultinomialLogReg (wd=0.1)   |  40.00%           |  40.00%
+32    |  89.33%            | MultinomialLogReg (wd=0.01)  |  70.00%           |  77.00%
+48    |  94.00%            | MultinomialLogReg (wd=0.1)   |  82.80%           |  83.60%
+56    |  94.33%            | MultinomialLogReg (wd=0.001) |  83.20%           |  85.20%
+64    |  96.00%            | MultinomialLogReg (wd=0.001) |  82.60%           |  85.80%
+72    |  95.33%            | MultinomialLogReg (wd=0.01)  |  80.40%           |  84.60%
+80    |  94.67%            | MultinomialLogReg (wd=0.0)   |  79.60%           |  82.40%
+96    |  83.33%            | MultinomialLogReg (wd=0.01)  |  66.00%           |  68.40%
+112   |  67.00%            | MultinomialLogReg (wd=0.01)  |  49.80%           |  53.60%
+128   |  58.67%            | MultinomialLogReg (wd=0.0001) |  49.00%           |  49.00%
+256   |  50.33%            | NCM                          |  43.40%           |  43.40%
+299   |  48.33%            | MultinomialLogReg (wd=10.0)  |  42.20%           |  42.60%
+===============================================================================================
+
+  Validation Range across m in {56, 64, 72, 80}: 1.67 percentage points
+
+=========================================================================================================
+ SUMMARY OF PRE-REGISTERED PREDICTIONS (P16..P19):
+=========================================================================================================
+  P16 (WD Differs on >= 5 cells)               : Differed on 6/11 cells -> Verdict: RIGHT
+  P17 (HONEST_TEST_ACC <= 85.60% - 2.0pp = 83.60%): Honest = 82.60% -> Verdict: RIGHT
+  P18 (r_before > +0.80)                        : r_before = +0.9326 -> Verdict: RIGHT
+  P19 (Train-Val Cos > Train-Test Cos)          : Train-Val = 0.988414, Train-Test = 0.981101 -> Verdict: RIGHT
+=========================================================================================================
