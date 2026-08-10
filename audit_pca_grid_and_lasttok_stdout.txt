@@ -1,0 +1,84 @@
+python : 
+At line:1 char:1
++ python audit_pca_grid_and_lasttok.py > audit_pca_grid_and_lasttok_std ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\audit_pca_grid_and_lasttok.py", line 
+17, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================================
+ PHASE J1 & J2 AUDIT ù TRUNCATED PCA, LEDOIT-WOLF & LAST-TOKEN FIX
+==================================================================
+
+==================================================================
+ J1 TRUNCATED PCA WHITENING GRID (Mean Pooling Cache)
+==================================================================
+m (kept components)  | eps      | NCM Top-1    | 1-NN Top-1  
+-----------------------------------------------------------------
+16                   | 1e-06    |  33.33%      |  27.33%
+16                   | 1e-04    |  33.33%      |  28.00%
+16                   | 1e-02    |  25.00%      |  25.00%
+32                   | 1e-06    |  63.33%      |  52.33%
+32                   | 1e-04    |  61.67%      |  54.00%
+32                   | 1e-02    |  37.67%      |  32.33%
+64                   | 1e-06    |  39.33%      |  29.67%
+64                   | 1e-04    |  62.00%      |  50.33%
+64                   | 1e-02    |  41.67%      |  39.67%
+128                  | 1e-06    |  30.00%      |  21.67%
+128                  | 1e-04    |  59.00%      |  49.00%
+128                  | 1e-02    |  41.67%      |  41.00%
+256                  | 1e-06    |  24.67%      |  16.67%
+256                  | 1e-04    |  58.67%      |  49.33%
+256                  | 1e-02    |  42.33%      |  40.33%
+299                  | 1e-06    |  24.00%      |  15.00%
+299                  | 1e-04    |  58.67%      |  49.33%
+299                  | 1e-02    |  42.33%      |  40.00%
+  [R7 Confirm] Ledoit-Wolf Shrinkage fit on TRAIN only: delta = 0.0242, prior_scale = 0.000124
+-----------------------------------------------------------------
+Ledoit-Wolf (full rank) | 1e-4     |  58.67%      |  49.67%
+==================================================================
+BEST TRUNCATED PCA CELL FOR 'Mean Pooling Cache': m=32, eps=1e-06 -> NCM=63.33%, 1-NN=52.33%
+
+==================================================================
+ J2 LAST-TOKEN COMPARISON: OLD (WITH PUNCT) VS NEW (NON-PUNCT)
+==================================================================
+Transform              | Old NCM    | New NCM    | Old 1-NN   | New 1-NN  
+---------------------------------------------------------------------------
+none                   |   7.67%    |   8.67%    |  10.00%    |   7.67%
+center                 |  10.67%    |  10.67%    |  11.33%    |   7.33%
+pca_m32_eps1e-6        |   8.00%    |  13.33%    |   4.67%    |   7.00%
+pca_m299_eps1e-4       |   4.67%    |  12.33%    |   5.33%    |   9.67%
+  [R7 Confirm] Ledoit-Wolf Shrinkage fit on TRAIN only: delta = 0.0198, prior_scale = 0.000183
+  [R7 Confirm] Ledoit-Wolf Shrinkage fit on TRAIN only: delta = 0.0198, prior_scale = 0.000183
+ledoit_wolf            |   4.67%    |  12.33%    |   5.67%    |   9.67%
+==================================================================
