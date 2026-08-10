@@ -29,6 +29,12 @@
 !run_n4_pca_collapse_audit_stdout.txt
 !run_n5_latin_square_audit_stdout.txt
 !run_n1_to_n9_master_stdout.txt
+!run_o2_reproducibility_check_stdout.txt
+!run_o3_eps_question_stdout.txt
+!run_o4_r12_citation_audit_stdout.txt
+!run_o5_rescore_stdout.txt
+!run_o6_reconcile_stdout.txt
+!run_phase_iv_stdout.txt
 !build_cache_v3_stdout.log
 !class_permutation_seed42.json
 !agnis_scaling_dataset_v3_template_split.json

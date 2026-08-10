@@ -1,0 +1,57 @@
+====================================================================================================
+ PHASE IV -- CLASS-INCREMENTAL LEARNING (4 PRE-REGISTERED ARMS + 0 OPTIONAL)
+====================================================================================================
+  SELECTED_REPRESENTATION = mean / pca_m64_eps1e-4
+  HONEST_TEST_ACC         = 82.20%  (val-selected MultinomialLogReg wd=0.0001, single eval)
+  OPTIMISTIC_CEILING      = 85.80%  (N=187 test evals, NOT a valid target)
+  Gate 2 Assertion        : HONEST_TEST_ACC (82.20%) >= 50.0% [PASSED]
+  Candidate Grid Size     : 17 configs per cell
+
+  Blocks: 10, Classes: 100, Test samples: 500
+
+================================================================================
+  ARM 1: joint_offline (offline upper bound)
+  Val-Selected Config : MultinomialLogReg
+  Val Acc             : 95.67%
+  HONEST_TEST_ACC     : 82.20%  [100.0% of HONEST_TEST_ACC]
+  NCM Test Acc        : 85.80%  (for P27 joint_offline NCM comparison)
+
+================================================================================
+  ARM 2: naive_l1c (sequential fine-tuning, no memory)
+  Per-block test accs : ['9.80', '18.40', '24.80', '30.40', '34.60', '39.40', '47.20', '47.80', '47.60', '47.00']
+  Final Test Acc      : 47.00%  [57.2% of HONEST_TEST_ACC]
+
+================================================================================
+  ARM 3: freeze_after_base [R1 STANDING CONTROL ARM]
+  Per-block test accs : ['10.20', '10.20', '10.20', '10.20', '10.20', '10.20', '10.20', '10.20', '10.20', '10.20']
+  Final Test Acc      : 10.20%  [12.4% of HONEST_TEST_ACC]
+
+================================================================================
+  ARM 4: ncm_incremental (running centroid mean)
+  Per-block test accs : ['10.00', '19.40', '28.40', '38.00', '46.60', '55.20', '63.40', '71.80', '77.80', '85.80']
+  Final Test Acc      : 85.80%  [104.4% of HONEST_TEST_ACC]
+
+====================================================================================================
+  PHASE IV SUMMARY TABLE
+====================================================================================================
+  Arm                               Final Acc   % of HONEST_TEST_ACC
+  ------------------------------ ------------ ----------------------
+  joint_offline (upper bound)         82.20%                 100.0%
+  naive_l1c                           47.00%                  57.2%
+  freeze_after_base [R1 ctrl]         10.20%                  12.4%
+  ncm_incremental                     85.80%                 104.4%
+
+  R2 DECOMPOSED GAP REPORTING:
+  (Offline BWT = 0.00%, Naive BWT = 37.20%, freeze_after_base BWT = 0.00%)
+  freeze_after_base Retention Gap Closed : 100.0%
+
+  P27 CHECK:
+  freeze_after_base - naive_l1c = -36.80 pp (> 20.0 pp: False) -> WRONG
+  ncm_incremental vs joint_offline NCM = |85.80 - 85.80| = 0.00 pp (<= 5.0 pp: True) -> RIGHT
+  P27 Overall Verdict: WRONG
+
+  P5 CHECK ('Every Class-IL arm will score below joint offline'):
+    naive_l1c: 47.00% < joint_offline 82.20%: True
+    freeze_after_base: 10.20% < joint_offline 82.20%: True
+    ncm_incremental: 85.80% < joint_offline 82.20%: False
+  P5 Verdict: WRONG
