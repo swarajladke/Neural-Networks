@@ -1,0 +1,56 @@
+python : 
+At line:1 char:1
++ python run_gate1_diagnostic_corrected.py > run_gate1_diagnostic_corre ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.1 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "C:\Users\Vicky\Desktop\Neural Networks\run_gate1_diagnostic_corrected.py", 
+line 20, in <module>
+    import torch
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\__init__.py", line 1477, in 
+<module>
+    from .functional import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\functional.py", line 9, in 
+<module>
+    import torch.nn.functional as F
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\__init__.py", line 1, in 
+<module>
+    from .modules import *  # noqa: F403
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\__init__.py", line 
+35, in <module>
+    from .transformer import TransformerEncoder, TransformerDecoder, \
+  File "C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py", 
+line 20, in <module>
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+C:\Users\Vicky\AppData\Local\Programs\Python\Python311\Lib\site-packages\torch\nn\modules\transformer.py:20: 
+UserWarning: Failed to initialize NumPy: _ARRAY_API not found (Triggered internally at 
+..\torch\csrc\utils\tensor_numpy.cpp:84.)
+  device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+==================================================================
+ J6 CORRECTED GATE 1 DIAGNOSTIC (NESTED SUBSETS & FULL FIT ONCE)
+==================================================================
+[R7 Confirm] Transform (centering) fit ONCE on full 300 train vectors.
+
+Class Count (k)    | NCM Top-1    | 1-NN Top-1   | HeadL1c (J4 Early Stopped)
+---------------------------------------------------------------------------
+10                 |  56.67%      |  56.67%      |  74.44%
+25                 |  48.00%      |  50.67%      |  71.11%
+50                 |  42.67%      |  37.33%      |  61.56%
+100                |  28.00%      |  27.00%      |  61.44%
+===========================================================================
+
+--- MONOTONICITY CHECK ---
+NCM            : Values across k=[10, 25, 50, 100] = ['56.67%', '48.00%', '42.67%', '28.00%'] | Monotonic non-increasing: True
+1-NN           : Values across k=[10, 25, 50, 100] = ['56.67%', '50.67%', '37.33%', '27.00%'] | Monotonic non-increasing: True
+HeadL1c(J4)    : Values across k=[10, 25, 50, 100] = ['74.44%', '71.11%', '61.56%', '61.44%'] | Monotonic non-increasing: True
+==================================================================
