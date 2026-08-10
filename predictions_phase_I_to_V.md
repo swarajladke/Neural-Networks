@@ -35,4 +35,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 19. **P19**: Train-val centroid cosine will exceed train-test centroid cosine.
 
 ---
+
+### Additional Pre-Registered Predictions (N1-N9 Re-Registration)
+
+20. **P20**: Recomputed 3/3 NCM test accuracy on mean/pca_m32_eps1e-4 will equal that of mean/pca_m32_eps1e-6 to within 0.01 pp, restoring P10 to WRONG.
+21. **P21**: With per-method mean-across-folds scoring, the v3 CV winner will be MultinomialLogReg rather than NCM, and the winning CV score will fall by more than 3 pp relative to the max-over-methods-per-fold value.
+22. **P22**: The printed N_test_evals will be strictly greater than 11.
+23. **P23**: At eps=1e-2, m=128 disjoint validation accuracy will exceed the eps=1e-4, m=128 value (58.67%) by more than 15 pp.
+
+---
 *Scorecard and verification will be recorded after completing all phases.*
