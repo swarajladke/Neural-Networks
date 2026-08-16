@@ -43,7 +43,8 @@ MILESTONE_SHAS = [
     ("8209ea3", "S1 & S2 -- Phase IV json emission, all-classes cross-check assert, build_report_tables, and verify_report_numbers"),
     ("f89ba6e", "S1a -- Execute Phase IV matrix and commit stdout + JSON artifacts"),
     ("8befc77", "S1c & S1d -- Verify Phase IV numbers from generated report table (53/53 literals pass)"),
-    ("8f76224", "PRE-REGISTER PREDICTIONS P38-P42 before executing Directive T")
+    ("8f76224", "PRE-REGISTER PREDICTIONS P38-P42 before executing Directive T"),
+    ("f035023", "U0 -- Pre-register P43-P47 and restore P36/P37 verbatim before running Directive U")
 ]
 
 WITHDRAWALS_REGISTRY = [
@@ -114,7 +115,7 @@ WITHDRAWALS_REGISTRY = [
         "item": "P16 6-of-11 Count Baseline",
         "old_val": "6 of 11 cells",
         "origin": "Commit 8938519 (N3)",
-        "new_val": "5 of 11 cells under R15 wd=0.0 filtering (reconciled to 10 of 11 in P28)",
+        "new_val": "8 of 11 cells under unified stack",
         "cause": "Grid included unregularized wd=0.0 without R15 convergence checking."
     },
     {
@@ -151,6 +152,13 @@ WITHDRAWALS_REGISTRY = [
         "origin": "Commit 303587c",
         "new_val": "-8.22% (f89ba6e)",
         "cause": "Earlier report assumed diagonal R[i,i] equals R[T-1,i], but diagonal entries are measured against fewer candidate classes (10(i+1) vs 100 classes)."
+    },
+    {
+        "item": "Pre-registered text of P36 and P37",
+        "old_val": "Replaced with tautological restatements",
+        "origin": "Commit 8209ea3 / Commit f89ba6e",
+        "new_val": "Original text restored verbatim",
+        "cause": "Pre-registered statements are frozen at their commit SHA and may not be rewritten after the measurement exists."
     }
 ]
 

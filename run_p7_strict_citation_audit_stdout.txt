@@ -1,0 +1,71 @@
+=========================================================================================================
+ DIRECTIVES P7, S5, S8, U1-U7 -- STRICT RULE R12 SOURCED CITATION AUDIT & INTEGRITY GUARD
+=========================================================================================================
+--- 1. U1 STATEMENT INTEGRITY GUARD ---
+  Statements Checked : n_checked    = 47
+  Mismatched Count   : n_mismatched = 0
+  Status: PASSED (100% of scorecard statements match pre-registration verbatim).
+
+--- 2. U2 & U3 SOURCED CITATION & LITERAL PRESENCE AUDIT ---
+  P1     | audit_embedding_leakage_stdout.txt            | YES    | FAIL_MISSING (['7.67'])
+  P2     | audit_representation_ablation_stdout.txt      | YES    | PASS (4 literals verified)
+  P3     | run_joint_offline_probe_stdout.txt            | YES    | FAIL_MISSING (['-1', '40.33'])
+  P4     | run_joint_offline_probe_stdout.txt            | YES    | FAIL_MISSING (['64.95'])
+  P5     | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (4 literals verified)
+  P6     | audit_pca_grid_and_lasttok_stdout.txt         | YES    | PASS (3 literals verified)
+  P7     | audit_pca_grid_and_lasttok_stdout.txt         | YES    | PASS (3 literals verified)
+  P8     | UNSOURCED (no repo artifact)                  | N/A    | PASS (UNSOURCED/SUPERSEDED)
+  P9     | run_gate1_diagnostic_k3_k5_stdout.txt         | YES    | PASS (0 literals verified)
+  P10    | run_n1_3x3_ncm_recheck_stdout.txt             | YES    | FAIL_MISSING (['1.66', '3.0', '63.33'])
+  P11    | run_o5_rescore_stdout.txt                     | YES    | PASS (2 literals verified)
+  P12    | run_k4_k5_k6_offline_bound_search_stdout.txt  | YES    | PASS (2 literals verified)
+  P13    | run_o5_rescore_stdout.txt                     | YES    | PASS (1 literals verified)
+  P14    | run_o5_rescore_stdout.txt                     | YES    | PASS (1 literals verified)
+  P15    | run_k4_k5_k6_offline_bound_search_stdout.txt  | YES    | FAIL_MISSING (['66.00'])
+  P16    | run_n3_n_count_and_match_stdout.txt           | YES    | PASS (2 literals verified)
+  P17    | run_o2_reproducibility_check_stdout.txt       | YES    | FAIL_MISSING (['3.40', '83.60', '85.60'])
+  P18    | evaluate_m_phase_stdout.txt                   | YES    | PASS (3 literals verified)
+  P19    | evaluate_m_phase_stdout.txt                   | YES    | PASS (2 literals verified)
+  P20    | run_o3_eps_question_stdout.txt                | YES    | FAIL_MISSING (['0.01'])
+  P21    | run_o5_rescore_stdout.txt                     | YES    | PASS (3 literals verified)
+  P22    | run_n3_n_count_and_match_stdout.txt           | YES    | FAIL_MISSING (['187'])
+  P23    | run_o6_reconcile_stdout.txt                   | YES    | FAIL_MISSING (['15.0'])
+  P24    | run_o2_reproducibility_check_stdout.txt       | YES    | PASS (2 literals verified)
+  P25    | UNSOURCED (no repo artifact)                  | N/A    | PASS (UNSOURCED/SUPERSEDED)
+  P26    | run_o3_eps_question_stdout.txt                | YES    | FAIL_MISSING (['-2', '-5'])
+  P27    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (4 literals verified)
+  P28    | run_p1_full_selection_grid_stdout.txt         | YES    | FAIL_MISSING (['5.0'])
+  P29    | run_p1_full_selection_grid_stdout.txt         | YES    | PASS (4 literals verified)
+  P30    | run_p1_full_selection_grid_stdout.txt         | YES    | PASS (5 literals verified)
+  P31    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (3 literals verified)
+  P32    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | FAIL_MISSING (['1e-6'])
+  P33    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | FAIL_MISSING (['0.82', '33.40'])
+  P34    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | FAIL_MISSING (['1.45', '48.80'])
+  P35    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | FAIL_MISSING (['16.60'])
+  P36    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (2 literals verified)
+  P37    | verify_report_numbers_PRE_stdout.txt          | YES    | PASS (1 literals verified)
+  P38    | verify_report_numbers_PRE_stdout.txt          | YES    | PASS (1 literals verified)
+  P39    | build_report_tables_stdout.txt                | YES    | FAIL_MISSING (['-15'])
+  P40    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (0 literals verified)
+  P41    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (1 literals verified)
+  P42    | run_p1_full_selection_grid_stdout.txt         | YES    | PASS (1 literals verified)
+  P43    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (0 literals verified)
+  P44    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (0 literals verified)
+  P45    | run_p1_full_selection_grid_stdout.txt         | YES    | PASS (3 literals verified)
+  P46    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (0 literals verified)
+  P47    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (0 literals verified)
+
+--- 3. U4 AUDIT COUNTS RECONCILIATION ---
+  n_scorecard_rows  = 47
+  n_sourceable_rows = 46
+  n_checks_run      = 47
+  n_pass            = 31
+  n_fail            = 16
+  n_literals        = 122
+  n_absent          = 24
+  Absent Literals   : [('P1', '7.67', 'audit_embedding_leakage_stdout.txt'), ('P3', '-1', 'run_joint_offline_probe_stdout.txt'), ('P3', '40.33', 'run_joint_offline_probe_stdout.txt'), ('P4', '64.95', 'run_joint_offline_probe_stdout.txt'), ('P10', '1.66', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '3.0', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '63.33', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P15', '66.00', 'run_k4_k5_k6_offline_bound_search_stdout.txt'), ('P17', '3.40', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '83.60', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '85.60', 'run_o2_reproducibility_check_stdout.txt'), ('P20', '0.01', 'run_o3_eps_question_stdout.txt'), ('P22', '187', 'run_n3_n_count_and_match_stdout.txt'), ('P23', '15.0', 'run_o6_reconcile_stdout.txt'), ('P26', '-2', 'run_o3_eps_question_stdout.txt'), ('P26', '-5', 'run_o3_eps_question_stdout.txt'), ('P28', '5.0', 'run_p1_full_selection_grid_stdout.txt'), ('P32', '1e-6', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '0.82', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '33.40', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '1.45', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '48.80', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P35', '16.60', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P39', '-15', 'build_report_tables_stdout.txt')]
+
+--- 4. U5 SCOPED WITHDRAWAL REGISTRY AUDIT ---
+  Status: PASSED (All withdrawn values purged from active Phase IV reporting).
+
+--- 5. U6 & U7 UNIVERSAL STRING INTEGRITY ASSERTS ---
