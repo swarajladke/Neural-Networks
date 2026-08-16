@@ -2,8 +2,12 @@
 run_p3_to_p6_phase_iv_matrix.py
 ===============================
 
-Directives Q1, P3, P4, P5, P6:
+Directives S1, S2, Q1, P3, P4, P5, P6:
 Phase IV Class-Incremental Learning (Class-IL) with strict R16, R17, R18 compliance.
+
+S1 (ARTIFACT INTEGRITY):
+  - Emits 'phase_iv_results.json' containing full matrices, per-seed metrics, and 5-seed aggregates.
+  - S2 Cross-Check: Verifies that ACC_T strictly equals all-classes test accuracy for equal-sized blocks.
 
 R16 (NO STRUCTURALLY CONSTANT METRIC):
   - Builds full lower-triangular accuracy matrix R[t,i] (t=1..T, i<=t)
@@ -11,7 +15,6 @@ R16 (NO STRUCTURALLY CONSTANT METRIC):
   - Computes real Forgetting = 1/(T-1) * sum_{i<T} (max_{t<=T} R[t,i] - R[T-1,i])
   - For freeze arms, R[t][i] is constant in t by construction, so BWT and Forgetting are
     identically zero by construction; they are NOT reported as empirical continual learning measurements (R16).
-  - Enforces guard assertion: recomputed = sum(naive_R[-1]) / len(naive_R[-1]) == n_acc
 
 R17 (SEED BEFORE CONSTRUCTION):
   - torch.manual_seed(seed) executes BEFORE any HeadL1c(...) construction
@@ -24,6 +27,7 @@ R18 (ONE CLASSIFIER FAMILY PER COMPARISON):
   - Proves NCM order-invariance: torch.allclose(incremental_centroids, batch_centroids, atol=1e-6)
 """
 
+import json
 import math
 import os
 import torch
@@ -127,6 +131,11 @@ def run_single_seed_headl1c_arms(seed, tr_blocks, te_blocks, te_x_full, te_y_ful
                 r_t.append(acc)
         naive_R.append(r_t)
 
+    # S2 Cross-Check: Verify all-classes accuracy against ACC_T
+    naive_model.eval()
+    with torch.no_grad():
+        all_classes_acc = (naive_model(te_x_full).argmax(dim=1) == te_y_full).float().mean().item() * 100.0
+
     # --- 2. freeze_after_base ---
     # R17: SEED BEFORE MODULE CONSTRUCTION (Identical seed for base block)
     torch.manual_seed(seed)
@@ -182,7 +191,7 @@ def run_single_seed_headl1c_arms(seed, tr_blocks, te_blocks, te_x_full, te_y_ful
         preds = joint_model(te_x_full).argmax(dim=1)
         joint_acc = (preds == te_y_full).float().mean().item() * 100.0
 
-    return naive_R, freeze_R, joint_acc
+    return naive_R, freeze_R, joint_acc, all_classes_acc
 
 
 # =============================================================================
@@ -261,7 +270,7 @@ def main():
         return
 
     print("=========================================================================================================")
-    print(f" DIRECTIVES Q1, P3-P6 -- PHASE IV CLASS-IL EVALUATION UNDER R16, R17, R18")
+    print(f" DIRECTIVES S1, S2, Q1, P3-P6 -- PHASE IV CLASS-IL EVALUATION (R16, R17, R18)")
     print("=========================================================================================================")
     print(f"  Selected Representation : {SELECTED_REPRESENTATION}")
     print(f"  Evaluation Seeds        : {SEEDS} (5 seeds, mean +/- std reporting)")
@@ -272,41 +281,48 @@ def main():
     te_blocks = [get_block_test_subset(te_x, te_y, b) for b in range(N_BLOCKS)]
 
     # =========================================================================
-    # HEADL1C FAMILY MULTI-SEED RUN (R17 & Q1)
+    # HEADL1C FAMILY MULTI-SEED RUN (R17, Q1, S1, S2)
     # =========================================================================
     print("---------------------------------------------------------------------------------------------------------")
     print(" 1. HEADL1C CLASSIFIER FAMILY (5 Seeds: 42, 43, 44, 45, 46)")
     print("---------------------------------------------------------------------------------------------------------")
 
-    naive_seed_metrics = []
-    freeze_seed_accs = []
-    joint_seed_accs = []
+    per_seed_records = []
     sample_naive_R = None
     sample_freeze_R = None
 
     for seed in SEEDS:
-        naive_R, freeze_R, joint_acc = run_single_seed_headl1c_arms(seed, tr_blocks, te_blocks, te_x, te_y)
+        naive_R, freeze_R, joint_acc, all_classes_acc = run_single_seed_headl1c_arms(seed, tr_blocks, te_blocks, te_x, te_y)
         if sample_naive_R is None:
             sample_naive_R = naive_R
             sample_freeze_R = freeze_R
 
         n_acc, n_bwt, n_fgt = compute_r_metrics(naive_R)
-        f_acc, f_bwt, f_fgt = compute_r_metrics(freeze_R)
+        f_acc, _, _ = compute_r_metrics(freeze_R)
 
-        # Q1 Guard Assertion: summary n_acc must identically match sum(naive_R[-1]) / len(naive_R[-1])
-        recomputed_n_acc = sum(naive_R[-1]) / len(naive_R[-1])
-        assert abs(recomputed_n_acc - n_acc) < 1e-9, (
-            f"Seed {seed} Guard Failure: summary {n_acc} != matrix-derived {recomputed_n_acc}"
-        )
-
-        naive_seed_metrics.append((n_acc, n_bwt, n_fgt))
-        freeze_seed_accs.append(f_acc)
-        joint_seed_accs.append(joint_acc)
-
+        # S2 Cross-Check: all-classes accuracy must match ACC_T exactly
         print(f"  [Seed {seed}]")
+        print(f"    All-Classes Test Acc  : {all_classes_acc:5.2f}%")
+        print(f"    Matrix-Derived ACC_T  : {n_acc:5.2f}%")
+        assert abs(all_classes_acc - n_acc) < 1e-4, (
+            f"S2 Cross-Check Failure on Seed {seed}: all_acc={all_classes_acc} != ACC_T={n_acc}"
+        )
+        print(f"    S2 Cross-Check Assert : PASSED (abs diff = {abs(all_classes_acc - n_acc):.6f} < 1e-4)")
+
         print(f"    naive_l1c             : ACC_T = {n_acc:5.2f}% | BWT = {n_bwt:+6.2f}% | Forgetting = {n_fgt:5.2f}%")
         print(f"    freeze_after_base     : ACC_T = {f_acc:5.2f}% (BWT and Forgetting omitted per R16: identically 0.00 by construction)")
         print(f"    joint_offline_headl1c : ACC   = {joint_acc:5.2f}%\n")
+
+        per_seed_records.append({
+            "seed": seed,
+            "naive_R": naive_R,
+            "freeze_R": freeze_R,
+            "naive_acc_T": n_acc,
+            "naive_bwt": n_bwt,
+            "naive_forgetting": n_fgt,
+            "freeze_acc_T": f_acc,
+            "joint_offline_headl1c": joint_acc
+        })
 
     # Print sample lower-triangular R matrix for seed 42
     print("  Lower-Triangular R[t,i] Accuracy Matrix (naive_l1c, Seed 42):")
@@ -325,12 +341,12 @@ def main():
         s = math.sqrt(sum((x - m) ** 2 for x in vals) / (len(vals) - 1)) if len(vals) > 1 else 0.0
         return m, s
 
-    naive_acc_m, naive_acc_s = mean_std([m[0] for m in naive_seed_metrics])
-    naive_bwt_m, naive_bwt_s = mean_std([m[1] for m in naive_seed_metrics])
-    naive_fgt_m, naive_fgt_s = mean_std([m[2] for m in naive_seed_metrics])
+    naive_acc_m, naive_acc_s = mean_std([r["naive_acc_T"] for r in per_seed_records])
+    naive_bwt_m, naive_bwt_s = mean_std([r["naive_bwt"] for r in per_seed_records])
+    naive_fgt_m, naive_fgt_s = mean_std([r["naive_forgetting"] for r in per_seed_records])
 
-    freeze_acc_m, freeze_acc_s = mean_std(freeze_seed_accs)
-    joint_acc_m, joint_acc_s = mean_std(joint_seed_accs)
+    freeze_acc_m, freeze_acc_s = mean_std([r["freeze_acc_T"] for r in per_seed_records])
+    joint_acc_m, joint_acc_s = mean_std([r["joint_offline_headl1c"] for r in per_seed_records])
 
     print("\n  HeadL1c Summary Table (5-Seed Mean +/- Std):")
     print(f"    joint_offline_headl1c : Final ACC = {joint_acc_m:5.2f}% +/- {joint_acc_s:4.2f}%")
@@ -351,6 +367,38 @@ def main():
     print(f"    joint_offline_ncm     : Final ACC = {joint_ncm_acc:5.2f}% (batch centroids)")
     print(f"    ncm_incremental       : Final ACC = {ncm_inc_acc:5.2f}% | BWT = {ncm_inc_bwt:+6.2f}% | Forgetting = {ncm_inc_fgt:5.2f}%")
     print(f"    freeze_after_base_ncm : Final ACC = {freeze_ncm_acc:5.2f}% (Base-only ceiling: 10.00%)")
+
+    # =========================================================================
+    # S1(b): EMIT phase_iv_results.json
+    # =========================================================================
+    results_json = {
+        "selected_representation": SELECTED_REPRESENTATION,
+        "seeds": SEEDS,
+        "n_blocks": N_BLOCKS,
+        "n_classes": N_CLASSES,
+        "headl1c_family": {
+            "per_seed": per_seed_records,
+            "aggregate": {
+                "joint_offline_headl1c": {"mean": joint_acc_m, "std": joint_acc_s},
+                "naive_l1c": {
+                    "acc_T_mean": naive_acc_m, "acc_T_std": naive_acc_s,
+                    "bwt_mean": naive_bwt_m, "bwt_std": naive_bwt_s,
+                    "forgetting_mean": naive_fgt_m, "forgetting_std": naive_fgt_s
+                },
+                "freeze_after_base": {"acc_T_mean": freeze_acc_m, "acc_T_std": freeze_acc_s}
+            }
+        },
+        "ncm_family": {
+            "joint_offline_ncm": {"acc": joint_ncm_acc},
+            "ncm_incremental": {"acc": ncm_inc_acc, "bwt": ncm_inc_bwt, "forgetting": ncm_inc_fgt},
+            "freeze_after_base_ncm": {"acc": freeze_ncm_acc}
+        }
+    }
+
+    json_path = "phase_iv_results.json"
+    with open(json_path, "w") as f:
+        json.dump(results_json, f, indent=2)
+    print(f"\n  [S1 ARTIFACT] Emitted '{json_path}' successfully.")
 
     # =========================================================================
     # PRE-REGISTERED PREDICTIONS SCORECARD VERIFICATION (P5, P27, P31, P32)

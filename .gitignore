@@ -52,6 +52,7 @@
 *.gguf
 *.json
 !results_*.json
+!phase_iv_results.json
 !agnis_scaling_dataset.json
 !agnis_scaling_dataset_v2.json
 
