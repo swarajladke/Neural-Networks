@@ -41,8 +41,14 @@
 !run_p8_milestone_ledger_audit_stdout.txt
 !build_report_tables_stdout.txt
 !verify_report_numbers_PRE_stdout.txt
+!run_w1_adaptation_gap_stdout.txt
+!run_w2_benchmark_build_stdout.txt
+!run_w4_baselines_stdout.txt
+!run_w5_plasticity_stdout.txt
+!run_w6_prototype_anchored_stdout.txt
 !build_cache_v3_stdout.log
 !class_permutation_seed42.json
+!class_order_split_cifar100.json
 !agnis_scaling_dataset_v3_template_split.json
 !agnis_scaling_dataset_v2.json
 !agnis_scaling_dataset_v2_expanded.json
@@ -55,6 +61,11 @@
 *.json
 !results_*.json
 !phase_iv_results.json
+!w1_results.json
+!w2_benchmark_summary.json
+!w4_results.json
+!w5_results.json
+!w6_results.json
 !agnis_scaling_dataset.json
 !agnis_scaling_dataset_v2.json
 

@@ -251,3 +251,55 @@ def evaluate_classifier_by_name(tr_x, tr_y, eval_x, eval_y, method_name, wd=0.0)
         return eval_logreg(tr_x, tr_y, eval_x, eval_y, wd)
     else:
         raise ValueError(f"Unknown classifier method: '{method_name}'")
+
+
+def compute_r_metrics(R):
+    """
+    Directive W3: Standardized Dual-Metric Evaluation Harness over Lower-Triangular R[t,i] Matrix.
+    Index columns strictly from i = 0 to T-1.
+
+    Returns:
+      - acc_T: mean over i in 0..T-1 of R[T-1, i]
+      - bwt: mean over i in 0..T-2 of (R[T-1, i] - R[i, i]) (Backward Transfer)
+      - forgetting: mean over i in 0..T-1 of (max_{t >= i} R[t, i] - R[T-1, i])
+      - plasticity_curve: [R[i, i] for i in range(T)]
+      - plasticity_decay: R[0, 0] - R[T-1, T-1] (Loss of Plasticity)
+    """
+    T = len(R)
+    if T == 0:
+        return {
+            "acc_T": 0.0,
+            "bwt": 0.0,
+            "forgetting": 0.0,
+            "plasticity_curve": [],
+            "plasticity_decay": 0.0
+        }
+
+    # ACC_T = mean over all tasks evaluated at final step T-1
+    acc_T = sum(R[T - 1][i] for i in range(T)) / float(T)
+
+    # BWT = mean over tasks 0..T-2 of final accuracy minus learning-time accuracy
+    if T > 1:
+        bwt = sum(R[T - 1][i] - R[i][i] for i in range(T - 1)) / float(T - 1)
+    else:
+        bwt = 0.0
+
+    # Forgetting = mean over tasks of peak accuracy minus final accuracy
+    fgt_list = []
+    for i in range(T):
+        peak_acc = max(R[t][i] for t in range(i, T))
+        fgt_list.append(peak_acc - R[T - 1][i])
+    forgetting = sum(fgt_list) / float(T)
+
+    # Plasticity curve & decay
+    plasticity_curve = [R[i][i] for i in range(T)]
+    plasticity_decay = R[0][0] - R[T - 1][T - 1]
+
+    return {
+        "acc_T": acc_T,
+        "bwt": bwt,
+        "forgetting": forgetting,
+        "plasticity_curve": plasticity_curve,
+        "plasticity_decay": plasticity_decay
+    }
+

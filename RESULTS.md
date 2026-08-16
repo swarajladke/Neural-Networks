@@ -11,6 +11,19 @@ Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean
 
 The benchmark measures 100-way classification of prompt clusters with 7 train, 3 val, and 5 test disjoint-template examples per class. It does not measure fact retention. The answer field does not enter the model, the loss, or any metric.
 
+---
+
+### Why the v3 benchmark is retired (Directive W1)
+
+The v3 100-fact benchmark is retired for research purposes because representation learning contributes nothing on this task:
+- `frozen_NCM` benchmark accuracy: **85.80%** (parameter-free running centroids on frozen representation).
+- `joint_offline_full_finetune`: **79.80% $\pm$ 0.76%** (gradient-based joint training on all 100 classes with unfrozen backbone).
+- $\text{ADAPTATION\_GAP} = \text{joint\_offline\_full\_finetune} - \text{frozen\_NCM} = 79.80\% - 85.80\% = \mathbf{-6.00\text{ percentage points}}$.
+
+Since joint training on all data loses to no training at all, continual learning methods cannot demonstrate genuine adaptation gains on this benchmark. Research has pivoted to the **Split-CIFAR-100** benchmark (ResNet-18) where $\text{ADAPTATION\_GAP} \gg +15.0\text{ pp}$ and representation learning is essential.
+
+---
+
 **Continual Learning Measured Finding (S10)**:
 - **HeadL1c Family**: Under Class-IL, sequential gradient training forgets catastrophically (Final $\text{ACC}_T = \mathbf{47.60\% \pm 1.93\%}$, $\text{BWT} = \mathbf{-42.09\% \pm 1.99\%}$, $\text{Forgetting} = \mathbf{42.09\% \pm 1.99\%}$).
 - **NCM Family**: Parameter-free centroid accumulation reaches **85.80%**, identical to its own joint-offline bound, with $\text{BWT} = \mathbf{-8.22\%}$.

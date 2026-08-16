@@ -44,7 +44,8 @@ MILESTONE_SHAS = [
     ("f89ba6e", "S1a -- Execute Phase IV matrix and commit stdout + JSON artifacts"),
     ("8befc77", "S1c & S1d -- Verify Phase IV numbers from generated report table (53/53 literals pass)"),
     ("8f76224", "PRE-REGISTER PREDICTIONS P38-P42 before executing Directive T"),
-    ("f035023", "U0 -- Pre-register P43-P47 and restore P36/P37 verbatim before running Directive U")
+    ("f035023", "U0 -- Pre-register P43-P47 and restore P36/P37 verbatim before running Directive U"),
+    ("66b64ff", "W0 -- Pre-register P53-P57 before benchmark pivot and adaptation gap measurement")
 ]
 
 WITHDRAWALS_REGISTRY = [
