@@ -60,5 +60,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 31. **P31**: `naive_l1c` BWT computed from the `R` matrix will be strictly negative, contradicting the current +37.20% figure.
 32. **P32**: With the seed moved before construction, `naive_l1c` and `freeze_after_base` block-0 accuracies will be identical, and the 5-seed std of `freeze_after_base` final accuracy will exceed 0.30 pp.
 
+### Additional Pre-Registered Predictions (S-Phase Re-Registration)
+
+33. **P33**: 5-seed mean naive ACC_T will differ from 14.20% by more than 0.20 pp, and its std will differ from 0.82.
+34. **P34**: 5-seed mean naive BWT will differ from -90.89% by more than 0.20 pp, and its std will differ from 1.45.
+35. **P35**: joint_offline_headl1c will differ from 63.20% by more than 0.20 pp.
+36. **P36**: verify_report_numbers.py will report n_missing == 0 once walkthrough.md is generated from build_report_tables.py.
+37. **P37**: In phase_iv_results.json, for all 5 seeds, abs(all_classes_acc - naive_acc_T) < 1e-4 will hold strictly.
+
 ---
 *Scorecard and verification will be recorded after completing all phases.*
