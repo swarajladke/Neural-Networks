@@ -1,13 +1,14 @@
 =========================================================================================================
- DIRECTIVES P7, S5, S8, U1-U7, X7 -- STRICT RULE R12 SOURCED CITATION AUDIT
+ DIRECTIVES P7, S5, S8, U1-U7, X7, Z1-Z3 -- STRICT RULE R12 SOURCED CITATION AUDIT
 =========================================================================================================
 --- 1. U1 STATEMENT INTEGRITY GUARD ---
   Statements Checked : n_checked    = 52
   Mismatched Count   : n_mismatched = 0
   Status: PASSED (100% of scorecard statements match pre-registration verbatim).
 
---- 2. U2, U3 & X7 SOURCED CITATION & LITERAL PRESENCE AUDIT ---
-  Programmatic R12 Exemption List: ['P8', 'P25'] (SUPERSEDED / Retracted historical endpoints)
+--- 2. U2, U3, X7 & Z3 SOURCED CITATION & LITERAL PRESENCE AUDIT ---
+  Programmatic R12 Exemption List : ['P8', 'P25'] (SUPERSEDED / Retracted historical endpoints)
+  Unmeasured Benchmark Pivot List : ['P53', 'P54', 'P55', 'P56', 'P57'] (Awaiting Kaggle execution)
   P1     | audit_embedding_leakage_stdout.txt            | YES    | FAIL_MISSING (['7.67'])
   P2     | audit_representation_ablation_stdout.txt      | YES    | PASS (4 literals verified)
   P3     | run_joint_offline_probe_stdout.txt            | YES    | FAIL_MISSING (['-1', '40.33'])
@@ -15,24 +16,24 @@
   P5     | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (4 literals verified)
   P6     | audit_pca_grid_and_lasttok_stdout.txt         | YES    | PASS (3 literals verified)
   P7     | audit_pca_grid_and_lasttok_stdout.txt         | YES    | PASS (3 literals verified)
-  P8     | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
+  P8     | UNSOURCED (R12 Exemption)                     | N/A    | EXEMPT
   P9     | run_gate1_diagnostic_k3_k5_stdout.txt         | YES    | VACUOUS -- no literals verified
   P10    | run_n1_3x3_ncm_recheck_stdout.txt             | YES    | FAIL_MISSING (['1.66', '3.0', '63.33'])
-  P11    | run_o5_rescore_stdout.txt                     | NO     | FAIL_FILE_NOT_FOUND
+  P11    | run_o5_rescore_p21_p11_p13_p14_stdout.txt     | YES    | PASS (2 literals verified)
   P12    | run_k4_k5_k6_offline_bound_search_stdout.txt  | YES    | PASS (2 literals verified)
-  P13    | run_o5_rescore_stdout.txt                     | NO     | FAIL_FILE_NOT_FOUND
-  P14    | run_o5_rescore_stdout.txt                     | NO     | FAIL_FILE_NOT_FOUND
+  P13    | run_o5_rescore_p21_p11_p13_p14_stdout.txt     | YES    | PASS (1 literals verified)
+  P14    | run_o5_rescore_p21_p11_p13_p14_stdout.txt     | YES    | PASS (1 literals verified)
   P15    | run_k4_k5_k6_offline_bound_search_stdout.txt  | YES    | FAIL_MISSING (['66.00'])
   P16    | run_n3_n_count_and_match_stdout.txt           | YES    | PASS (2 literals verified)
   P17    | run_o2_reproducibility_check_stdout.txt       | YES    | FAIL_MISSING (['3.40', '83.60', '85.60'])
-  P18    | evaluate_m_phase_stdout.txt                   | NO     | FAIL_FILE_NOT_FOUND
-  P19    | evaluate_m_phase_stdout.txt                   | NO     | FAIL_FILE_NOT_FOUND
+  P18    | evaluate_m_phase_comprehensive_stdout.txt     | YES    | PASS (3 literals verified)
+  P19    | evaluate_m_phase_comprehensive_stdout.txt     | YES    | PASS (2 literals verified)
   P20    | run_o3_eps_question_stdout.txt                | YES    | FAIL_MISSING (['0.01'])
-  P21    | run_o5_rescore_stdout.txt                     | NO     | FAIL_FILE_NOT_FOUND
+  P21    | run_o5_rescore_p21_p11_p13_p14_stdout.txt     | YES    | PASS (3 literals verified)
   P22    | run_n3_n_count_and_match_stdout.txt           | YES    | PASS (3 literals verified)
-  P23    | run_o6_reconcile_stdout.txt                   | NO     | FAIL_FILE_NOT_FOUND
+  P23    | run_o6_reconcile_n4_m6_stdout.txt             | YES    | FAIL_MISSING (['15.0'])
   P24    | run_o2_reproducibility_check_stdout.txt       | YES    | PASS (2 literals verified)
-  P25    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
+  P25    | UNSOURCED (R12 Exemption)                     | N/A    | EXEMPT
   P26    | run_o3_eps_question_stdout.txt                | YES    | FAIL_MISSING (['-2', '-5'])
   P27    | run_p3_to_p6_phase_iv_matrix_stdout.txt       | YES    | PASS (4 literals verified)
   P28    | run_p1_full_selection_grid_stdout.txt         | YES    | FAIL_MISSING (['5.0'])
@@ -54,29 +55,38 @@
   P44    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (1 literals verified)
   P45    | run_p1_full_selection_grid_stdout.txt         | YES    | PASS (3 literals verified)
   P46    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (1 literals verified)
-  P47    | run_p7_strict_citation_audit_stdout.txt       | YES    | VACUOUS -- no literals verified
-  P53    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
-  P54    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
-  P55    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
-  P56    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
-  P57    | UNSOURCED (R12 Exemption)                     | N/A    | PASS_EXEMPT
+  P47    | run_p7_strict_citation_audit_stdout.txt       | YES    | PASS (3 literals verified)
+  P53    | NOT YET MEASURED (Awaiting Kaggle)            | N/A    | NOT_MEASURED
+  P54    | NOT YET MEASURED (Awaiting Kaggle)            | N/A    | NOT_MEASURED
+  P55    | NOT YET MEASURED (Awaiting Kaggle)            | N/A    | NOT_MEASURED
+  P56    | NOT YET MEASURED (Awaiting Kaggle)            | N/A    | NOT_MEASURED
+  P57    | NOT YET MEASURED (Awaiting Kaggle)            | N/A    | NOT_MEASURED
 
---- 3. U4 & X7 AUDIT COUNTS RECONCILIATION ---
+--- 3. U4, X7 & Z3 AUDIT COUNTS RECONCILIATION ---
   n_scorecard_rows  = 52
-  n_sourceable_rows = 50
-  n_checks_run      = 52
-  n_pass            = 31
-  n_fail            = 21
-  n_vacuous_pass    = 3 (['P9', 'P40', 'P47'])
-  n_literals        = 108
-  n_absent          = 22
-  Failing Rows (21) : ['P1', 'P3', 'P4', 'P10', 'P11', 'P13', 'P14', 'P15', 'P17', 'P18', 'P19', 'P20', 'P21', 'P23', 'P26', 'P28', 'P32', 'P33', 'P34', 'P35', 'P39']
-  Absent Details    : [('P1', '7.67', 'audit_embedding_leakage_stdout.txt'), ('P3', '-1', 'run_joint_offline_probe_stdout.txt'), ('P3', '40.33', 'run_joint_offline_probe_stdout.txt'), ('P4', '64.95', 'run_joint_offline_probe_stdout.txt'), ('P10', '1.66', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '3.0', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '63.33', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P15', '66.00', 'run_k4_k5_k6_offline_bound_search_stdout.txt'), ('P17', '3.40', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '83.60', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '85.60', 'run_o2_reproducibility_check_stdout.txt'), ('P20', '0.01', 'run_o3_eps_question_stdout.txt'), ('P26', '-2', 'run_o3_eps_question_stdout.txt'), ('P26', '-5', 'run_o3_eps_question_stdout.txt'), ('P28', '5.0', 'run_p1_full_selection_grid_stdout.txt'), ('P32', '1e-6', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '0.82', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '33.40', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '1.45', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '48.80', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P35', '16.60', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P39', '-15', 'build_report_tables_stdout.txt')]
+  n_checks_run      = 45
+  n_pass            = 28
+  n_vacuous_pass    = 2 (['P9', 'P40'])
+  n_fail            = 15
+  n_exempt          = 2 (['P8', 'P25'])
+  n_not_measured    = 5 (['P53', 'P54', 'P55', 'P56', 'P57'])
+  n_literals        = 128
+  n_absent          = 23
+  Failing Rows (15) : ['P1', 'P3', 'P4', 'P10', 'P15', 'P17', 'P20', 'P23', 'P26', 'P28', 'P32', 'P33', 'P34', 'P35', 'P39']
+  Absent Details    : [('P1', '7.67', 'audit_embedding_leakage_stdout.txt'), ('P3', '-1', 'run_joint_offline_probe_stdout.txt'), ('P3', '40.33', 'run_joint_offline_probe_stdout.txt'), ('P4', '64.95', 'run_joint_offline_probe_stdout.txt'), ('P10', '1.66', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '3.0', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P10', '63.33', 'run_n1_3x3_ncm_recheck_stdout.txt'), ('P15', '66.00', 'run_k4_k5_k6_offline_bound_search_stdout.txt'), ('P17', '3.40', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '83.60', 'run_o2_reproducibility_check_stdout.txt'), ('P17', '85.60', 'run_o2_reproducibility_check_stdout.txt'), ('P20', '0.01', 'run_o3_eps_question_stdout.txt'), ('P23', '15.0', 'run_o6_reconcile_n4_m6_stdout.txt'), ('P26', '-2', 'run_o3_eps_question_stdout.txt'), ('P26', '-5', 'run_o3_eps_question_stdout.txt'), ('P28', '5.0', 'run_p1_full_selection_grid_stdout.txt'), ('P32', '1e-6', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '0.82', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P33', '33.40', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '1.45', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P34', '48.80', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P35', '16.60', 'run_p3_to_p6_phase_iv_matrix_stdout.txt'), ('P39', '-15', 'build_report_tables_stdout.txt')]
+
+  Reconciliation Assertion: 28 + 2 + 15 + 2 + 5 == 52
+  Assertion Status: PASSED (Sum of partitioned categories equals n_scorecard_rows).
 
 --- 4. U5 SCOPED WITHDRAWAL REGISTRY AUDIT ---
   Status: PASSED (All withdrawn values purged from active Phase IV reporting).
 
---- 5. U6 & U7 UNIVERSAL STRING GREP AUDIT FINDINGS ---
-  Occurrences of '10^{-5}' in walkthrough.md : 2 (Must be 0)
-  Occurrences of 'file:///' in walkthrough.md  : 4 (Must be 0)
-  Occurrences of 'file:///' in RESULTS.md      : 48 (Must be 0)
+--- 5. U6, U7 & Z1 UNIVERSAL STRING GREP AUDIT FINDINGS ---
+  Occurrences of '10^{-5}' in walkthrough.md : 1
+  Occurrences of 'file:///' in walkthrough.md  : 5
+  Occurrences of 'file:///' in RESULTS.md      : 0
+  Universal String Grep Status: FAILURES DETECTED
+
+=========================================================================================================
+ CITATION AUDIT RESULT: DOCUMENTED FAILURES ISOLATED (15 fails out of 45 sourceable checks)
+=========================================================================================================

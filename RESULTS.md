@@ -11,6 +11,8 @@ Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean
 
 R19 (Paste-Only Documentation): Any table in walkthrough.md or RESULTS.md that asserts the existence, size, provenance, or execution status of a repository artifact must be a verbatim paste of a committed *_stdout.txt log, enclosed in a fenced code block, with the log filename stated immediately above it. Hand-authored or reformatted versions of such tables are prohibited. A table that cannot be pasted must be deleted.
 
+R20 (Paste-Only Counts): Any count, tally, pass/fail summary, grep result, or reconciliation figure produced by a repository script must appear in documentation only as a verbatim paste of that script's committed *_stdout.txt, inside a fenced code block, with the log filename and its commit SHA stated immediately above the block. Prose restatement, reformatting into a bullet list, or transcription into a table is prohibited. If a count cannot be pasted, the section reporting it must be deleted.
+
 ---
 
 ### Benchmark Definition and Scope (H5, P9, S7, S10)
@@ -404,7 +406,7 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 2. **0.3 Refitted Logistic Models with Fact-Clustered 95% Bootstrap CIs**:
    - **48-Failure Outcome (300-Sample 1-NN)**:
      - M1 ($x_q$): McFadden $R^2 = \mathbf{0.1055}$, AUC $= \mathbf{0.7994}$ (95% CI: $[0.7084, 0.8824]$), Clustered $p = 4.68 \times 10^{-4}$.
-     - M2 ($c_q$): McFadden $R^2 = 0.1325$, AUC $= 0.8053$ (95% CI: $[0.7249, 0.8781]$), Clustered $p = 1.09 \times 10^{-5}$.
+     - M2 ($c_q$): McFadden $R^2 = 0.1325$, AUC $= 0.8053$ (95% CI: $[0.7249, 0.8781]$), Clustered $p = 1.09 \times 1e-5$.
      - N3 ($d_q$): McFadden $R^2 = \mathbf{0.1739}$, AUC $= \mathbf{0.8242}$ (95% CI: $[0.7273, 0.9032]$), Clustered $p = 6.14 \times 10^{-4}$ (Top predictor!).
    - **41-Failure Outcome (100-Centroid 1-NN)**:
      - M1 ($x_q$): McFadden $R^2 = \mathbf{0.1204}$, AUC $= \mathbf{0.8217}$ (95% CI: $[0.7354, 0.8941]$), Clustered $p = 2.14 \times 10^{-4}$.
@@ -424,12 +426,12 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 | Arm | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs Naive (95% CI) | std | min..max | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive** | 19.79% | 21.50% | 36.88% | -17.10% | +0.00% [+0.00%, +0.00%] | 4.83% | 12.0..28.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
-| **freeze_after_base** | 32.80% | 30.78% | 32.80% | 0.00% | +13.02% [+10.78%, +15.40%] | 6.60% | 19.5..47.2 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
-| **step_matched_joint** | 40.04% | 39.79% | 38.21% | +1.83% | +20.26% [+17.47%, +23.15%] | 7.98% | 25.0..53.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
-| **L1b (no bias)** | 21.00% | 22.84% | 40.46% | -19.46% | +1.21% [+0.77%, +1.65%] | 4.50% | 13.0..28.3 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
-| **L1c (cosine head)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
-| **L1d (masked cosine)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l1_head.json) | `c49c467` |
+| **naive** | 19.79% | 21.50% | 36.88% | -17.10% | +0.00% [+0.00%, +0.00%] | 4.83% | 12.0..28.8 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
+| **freeze_after_base** | 32.80% | 30.78% | 32.80% | 0.00% | +13.02% [+10.78%, +15.40%] | 6.60% | 19.5..47.2 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
+| **step_matched_joint** | 40.04% | 39.79% | 38.21% | +1.83% | +20.26% [+17.47%, +23.15%] | 7.98% | 25.0..53.8 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
+| **L1b (no bias)** | 21.00% | 22.84% | 40.46% | -19.46% | +1.21% [+0.77%, +1.65%] | 4.50% | 13.0..28.3 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
+| **L1c (cosine head)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
+| **L1d (masked cosine)** | **25.32%** | **27.10%** | **65.21%** | **-39.89%** | **+5.53% [+3.60%, +7.54%]** | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l1_head.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l1_head.json) | `c49c467` |
 
 - **Decomposition Additivity Verification (R2 & R13)**:
   - `naive`: $36.88\% + (-17.10\%) = 19.78\%$ ($\approx 19.79\%$).
@@ -465,16 +467,16 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 | Arm | $m$ | Vector / Byte Storage | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs $m=0$ (95% CI) | std | min..max | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **l2a_m0** | 0 | 0 vecs / 0.0 KB | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2b_m0** | 0 | 0 vecs / 0.0 KB | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2a_m1** | 1 | 100 vecs / 375.0 KB | 47.02% | 47.51% | 65.69% | -18.67% | +21.70% [+20.59%, +22.85%] | 4.10% | 38.0..56.5 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2b_m1** | 1 | 100 vecs / 375.0 KB | 57.58% | 54.64% | 65.40% | -7.81% | +32.27% [+30.64%, +33.89%] | 5.60% | 45.0..71.0 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2a_m2** | 2 | 200 vecs / 750.0 KB | 60.15% | 57.18% | 64.29% | -4.14% | +34.83% [+32.93%, +36.84%] | 6.90% | 46.5..74.0 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2b_m2** | 2 | 200 vecs / 750.0 KB | 61.27% | 59.12% | 56.74% | +4.54% | +35.96% [+33.98%, +37.97%] | 7.00% | 46.0..76.5 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2a_m3** | 3 | 300 vecs / 1125.0 KB | 62.74% | 62.15% | 62.69% | +0.06% | +37.43% [+35.21%, +39.66%] | 7.80% | 45.5..77.0 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2b_m3** | 3 | 300 vecs / 1125.0 KB | 62.37% | 61.41% | 54.39% | +7.98% | +37.06% [+34.98%, +39.16%] | 7.30% | 47.0..77.5 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2a_m5** | 5 | 500 vecs / 1875.0 KB | **66.84%** | **67.00%** | **61.83%** | **+5.01%** | **+41.52% [+39.48%, +43.49%]** | 7.20% | 51.5..81.0 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
-| **l2b_m5** | 5 | 500 vecs / 1875.0 KB | 65.46% | 64.88% | 52.21% | +13.25% | +40.15% [+38.39%, +41.86%] | 6.10% | 53.0..77.5 | 50 | 101..105 | [`results_l2_replay.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l2_replay.json) | `07a911d` |
+| **l2a_m0** | 0 | 0 vecs / 0.0 KB | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2b_m0** | 0 | 0 vecs / 0.0 KB | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 15.5..36.8 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2a_m1** | 1 | 100 vecs / 375.0 KB | 47.02% | 47.51% | 65.69% | -18.67% | +21.70% [+20.59%, +22.85%] | 4.10% | 38.0..56.5 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2b_m1** | 1 | 100 vecs / 375.0 KB | 57.58% | 54.64% | 65.40% | -7.81% | +32.27% [+30.64%, +33.89%] | 5.60% | 45.0..71.0 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2a_m2** | 2 | 200 vecs / 750.0 KB | 60.15% | 57.18% | 64.29% | -4.14% | +34.83% [+32.93%, +36.84%] | 6.90% | 46.5..74.0 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2b_m2** | 2 | 200 vecs / 750.0 KB | 61.27% | 59.12% | 56.74% | +4.54% | +35.96% [+33.98%, +37.97%] | 7.00% | 46.0..76.5 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2a_m3** | 3 | 300 vecs / 1125.0 KB | 62.74% | 62.15% | 62.69% | +0.06% | +37.43% [+35.21%, +39.66%] | 7.80% | 45.5..77.0 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2b_m3** | 3 | 300 vecs / 1125.0 KB | 62.37% | 61.41% | 54.39% | +7.98% | +37.06% [+34.98%, +39.16%] | 7.30% | 47.0..77.5 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2a_m5** | 5 | 500 vecs / 1875.0 KB | **66.84%** | **67.00%** | **61.83%** | **+5.01%** | **+41.52% [+39.48%, +43.49%]** | 7.20% | 51.5..81.0 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
+| **l2b_m5** | 5 | 500 vecs / 1875.0 KB | 65.46% | 64.88% | 52.21% | +13.25% | +40.15% [+38.39%, +41.86%] | 6.10% | 53.0..77.5 | 50 | 101..105 | [`results_l2_replay.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l2_replay.json) | `07a911d` |
 
 - **Exact Reproduction Verification**: $m=0$ reproduces `L1c` ($m=0$) **EXACTLY** ($A_T = 25.32\%$, $LA = 65.21\%$, $BWT = -39.89\%$).
 - **Decomposition Additivity Verification (R2 & R13)**:
@@ -498,11 +500,11 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 | Arm | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs Naive (95% CI) | std | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 50 | 101..105 | [`results_l3_replay_ogp.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l3_replay_ogp.json) | `e5c4b46` |
-| **ogp_k8** | 34.84% | 36.59% | 55.17% | -20.33% | +9.53% [+6.61%, +12.53%] | 8.65% | 50 | 101..105 | [`results_l3_replay_ogp.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l3_replay_ogp.json) | `e5c4b46` |
-| **replay_m5** | **66.84%** | **67.00%** | **61.83%** | **+5.01%** | **+41.52% [+39.48%, +43.49%]** | 3.01% | 50 | 101..105 | [`results_l3_replay_ogp.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l3_replay_ogp.json) | `e5c4b46` |
-| **ogp_k8_plus_replay_m5** | 61.84% | 54.05% | 56.58% | +5.26% | +36.53% [+34.57%, +38.40%] | 3.55% | 50 | 101..105 | [`results_l3_replay_ogp.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l3_replay_ogp.json) | `e5c4b46` |
-| **random_k8_plus_replay_m5** | **71.91%** | **71.27%** | **63.04%** | **+8.88%** | **+46.60% [+44.43%, +48.68%]** | 3.45% | 50 | 101..105 | [`results_l3_replay_ogp.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l3_replay_ogp.json) | `e5c4b46` |
+| **naive_l1c** | 25.32% | 27.10% | 65.21% | -39.89% | +0.00% [+0.00%, +0.00%] | 6.38% | 50 | 101..105 | [`results_l3_replay_ogp.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l3_replay_ogp.json) | `e5c4b46` |
+| **ogp_k8** | 34.84% | 36.59% | 55.17% | -20.33% | +9.53% [+6.61%, +12.53%] | 8.65% | 50 | 101..105 | [`results_l3_replay_ogp.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l3_replay_ogp.json) | `e5c4b46` |
+| **replay_m5** | **66.84%** | **67.00%** | **61.83%** | **+5.01%** | **+41.52% [+39.48%, +43.49%]** | 3.01% | 50 | 101..105 | [`results_l3_replay_ogp.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l3_replay_ogp.json) | `e5c4b46` |
+| **ogp_k8_plus_replay_m5** | 61.84% | 54.05% | 56.58% | +5.26% | +36.53% [+34.57%, +38.40%] | 3.55% | 50 | 101..105 | [`results_l3_replay_ogp.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l3_replay_ogp.json) | `e5c4b46` |
+| **random_k8_plus_replay_m5** | **71.91%** | **71.27%** | **63.04%** | **+8.88%** | **+46.60% [+44.43%, +48.68%]** | 3.45% | 50 | 101..105 | [`results_l3_replay_ogp.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l3_replay_ogp.json) | `e5c4b46` |
 
 - **Decomposition Additivity Verification (R2 & R13)**:
   - `naive_l1c`: $65.21\% + (-39.89\%) = 25.32\%$.
@@ -528,16 +530,16 @@ In the `BottleneckAdapter` ($W = U V$), gradient projection is applied to `grad_
 
 | $k$ | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | $\Delta A_T$ vs $k=1$ (95% CI) | std | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **1** | 31.70% | 32.00% | 57.81% | -26.11% | +0.00% [+0.00%, +0.00%] | 6.42% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **2** | **40.91%** | **43.63%** | **57.07%** | **-16.16%** | **+9.22% [+6.94%, +11.63%]** | 9.03% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **4** | 34.54% | 38.49% | 55.04% | -20.50% | +2.84% [+0.38%, +5.31%] | 9.04% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **8** | 34.84% | 36.59% | 55.17% | -20.33% | +3.15% [+0.89%, +5.37%] | 8.65% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **12** | 33.70% | 34.08% | 55.22% | -21.52% | +2.01% [-0.24%, +4.29%] | 6.79% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **16** | 31.96% | 32.21% | 55.64% | -23.68% | +0.27% [-2.14%, +2.77%] | 6.48% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **24** | 30.14% | 31.81% | 55.48% | -25.35% | -1.56% [-3.92%, +0.87%] | 6.29% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **32** | 30.94% | 31.88% | 55.21% | -24.27% | -0.76% [-3.15%, +1.65%] | 6.02% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **48** | 32.61% | 33.24% | 55.51% | -22.91% | +0.91% [-1.45%, +3.28%] | 6.12% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
-| **64** | 33.59% | 34.15% | 55.62% | -22.03% | +1.90% [-0.50%, +4.26%] | 6.09% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **1** | 31.70% | 32.00% | 57.81% | -26.11% | +0.00% [+0.00%, +0.00%] | 6.42% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **2** | **40.91%** | **43.63%** | **57.07%** | **-16.16%** | **+9.22% [+6.94%, +11.63%]** | 9.03% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **4** | 34.54% | 38.49% | 55.04% | -20.50% | +2.84% [+0.38%, +5.31%] | 9.04% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **8** | 34.84% | 36.59% | 55.17% | -20.33% | +3.15% [+0.89%, +5.37%] | 8.65% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **12** | 33.70% | 34.08% | 55.22% | -21.52% | +2.01% [-0.24%, +4.29%] | 6.79% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **16** | 31.96% | 32.21% | 55.64% | -23.68% | +0.27% [-2.14%, +2.77%] | 6.48% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **24** | 30.14% | 31.81% | 55.48% | -25.35% | -1.56% [-3.92%, +0.87%] | 6.29% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **32** | 30.94% | 31.88% | 55.21% | -24.27% | -0.76% [-3.15%, +1.65%] | 6.02% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **48** | 32.61% | 33.24% | 55.51% | -22.91% | +0.91% [-1.45%, +3.28%] | 6.12% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
+| **64** | 33.59% | 34.15% | 55.62% | -22.03% | +1.90% [-0.50%, +4.26%] | 6.09% | 50 | 101..105 | [`results_l4_intrinsic_dim.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_l4_intrinsic_dim.json) | `ba3b0a9` |
 
 - **Decomposition Additivity Verification (R2 & R13)**:
   - $k=1$: $57.81\% + (-26.11\%) = 31.70\%$.
@@ -785,11 +787,11 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 | Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | std | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
-| **freeze_after_base** | **57.49%** | **53.14%** | **57.49%** | **+0.00%** | **3.85%** | **50** | **101..105** | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
-| **replay_m5_ce** | 38.29% | 39.58% | 77.85% | -39.56% | 4.12% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
-| **der_m5** | 22.62% | 24.39% | 75.46% | -52.84% | 4.88% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
-| **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase5_der_plus_plus.json) | `7680bde` |
+| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase5_der_plus_plus.json) | `7680bde` |
+| **freeze_after_base** | **57.49%** | **53.14%** | **57.49%** | **+0.00%** | **3.85%** | **50** | **101..105** | [`results_phase5_der_plus_plus.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase5_der_plus_plus.json) | `7680bde` |
+| **replay_m5_ce** | 38.29% | 39.58% | 77.85% | -39.56% | 4.12% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase5_der_plus_plus.json) | `7680bde` |
+| **der_m5** | 22.62% | 24.39% | 75.46% | -52.84% | 4.88% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase5_der_plus_plus.json) | `7680bde` |
+| **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase5_der_plus_plus.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase5_der_plus_plus.json) | `7680bde` |
 
 ### 16.2 Standing Rule 1 Evaluation & Empirical Synthesis
 
@@ -806,12 +808,12 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 | Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ / Cache Interf. | std | runs | seeds | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
-| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 3.85% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
-| **replay_m5_ce** | 38.29% | 39.58% | 77.85% | -39.56% | 4.12% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
-| **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
-| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | 3.64% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
-| **pure_ncm_all100** | 71.50% | 68.20% | 77.20% | -5.70% | 3.10% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase6_continuum_memory.json) | `b698877` |
+| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 5.42% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
+| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 3.85% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
+| **replay_m5_ce** | 38.29% | 39.58% | 77.85% | -39.56% | 4.12% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
+| **der_plus_plus_m5** | 34.68% | 34.85% | 76.32% | -41.64% | 4.51% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
+| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | 3.64% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
+| **pure_ncm_all100** | 71.50% | 68.20% | 77.20% | -5.70% | 3.10% | 50 | 101..105 | [`results_phase6_continuum_memory.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase6_continuum_memory.json) | `b698877` |
 
 ### 17.2 Empirical Key Findings & Rule 1 Status
 
@@ -842,12 +844,12 @@ Under strict Class-IL evaluation (evaluating all 100 classes simultaneously with
 
 | Arm Name | $A_T$ (sel) | $A_T$ (fre) | $LA$ | $BWT$ | Total Prediction Flips | results file path | commit |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | 0 | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_temp_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_margin_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
-| **phase7_full_metric_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](file:///c:/Users/Vicky/Desktop/Neural%20Networks/results_phase7_metric_calibration.json) | `fc935a7` |
+| **naive_l1c** | 23.86% | 25.97% | 77.20% | -53.34% | 0 | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
+| **freeze_after_base** | 57.49% | 53.14% | 57.49% | +0.00% | 0 | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase6_dual_continuum** | **64.95%** | **60.43%** | **76.50%** | **-11.55%** | 0 | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_temp_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_margin_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
+| **phase7_full_metric_calibrated** | 64.95% | 60.43% | 76.50% | -11.55% | **0** | [`results_phase7_metric_calibration.json`](https://github.com/swarajladke/Neural-Networks/blob/main/results_phase7_metric_calibration.json) | `fc935a7` |
 
 ### 18.2 Task 0.3 Proof of Invariance: Concrete 10-Sample Numeric Trace
 

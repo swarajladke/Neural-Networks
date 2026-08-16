@@ -7,14 +7,14 @@
   audit_embedding_leakage.py             | YES            | 3392       | 56967bc
   audit_fact_map_and_c_q_bug.py          | NO             | 0          | N/A
   audit_file_to_section_mapping.py       | NO             | 0          | N/A
-  audit_generator_defects_and_leakage.py | YES            | 900        | uncommitted
+  audit_generator_defects_and_leakage.py | YES            | 900        | f1eb640
   audit_pca_grid_and_lasttok.py          | YES            | 5134       | 10a7318
   audit_representation_ablation.py       | YES            | 5105       | 1e72a07
   audit_smollm2_failures.py              | NO             | 0          | N/A
   audit_task_cardinality.py              | NO             | 0          | N/A
   evaluate_disjoint_template_split_l5_l6.py | YES            | 6365       | b880712
   evaluate_expanded_offline_bound.py     | YES            | 3161       | e8ca39c
-  evaluate_m_phase_comprehensive.py      | YES            | 11191      | uncommitted
+  evaluate_m_phase_comprehensive.py      | YES            | 11191      | f1eb640
   run_adapter_continual_benchmarks.py    | NO             | 0          | N/A
   run_base_rate_enrichment_test.py       | NO             | 0          | N/A
   run_confusable_split_experiment.py     | NO             | 0          | N/A
@@ -50,8 +50,8 @@
   run_o2_reproducibility_check.py        | YES            | 8044       | 5443ef1
   run_o3_eps_question.py                 | YES            | 10282      | 5443ef1
   run_o4_r12_citation_audit.py           | YES            | 6736       | 5443ef1
-  run_o5_rescore_p21_p11_p13_p14.py      | YES            | 3486       | uncommitted
-  run_o6_reconcile_n4_m6.py              | YES            | 7294       | uncommitted
+  run_o5_rescore_p21_p11_p13_p14.py      | YES            | 3486       | f1eb640
+  run_o6_reconcile_n4_m6.py              | YES            | 7294       | f1eb640
   run_off_support_density_test.py        | NO             | 0          | N/A
   run_offline_bound_search.py            | YES            | 4738       | c3e2d5c
   run_ogp_50run_master_suite.py          | NO             | 0          | N/A
@@ -59,7 +59,7 @@
   run_ogp_rigorous_verification.py       | NO             | 0          | N/A
   run_p1_full_selection_grid.py          | YES            | 7926       | 29c1821
   run_p3_to_p6_phase_iv_matrix.py        | YES            | 7356       | 29c1821
-  run_p7_strict_citation_audit.py        | YES            | 8683       | 4b57212
+  run_p7_strict_citation_audit.py        | YES            | 8339       | 7e679b3
   run_p8_milestone_ledger_audit.py       | YES            | 8187       | f915bee
   run_part0_blocking_corrections.py      | NO             | 0          | N/A
   run_partA_fix_joint_baseline.py        | NO             | 0          | N/A

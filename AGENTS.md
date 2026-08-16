@@ -30,6 +30,10 @@
 9. **Paste-Only Documentation (Rule R19)**:
    Any table in walkthrough.md or RESULTS.md that asserts the existence, size, provenance, or execution status of a repository artifact must be a verbatim paste of a committed *_stdout.txt log, enclosed in a fenced code block, with the log filename stated immediately above it. Hand-authored or reformatted versions of such tables are prohibited. A table that cannot be pasted must be deleted.
 
+10. **Paste-Only Counts (Rule R20)**:
+    Any count, tally, pass/fail summary, grep result, or reconciliation figure produced by a repository script must appear in documentation only as a verbatim paste of that script's committed `*_stdout.txt`, inside a fenced code block, with the log filename and its commit SHA stated immediately above the block. Prose restatement, reformatting into a bullet list, or transcription into a table is prohibited. If a count cannot be pasted, the section reporting it must be deleted.
+
+
 
 
 
