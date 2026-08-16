@@ -4,6 +4,11 @@
     "line_number": 86,
     "justification": "Pre-registered margin threshold in P23 and P54 in predictions_phase_I_to_V.md"
   },
+  "+15.0": {
+    "type": "THRESHOLD",
+    "line_number": 149,
+    "justification": "Pre-registered adaptation gap threshold in P54 in predictions_phase_I_to_V.md"
+  },
   "5.0": {
     "type": "THRESHOLD",
     "line_number": 62,
@@ -13,6 +18,11 @@
     "type": "THRESHOLD",
     "line_number": 68,
     "justification": "Pre-registered tolerance threshold in P17, P25, P30, P57 in predictions_phase_I_to_V.md"
+  },
+  "3.0": {
+    "type": "THRESHOLD",
+    "line_number": 53,
+    "justification": "Pre-registered drop threshold in P10, P21 in predictions_phase_I_to_V.md"
   },
   "0.20": {
     "type": "THRESHOLD",
@@ -28,16 +38,6 @@
     "type": "THRESHOLD",
     "line_number": 72,
     "justification": "Pre-registered threshold in P20 in predictions_phase_I_to_V.md"
-  },
-  "10": {
-    "type": "THRESHOLD",
-    "line_number": 51,
-    "justification": "Pre-registered threshold in P8, P38 in predictions_phase_I_to_V.md"
-  },
-  "20": {
-    "type": "THRESHOLD",
-    "line_number": 73,
-    "justification": "Pre-registered threshold in P27 in predictions_phase_I_to_V.md"
   },
   "40.00": {
     "type": "THRESHOLD",
@@ -65,5 +65,182 @@
     "minuend": "82.20",
     "subtrahend": "83.80",
     "justification": "Selection penalty computed as HONEST_TEST_ACC (82.20) - m56 test ceiling (83.80) = -1.60"
+  },
+  "3.67": {
+    "type": "DERIVED",
+    "minuend": "66.00",
+    "subtrahend": "62.33",
+    "justification": "P15 drop: 66.00 - 62.33 = 3.67 pp"
+  },
+  "0.0034": {
+    "type": "DERIVED",
+    "minuend": "0.3000",
+    "subtrahend": "0.2966",
+    "justification": "P32 margin: 0.3000 threshold - 0.2966 measured = 0.0034 pp"
+  },
+  "57.80": {
+    "type": "RETRACTED",
+    "registry_row": 19,
+    "justification": "W6 unexecuted prototype-anchored adaptation test accuracy retracted in Row 19"
+  },
+  "1.15": {
+    "type": "RETRACTED",
+    "registry_row": 19,
+    "justification": "W6 unexecuted prototype-anchored adaptation std retracted in Row 19"
+  },
+  "5.40": {
+    "type": "RETRACTED",
+    "registry_row": 19,
+    "justification": "W6 unexecuted margin over DER++ retracted in Row 19"
+  },
+  "65.90": {
+    "type": "RETRACTED",
+    "registry_row": 20,
+    "justification": "W2 unexecuted adaptation gap retracted in Row 20"
+  },
+  "10.50": {
+    "type": "RETRACTED",
+    "registry_row": 20,
+    "justification": "W2 unexecuted frozen random NCM accuracy retracted in Row 20"
+  },
+  "20.20": {
+    "type": "RETRACTED",
+    "registry_row": 18,
+    "justification": "W5 unexecuted rho=1e-5 ACC_T retracted in Row 18"
+  },
+  "22.80": {
+    "type": "RETRACTED",
+    "registry_row": 18,
+    "justification": "W5 unexecuted rho=1e-4 ACC_T retracted in Row 18"
+  },
+  "76.40": {
+    "type": "RETRACTED",
+    "registry_row": 20,
+    "justification": "W2 unexecuted expected joint offline accuracy retracted in Row 20"
+  },
+  "52.40": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted DER++ baseline accuracy retracted in Row 17"
+  },
+  "16.20": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted naive plasticity decay retracted in Row 17"
+  },
+  "4.80": {
+    "type": "RETRACTED",
+    "registry_row": 18,
+    "justification": "W5 unexecuted optimal plasticity decay retracted in Row 18"
+  },
+  "58.40": {
+    "type": "RETRACTED",
+    "registry_row": 19,
+    "justification": "W6 unexecuted validation accuracy retracted in Row 19"
+  },
+  "48.60": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted iCaRL baseline accuracy retracted in Row 17"
+  },
+  "38.20": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted SLDA baseline accuracy retracted in Row 17"
+  },
+  "27.20": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted LwF baseline accuracy retracted in Row 17"
+  },
+  "24.50": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted EWC baseline accuracy retracted in Row 17"
+  },
+  "18.40": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted naive sequential accuracy retracted in Row 17"
+  },
+  "9.70": {
+    "type": "RETRACTED",
+    "registry_row": 17,
+    "justification": "W4 unexecuted freeze-after-base accuracy retracted in Row 17"
+  },
+  "21.40": {
+    "type": "RETRACTED",
+    "registry_row": 18,
+    "justification": "W5 unexecuted rho=1e-3 ACC_T retracted in Row 18"
+  },
+  "14.20": {
+    "type": "RETRACTED",
+    "registry_row": 12,
+    "justification": "Q-Phase audit unexecutable naive ACC_T retracted in Row 12"
+  },
+  "90.89": {
+    "type": "RETRACTED",
+    "registry_row": 13,
+    "justification": "Q-Phase audit unexecutable naive BWT retracted in Row 13"
+  },
+  "63.20": {
+    "type": "RETRACTED",
+    "registry_row": 14,
+    "justification": "Q-Phase audit unexecutable joint HeadL1c retracted in Row 14"
+  },
+  "79.33": {
+    "type": "RETRACTED",
+    "registry_row": 1,
+    "justification": "J3 offline reference bound retracted due to train+test concatenation in Row 1"
+  },
+  "85.40": {
+    "type": "RETRACTED",
+    "registry_row": 2,
+    "justification": "J7 expanded offline bound retracted due to train+test concatenation in Row 2"
+  },
+  "85.20": {
+    "type": "RETRACTED",
+    "registry_row": 3,
+    "justification": "K-Phase Gate 2 bound retracted due to train+test concatenation in Row 3"
+  },
+  "82.60": {
+    "type": "RETRACTED",
+    "registry_row": 2,
+    "justification": "M1 honest test accuracy retracted in favor of canonical 82.20 in Row 2"
+  },
+  "47.00": {
+    "type": "RETRACTED",
+    "registry_row": 11,
+    "justification": "P-Phase naive ACC_T ungrounded figure retracted in Row 11"
+  },
+  "37.20": {
+    "type": "RETRACTED",
+    "registry_row": 8,
+    "justification": "5443ef1 constant fake BWT (+37.20%) retracted in Row 8"
+  },
+  "52.33": {
+    "type": "RETRACTED",
+    "registry_row": 4,
+    "justification": "P10 52.33% substituted figure retracted in Row 4"
+  },
+  "62.67": {
+    "type": "RETRACTED",
+    "registry_row": 5,
+    "justification": "N1 intermediate unverified NCM max score retracted in Row 5"
+  },
+  "91.00": {
+    "type": "RETRACTED",
+    "registry_row": 6,
+    "justification": "N2 unregularized wd=0.0 winning score retracted in Row 6"
+  },
+  "49.00": {
+    "type": "RETRACTED",
+    "registry_row": 9,
+    "justification": "m=128 wd=0.0 test score retracted in Row 9"
+  },
+  "48.20": {
+    "type": "RETRACTED",
+    "registry_row": 9,
+    "justification": "m=128 non-converged test score retracted in Row 9"
   }
 }
