@@ -1,0 +1,69 @@
+{
+  "15.0": {
+    "type": "THRESHOLD",
+    "line_number": 86,
+    "justification": "Pre-registered margin threshold in P23 and P54 in predictions_phase_I_to_V.md"
+  },
+  "5.0": {
+    "type": "THRESHOLD",
+    "line_number": 62,
+    "justification": "Pre-registered threshold in P15, P28, P56 in predictions_phase_I_to_V.md"
+  },
+  "2.0": {
+    "type": "THRESHOLD",
+    "line_number": 68,
+    "justification": "Pre-registered tolerance threshold in P17, P25, P30, P57 in predictions_phase_I_to_V.md"
+  },
+  "0.20": {
+    "type": "THRESHOLD",
+    "line_number": 75,
+    "justification": "Pre-registered threshold in P29, P33, P34, P35 in predictions_phase_I_to_V.md"
+  },
+  "0.30": {
+    "type": "THRESHOLD",
+    "line_number": 74,
+    "justification": "Pre-registered std threshold in P32 in predictions_phase_I_to_V.md"
+  },
+  "0.01": {
+    "type": "THRESHOLD",
+    "line_number": 72,
+    "justification": "Pre-registered threshold in P20 in predictions_phase_I_to_V.md"
+  },
+  "10": {
+    "type": "THRESHOLD",
+    "line_number": 51,
+    "justification": "Pre-registered threshold in P8, P38 in predictions_phase_I_to_V.md"
+  },
+  "20": {
+    "type": "THRESHOLD",
+    "line_number": 73,
+    "justification": "Pre-registered threshold in P27 in predictions_phase_I_to_V.md"
+  },
+  "40.00": {
+    "type": "THRESHOLD",
+    "line_number": 28,
+    "justification": "Gate 1 diagnostic threshold in predictions_phase_I_to_V.md"
+  },
+  "64.95": {
+    "type": "THRESHOLD",
+    "line_number": 26,
+    "justification": "Phase 6 historical benchmark reference in P4 in predictions_phase_I_to_V.md"
+  },
+  "85.60": {
+    "type": "THRESHOLD",
+    "line_number": 68,
+    "justification": "Historical baseline reference in P17 in predictions_phase_I_to_V.md"
+  },
+  "-3.60": {
+    "type": "DERIVED",
+    "minuend": "82.20",
+    "subtrahend": "85.80",
+    "justification": "Selection penalty computed as HONEST_TEST_ACC (82.20) - OPTIMISTIC_CEILING (85.80) = -3.60"
+  },
+  "-1.60": {
+    "type": "DERIVED",
+    "minuend": "82.20",
+    "subtrahend": "83.80",
+    "justification": "Selection penalty computed as HONEST_TEST_ACC (82.20) - m56 test ceiling (83.80) = -1.60"
+  }
+}
