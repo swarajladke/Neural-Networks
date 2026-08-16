@@ -1,0 +1,10 @@
+=========================================================================================================
+ DIRECTIVE S1(d) -- VERIFY WALKTHROUGH.MD PHASE IV NUMBERS AGAINST STDOUT LOG
+=========================================================================================================
+  Total Phase IV Numeric Literals Checked : n_numbers = 33
+  Numbers Found in Sourced Stdout Log     : n_found   = 21
+  Numbers Missing from Sourced Stdout Log : n_missing = 12
+
+  [MISSING LIST]: ['0.42', '0.82', '1.12', '1.45', '14.20', '16.0', '18.0', '20.0', '63.20', '90.89', '98.0', '102.0']
+  Status: FAILED (Numbers in walkthrough.md were not found in stdout log!)
+=========================================================================================================

@@ -7,11 +7,18 @@ Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean
 
 ---
 
-### Benchmark Definition and Scope (H5 & P9)
+### Benchmark Definition and Scope (H5, P9, S7, S10)
 
 The benchmark measures 100-way classification of prompt clusters with 7 train, 3 val, and 5 test disjoint-template examples per class. It does not measure fact retention. The answer field does not enter the model, the loss, or any metric.
 
-**P9 Reframing Finding**: On a frozen representation with disjoint class blocks, class-incremental learning is solved exactly by a parameter-free running centroid (85.80%); the difficulty is entirely in representation selection. Phase IV demonstrates that parameter-free centroid accumulation achieves zero catastrophic forgetting (BWT = 0.00%, Forgetting = 0.00%), whereas sequential gradient-based linear heads suffer severe catastrophic forgetting (ACC_T = 14.20%, BWT = -90.89%, Forgetting = 90.89%).
+**Continual Learning Measured Finding (S10)**:
+- **HeadL1c Family**: Under Class-IL, sequential gradient training forgets catastrophically (Final $\text{ACC}_T = \mathbf{47.60\% \pm 1.93\%}$, $\text{BWT} = \mathbf{-42.09\% \pm 1.99\%}$, $\text{Forgetting} = \mathbf{42.09\% \pm 1.99\%}$).
+- **NCM Family**: Parameter-free centroid accumulation reaches **85.80%**, identical to its own joint-offline bound, with $\text{BWT} = \mathbf{-8.22\%}$.
+- The two classifier families are not comparable and must not be merged into one claim.
+- Benchmark Comparison: `phase6_dual_continuum` reported **64.95%** (on contaminated 34-class layout), compared to NCM's **85.80%** on the canonical 100-class disjoint-template benchmark.
+
+**S7 Optimistic Ceiling Attribution**:
+- $\text{OPTIMISTIC\_CEILING} = \mathbf{85.80\%}$ is attained by parameter-free NCM, not by the validation-selected `MultinomialLogReg` config (which achieves 82.20%, giving $\text{SELECTION\_PENALTY} = -3.60\text{ pp}$).
 
 ---
 

@@ -2,16 +2,42 @@
  GENERATED MARKDOWN ROWS FOR walkthrough.md (Section 6: Multi-Seed Phase IV Results)
 =========================================================================================================
 
-### Multi-Seed Aggregate Results (Mean $\pm$ Std derived strictly from $R[t,i]$):
+### 1. HeadL1c Per-Seed Results Table (T5 / S3):
+| Seed | naive ACC_T | naive BWT | naive Forgetting | freeze ACC_T | joint ACC |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 42 | 50.80% | -41.11% | 41.11% | 10.20% | 79.00% |
+| 43 | 47.40% | -42.67% | 42.67% | 10.60% | 80.60% |
+| 44 | 47.60% | -39.11% | 39.11% | 10.20% | 79.60% |
+| 45 | 45.80% | -43.78% | 43.78% | 10.40% | 79.20% |
+| 46 | 46.40% | -43.78% | 43.78% | 9.80% | 80.60% |
+| **mean $\pm$ std** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$ 1.99%** | **10.24% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+
+### 2. Multi-Seed Aggregate Results (Mean $\pm$ Std derived strictly from $R[t,i]$):
 #### HeadL1c Classifier Family:
 - **`joint_offline_headl1c`**: Final Test Accuracy = **$79.80\% \pm 0.76\%$** (HeadL1c architecture)
 - **`naive_l1c`**: Final $\text{ACC}_T = \mathbf{47.60\% \pm 1.93\%}$ | $\text{BWT} = \mathbf{-42.09\% \pm 1.99\%}$ | $\text{Forgetting} = \mathbf{42.09\% \pm 1.99\%}$ (severe catastrophic forgetting).
-- **`freeze_after_base` (R1 Standing Control)**: Final $\text{ACC}_T = \mathbf{10.24\% \pm 0.30\%}$ | $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16 (identically 0.00% by construction).
-  - Structural Ceiling: **10.00%** ($10/100 \times 100$). Reports **102.4%** of base-only ceiling.
+- **`freeze_after_base` (R1 Standing Control)**: Final $\text{ACC}_T = \mathbf{10.24\% \pm 0.30\%}$, against chance 1.00% and base-block-only 10.00%. $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16 (identically 0.00% by construction).
+  - Note: Off-block non-zeros are random-init artefacts (untrained head rows winning the argmax), as seen from R[t][1] = 6.0% and R[t][5] = 2.0% in the seed-42 freeze matrix.
 
 #### NCM Classifier Family:
 - **`joint_offline_ncm`**: Final Test Accuracy = **85.80%** (batch centroids)
 - **`ncm_incremental`**: Final Test Accuracy = **85.80%** | $\text{BWT} = \mathbf{-8.22\%}$ | $\text{Forgetting} = \mathbf{8.22\%}$
-- **`freeze_after_base_ncm`**: Final Test Accuracy = **10.00%** | $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16.
+- **`freeze_after_base_ncm`**: Final Test Accuracy = **10.00%** (base-block only 10.00%). $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16.
+
+### 3. NCM Per-Column BWT Decomposition (S4):
+| Column $i$ (Block $i$) | Final Accuracy $R[T-1, i]$ | Learning Time Accuracy $R[i,i]$ | Column Contribution $R[T-1, i] - R[i,i]$ |
+|:---|:---:|:---:|:---:|
+| Col $i=1$ (Classes 00-09) | 88.0% | 100.0% | **-12.0 pp** |
+| Col $i=2$ (Classes 10-19) | 82.0% | 96.0% | **-14.0 pp** |
+| Col $i=3$ (Classes 20-29) | 82.0% | 96.0% | **-14.0 pp** |
+| Col $i=4$ (Classes 30-39) | 86.0% | 96.0% | **-10.0 pp** |
+| Col $i=5$ (Classes 40-49) | 82.0% | 92.0% | **-10.0 pp** |
+| Col $i=6$ (Classes 50-59) | 86.0% | 90.0% | **-4.0 pp** |
+| Col $i=7$ (Classes 60-69) | 94.0% | 98.0% | **-4.0 pp** |
+| Col $i=8$ (Classes 70-79) | 84.0% | 90.0% | **-6.0 pp** |
+| Col $i=9$ (Classes 80-89) | 90.0% | 90.0% | **+0.0 pp** |
+| **Mean BWT (Col $i=1..9$)** | -- | -- | **-8.22%** |
+
+> **Mathematical Explanation (S4)**: Final accuracy strictly equals `joint_offline_ncm` (85.80%) because centroid accumulation is order-invariant. Backward transfer is non-zero (-8.22%) because diagonal entries $R[i,i]$ are measured at step $i$ when fewer total candidate classes have been observed ($10(i+1)$ classes) compared to final step $T-1$ (100 classes).
 =========================================================================================================
 

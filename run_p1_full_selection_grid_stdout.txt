@@ -1,0 +1,84 @@
+=========================================================================================================
+ DIRECTIVE P1 -- FULL SELECTION RE-RUN UNDER eval_core.py UNIFIED STACK (R14/R15)
+=========================================================================================================
+  Candidate grid size per cell : len(grid) = 17 configs
+  M1 Table cell count          : n_cells   = 11 cells
+  Total M1 test evaluations    : N_m1      = 187 test evaluations (interpolated)
+
+---------------------------------------------------------------------------------------------------------
+ (a) FULL 11-CELL M1 TABLE (Unified Stack, Float64 Transforms, R15 Convergence Filtering)
+---------------------------------------------------------------------------------------------------------
+  mean / none                         | Val Acc: 84.00% via Ridge (wd=0.0001)            | Honest Test: 78.00% | Max Test: 78.00% via Ridge (wd=0.0001)
+  mean / center                       | Val Acc: 82.67% via Ridge (wd=0.001)             | Honest Test: 75.60% | Max Test: 75.60% via Ridge (wd=0.001)
+  mean / center+ZCA_whiten            | Val Acc: 33.33% via NCM (wd=0.0)                 | Honest Test: 21.00% | Max Test: 21.40% via MultinomialLogReg (wd=0.01)
+  mean / pca_m16_eps1e-4              | Val Acc: 61.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 39.60% | Max Test: 40.60% via Ridge (wd=0.1)
+  mean / pca_m32_eps1e-6              | Val Acc: 90.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 72.20% | Max Test: 77.00% via NCM (wd=0.0)
+  mean / pca_m32_eps1e-4              | Val Acc: 90.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 72.20% | Max Test: 77.00% via NCM (wd=0.0)
+  mean / pca_m64_eps1e-4              | Val Acc: 95.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 82.20% | Max Test: 85.80% via NCM (wd=0.0)
+  mean / pca_m128_eps1e-4             | Val Acc: 58.67% via 1-NN (wd=0.0)                | Honest Test: 37.20% | Max Test: 47.60% via NCM (wd=0.0)
+  mean / pca_m256_eps1e-4             | Val Acc: 50.33% via NCM (wd=0.0)                 | Honest Test: 43.40% | Max Test: 43.80% via MultinomialLogReg (wd=0.001)
+  mean / pca_m299_eps1e-4             | Val Acc: 48.33% via MultinomialLogReg (wd=0.01)  | Honest Test: 42.00% | Max Test: 42.80% via MultinomialLogReg (wd=0.001)
+  mean / ledoit_wolf                  | Val Acc: 51.33% via MultinomialLogReg (wd=0.001) | Honest Test: 52.40% | Max Test: 52.60% via NCM (wd=0.0)
+
+---------------------------------------------------------------------------------------------------------
+ (b) FULL 12-POINT PCA DIMENSION SWEEP (eps=1e-4, Unified Stack)
+---------------------------------------------------------------------------------------------------------
+  Dimension sweep candidate configs : N_sweep = 204 test evaluations (12 cells * 17)
+
+  m = 16  | Val Acc: 61.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 39.60% | Max Test: 40.60%
+  m = 32  | Val Acc: 90.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 72.20% | Max Test: 77.00%
+  m = 48  | Val Acc: 93.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 81.00% | Max Test: 84.00%
+  m = 56  | Val Acc: 93.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 83.80% | Max Test: 85.20%
+  m = 64  | Val Acc: 95.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 82.20% | Max Test: 85.80%
+  m = 72  | Val Acc: 94.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 79.80% | Max Test: 84.60%
+  m = 80  | Val Acc: 93.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 77.60% | Max Test: 82.40%
+  m = 96  | Val Acc: 79.67% via MultinomialLogReg (wd=0.0001) | Honest Test: 65.60% | Max Test: 66.20%
+  m = 112 | Val Acc: 66.33% via MultinomialLogReg (wd=0.0001) | Honest Test: 49.40% | Max Test: 53.60%
+  m = 128 | Val Acc: 58.67% via 1-NN (wd=0.0)                | Honest Test: 37.20% | Max Test: 47.60%
+  m = 256 | Val Acc: 50.33% via NCM (wd=0.0)                 | Honest Test: 43.40% | Max Test: 43.80%
+  m = 299 | Val Acc: 48.33% via MultinomialLogReg (wd=0.01)  | Honest Test: 42.00% | Max Test: 42.80%
+
+---------------------------------------------------------------------------------------------------------
+ (c) DIFF TABLE -- OLD-STACK VS NEW-STACK (Sorted by |delta_test| descending)
+---------------------------------------------------------------------------------------------------------
+  Cell                             | Old Val  New Val  dVal     | Old Test New Test dTest    | Config Change                 
+  ---------------------------------|----------------------------|----------------------------|-------------------------------
+  mean / center                    |  84.33%  82.67%  -1.66pp |  62.20%  75.60% +13.40pp | MultinomialLogReg(0.01) -> Ridge(0.001)
+  mean / center+ZCA_whiten         |  19.33%  33.33% +14.00pp |   8.60%  21.00% +12.40pp | MultinomialLogReg(1.0) -> NCM(0.0)
+  mean / pca_m128_eps1e-4          |  58.67%  58.67%  -0.00pp |  49.00%  37.20% -11.80pp | MultinomialLogReg(0.0001) -> 1-NN(0.0)
+  mean / pca_m32_eps1e-6           |  89.33%  90.33%  +1.00pp |  70.00%  72.20%  +2.20pp | MultinomialLogReg(0.01) -> MultinomialLogReg(0.0001)
+  mean / pca_m32_eps1e-4           |  89.33%  90.33%  +1.00pp |  70.00%  72.20%  +2.20pp | MultinomialLogReg(0.01) -> MultinomialLogReg(0.0001)
+  mean / ledoit_wolf               |  51.33%  51.33%  +0.00pp |  53.00%  52.40%  -0.60pp | MultinomialLogReg(1.0) -> MultinomialLogReg(0.001)
+  mean / pca_m16_eps1e-4           |  61.67%  61.67%  -0.00pp |  40.00%  39.60%  -0.40pp | MultinomialLogReg(0.1) -> MultinomialLogReg(0.0001)
+  mean / pca_m64_eps1e-4           |  96.00%  95.67%  -0.33pp |  82.60%  82.20%  -0.40pp | MultinomialLogReg(0.001) -> MultinomialLogReg(0.0001)
+  mean / pca_m299_eps1e-4          |  48.33%  48.33%  +0.00pp |  42.20%  42.00%  -0.20pp | MultinomialLogReg(10.0) -> MultinomialLogReg(0.01)
+  mean / none                      |  85.67%  84.00%  -1.67pp |  77.80%  78.00%  +0.20pp | Ridge(0.1) -> Ridge(0.0001)   
+  mean / pca_m256_eps1e-4          |  50.33%  50.33%  +0.00pp |  43.40%  43.40%  -0.00pp | Unchanged (NCM(0.0))          
+
+---------------------------------------------------------------------------------------------------------
+ (d) & (e) SELECTION OUTCOME AND OPTIMISTIC CEILING
+---------------------------------------------------------------------------------------------------------
+  SELECTED_REPRESENTATION = 'mean / pca_m64_eps1e-4'
+  Validation Accuracy     = 95.67%
+  Val-Selected Config     = MultinomialLogReg (wd=0.0001)
+  HONEST_TEST_ACC         = 82.20%
+  OPTIMISTIC_CEILING      = 85.80% (max over N=187 test evaluations)
+
+=========================================================================================================
+ DIRECTIVE P2 -- ZERO-SELECTION NCM BENCHMARK VS VAL-SELECTED HEAD
+=========================================================================================================
+  NCM_TEST_ACC       = 85.80% (zero hyperparameters, single test evaluation)
+  SELECTED_TEST_ACC  = 82.20% (val-selected MultinomialLogReg wd=0.0001)
+  SELECTION_PENALTY  = -3.60 percentage points (82.20% - 85.80%)
+  FINDING: SELECTION_PENALTY is negative (-3.60 pp).
+  Validation-based model selection performs worse than the parameter-free NCM baseline on this representation.
+
+=========================================================================================================
+ PRE-REGISTERED PREDICTIONS SCORECARD VERIFICATION (P28, P29, P30)
+=========================================================================================================
+  P28: Config changes = 10 (>=4: True), Test deltas > 5pp = 3 (>=1: True)
+       Verdict: RIGHT
+  P29: Selected rep is mean/pca_m64_eps1e-4: True, Ceiling diff: 0.00pp
+       Verdict: WRONG
+  P30: SELECTION_PENALTY negative: True, Magnitude > 2.0pp: True (|-3.60| pp)
+       Verdict: RIGHT

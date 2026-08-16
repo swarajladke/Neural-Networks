@@ -26,7 +26,7 @@ def extract_phase_iv_section(text):
     if not start_match:
         return text
     start_pos = start_match.start()
-    end_match = re.search(r"##\s*7\.\s*P7[^\n]*", text[start_pos:])
+    end_match = re.search(r"\n##\s*7\.\s*", text[start_pos:])
     if end_match:
         end_pos = start_pos + end_match.start()
         return text[start_pos:end_pos]

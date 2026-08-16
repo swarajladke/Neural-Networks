@@ -351,7 +351,7 @@ def main():
     print("\n  HeadL1c Summary Table (5-Seed Mean +/- Std):")
     print(f"    joint_offline_headl1c : Final ACC = {joint_acc_m:5.2f}% +/- {joint_acc_s:4.2f}%")
     print(f"    naive_l1c             : Final ACC = {naive_acc_m:5.2f}% +/- {naive_acc_s:4.2f}% | BWT = {naive_bwt_m:+6.2f}% +/- {naive_bwt_s:4.2f}% | Forgetting = {naive_fgt_m:5.2f}% +/- {naive_fgt_s:4.2f}%")
-    print(f"    freeze_after_base     : Final ACC = {freeze_acc_m:5.2f}% +/- {freeze_acc_s:4.2f}% (Base-only ceiling: 10.00%, reports {freeze_acc_m/10.0*100:.1f}% of ceiling)")
+    print(f"    freeze_after_base     : Final ACC = {freeze_acc_m:5.2f}% +/- {freeze_acc_s:4.2f}%, against chance 1.00% and base-block-only 10.00%")
 
     # =========================================================================
     # NCM FAMILY RUN (R18)
@@ -366,7 +366,17 @@ def main():
 
     print(f"    joint_offline_ncm     : Final ACC = {joint_ncm_acc:5.2f}% (batch centroids)")
     print(f"    ncm_incremental       : Final ACC = {ncm_inc_acc:5.2f}% | BWT = {ncm_inc_bwt:+6.2f}% | Forgetting = {ncm_inc_fgt:5.2f}%")
-    print(f"    freeze_after_base_ncm : Final ACC = {freeze_ncm_acc:5.2f}% (Base-only ceiling: 10.00%)")
+    print(f"    freeze_after_base_ncm : Final ACC = {freeze_ncm_acc:5.2f}% (base-block only 10.00%)")
+
+    print("\n  Lower-Triangular R[t,i] Accuracy Matrix (ncm_incremental):")
+    for t in range(N_BLOCKS):
+        row_str = " ".join(f"{ncm_inc_R[t][i]:5.1f}%" for i in range(t + 1))
+        print(f"    Block t={t+1:2d} -> [{row_str}]")
+
+    print("\n  NCM Per-Column BWT Decomposition (S4):")
+    for i in range(N_BLOCKS - 1):
+        diff = ncm_inc_R[N_BLOCKS - 1][i] - ncm_inc_R[i][i]
+        print(f"    Col i={i+1:2d} (Classes {i*10:02d}-{i*10+9:02d}) : R[9][{i}] = {ncm_inc_R[N_BLOCKS - 1][i]:5.1f}% | R[{i}][{i}] = {ncm_inc_R[i][i]:5.1f}% | Diff = {diff:+6.1f}pp")
 
     # =========================================================================
     # S1(b): EMIT phase_iv_results.json

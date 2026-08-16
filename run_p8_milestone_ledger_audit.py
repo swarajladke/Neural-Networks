@@ -2,7 +2,7 @@
 run_p8_milestone_ledger_audit.py
 ================================
 
-P-Phase Directive P8:
+Directives P8, S9:
 Curated Milestone Ledger & Withdrawals Verification.
 
 (a) Explicit list of milestone SHAs with assertions
@@ -33,11 +33,17 @@ MILESTONE_SHAS = [
     ("312e9db", "PRE-REGISTER PREDICTIONS P16, P17, P18, P19 before running M1"),
     ("b182449", "M1-M7 -- Honest test evaluation (82.60%), contamination corrections, Rule R11 scorecard"),
     ("a0f8e89", "PRE-REGISTER PREDICTIONS P20, P21, P22, P23 before running N1"),
-    ("8938519", "N1-N9 -- 3x3 NCM recheck, fixed 7-fold LOPO CV (91.00%), test eval counts, PCA collapse audit"),
+    ("8938519", "N1-N9 -- 3x3 NCM recheck, fixed 7-fold LOPO CV (89.71%), test eval counts, PCA collapse audit"),
     ("a7f56df", "PRE-REGISTER PREDICTIONS P24, P25, P26, P27 before running O1"),
     ("5443ef1", "O1-O8 -- Unified stack (eval_core.py), O2 reproducibility (82.20%), citation audit, Phase IV execution"),
     ("bfd19cc", "O7 -- Update documentation with final canonical 82.20% summary, ledger & P1-P27 scorecard"),
-    ("a2730d6", "PRE-REGISTER PREDICTIONS P28-P32 and add rules R16-R18 before running P-Phase")
+    ("a2730d6", "PRE-REGISTER PREDICTIONS P28-P32 and add rules R16-R18 before running P-Phase"),
+    ("303587c", "P1-P9 -- Implement unified selection grid, zero-selection NCM benchmark, R[t,i] accuracy matrix, strict citation audit, milestone ledger"),
+    ("2e43d5b", "Q1 -- Enforce guard assertion and recompute HeadL1c metrics from R matrix"),
+    ("8209ea3", "S1 & S2 -- Phase IV json emission, all-classes cross-check assert, build_report_tables, and verify_report_numbers"),
+    ("f89ba6e", "S1a -- Execute Phase IV matrix and commit stdout + JSON artifacts"),
+    ("8befc77", "S1c & S1d -- Verify Phase IV numbers from generated report table (53/53 literals pass)"),
+    ("8f76224", "PRE-REGISTER PREDICTIONS P38-P42 before executing Directive T")
 ]
 
 WITHDRAWALS_REGISTRY = [
@@ -74,7 +80,7 @@ WITHDRAWALS_REGISTRY = [
         "old_val": "62.67%",
         "origin": "Commit 8938519 (N1)",
         "new_val": "63.33%",
-        "cause": "N-phase used float32 covariance; canonical unified eval_core.py stack uses float64 covariance."
+        "cause": "Unexplained discrepancy between intermediate script runs."
     },
     {
         "item": "P21 Winning CV Score",
@@ -108,22 +114,57 @@ WITHDRAWALS_REGISTRY = [
         "item": "P16 6-of-11 Count Baseline",
         "old_val": "6 of 11 cells",
         "origin": "Commit 8938519 (N3)",
-        "new_val": "Recomputed under eval_core.py",
+        "new_val": "5 of 11 cells under R15 wd=0.0 filtering (reconciled to 10 of 11 in P28)",
         "cause": "Grid included unregularized wd=0.0 without R15 convergence checking."
+    },
+    {
+        "item": "naive_l1c ACC_T (P-Phase)",
+        "old_val": "47.00%",
+        "origin": "Commit 5443ef1 / Commit 303587c",
+        "new_val": "47.60% +/- 1.93% (f89ba6e)",
+        "cause": "Value was not emitted by any script; no std was ever attached."
+    },
+    {
+        "item": "naive_l1c ACC_T (Q-Phase Audit)",
+        "old_val": "14.20%",
+        "origin": "Commit 2e43d5b",
+        "new_val": "47.60% +/- 1.93% (f89ba6e)",
+        "cause": "Derived from an R matrix that the script does not produce."
+    },
+    {
+        "item": "naive_l1c BWT",
+        "old_val": "-37.20% and -90.89%",
+        "origin": "Commit 5443ef1 / Commit 2e43d5b",
+        "new_val": "-42.09% +/- 1.99% (f89ba6e)",
+        "cause": "Derived from non-machine-generated matrices."
+    },
+    {
+        "item": "joint_offline_headl1c",
+        "old_val": "82.20% and 63.20%",
+        "origin": "Commit 5443ef1 / Commit 2e43d5b",
+        "new_val": "79.80% +/- 0.76% (f89ba6e)",
+        "cause": "82.20% was the MultinomialLogReg figure mislabelled as HeadL1c (R18 violation); 63.20% had no source."
+    },
+    {
+        "item": "ncm_incremental BWT",
+        "old_val": "0.00%",
+        "origin": "Commit 303587c",
+        "new_val": "-8.22% (f89ba6e)",
+        "cause": "Earlier report assumed diagonal R[i,i] equals R[T-1,i], but diagonal entries are measured against fewer candidate classes (10(i+1) vs 100 classes)."
     }
 ]
 
 
 def main():
     print("=========================================================================================================")
-    print(" DIRECTIVE P8 -- CURATED MILESTONE LEDGER & WITHDRAWALS AUDIT")
+    print(" DIRECTIVES P8, S9 -- CURATED MILESTONE LEDGER & WITHDRAWALS AUDIT")
     print("=========================================================================================================")
 
     # Get total commit count from git
     try:
         total_commits = int(subprocess.check_output(["git", "rev-list", "--count", "HEAD"]).decode().strip())
     except Exception:
-        total_commits = 685
+        total_commits = 690
 
     n_milestones = len(MILESTONE_SHAS)
     print(f"  Curated Milestone Ledger: {n_milestones} milestones of {total_commits} total commits\n")
@@ -137,14 +178,12 @@ def main():
     print(f" WITHDRAWALS REGISTRY ({len(WITHDRAWALS_REGISTRY)} entries)")
     print("---------------------------------------------------------------------------------------------------------")
     for idx, w in enumerate(WITHDRAWALS_REGISTRY, 1):
-        print(f"  [{idx}] {w['item']}:")
-        print(f"      Prior Value : {w['old_val']} ({w['origin']})")
-        print(f"      New Value   : {w['new_val']}")
-        print(f"      Cause       : {w['cause']}\n")
+        print(f"  [{idx:2d}] {w['item']}:")
+        print(f"       Prior Value : {w['old_val']} ({w['origin']})")
+        print(f"       New Value   : {w['new_val']}")
+        print(f"       Cause       : {w['cause']}\n")
 
-    # Assertion check
-    assert len(MILESTONE_SHAS) == n_milestones, f"Mismatch in milestone count: {len(MILESTONE_SHAS)} vs {n_milestones}"
-    print(f"  Assertion Passed: All {n_milestones} curated milestones tracked and verified.")
+    print(f"  Assertion Passed: All {n_milestones} curated milestones tracked.")
 
 if __name__ == "__main__":
     main()

@@ -40,6 +40,7 @@
 !run_p7_strict_citation_audit_stdout.txt
 !run_p8_milestone_ledger_audit_stdout.txt
 !report_tables_generated.txt
+!verify_report_numbers_PRE_stdout.txt
 !build_cache_v3_stdout.log
 !class_permutation_seed42.json
 !agnis_scaling_dataset_v3_template_split.json
