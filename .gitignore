@@ -4,6 +4,7 @@
 !script_provenance_check.txt
 !audit_dataset_integrity_stdout.txt
 !audit_generator_defects_stdout.txt
+!audit_generator_defects_and_leakage_stdout.txt
 !stride_file_mapping_stdout.txt
 !generate_dataset_v2_stdout.txt
 !mapping_honest_audit.txt
@@ -23,6 +24,7 @@
 !run_gate2_redecision_expanded_stdout.txt
 !evaluate_disjoint_template_split_l5_l6_stdout.txt
 !evaluate_m_phase_stdout.txt
+!evaluate_m_phase_comprehensive_stdout.txt
 !run_n1_3x3_ncm_recheck_stdout.txt
 !run_n2_fix_cv_stdout.txt
 !run_n3_n_count_and_match_stdout.txt
@@ -33,7 +35,9 @@
 !run_o3_eps_question_stdout.txt
 !run_o4_r12_citation_audit_stdout.txt
 !run_o5_rescore_stdout.txt
+!run_o5_rescore_p21_p11_p13_p14_stdout.txt
 !run_o6_reconcile_stdout.txt
+!run_o6_reconcile_n4_m6_stdout.txt
 !run_phase_iv_stdout.txt
 !run_p1_full_selection_grid_stdout.txt
 !run_p3_to_p6_phase_iv_matrix_stdout.txt

@@ -27,5 +27,9 @@
 8. **One Classifier Family Per Comparison (Rule R18)**:
    Any table comparing arms, and any prediction of the form "arm A vs arm B," must hold the classifier fixed. If arms use different classifiers, split the table by classifier and report the cross-classifier difference separately, labelled as such.
 
+9. **Paste-Only Documentation (Rule R19)**:
+   Any table in walkthrough.md or RESULTS.md that asserts the existence, size, provenance, or execution status of a repository artifact must be a verbatim paste of a committed *_stdout.txt log, enclosed in a fenced code block, with the log filename stated immediately above it. Hand-authored or reformatted versions of such tables are prohibited. A table that cannot be pasted must be deleted.
+
+
 
 

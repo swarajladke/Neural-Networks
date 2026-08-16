@@ -7,6 +7,12 @@ Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean
 
 ---
 
+### Standing Rules for Continual Learning Experiments
+
+R19 (Paste-Only Documentation): Any table in walkthrough.md or RESULTS.md that asserts the existence, size, provenance, or execution status of a repository artifact must be a verbatim paste of a committed *_stdout.txt log, enclosed in a fenced code block, with the log filename stated immediately above it. Hand-authored or reformatted versions of such tables are prohibited. A table that cannot be pasted must be deleted.
+
+---
+
 ### Benchmark Definition and Scope (H5, P9, S7, S10)
 
 The benchmark measures 100-way classification of prompt clusters with 7 train, 3 val, and 5 test disjoint-template examples per class. It does not measure fact retention. The answer field does not enter the model, the loss, or any metric.
