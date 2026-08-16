@@ -35,6 +35,10 @@
 !run_o5_rescore_stdout.txt
 !run_o6_reconcile_stdout.txt
 !run_phase_iv_stdout.txt
+!run_p1_full_selection_grid_stdout.txt
+!run_p3_to_p6_phase_iv_matrix_stdout.txt
+!run_p7_strict_citation_audit_stdout.txt
+!run_p8_milestone_ledger_audit_stdout.txt
 !build_cache_v3_stdout.log
 !class_permutation_seed42.json
 !agnis_scaling_dataset_v3_template_split.json
