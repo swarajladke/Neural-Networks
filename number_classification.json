@@ -1,57 +1,47 @@
 {
   "15.0": {
     "type": "THRESHOLD",
-    "line_number": 86,
-    "justification": "Pre-registered margin threshold in P23 and P54 in predictions_phase_I_to_V.md"
+    "line_number": 90,
+    "justification": "Pre-registered adaptation gap threshold in P54 in predictions_phase_I_to_V.md"
   },
   "+15.0": {
     "type": "THRESHOLD",
-    "line_number": 149,
+    "line_number": 90,
     "justification": "Pre-registered adaptation gap threshold in P54 in predictions_phase_I_to_V.md"
   },
   "5.0": {
     "type": "THRESHOLD",
-    "line_number": 62,
-    "justification": "Pre-registered threshold in P15, P28, P56 in predictions_phase_I_to_V.md"
+    "line_number": 92,
+    "justification": "Pre-registered plasticity decay threshold in P56 in predictions_phase_I_to_V.md"
   },
   "2.0": {
     "type": "THRESHOLD",
-    "line_number": 68,
-    "justification": "Pre-registered tolerance threshold in P17, P25, P30, P57 in predictions_phase_I_to_V.md"
-  },
-  "3.0": {
-    "type": "THRESHOLD",
-    "line_number": 53,
-    "justification": "Pre-registered drop threshold in P10, P21 in predictions_phase_I_to_V.md"
+    "line_number": 51,
+    "justification": "Pre-registered tolerance threshold in P25, P30, P57 in predictions_phase_I_to_V.md"
   },
   "0.20": {
     "type": "THRESHOLD",
-    "line_number": 75,
-    "justification": "Pre-registered threshold in P29, P33, P34, P35 in predictions_phase_I_to_V.md"
+    "line_number": 58,
+    "justification": "Pre-registered delta threshold in P29, P33, P34, P35 in predictions_phase_I_to_V.md"
   },
   "0.30": {
     "type": "THRESHOLD",
-    "line_number": 74,
+    "line_number": 61,
     "justification": "Pre-registered std threshold in P32 in predictions_phase_I_to_V.md"
   },
   "0.01": {
     "type": "THRESHOLD",
-    "line_number": 72,
-    "justification": "Pre-registered threshold in P20 in predictions_phase_I_to_V.md"
-  },
-  "40.00": {
-    "type": "THRESHOLD",
-    "line_number": 28,
-    "justification": "Gate 1 diagnostic threshold in predictions_phase_I_to_V.md"
+    "line_number": 41,
+    "justification": "Pre-registered tolerance threshold in P20 in predictions_phase_I_to_V.md"
   },
   "64.95": {
     "type": "THRESHOLD",
-    "line_number": 26,
+    "line_number": 10,
     "justification": "Phase 6 historical benchmark reference in P4 in predictions_phase_I_to_V.md"
   },
   "85.60": {
     "type": "THRESHOLD",
-    "line_number": 68,
+    "line_number": 33,
     "justification": "Historical baseline reference in P17 in predictions_phase_I_to_V.md"
   },
   "-3.60": {
@@ -118,61 +108,6 @@
     "registry_row": 20,
     "justification": "W2 unexecuted expected joint offline accuracy retracted in Row 20"
   },
-  "52.40": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted DER++ baseline accuracy retracted in Row 17"
-  },
-  "16.20": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted naive plasticity decay retracted in Row 17"
-  },
-  "4.80": {
-    "type": "RETRACTED",
-    "registry_row": 18,
-    "justification": "W5 unexecuted optimal plasticity decay retracted in Row 18"
-  },
-  "58.40": {
-    "type": "RETRACTED",
-    "registry_row": 19,
-    "justification": "W6 unexecuted validation accuracy retracted in Row 19"
-  },
-  "48.60": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted iCaRL baseline accuracy retracted in Row 17"
-  },
-  "38.20": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted SLDA baseline accuracy retracted in Row 17"
-  },
-  "27.20": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted LwF baseline accuracy retracted in Row 17"
-  },
-  "24.50": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted EWC baseline accuracy retracted in Row 17"
-  },
-  "18.40": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted naive sequential accuracy retracted in Row 17"
-  },
-  "9.70": {
-    "type": "RETRACTED",
-    "registry_row": 17,
-    "justification": "W4 unexecuted freeze-after-base accuracy retracted in Row 17"
-  },
-  "21.40": {
-    "type": "RETRACTED",
-    "registry_row": 18,
-    "justification": "W5 unexecuted rho=1e-3 ACC_T retracted in Row 18"
-  },
   "14.20": {
     "type": "RETRACTED",
     "registry_row": 12,
@@ -237,10 +172,5 @@
     "type": "RETRACTED",
     "registry_row": 9,
     "justification": "m=128 wd=0.0 test score retracted in Row 9"
-  },
-  "48.20": {
-    "type": "RETRACTED",
-    "registry_row": 9,
-    "justification": "m=128 non-converged test score retracted in Row 9"
   }
 }

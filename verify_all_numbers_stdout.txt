@@ -1,40 +1,95 @@
 =========================================================================================================
- DIRECTIVES X8, Y3, Z4 -- UNIVERSAL NUMBER VERIFICATION GUARD (SECOND RUN)
+ DIRECTIVES X8, Y3, Z4, AA1-AA6 -- UNIVERSAL NUMBER VERIFICATION GUARD (STRICT AUDIT)
 =========================================================================================================
-  Loaded 42 committed *_stdout.txt logs (242,012 total chars).
-  Loaded 48 entries from number_classification.json.
-  Normalized Exponent Tokens : n_exponent_normalized = 68
+FILES CHECKED: ['walkthrough.md', 'RESULTS.md']
+FILES SKIPPED: ['RESULTS_ARCHIVE.md'] (Historical pre-audit archive; excluded per Directive AA8 Option A)
+
+--- AA4 GIT-VERIFIED LOG CORPUS ---
+  audit_dataset_integrity_stdout.txt            |  33588 bytes | SHA: 64bd022
+  audit_embedding_leakage_stdout.txt            |   3334 bytes | SHA: 56967bc
+  audit_generator_defects_and_leakage_stdout.txt |    881 bytes | SHA: f1eb640
+  audit_pca_grid_and_lasttok_stdout.txt         |   5050 bytes | SHA: 10a7318
+  audit_representation_ablation_stdout.txt      |   5024 bytes | SHA: 1e72a07
+  build_cache_v2_expanded_stdout.txt            |   2640 bytes | SHA: e8ca39c
+  build_execution_status_stdout.txt             |   8370 bytes | SHA: 0a573b2
+  build_lasttok_nonpunct_cache_stdout.txt       |   3044 bytes | SHA: eeb509f
+  build_report_tables_stdout.txt                |   3385 bytes | SHA: f915bee
+  diagnose_cache_layout_stdout.txt              |   4302 bytes | SHA: 5d12158
+  evaluate_disjoint_template_split_l5_l6_stdout.txt |   6285 bytes | SHA: b880712
+  evaluate_expanded_offline_bound_stdout.txt    |   3108 bytes | SHA: e8ca39c
+  evaluate_m_phase_comprehensive_stdout.txt     |  11041 bytes | SHA: f1eb640
+  generate_dataset_v2_expanded_stdout.txt       |    546 bytes | SHA: e8ca39c
+  generate_dataset_v2_stdout.txt                |   3273 bytes | SHA: 25bc9bb
+  run_gate1_diagnostic_corrected_stdout.txt     |   3375 bytes | SHA: 8cefac3
+  run_gate1_diagnostic_k3_k5_stdout.txt         |   3874 bytes | SHA: b880712
+  run_gate1_diagnostic_stdout.txt               |   4199 bytes | SHA: 384af03
+  run_gate2_redecision_expanded_stdout.txt      |   3555 bytes | SHA: fc0f862
+  run_joint_offline_probe_stdout.txt            |   4721 bytes | SHA: a6f9a31
+  run_k4_k5_k6_offline_bound_search_stdout.txt  |  10245 bytes | SHA: b880712
+  run_n1_3x3_ncm_recheck_stdout.txt             |   2986 bytes | SHA: 8938519
+  run_n1_to_n9_master_stdout.txt                |   5828 bytes | SHA: 8938519
+  run_n2_fix_cv_stdout.txt                      |   4241 bytes | SHA: 8938519
+  run_n3_n_count_and_match_stdout.txt           |   4928 bytes | SHA: 8938519
+  run_n4_pca_collapse_audit_stdout.txt          |   4385 bytes | SHA: 8938519
+  run_n5_latin_square_audit_stdout.txt          |   1487 bytes | SHA: 8938519
+  run_o2_reproducibility_check_stdout.txt       |   3957 bytes | SHA: 5443ef1
+  run_o3_eps_question_stdout.txt                |   5052 bytes | SHA: 5443ef1
+  run_o4_r12_citation_audit_stdout.txt          |   3325 bytes | SHA: 5443ef1
+  run_o5_rescore_p21_p11_p13_p14_stdout.txt     |   3431 bytes | SHA: f1eb640
+  run_o6_reconcile_n4_m6_stdout.txt             |   3581 bytes | SHA: f1eb640
+  run_offline_bound_search_stdout.txt           |   4670 bytes | SHA: c3e2d5c
+  run_p1_full_selection_grid_stdout.txt         |   7842 bytes | SHA: 29c1821
+  run_p3_to_p6_phase_iv_matrix_stdout.txt       |   7233 bytes | SHA: 29c1821
+  run_p7_strict_citation_audit_stdout.txt       |   8251 bytes | SHA: 0a573b2
+  run_p8_milestone_ledger_audit_stdout.txt      |   8063 bytes | SHA: f915bee
+  run_phase_iv_stdout.txt                       |   3178 bytes | SHA: 5443ef1
+  stride_file_mapping_stdout.txt                |   2671 bytes | SHA: 9554347
+  verify_all_numbers_stdout.txt                 |   8647 bytes | SHA: 0c5f757
+  verify_report_numbers_PRE_stdout.txt          |    768 bytes | SHA: 29c1821
+
+  Total Tracked Logs : n_logs = 41 (218,345 total characters)
+  Uncommitted Logs   : n_uncommitted_logs = 0
+--- AA5 CLASSIFICATION INTEGRITY AUDIT ---
+  Classification Entries Audited : 34
+  Classification Audit Errors    : 1
+    [CLASSIFICATION ERROR]: RETRACTED 82.60: Value not present in withdrawals registry table (Row 2)
 
 --- Document: walkthrough.md ---
   Total Extracted Literals   : 137
-  Skipped Bare Integers      : n_skipped_integers = 559
+  Skipped Bare Integers      : n_skipped_integers = 597
   Skipped 4-digit Years      : n_skipped_years    = 0
-  Classified THRESHOLD       : 11
+  Classified THRESHOLD       : 9
   Classified DERIVED         : 3
-  Classified RETRACTED (OK)  : 10
-  ILLEGAL RETRACTED OUTSIDE  : ['1.15', '10.50', '14.20', '20.20', '22.80', '57.80', '63.20', '79.33', '82.60', '85.40']
-  Classified MEASURED        : 113
-  Numbers Found in Logs      : 113
-  Numbers Missing in Logs    : 0
-  [MISSING LIST]: None (100% found)
+  Classified RETRACTED (OK)  : 5
+  ILLEGAL RETRACTED OUTSIDE  : 13 ['1.15', '10.50', '14.20', '20.20', '22.80', '57.80', '62.67', '63.20', '79.33', '82.60', '85.20', '85.40', '91.00']
+  Classified MEASURED        : 107
+  Numbers Mapped to Logs     : 107
+  Numbers Unmapped (Missing) : 0
+  Exponent Value Equivalence : 1 matches -> [('0.0001', '1e-04')]
 
 --- Document: RESULTS.md ---
-  Total Extracted Literals   : 1421
-  Skipped Bare Integers      : n_skipped_integers = 945
-  Skipped 4-digit Years      : n_skipped_years    = 9
-  Classified THRESHOLD       : 6
+  Total Extracted Literals   : 32
+  Skipped Bare Integers      : n_skipped_integers = 37
+  Skipped 4-digit Years      : n_skipped_years    = 2
+  Classified THRESHOLD       : 2
   Classified DERIVED         : 1
   Classified RETRACTED (OK)  : 0
-  ILLEGAL RETRACTED OUTSIDE  : ['14.20', '62.67', '79.33', '82.60', '85.20', '85.40', '91.00']
-  Classified MEASURED        : 1414
-  Numbers Found in Logs      : 1414
-  Numbers Missing in Logs    : 0
-  [MISSING LIST]: None (100% found)
+  ILLEGAL RETRACTED OUTSIDE  : 5 ['62.67', '79.33', '82.60', '85.20', '85.40']
+  Classified MEASURED        : 24
+  Numbers Mapped to Logs     : 24
+  Numbers Unmapped (Missing) : 0
+  Exponent Value Equivalence : 1 matches -> [('0.0001', '1e-04')]
 
 =========================================================================================================
- COMBINED TOTALS (Z4 RUN 2):
-   n_measured = 1493 (Run 1: 1778, Delta: -285)
-   n_found    = 1493 (Run 1: 292, Delta: +1201)
-   n_missing  = 0 (Run 1: 1486, Delta: -1486)
-   Status: PASSED -- 100% of measured numbers verified across committed stdout logs.
+ COMBINED TOTALS (DIRECTIVE AA):
+   n_measured           = 113
+   n_mapped             = 113
+   n_unmapped_literals  = 0
+   n_map_rows           = 272 (Written to number_verification_map.tsv)
+   n_illegal_retracted  = 13
+   n_uncommitted_logs   = 0
+   n_class_audit_errors = 1
+   Illegal Retracted    : ['1.15', '10.50', '14.20', '20.20', '22.80', '57.80', '62.67', '63.20', '79.33', '82.60', '85.20', '85.40', '91.00']
+   Status: FAILED
 =========================================================================================================
+EXIT_CODE = 1

@@ -1,0 +1,273 @@
+literal	document	document_line_number	log_file	log_line_number	matched_text
+34.80	walkthrough.md	130	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+1.66	walkthrough.md	130	run_gate1_diagnostic_stdout.txt	48	: 34.80% +/- 1.66%
+34.80	walkthrough.md	131	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+40.00	walkthrough.md	131	audit_pca_grid_and_lasttok_stdout.txt	65	|  42.33%      |  40.00%
+89.71	walkthrough.md	147	run_o5_rescore_p21_p11_p13_p14_stdout.txt	6	mean-across-folds): 89.71% via ('MultinomialL
+82.20	walkthrough.md	149	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+82.20	walkthrough.md	150	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+27.33	walkthrough.md	170	audit_embedding_leakage_stdout.txt	57	Top-1 Accuracy    : 27.33% (0.2733)
+7.67	walkthrough.md	170	audit_pca_grid_and_lasttok_stdout.txt	77	|   7.67%    |   8.67%    |
+27.33	walkthrough.md	171	audit_embedding_leakage_stdout.txt	57	Top-1 Accuracy    : 27.33% (0.2733)
+28.00	walkthrough.md	171	audit_pca_grid_and_lasttok_stdout.txt	49	|  33.33%      |  28.00%
+7.67	walkthrough.md	171	audit_pca_grid_and_lasttok_stdout.txt	77	|   7.67%    |   8.67%    |
+10.67	walkthrough.md	171	audit_pca_grid_and_lasttok_stdout.txt	78	|  10.67%    |  10.67%    |
+40.33	walkthrough.md	172	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+34.80	walkthrough.md	172	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+34.80	walkthrough.md	172	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+40.33	walkthrough.md	172	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+34.80	walkthrough.md	173	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+47.60	walkthrough.md	174	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+10.24	walkthrough.md	174	build_report_tables_stdout.txt	13	% $\pm$ 1.99%** | **10.24% $\pm$ 0.30%** | **
+79.80	walkthrough.md	174	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+85.80	walkthrough.md	174	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+85.80	walkthrough.md	174	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+40.33	walkthrough.md	175	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+1e-6	walkthrough.md	175	run_n1_3x3_ncm_recheck_stdout.txt	52	Check (NCM 1e-4 == 1e-6 within 0.01 pp): Fa
+63.33	walkthrough.md	175	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+4.67	walkthrough.md	176	audit_pca_grid_and_lasttok_stdout.txt	79	|  13.33%    |   4.67%    |   7.00%
+13.33	walkthrough.md	176	audit_pca_grid_and_lasttok_stdout.txt	79	|   8.00%    |  13.33%    |   4.67%    |
+63.33	walkthrough.md	176	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+61.67	walkthrough.md	179	audit_pca_grid_and_lasttok_stdout.txt	52	| 1e-04    |  61.67%      |  54.00%
+63.33	walkthrough.md	179	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+1.66	walkthrough.md	179	run_gate1_diagnostic_stdout.txt	48	: 34.80% +/- 1.66%
+3.0	walkthrough.md	179	run_n1_to_n9_master_stdout.txt	53	rdict (Difference > 3.0 pp): False -> Verdi
+62.33	walkthrough.md	180	run_k4_k5_k6_offline_bound_search_stdout.txt	47	' -> Train CV = 62.33% (NCM), Best Linear
+60.00	walkthrough.md	181	run_k4_k5_k6_offline_bound_search_stdout.txt	72	| 60.00% +/- 0.60%   | 58.6
+58.67	walkthrough.md	181	audit_pca_grid_and_lasttok_stdout.txt	61	| 1e-04    |  58.67%      |  49.33%
+62.33	walkthrough.md	182	run_k4_k5_k6_offline_bound_search_stdout.txt	47	' -> Train CV = 62.33% (NCM), Best Linear
+66.00	walkthrough.md	184	evaluate_m_phase_comprehensive_stdout.txt	134	ogReg (wd=0.01)  |  66.00%           |  68.40
+62.33	walkthrough.md	184	run_k4_k5_k6_offline_bound_search_stdout.txt	47	' -> Train CV = 62.33% (NCM), Best Linear
+82.20	walkthrough.md	186	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+83.60	walkthrough.md	186	evaluate_m_phase_comprehensive_stdout.txt	129	82.80%           |  83.60%
+3.40	walkthrough.md	186	run_p7_strict_citation_audit_stdout.txt	28	| FAIL_MISSING (['3.40', '83.60', '85.60']
++0.80	walkthrough.md	187	evaluate_m_phase_comprehensive_stdout.txt	148	P18 (r_before > +0.80)
++0.9326	walkthrough.md	187	evaluate_m_phase_comprehensive_stdout.txt	95	st)   : Pearson r = +0.9326, Spearman rho = +0.
++0.80	walkthrough.md	187	evaluate_m_phase_comprehensive_stdout.txt	148	P18 (r_before > +0.80)
++0.8082	walkthrough.md	187	evaluate_m_phase_comprehensive_stdout.txt	95	326, Spearman rho = +0.8082
+0.988414	walkthrough.md	188	evaluate_m_phase_comprehensive_stdout.txt	112	l Centroid Cosine:  0.988414
+0.981101	walkthrough.md	188	evaluate_m_phase_comprehensive_stdout.txt	113	st Centroid Cosine: 0.981101
+63.33	walkthrough.md	189	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+61.67	walkthrough.md	189	audit_pca_grid_and_lasttok_stdout.txt	52	| 1e-04    |  61.67%      |  54.00%
+1.67	walkthrough.md	189	evaluate_m_phase_comprehensive_stdout.txt	141	n {56, 64, 72, 80}: 1.67 percentage points
+83.44	walkthrough.md	190	evaluate_m_phase_comprehensive_stdout.txt	87	_eps1e-4         |  83.44%                 |
+89.71	walkthrough.md	190	run_o5_rescore_p21_p11_p13_p14_stdout.txt	6	mean-across-folds): 89.71% via ('MultinomialL
++6.27	walkthrough.md	190	run_o5_rescore_p21_p11_p13_p14_stdout.txt	11	fold structure)  : +6.27 pp
+1e-2	walkthrough.md	192	run_n4_pca_collapse_audit_stdout.txt	53	Damping Test: eps = 1e-2 at m = 128 ---
+1e-4	walkthrough.md	192	audit_pca_grid_and_lasttok_stdout.txt	68	-Wolf (full rank) | 1e-4     |  58.67%
+58.67	walkthrough.md	192	audit_pca_grid_and_lasttok_stdout.txt	61	| 1e-04    |  58.67%      |  49.33%
+1e-2	walkthrough.md	192	run_n4_pca_collapse_audit_stdout.txt	53	Damping Test: eps = 1e-2 at m = 128 ---
+64.33	walkthrough.md	192	run_k4_k5_k6_offline_bound_search_stdout.txt	46	Best Linear Test = 64.33%
++5.67	walkthrough.md	192	run_o6_reconcile_n4_m6_stdout.txt	64	-> eps=1e-2 (val): +5.67 pp
+0.0	walkthrough.md	193	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+0.0	walkthrough.md	193	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+0.0001	walkthrough.md	193	audit_pca_grid_and_lasttok_stdout.txt	49	| 1e-04    |  33.33%      | [EXP_EQ: 1e-04]
+0.0	walkthrough.md	193	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+82.20	walkthrough.md	194	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+82.20	walkthrough.md	194	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+0.40	walkthrough.md	194	run_k4_k5_k6_offline_bound_search_stdout.txt	77	| 15.53% +/- 0.40%   | 12.67% (determ
+3.46	walkthrough.md	195	verify_all_numbers_stdout.txt	89	, '11.80', '2.22', '3.46', '3.60']
+2.22	walkthrough.md	195	verify_all_numbers_stdout.txt	89	'0.2966', '11.80', '2.22', '3.46', '3.60']
+1e-5	walkthrough.md	195	audit_representation_ablation_stdout.txt	50	ctors only (epsilon=1e-5).
+10.24	walkthrough.md	196	build_report_tables_stdout.txt	13	% $\pm$ 1.99%** | **10.24% $\pm$ 0.30%** | **
+47.60	walkthrough.md	196	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+-37.36	walkthrough.md	196	verify_all_numbers_stdout.txt	89	'+5.40', '+65.90', '-37.36', '0.2966', '11.80'
+10	walkthrough.md	196	audit_dataset_integrity_stdout.txt	116	Fact idx 10 (ID: A09): answer =
+85.80	walkthrough.md	196	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+85.80	walkthrough.md	196	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+11.80	walkthrough.md	197	verify_all_numbers_stdout.txt	89	-37.36', '0.2966', '11.80', '2.22', '3.46', '
+85.80	walkthrough.md	198	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+95.67	walkthrough.md	198	run_o2_reproducibility_check_stdout.txt	43	=0.0001), Val Acc = 95.67%, HONEST_TEST_ACC =
+85.80	walkthrough.md	198	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+82.20	walkthrough.md	199	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+85.80	walkthrough.md	199	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+3.60	walkthrough.md	199	verify_all_numbers_stdout.txt	89	', '2.22', '3.46', '3.60']
++37.20	walkthrough.md	200	run_p8_milestone_ledger_audit_stdout.txt	80	Prior Value : +37.20% BWT, 100.0% Gap Cl
+-42.09	walkthrough.md	200	build_report_tables_stdout.txt	13	% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	walkthrough.md	200	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+94.0	walkthrough.md	201	build_report_tables_stdout.txt	36	$ (Classes 60-69) | 94.0% | 98.0% | **-4.0 p
+1e-6	walkthrough.md	201	run_n1_3x3_ncm_recheck_stdout.txt	52	Check (NCM 1e-4 == 1e-6 within 0.01 pp): Fa
+0.2966	walkthrough.md	201	verify_all_numbers_stdout.txt	89	+65.90', '-37.36', '0.2966', '11.80', '2.22',
+0.2966	walkthrough.md	201	verify_all_numbers_stdout.txt	89	+65.90', '-37.36', '0.2966', '11.80', '2.22',
+47.60	walkthrough.md	202	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+33.40	walkthrough.md	202	run_p7_strict_citation_audit_stdout.txt	44	_MISSING (['0.82', '33.40'])
+1.93	walkthrough.md	202	build_report_tables_stdout.txt	13	** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm
+0.82	walkthrough.md	202	run_p7_strict_citation_audit_stdout.txt	44	| FAIL_MISSING (['0.82', '33.40'])
+-90.89	walkthrough.md	203	run_p8_milestone_ledger_audit_stdout.txt	105	Value : -37.20% and -90.89% (Commit 5443ef1 /
+-42.09	walkthrough.md	203	build_report_tables_stdout.txt	13	% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+48.80	walkthrough.md	203	run_p7_strict_citation_audit_stdout.txt	45	_MISSING (['1.45', '48.80'])
+1.99	walkthrough.md	203	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+1.45	walkthrough.md	203	run_p7_strict_citation_audit_stdout.txt	45	| FAIL_MISSING (['1.45', '48.80'])
+79.80	walkthrough.md	204	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+0.76	walkthrough.md	204	build_report_tables_stdout.txt	13	** | **79.80% $\pm$ 0.76%** |
+16.60	walkthrough.md	204	run_p7_strict_citation_audit_stdout.txt	46	| FAIL_MISSING (['16.60'])
+-8.22	walkthrough.md	205	build_report_tables_stdout.txt	24	text{BWT} = \mathbf{-8.22\%}$ | $\text{Forget
+0.00	walkthrough.md	205	audit_dataset_integrity_stdout.txt	166	n Leakage Fraction: 0.0000 (0.00%)
+-14.0	walkthrough.md	208	build_report_tables_stdout.txt	31	| 82.0% | 96.0% | **-14.0 pp** |
+46.00	walkthrough.md	231	run_k4_k5_k6_offline_bound_search_stdout.txt	104	.0) Test Accuracy = 46.00%
+82.20	walkthrough.md	232	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+82.20	walkthrough.md	233	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+61.67	walkthrough.md	234	audit_pca_grid_and_lasttok_stdout.txt	52	| 1e-04    |  61.67%      |  54.00%
+63.33	walkthrough.md	234	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+63.33	walkthrough.md	235	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+89.71	walkthrough.md	236	run_o5_rescore_p21_p11_p13_p14_stdout.txt	6	mean-across-folds): 89.71% via ('MultinomialL
+0.0	walkthrough.md	236	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+0.0	walkthrough.md	236	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+9.80	walkthrough.md	237	build_report_tables_stdout.txt	12	-43.78% | 43.78% | 9.80% | 80.60% |
+10.20	walkthrough.md	237	build_report_tables_stdout.txt	8	-41.11% | 41.11% | 10.20% | 79.00% |
+94.0	walkthrough.md	237	build_report_tables_stdout.txt	36	$ (Classes 60-69) | 94.0% | 98.0% | **-4.0 p
++37.20	walkthrough.md	238	run_p8_milestone_ledger_audit_stdout.txt	80	Prior Value : +37.20% BWT, 100.0% Gap Cl
+100.0	walkthrough.md	238	build_report_tables_stdout.txt	30	es 00-09) | 88.0% | 100.0% | **-12.0 pp** |
+48.20	walkthrough.md	239	run_n4_pca_collapse_audit_stdout.txt	54	, Honest Test Acc = 48.20% (MultinomialLogReg
+0.0	walkthrough.md	239	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+58.67	walkthrough.md	239	audit_pca_grid_and_lasttok_stdout.txt	61	| 1e-04    |  58.67%      |  49.33%
+0.0	walkthrough.md	240	evaluate_m_phase_comprehensive_stdout.txt	133	ltinomialLogReg (wd=0.0)   |  79.60%
+47.60	walkthrough.md	241	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+1.93	walkthrough.md	241	build_report_tables_stdout.txt	13	** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm
+47.60	walkthrough.md	242	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+1.93	walkthrough.md	242	build_report_tables_stdout.txt	13	** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm
+-37.20	walkthrough.md	243	run_p8_milestone_ledger_audit_stdout.txt	105	Prior Value : -37.20% and -90.89% (Commi
+-90.89	walkthrough.md	243	run_p8_milestone_ledger_audit_stdout.txt	105	Value : -37.20% and -90.89% (Commit 5443ef1 /
+-42.09	walkthrough.md	243	build_report_tables_stdout.txt	13	% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	walkthrough.md	243	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+82.20	walkthrough.md	244	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+79.80	walkthrough.md	244	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+0.76	walkthrough.md	244	build_report_tables_stdout.txt	13	** | **79.80% $\pm$ 0.76%** |
+82.20	walkthrough.md	244	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+0.00	walkthrough.md	245	audit_dataset_integrity_stdout.txt	166	n Leakage Fraction: 0.0000 (0.00%)
+-8.22	walkthrough.md	245	build_report_tables_stdout.txt	24	text{BWT} = \mathbf{-8.22\%}$ | $\text{Forget
+21.40	walkthrough.md	248	run_p1_full_selection_grid_stdout.txt	13	21.00% | Max Test: 21.40% via MultinomialLog
++5.40	walkthrough.md	249	verify_all_numbers_stdout.txt	89	[UNMAPPED LIST]: ['+5.40', '+65.90', '-37.36
++65.90	walkthrough.md	250	verify_all_numbers_stdout.txt	89	D LIST]: ['+5.40', '+65.90', '-37.36', '0.2966
+79.80	walkthrough.md	251	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+0.76	walkthrough.md	251	build_report_tables_stdout.txt	13	** | **79.80% $\pm$ 0.76%** |
+50.80	walkthrough.md	264	build_report_tables_stdout.txt	8	| 42 | 50.80% | -41.11% | 41.11%
+-41.11	walkthrough.md	264	build_report_tables_stdout.txt	8	| 42 | 50.80% | -41.11% | 41.11% | 10.20%
+41.11	walkthrough.md	264	build_report_tables_stdout.txt	8	| 42 | 50.80% | -41.11% | 41.11% | 10.20%
+10.20	walkthrough.md	264	build_report_tables_stdout.txt	8	-41.11% | 41.11% | 10.20% | 79.00% |
+79.00	walkthrough.md	264	build_report_tables_stdout.txt	8	| 41.11% | 10.20% | 79.00% |
+47.40	walkthrough.md	265	build_report_tables_stdout.txt	9	| 43 | 47.40% | -42.67% | 42.67%
+-42.67	walkthrough.md	265	build_report_tables_stdout.txt	9	| 43 | 47.40% | -42.67% | 42.67% | 10.60%
+42.67	walkthrough.md	265	build_report_tables_stdout.txt	9	| 43 | 47.40% | -42.67% | 42.67% | 10.60%
+10.60	walkthrough.md	265	build_report_tables_stdout.txt	9	-42.67% | 42.67% | 10.60% | 80.60% |
+80.60	walkthrough.md	265	build_report_tables_stdout.txt	9	| 42.67% | 10.60% | 80.60% |
+47.60	walkthrough.md	266	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+-39.11	walkthrough.md	266	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11% | 10.20%
+39.11	walkthrough.md	266	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11% | 10.20%
+10.20	walkthrough.md	266	build_report_tables_stdout.txt	8	-41.11% | 41.11% | 10.20% | 79.00% |
+79.60	walkthrough.md	266	build_report_tables_stdout.txt	10	| 39.11% | 10.20% | 79.60% |
+45.80	walkthrough.md	267	build_report_tables_stdout.txt	11	| 45 | 45.80% | -43.78% | 43.78%
+-43.78	walkthrough.md	267	build_report_tables_stdout.txt	11	| 45 | 45.80% | -43.78% | 43.78% | 10.40%
+43.78	walkthrough.md	267	build_report_tables_stdout.txt	11	| 45 | 45.80% | -43.78% | 43.78% | 10.40%
+10.40	walkthrough.md	267	build_report_tables_stdout.txt	11	-43.78% | 43.78% | 10.40% | 79.20% |
+79.20	walkthrough.md	267	build_report_tables_stdout.txt	11	| 43.78% | 10.40% | 79.20% |
+46.40	walkthrough.md	268	build_report_tables_stdout.txt	12	| 46 | 46.40% | -43.78% | 43.78%
+-43.78	walkthrough.md	268	build_report_tables_stdout.txt	11	| 45 | 45.80% | -43.78% | 43.78% | 10.40%
+43.78	walkthrough.md	268	build_report_tables_stdout.txt	11	| 45 | 45.80% | -43.78% | 43.78% | 10.40%
+9.80	walkthrough.md	268	build_report_tables_stdout.txt	12	-43.78% | 43.78% | 9.80% | 80.60% |
+80.60	walkthrough.md	268	build_report_tables_stdout.txt	9	| 42.67% | 10.60% | 80.60% |
+47.60	walkthrough.md	269	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+1.93	walkthrough.md	269	build_report_tables_stdout.txt	13	** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm
+-42.09	walkthrough.md	269	build_report_tables_stdout.txt	13	% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	walkthrough.md	269	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+42.09	walkthrough.md	269	build_report_tables_stdout.txt	13	$\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	walkthrough.md	269	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+10.24	walkthrough.md	269	build_report_tables_stdout.txt	13	% $\pm$ 1.99%** | **10.24% $\pm$ 0.30%** | **
+79.80	walkthrough.md	269	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+0.76	walkthrough.md	269	build_report_tables_stdout.txt	13	** | **79.80% $\pm$ 0.76%** |
+88.0	walkthrough.md	274	build_report_tables_stdout.txt	30	$ (Classes 00-09) | 88.0% | 100.0% | **-12.0
+100.0	walkthrough.md	274	build_report_tables_stdout.txt	30	es 00-09) | 88.0% | 100.0% | **-12.0 pp** |
+-12.0	walkthrough.md	274	build_report_tables_stdout.txt	30	88.0% | 100.0% | **-12.0 pp** |
+82.0	walkthrough.md	275	build_report_tables_stdout.txt	31	$ (Classes 10-19) | 82.0% | 96.0% | **-14.0
+96.0	walkthrough.md	275	build_report_tables_stdout.txt	31	es 10-19) | 82.0% | 96.0% | **-14.0 pp** |
+-14.0	walkthrough.md	275	build_report_tables_stdout.txt	31	| 82.0% | 96.0% | **-14.0 pp** |
+82.0	walkthrough.md	276	build_report_tables_stdout.txt	31	$ (Classes 10-19) | 82.0% | 96.0% | **-14.0
+96.0	walkthrough.md	276	build_report_tables_stdout.txt	31	es 10-19) | 82.0% | 96.0% | **-14.0 pp** |
+-14.0	walkthrough.md	276	build_report_tables_stdout.txt	31	| 82.0% | 96.0% | **-14.0 pp** |
+86.0	walkthrough.md	277	build_report_tables_stdout.txt	33	$ (Classes 30-39) | 86.0% | 96.0% | **-10.0
+96.0	walkthrough.md	277	build_report_tables_stdout.txt	31	es 10-19) | 82.0% | 96.0% | **-14.0 pp** |
+-10.0	walkthrough.md	277	build_report_tables_stdout.txt	33	| 86.0% | 96.0% | **-10.0 pp** |
+82.0	walkthrough.md	278	build_report_tables_stdout.txt	31	$ (Classes 10-19) | 82.0% | 96.0% | **-14.0
+92.0	walkthrough.md	278	build_report_tables_stdout.txt	34	es 40-49) | 82.0% | 92.0% | **-10.0 pp** |
+-10.0	walkthrough.md	278	build_report_tables_stdout.txt	33	| 86.0% | 96.0% | **-10.0 pp** |
+86.0	walkthrough.md	279	build_report_tables_stdout.txt	33	$ (Classes 30-39) | 86.0% | 96.0% | **-10.0
+90.0	walkthrough.md	279	build_report_tables_stdout.txt	35	es 50-59) | 86.0% | 90.0% | **-4.0 pp** |
+-4.0	walkthrough.md	279	build_report_tables_stdout.txt	35	| 86.0% | 90.0% | **-4.0 pp** |
+94.0	walkthrough.md	280	build_report_tables_stdout.txt	36	$ (Classes 60-69) | 94.0% | 98.0% | **-4.0 p
+98.0	walkthrough.md	280	build_report_tables_stdout.txt	36	es 60-69) | 94.0% | 98.0% | **-4.0 pp** |
+-4.0	walkthrough.md	280	build_report_tables_stdout.txt	35	| 86.0% | 90.0% | **-4.0 pp** |
+84.0	walkthrough.md	281	build_report_tables_stdout.txt	37	$ (Classes 70-79) | 84.0% | 90.0% | **-6.0 p
+90.0	walkthrough.md	281	build_report_tables_stdout.txt	35	es 50-59) | 86.0% | 90.0% | **-4.0 pp** |
+-6.0	walkthrough.md	281	build_report_tables_stdout.txt	37	| 84.0% | 90.0% | **-6.0 pp** |
+90.0	walkthrough.md	282	build_report_tables_stdout.txt	35	es 50-59) | 86.0% | 90.0% | **-4.0 pp** |
+90.0	walkthrough.md	282	build_report_tables_stdout.txt	35	es 50-59) | 86.0% | 90.0% | **-4.0 pp** |
++0.0	walkthrough.md	282	build_report_tables_stdout.txt	38	| 90.0% | 90.0% | **+0.0 pp** |
+-8.22	walkthrough.md	283	build_report_tables_stdout.txt	24	text{BWT} = \mathbf{-8.22\%}$ | $\text{Forget
+100	walkthrough.md	298	audit_dataset_integrity_stdout.txt	6	Total facts: 100
+7.67	walkthrough.md	303	audit_pca_grid_and_lasttok_stdout.txt	77	|   7.67%    |   8.67%    |
+40.33	walkthrough.md	305	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+1.66	walkthrough.md	312	run_gate1_diagnostic_stdout.txt	48	: 34.80% +/- 1.66%
+3.0	walkthrough.md	312	run_n1_to_n9_master_stdout.txt	53	rdict (Difference > 3.0 pp): False -> Verdi
+63.33	walkthrough.md	312	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+66.00	walkthrough.md	317	evaluate_m_phase_comprehensive_stdout.txt	134	ogReg (wd=0.01)  |  66.00%           |  68.40
+3.40	walkthrough.md	319	run_p7_strict_citation_audit_stdout.txt	28	| FAIL_MISSING (['3.40', '83.60', '85.60']
+83.60	walkthrough.md	319	evaluate_m_phase_comprehensive_stdout.txt	129	82.80%           |  83.60%
+1e-6	walkthrough.md	334	run_n1_3x3_ncm_recheck_stdout.txt	52	Check (NCM 1e-4 == 1e-6 within 0.01 pp): Fa
+0.82	walkthrough.md	335	run_p7_strict_citation_audit_stdout.txt	44	| FAIL_MISSING (['0.82', '33.40'])
+33.40	walkthrough.md	335	run_p7_strict_citation_audit_stdout.txt	44	_MISSING (['0.82', '33.40'])
+1.45	walkthrough.md	336	run_p7_strict_citation_audit_stdout.txt	45	| FAIL_MISSING (['1.45', '48.80'])
+48.80	walkthrough.md	336	run_p7_strict_citation_audit_stdout.txt	45	_MISSING (['1.45', '48.80'])
+16.60	walkthrough.md	337	run_p7_strict_citation_audit_stdout.txt	46	| FAIL_MISSING (['16.60'])
+7.67	walkthrough.md	367	audit_pca_grid_and_lasttok_stdout.txt	77	|   7.67%    |   8.67%    |
+40.33	walkthrough.md	367	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+1.66	walkthrough.md	367	run_gate1_diagnostic_stdout.txt	48	: 34.80% +/- 1.66%
+3.0	walkthrough.md	367	run_n1_to_n9_master_stdout.txt	53	rdict (Difference > 3.0 pp): False -> Verdi
+63.33	walkthrough.md	367	audit_pca_grid_and_lasttok_stdout.txt	51	| 1e-06    |  63.33%      |  52.33%
+66.00	walkthrough.md	367	evaluate_m_phase_comprehensive_stdout.txt	134	ogReg (wd=0.01)  |  66.00%           |  68.40
+3.40	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	28	| FAIL_MISSING (['3.40', '83.60', '85.60']
+83.60	walkthrough.md	367	evaluate_m_phase_comprehensive_stdout.txt	129	82.80%           |  83.60%
+1e-6	walkthrough.md	367	run_n1_3x3_ncm_recheck_stdout.txt	52	Check (NCM 1e-4 == 1e-6 within 0.01 pp): Fa
+0.82	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	44	| FAIL_MISSING (['0.82', '33.40'])
+33.40	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	44	_MISSING (['0.82', '33.40'])
+1.45	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	45	| FAIL_MISSING (['1.45', '48.80'])
+48.80	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	45	_MISSING (['1.45', '48.80'])
+16.60	walkthrough.md	367	run_p7_strict_citation_audit_stdout.txt	46	| FAIL_MISSING (['16.60'])
++5.40	walkthrough.md	410	verify_all_numbers_stdout.txt	89	[UNMAPPED LIST]: ['+5.40', '+65.90', '-37.36
++65.90	walkthrough.md	410	verify_all_numbers_stdout.txt	89	D LIST]: ['+5.40', '+65.90', '-37.36', '0.2966
+2.22	walkthrough.md	410	verify_all_numbers_stdout.txt	89	'0.2966', '11.80', '2.22', '3.46', '3.60']
+3.46	walkthrough.md	410	verify_all_numbers_stdout.txt	89	, '11.80', '2.22', '3.46', '3.60']
+100	walkthrough.md	454	audit_dataset_integrity_stdout.txt	6	Total facts: 100
+100	walkthrough.md	467	audit_dataset_integrity_stdout.txt	6	Total facts: 100
+100	walkthrough.md	474	audit_dataset_integrity_stdout.txt	6	Total facts: 100
+1e-4	RESULTS.md	1	audit_pca_grid_and_lasttok_stdout.txt	68	-Wolf (full rank) | 1e-4     |  58.67%
+0.0001	RESULTS.md	1	audit_pca_grid_and_lasttok_stdout.txt	49	| 1e-04    |  33.33%      | [EXP_EQ: 1e-04]
+82.20	RESULTS.md	1	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+85.80	RESULTS.md	30	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+79.80	RESULTS.md	31	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+0.76	RESULTS.md	31	build_report_tables_stdout.txt	13	** | **79.80% $\pm$ 0.76%** |
+79.80	RESULTS.md	32	build_report_tables_stdout.txt	13	% $\pm$ 0.30%** | **79.80% $\pm$ 0.76%** |
+85.80	RESULTS.md	32	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+-6.00	RESULTS.md	32	verify_all_numbers_stdout.txt	103	[UNMAPPED LIST]: ['-6.00']
+47.60	RESULTS.md	39	build_report_tables_stdout.txt	10	| 44 | 47.60% | -39.11% | 39.11%
+1.93	RESULTS.md	39	build_report_tables_stdout.txt	13	** | **47.60% $\pm$ 1.93%** | **-42.09% $\pm
+-42.09	RESULTS.md	39	build_report_tables_stdout.txt	13	% $\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	RESULTS.md	39	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+42.09	RESULTS.md	39	build_report_tables_stdout.txt	13	$\pm$ 1.93%** | **-42.09% $\pm$ 1.99%** | **
+1.99	RESULTS.md	39	build_report_tables_stdout.txt	13	* | **-42.09% $\pm$ 1.99%** | **42.09% $\pm$
+85.80	RESULTS.md	40	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+-8.22	RESULTS.md	40	build_report_tables_stdout.txt	24	text{BWT} = \mathbf{-8.22\%}$ | $\text{Forget
+85.80	RESULTS.md	42	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+85.80	RESULTS.md	45	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids
+82.20	RESULTS.md	45	run_o2_reproducibility_check_stdout.txt	43	, HONEST_TEST_ACC = 82.20%
+34.80	RESULTS.md	51	run_gate1_diagnostic_stdout.txt	41	iggered because J = 34.80% < 40.00%)
+1.66	RESULTS.md	51	run_gate1_diagnostic_stdout.txt	48	: 34.80% +/- 1.66%
+40.33	RESULTS.md	53	audit_pca_grid_and_lasttok_stdout.txt	62	|  42.33%      |  40.33%
+27.33	RESULTS.md	55	audit_embedding_leakage_stdout.txt	57	Top-1 Accuracy    : 27.33% (0.2733)
+29.00	RESULTS.md	55	audit_representation_ablation_stdout.txt	72	|  27.33%    |  29.00%    |  0.9281  |
+53.78	RESULTS.md	55	evaluate_expanded_offline_bound_stdout.txt	45	|  29.00%    |  53.78%      |  79.33%
+1.0	RESULTS.md	58	evaluate_disjoint_template_split_l5_l6_stdout.txt	44	ltinomialLogReg (wd=1.0)), Test Max =  9.40
+46.00	RESULTS.md	58	run_k4_k5_k6_offline_bound_search_stdout.txt	104	.0) Test Accuracy = 46.00%
+0.1	RESULTS.md	58	evaluate_disjoint_template_split_l5_l6_stdout.txt	42	= 85.67% (Ridge (wd=0.1)), Test Max = 77.80
+64.33	RESULTS.md	58	run_k4_k5_k6_offline_bound_search_stdout.txt	46	Best Linear Test = 64.33%
+0.001	RESULTS.md	60	evaluate_disjoint_template_split_l5_l6_stdout.txt	48	ltinomialLogReg (wd=0.001)), Test Max = 85.80
+85.80	RESULTS.md	60	build_report_tables_stdout.txt	23	l Test Accuracy = **85.80%** (batch centroids

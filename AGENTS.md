@@ -33,6 +33,10 @@
 10. **Paste-Only Counts (Rule R20)**:
     Any count, tally, pass/fail summary, grep result, or reconciliation figure produced by a repository script must appear in documentation only as a verbatim paste of that script's committed `*_stdout.txt`, inside a fenced code block, with the log filename and its commit SHA stated immediately above the block. Prose restatement, reformatting into a bullet list, or transcription into a table is prohibited. If a count cannot be pasted, the section reporting it must be deleted.
 
+11. **Exit-Code Integrity (Rule R21)**:
+    Any script that prints a violation, illegal value, mismatch, or failure condition must terminate with a non-zero exit status. A guard that prints a violation and exits zero is treated as a failed guard, and every number it certifies is treated as unverified. Every pasted guard output must be immediately followed by the line `EXIT_CODE = <n>` printed by the script itself, and no PASSED status may be claimed for a run whose printed exit code is non-zero or whose violation lists are non-empty.
+
+
 
 
 

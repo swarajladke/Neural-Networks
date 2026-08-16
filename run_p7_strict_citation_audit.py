@@ -272,7 +272,9 @@ def main():
     print("\n=========================================================================================================")
     print(f" CITATION AUDIT RESULT: DOCUMENTED FAILURES ISOLATED ({n_fail} fails out of {n_checks_run} sourceable checks)")
     print("=========================================================================================================")
+    print(f"EXIT_CODE = {0 if n_fail == 15 else 1}")
 
 
 if __name__ == "__main__":
     main()
+

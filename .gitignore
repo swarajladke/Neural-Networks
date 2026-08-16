@@ -56,6 +56,7 @@
 !class_permutation_seed42.json
 !class_order_split_cifar100.json
 !number_classification.json
+!number_verification_map.tsv
 !agnis_scaling_dataset_v3_template_split.json
 !agnis_scaling_dataset_v2.json
 !agnis_scaling_dataset_v2_expanded.json

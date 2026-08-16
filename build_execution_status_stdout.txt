@@ -59,7 +59,7 @@
   run_ogp_rigorous_verification.py       | NO             | 0          | N/A
   run_p1_full_selection_grid.py          | YES            | 7926       | 29c1821
   run_p3_to_p6_phase_iv_matrix.py        | YES            | 7356       | 29c1821
-  run_p7_strict_citation_audit.py        | YES            | 8339       | 7e679b3
+  run_p7_strict_citation_audit.py        | YES            | 8339       | 0a573b2
   run_p8_milestone_ledger_audit.py       | YES            | 8187       | f915bee
   run_part0_blocking_corrections.py      | NO             | 0          | N/A
   run_partA_fix_joint_baseline.py        | NO             | 0          | N/A
