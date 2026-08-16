@@ -11,7 +11,7 @@ Single defensible result as of `5443ef1`: 100 synthetic facts, SmolLM2-360M mean
 
 The benchmark measures 100-way classification of prompt clusters with 7 train, 3 val, and 5 test disjoint-template examples per class. It does not measure fact retention. The answer field does not enter the model, the loss, or any metric.
 
-**P9 Reframing Finding**: On a frozen representation with disjoint class blocks, class-incremental learning is solved exactly by a parameter-free running centroid (85.80%); the difficulty is entirely in representation selection. Phase IV demonstrates that parameter-free centroid accumulation achieves zero catastrophic forgetting (BWT = 0.00%, Forgetting = 0.00%), whereas sequential gradient-based linear heads suffer severe forgetting (BWT = -37.20%, Forgetting = 37.20%).
+**P9 Reframing Finding**: On a frozen representation with disjoint class blocks, class-incremental learning is solved exactly by a parameter-free running centroid (85.80%); the difficulty is entirely in representation selection. Phase IV demonstrates that parameter-free centroid accumulation achieves zero catastrophic forgetting (BWT = 0.00%, Forgetting = 0.00%), whereas sequential gradient-based linear heads suffer severe catastrophic forgetting (ACC_T = 14.20%, BWT = -90.89%, Forgetting = 90.89%).
 
 ---
 

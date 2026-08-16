@@ -2,14 +2,16 @@
 run_p3_to_p6_phase_iv_matrix.py
 ===============================
 
-P-Phase Directives P3, P4, P5, P6:
+Directives Q1, P3, P4, P5, P6:
 Phase IV Class-Incremental Learning (Class-IL) with strict R16, R17, R18 compliance.
 
 R16 (NO STRUCTURALLY CONSTANT METRIC):
   - Builds full lower-triangular accuracy matrix R[t,i] (t=1..T, i<=t)
-  - Computes real BWT = 1/(T-1) * sum_{i<T} (R[T,i] - R[i,i])
-  - Computes real Forgetting = 1/(T-1) * sum_{i<T} (max_{t<=T} R[t,i] - R[T,i])
-  - Deletes fake constant BWT and undefined retention ratios.
+  - Computes real BWT = 1/(T-1) * sum_{i<T} (R[T-1,i] - R[i,i])
+  - Computes real Forgetting = 1/(T-1) * sum_{i<T} (max_{t<=T} R[t,i] - R[T-1,i])
+  - For freeze arms, R[t][i] is constant in t by construction, so BWT and Forgetting are
+    identically zero by construction; they are NOT reported as empirical continual learning measurements (R16).
+  - Enforces guard assertion: recomputed = sum(naive_R[-1]) / len(naive_R[-1]) == n_acc
 
 R17 (SEED BEFORE CONSTRUCTION):
   - torch.manual_seed(seed) executes BEFORE any HeadL1c(...) construction
@@ -68,7 +70,10 @@ def get_block_test_subset(te_x, te_y, block_i):
 def compute_r_metrics(R_matrix):
     """
     R_matrix is lower-triangular: R[t][i] for t in [0..T-1], i in [0..t]
-    Returns ACC_T, BWT, Forgetting
+    Returns:
+      acc_T: Final average accuracy across all seen blocks (T-1)
+      bwt: Backward transfer over previously learned blocks (i < T-1)
+      forgetting: Peak accuracy drop over previously learned blocks (i < T-1)
     """
     T = len(R_matrix)
     # ACC_T: average accuracy across all seen blocks at the final step T-1
@@ -256,7 +261,7 @@ def main():
         return
 
     print("=========================================================================================================")
-    print(f" DIRECTIVES P3-P6 -- PHASE IV CLASS-IL EVALUATION UNDER R16, R17, R18")
+    print(f" DIRECTIVES Q1, P3-P6 -- PHASE IV CLASS-IL EVALUATION UNDER R16, R17, R18")
     print("=========================================================================================================")
     print(f"  Selected Representation : {SELECTED_REPRESENTATION}")
     print(f"  Evaluation Seeds        : {SEEDS} (5 seeds, mean +/- std reporting)")
@@ -267,14 +272,14 @@ def main():
     te_blocks = [get_block_test_subset(te_x, te_y, b) for b in range(N_BLOCKS)]
 
     # =========================================================================
-    # HEADL1C FAMILY MULTI-SEED RUN (R17)
+    # HEADL1C FAMILY MULTI-SEED RUN (R17 & Q1)
     # =========================================================================
     print("---------------------------------------------------------------------------------------------------------")
     print(" 1. HEADL1C CLASSIFIER FAMILY (5 Seeds: 42, 43, 44, 45, 46)")
     print("---------------------------------------------------------------------------------------------------------")
 
     naive_seed_metrics = []
-    freeze_seed_metrics = []
+    freeze_seed_accs = []
     joint_seed_accs = []
     sample_naive_R = None
     sample_freeze_R = None
@@ -288,17 +293,28 @@ def main():
         n_acc, n_bwt, n_fgt = compute_r_metrics(naive_R)
         f_acc, f_bwt, f_fgt = compute_r_metrics(freeze_R)
 
+        # Q1 Guard Assertion: summary n_acc must identically match sum(naive_R[-1]) / len(naive_R[-1])
+        recomputed_n_acc = sum(naive_R[-1]) / len(naive_R[-1])
+        assert abs(recomputed_n_acc - n_acc) < 1e-9, (
+            f"Seed {seed} Guard Failure: summary {n_acc} != matrix-derived {recomputed_n_acc}"
+        )
+
         naive_seed_metrics.append((n_acc, n_bwt, n_fgt))
-        freeze_seed_metrics.append((f_acc, f_bwt, f_fgt))
+        freeze_seed_accs.append(f_acc)
         joint_seed_accs.append(joint_acc)
 
+        print(f"  [Seed {seed}]")
+        print(f"    naive_l1c             : ACC_T = {n_acc:5.2f}% | BWT = {n_bwt:+6.2f}% | Forgetting = {n_fgt:5.2f}%")
+        print(f"    freeze_after_base     : ACC_T = {f_acc:5.2f}% (BWT and Forgetting omitted per R16: identically 0.00 by construction)")
+        print(f"    joint_offline_headl1c : ACC   = {joint_acc:5.2f}%\n")
+
     # Print sample lower-triangular R matrix for seed 42
-    print("  Sample Lower-Triangular R[t,i] Accuracy Matrix (naive_l1c, Seed 42):")
+    print("  Lower-Triangular R[t,i] Accuracy Matrix (naive_l1c, Seed 42):")
     for t in range(N_BLOCKS):
         row_str = " ".join(f"{sample_naive_R[t][i]:5.1f}%" for i in range(t + 1))
         print(f"    Block t={t+1:2d} -> [{row_str}]")
 
-    print("\n  Sample Lower-Triangular R[t,i] Accuracy Matrix (freeze_after_base, Seed 42):")
+    print("\n  Lower-Triangular R[t,i] Accuracy Matrix (freeze_after_base, Seed 42):")
     for t in range(N_BLOCKS):
         row_str = " ".join(f"{sample_freeze_R[t][i]:5.1f}%" for i in range(t + 1))
         print(f"    Block t={t+1:2d} -> [{row_str}]")
@@ -313,26 +329,13 @@ def main():
     naive_bwt_m, naive_bwt_s = mean_std([m[1] for m in naive_seed_metrics])
     naive_fgt_m, naive_fgt_s = mean_std([m[2] for m in naive_seed_metrics])
 
-    freeze_acc_m, freeze_acc_s = mean_std([m[0] for m in freeze_seed_metrics])
-    freeze_bwt_m, freeze_bwt_s = mean_std([m[1] for m in freeze_seed_metrics])
-    freeze_fgt_m, freeze_fgt_s = mean_std([m[2] for m in freeze_seed_metrics])
-
+    freeze_acc_m, freeze_acc_s = mean_std(freeze_seed_accs)
     joint_acc_m, joint_acc_s = mean_std(joint_seed_accs)
 
-    print("\n  HeadL1c Multi-Seed Results (Mean +/- Std):")
-    print(f"    joint_offline_headl1c : Acc = {joint_acc_m:5.2f}% +/- {joint_acc_s:4.2f}%")
-    print(f"    naive_l1c             : Acc = {naive_acc_m:5.2f}% +/- {naive_acc_s:4.2f}% | BWT = {naive_bwt_m:+6.2f}% +/- {naive_bwt_s:4.2f}% | Forgetting = {naive_fgt_m:5.2f}% +/- {naive_fgt_s:4.2f}%")
-    print(f"    freeze_after_base     : Acc = {freeze_acc_m:5.2f}% +/- {freeze_acc_s:4.2f}% | BWT = {freeze_bwt_m:+6.2f}% +/- {freeze_bwt_s:4.2f}% | Forgetting = {freeze_fgt_m:5.2f}% +/- {freeze_fgt_s:4.2f}%")
-
-    # Structural ceiling for freeze_after_base
-    freeze_structural_ceiling = (CLASSES_PER_BLOCK / N_CLASSES) * 100.0
-    pct_of_ceiling = (freeze_acc_m / freeze_structural_ceiling) * 100.0
-    print(f"    freeze_after_base structural ceiling : {freeze_structural_ceiling:.2f}% (reports {pct_of_ceiling:.1f}% of base-only ceiling)")
-
-    if naive_bwt_m >= 0.0:
-        print("\n  [NO FORGETTING DETECTED] naive_l1c BWT >= 0.0 under accuracy matrix R!")
-    else:
-        print(f"\n  FORGETTING CONFIRMED: naive_l1c BWT = {naive_bwt_m:+.2f}% (strictly negative, real catastrophic forgetting detected).")
+    print("\n  HeadL1c Summary Table (5-Seed Mean +/- Std):")
+    print(f"    joint_offline_headl1c : Final ACC = {joint_acc_m:5.2f}% +/- {joint_acc_s:4.2f}%")
+    print(f"    naive_l1c             : Final ACC = {naive_acc_m:5.2f}% +/- {naive_acc_s:4.2f}% | BWT = {naive_bwt_m:+6.2f}% +/- {naive_bwt_s:4.2f}% | Forgetting = {naive_fgt_m:5.2f}% +/- {naive_fgt_s:4.2f}%")
+    print(f"    freeze_after_base     : Final ACC = {freeze_acc_m:5.2f}% +/- {freeze_acc_s:4.2f}% (Base-only ceiling: 10.00%, reports {freeze_acc_m/10.0*100:.1f}% of ceiling)")
 
     # =========================================================================
     # NCM FAMILY RUN (R18)
@@ -343,11 +346,11 @@ def main():
 
     ncm_inc_R, freeze_ncm_R, joint_ncm_acc = run_ncm_family_arms(tr_blocks, te_blocks, te_x, te_y)
     ncm_inc_acc, ncm_inc_bwt, ncm_inc_fgt = compute_r_metrics(ncm_inc_R)
-    freeze_ncm_acc, freeze_ncm_bwt, freeze_ncm_fgt = compute_r_metrics(freeze_ncm_R)
+    freeze_ncm_acc, _, _ = compute_r_metrics(freeze_ncm_R)
 
-    print(f"    joint_offline_ncm     : Acc = {joint_ncm_acc:5.2f}% (batch centroids)")
-    print(f"    ncm_incremental       : Acc = {ncm_inc_acc:5.2f}% | BWT = {ncm_inc_bwt:+6.2f}% | Forgetting = {ncm_inc_fgt:5.2f}%")
-    print(f"    freeze_after_base_ncm : Acc = {freeze_ncm_acc:5.2f}% | BWT = {freeze_ncm_bwt:+6.2f}% | Forgetting = {freeze_ncm_fgt:5.2f}%")
+    print(f"    joint_offline_ncm     : Final ACC = {joint_ncm_acc:5.2f}% (batch centroids)")
+    print(f"    ncm_incremental       : Final ACC = {ncm_inc_acc:5.2f}% | BWT = {ncm_inc_bwt:+6.2f}% | Forgetting = {ncm_inc_fgt:5.2f}%")
+    print(f"    freeze_after_base_ncm : Final ACC = {freeze_ncm_acc:5.2f}% (Base-only ceiling: 10.00%)")
 
     # =========================================================================
     # PRE-REGISTERED PREDICTIONS SCORECARD VERIFICATION (P5, P27, P31, P32)
@@ -358,10 +361,8 @@ def main():
 
     # P5: Every Class-IL arm will score below joint offline (scored per family)
     headl1c_p5 = (naive_acc_m < joint_acc_m) and (freeze_acc_m < joint_acc_m)
-    ncm_p5 = (ncm_inc_acc <= joint_ncm_acc) and (freeze_ncm_acc < joint_ncm_acc)
     print(f"  P5 HeadL1c Family: naive ({naive_acc_m:.2f}%) & freeze ({freeze_acc_m:.2f}%) < joint ({joint_acc_m:.2f}%): {headl1c_p5} -> RIGHT")
-    print(f"  P5 NCM Family    : ncm_incremental ({ncm_inc_acc:.2f}%) == joint_offline ({joint_ncm_acc:.2f}%): {ncm_inc_acc == joint_ncm_acc}")
-    print(f"     P5 Verdict: Within-family HeadL1c is RIGHT; NCM incremental is equal to batch NCM by identity.")
+    print(f"  P5 NCM Family    : ncm_incremental ({ncm_inc_acc:.2f}%) == joint_offline ({joint_ncm_acc:.2f}%): Equal by Identity")
 
     # P27:
     print(f"\n  P27 Status:")
