@@ -40,6 +40,8 @@
 !run_p7_strict_citation_audit_stdout.txt
 !run_p8_milestone_ledger_audit_stdout.txt
 !build_report_tables_stdout.txt
+!build_execution_status_stdout.txt
+!verify_all_numbers_stdout.txt
 !verify_report_numbers_PRE_stdout.txt
 !run_w1_adaptation_gap_stdout.txt
 !run_w2_benchmark_build_stdout.txt

@@ -1,0 +1,105 @@
+=========================================================================================================
+ DIRECTIVE X1 -- REPOSITORY SCRIPT EXECUTION & STDOUT LOG STATUS TABLE
+=========================================================================================================
+  Script Name                            | Stdout Present | Log Bytes  | Last Commit SHA
+  ---------------------------------------|----------------|------------|----------------
+  audit_dataset_integrity.py             | YES            | 33968      | 64bd022
+  audit_embedding_leakage.py             | YES            | 3392       | 56967bc
+  audit_fact_map_and_c_q_bug.py          | NO             | 0          | N/A
+  audit_file_to_section_mapping.py       | NO             | 0          | N/A
+  audit_generator_defects_and_leakage.py | NO             | 0          | N/A
+  audit_pca_grid_and_lasttok.py          | YES            | 5134       | 10a7318
+  audit_representation_ablation.py       | YES            | 5105       | 1e72a07
+  audit_smollm2_failures.py              | NO             | 0          | N/A
+  audit_task_cardinality.py              | NO             | 0          | N/A
+  evaluate_disjoint_template_split_l5_l6.py | YES            | 6365       | b880712
+  evaluate_expanded_offline_bound.py     | YES            | 3161       | e8ca39c
+  evaluate_m_phase_comprehensive.py      | NO             | 0          | N/A
+  run_adapter_continual_benchmarks.py    | NO             | 0          | N/A
+  run_base_rate_enrichment_test.py       | NO             | 0          | N/A
+  run_confusable_split_experiment.py     | NO             | 0          | N/A
+  run_continual_learning_validation.py   | NO             | 0          | N/A
+  run_control_battery.py                 | NO             | 0          | N/A
+  run_corrected_stage1_probe.py          | NO             | 0          | N/A
+  run_d2_coverage_evaluation.py          | NO             | 0          | N/A
+  run_decisive_controls.py               | NO             | 0          | N/A
+  run_decoder_integration_validation.py  | NO             | 0          | N/A
+  run_english_fluency.py                 | NO             | 0          | N/A
+  run_gate1_diagnostic.py                | YES            | 4282       | 384af03
+  run_gate1_diagnostic_corrected.py      | YES            | 3431       | 8cefac3
+  run_gate1_diagnostic_k3_k5.py          | YES            | 3936       | b880712
+  run_gate2_redecision_expanded.py       | YES            | 3611       | fc0f862
+  run_graded_ceiling_reanalysis.py       | NO             | 0          | N/A
+  run_graded_ceiling_test.py             | NO             | 0          | N/A
+  run_horizon_a_l0_l1.py                 | NO             | 0          | N/A
+  run_input_recovery_probe.py            | NO             | 0          | N/A
+  run_joint_offline_probe.py             | YES            | 4806       | a6f9a31
+  run_k4_k5_k6_offline_bound_search.py   | YES            | 10357      | b880712
+  run_lambda_diagnostic_and_downward_sweep.py | NO             | 0          | N/A
+  run_learned_attention_probe.py         | NO             | 0          | N/A
+  run_mechanism_evaluation_suite.py      | NO             | 0          | N/A
+  run_multi_model_corrected_probe.py     | NO             | 0          | N/A
+  run_multi_model_recoverability_probe.py | NO             | 0          | N/A
+  run_multilingual_fluency.py            | NO             | 0          | N/A
+  run_n1_3x3_ncm_recheck.py              | YES            | 6078       | 8938519
+  run_n1_to_n9_master.py                 | YES            | 11834      | 8938519
+  run_n2_fix_cv.py                       | YES            | 8620       | 8938519
+  run_n3_n_count_and_match.py            | YES            | 9992       | 8938519
+  run_n4_pca_collapse_audit.py           | YES            | 8906       | 8938519
+  run_n5_latin_square_audit.py           | YES            | 3010       | 8938519
+  run_o2_reproducibility_check.py        | YES            | 8044       | 5443ef1
+  run_o3_eps_question.py                 | YES            | 10282      | 5443ef1
+  run_o4_r12_citation_audit.py           | YES            | 6736       | 5443ef1
+  run_o5_rescore_p21_p11_p13_p14.py      | NO             | 0          | N/A
+  run_o6_reconcile_n4_m6.py              | NO             | 0          | N/A
+  run_off_support_density_test.py        | NO             | 0          | N/A
+  run_offline_bound_search.py            | YES            | 4738       | c3e2d5c
+  run_ogp_50run_master_suite.py          | NO             | 0          | N/A
+  run_ogp_mechanism_experiment.py        | NO             | 0          | N/A
+  run_ogp_rigorous_verification.py       | NO             | 0          | N/A
+  run_p1_full_selection_grid.py          | YES            | 7926       | 29c1821
+  run_p3_to_p6_phase_iv_matrix.py        | YES            | 7356       | 29c1821
+  run_p7_strict_citation_audit.py        | YES            | 6891       | f915bee
+  run_p8_milestone_ledger_audit.py       | YES            | 8187       | f915bee
+  run_part0_blocking_corrections.py      | NO             | 0          | N/A
+  run_partA_fix_joint_baseline.py        | NO             | 0          | N/A
+  run_partB_naive_reproduction.py        | NO             | 0          | N/A
+  run_partC_random_control_diagnostic.py | NO             | 0          | N/A
+  run_partD_bookkeeping_and_verification.py | NO             | 0          | N/A
+  run_phase1_forgetting_calibration.py   | NO             | 0          | N/A
+  run_phase2_forgetting_master_suite.py  | NO             | 0          | N/A
+  run_phase3_parametric_full_suite.py    | NO             | 0          | N/A
+  run_phase3_parametric_memory.py        | NO             | 0          | N/A
+  run_phase4_lever1_head.py              | NO             | 0          | N/A
+  run_phase4_lever2_replay.py            | NO             | 0          | N/A
+  run_phase4_lever3_replay_ogp.py        | NO             | 0          | N/A
+  run_phase4_lever4_intrinsic_dim.py     | NO             | 0          | N/A
+  run_phase5_der_plus_plus_class_il.py   | NO             | 0          | N/A
+  run_phase6_continuum_memory_class_il.py | NO             | 0          | N/A
+  run_phase7_metric_calibration_class_il.py | NO             | 0          | N/A
+  run_phase_iv_continual_learning.py     | NO             | 0          | N/A
+  run_production_pipeline_validation.py  | NO             | 0          | N/A
+  run_qpl_stage2_evaluation.py           | NO             | 0          | N/A
+  run_qpl_stage3_evaluation.py           | NO             | 0          | N/A
+  run_qpl_stage4_evaluation.py           | NO             | 0          | N/A
+  run_qpl_stage4_final_test.py           | NO             | 0          | N/A
+  run_regression_suite.py                | NO             | 0          | N/A
+  run_relation_verifier_training.py      | NO             | 0          | N/A
+  run_replacement_tests_and_seed_wiring.py | NO             | 0          | N/A
+  run_section10_final_verification.py    | NO             | 0          | N/A
+  run_step1_readout_validation.py        | NO             | 0          | N/A
+  run_student_continual_benchmarks.py    | NO             | 0          | N/A
+  run_student_qpl_evaluation.py          | NO             | 0          | N/A
+  run_student_rigorous_audit.py          | NO             | 0          | N/A
+  run_supervised_metric_upper_bound.py   | NO             | 0          | N/A
+  run_training_intensity_dial.py         | NO             | 0          | N/A
+  run_void_and_fix_graded_test.py        | NO             | 0          | N/A
+  run_w1_adaptation_gap.py               | NO             | 0          | N/A
+  run_w2_benchmark_build.py              | NO             | 0          | N/A
+  run_w4_baselines.py                    | NO             | 0          | N/A
+  run_w5_plasticity.py                   | NO             | 0          | N/A
+  run_w6_prototype_anchored.py           | NO             | 0          | N/A
+=========================================================================================================
+ SUMMARY: Total Scripts = 96 | Logs Present (YES) = 26 | Logs Missing (NO) = 70
+ RULE: No result may appear anywhere in documentation for a script whose status is NO.
+=========================================================================================================
