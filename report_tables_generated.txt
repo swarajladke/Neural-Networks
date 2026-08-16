@@ -1,0 +1,17 @@
+=========================================================================================================
+ GENERATED MARKDOWN ROWS FOR walkthrough.md (Section 6: Multi-Seed Phase IV Results)
+=========================================================================================================
+
+### Multi-Seed Aggregate Results (Mean $\pm$ Std derived strictly from $R[t,i]$):
+#### HeadL1c Classifier Family:
+- **`joint_offline_headl1c`**: Final Test Accuracy = **$79.80\% \pm 0.76\%$** (HeadL1c architecture)
+- **`naive_l1c`**: Final $\text{ACC}_T = \mathbf{47.60\% \pm 1.93\%}$ | $\text{BWT} = \mathbf{-42.09\% \pm 1.99\%}$ | $\text{Forgetting} = \mathbf{42.09\% \pm 1.99\%}$ (severe catastrophic forgetting).
+- **`freeze_after_base` (R1 Standing Control)**: Final $\text{ACC}_T = \mathbf{10.24\% \pm 0.30\%}$ | $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16 (identically 0.00% by construction).
+  - Structural Ceiling: **10.00%** ($10/100 \times 100$). Reports **102.4%** of base-only ceiling.
+
+#### NCM Classifier Family:
+- **`joint_offline_ncm`**: Final Test Accuracy = **85.80%** (batch centroids)
+- **`ncm_incremental`**: Final Test Accuracy = **85.80%** | $\text{BWT} = \mathbf{-8.22\%}$ | $\text{Forgetting} = \mathbf{8.22\%}$
+- **`freeze_after_base_ncm`**: Final Test Accuracy = **10.00%** | $\text{BWT}$ and $\text{Forgetting}$ omitted per Rule R16.
+=========================================================================================================
+

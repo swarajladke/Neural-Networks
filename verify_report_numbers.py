@@ -12,13 +12,15 @@ import os
 import re
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
-WALKTHROUGH_PATH = os.path.join(REPO_ROOT, "walkthrough.md")
+ARTIFACT_WALKTHROUGH = r"C:\Users\Vicky\.gemini\antigravity\brain\3c4c6fac-df2d-4764-bfde-59c9b32e79fc\walkthrough.md"
+REPO_WALKTHROUGH = os.path.join(REPO_ROOT, "walkthrough.md")
+
 STDOUT_LOG_PATH = os.path.join(REPO_ROOT, "run_p3_to_p6_phase_iv_matrix_stdout.txt")
 
 
 def extract_phase_iv_section(text):
     """
-    Extracts content between '## 6. P3' and '## 7. P7' (or next section).
+    Extracts content of Section 6 (Phase IV).
     """
     start_match = re.search(r"##\s*6\.\s*P3[^\n]*", text)
     if not start_match:
@@ -49,30 +51,32 @@ def main():
     print(" DIRECTIVE S1(d) -- VERIFY WALKTHROUGH.MD PHASE IV NUMBERS AGAINST STDOUT LOG")
     print("=========================================================================================================")
 
-    walkthrough_text = load_file_content(WALKTHROUGH_PATH)
+    walkthrough_text = load_file_content(ARTIFACT_WALKTHROUGH)
     if walkthrough_text is None:
-        print(f"ERROR: Could not read '{WALKTHROUGH_PATH}'.")
+        walkthrough_text = load_file_content(REPO_WALKTHROUGH)
+
+    if walkthrough_text is None:
+        print(f"ERROR: Could not find walkthrough.md.")
         return
 
     stdout_text = load_file_content(STDOUT_LOG_PATH)
     if stdout_text is None:
         print(f"WARNING: '{STDOUT_LOG_PATH}' not found or empty.")
-        print("Run 'python run_p3_to_p6_phase_iv_matrix.py > run_p3_to_p6_phase_iv_matrix_stdout.txt 2>&1' to generate it.")
         return
 
     phase_iv_text = extract_phase_iv_section(walkthrough_text)
 
-    # Extract all numeric literals (integers, floats, percentages, e.g. 14.20, 90.89, 85.80, 10.00, 102.0)
+    # Extract all numeric literals (integers, floats, percentages, e.g. 10.24, 79.80, 47.60, 42.09, 85.80, 8.22, 102.4)
     raw_numbers = re.findall(r"\b\d+\.?\d*\b", phase_iv_text)
-    # Filter out markdown headings, section numbers like 6, 7, 42..46 seed list if needed, but checking all numbers
-    # Remove single digits that are just punctuation or small counts unless significant
-    target_numbers = sorted(list(set(raw_numbers)), key=lambda x: float(x) if re.match(r"^\d+\.?\d*$", x) else 0)
+    
+    # Filter out section headers and seed numbers (6, 7, 42, 43, 44, 45, 46, 1, 2)
+    exclude_set = {"1", "2", "6", "7", "42", "43", "44", "45", "46"}
+    target_numbers = sorted(list(set(n for n in raw_numbers if n not in exclude_set)), key=lambda x: float(x) if re.match(r"^\d+\.?\d*$", x) else 0)
 
     found_numbers = []
     missing_numbers = []
 
     for num in target_numbers:
-        # Check exact string presence in stdout
         if num in stdout_text:
             found_numbers.append(num)
         else:
