@@ -52,5 +52,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 26. **P26**: The max-abs elementwise difference between the pca_m32_eps1e-6 and pca_m32_eps1e-4 transformed test matrices will be strictly greater than zero on BOTH caches, meaning the identical v3 metrics are a coincidence of argmax ties rather than identical representations.
 27. **P27**: In Phase IV, freeze_after_base will exceed naive_l1c final average accuracy by more than 20 pp, and ncm_incremental will land within 5 pp of the joint_offline NCM value.
 
+### Additional Pre-Registered Predictions (P1-P9 / P-Phase Re-Registration)
+
+28. **P28**: Under the unified stack, at least 4 of the 11 M1 cells will change val-selected config relative to the old-stack N3 table, and at least one cell's honest test accuracy will move by more than 5 pp.
+29. **P29**: `mean/pca_m64_eps1e-4` will remain the validation argmax under the unified stack, but the recomputed `OPTIMISTIC_CEILING` will differ from 85.80% by more than 0.20 pp.
+30. **P30**: `SELECTION_PENALTY` on the selected representation will be negative, and its magnitude will exceed 2.0 pp.
+31. **P31**: `naive_l1c` BWT computed from the `R` matrix will be strictly negative, contradicting the current +37.20% figure.
+32. **P32**: With the seed moved before construction, `naive_l1c` and `freeze_after_base` block-0 accuracies will be identical, and the 5-seed std of `freeze_after_base` final accuracy will exceed 0.30 pp.
+
 ---
 *Scorecard and verification will be recorded after completing all phases.*

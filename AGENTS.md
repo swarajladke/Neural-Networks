@@ -18,5 +18,14 @@
 5. **Matched Evaluation Contexts (Rule R11)**:
    A prediction may only be scored against measurements taken on the same dataset and the same evaluation protocol. The dataset name must be explicitly stated in every cell of the Empirical Measurement column.
 
+6. **No Structurally Constant Metric (Rule R16)**:
+   Before printing any derived metric, prove it can take at least two values. Any expression whose numerator and denominator are forced equal by construction, or whose inputs are identically zero by construction, is forbidden. Every derived metric must be accompanied by a printed line stating what input change would alter it. If no such change exists, delete the metric.
+
+7. **Seed Before Construction (Rule R17)**:
+   `torch.manual_seed(seed)` must execute before any module instantiation or random draw. Every stochastic arm runs over `SEEDS = [42,43,44,45,46]` and reports mean ± std. No single-draw number may appear in any table.
+
+8. **One Classifier Family Per Comparison (Rule R18)**:
+   Any table comparing arms, and any prediction of the form "arm A vs arm B," must hold the classifier fixed. If arms use different classifiers, split the table by classifier and report the cross-classifier difference separately, labelled as such.
+
 
 
