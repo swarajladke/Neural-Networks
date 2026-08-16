@@ -1,0 +1,100 @@
+=========================================================================================================
+ DIRECTIVES S1, S2, Q1, P3-P6 -- PHASE IV CLASS-IL EVALUATION (R16, R17, R18)
+=========================================================================================================
+  Selected Representation : mean / pca_m64_eps1e-4
+  Evaluation Seeds        : [42, 43, 44, 45, 46] (5 seeds, mean +/- std reporting)
+  Block structure         : 10 blocks, 10 classes per block, 100 total classes
+
+---------------------------------------------------------------------------------------------------------
+ 1. HEADL1C CLASSIFIER FAMILY (5 Seeds: 42, 43, 44, 45, 46)
+---------------------------------------------------------------------------------------------------------
+  [Seed 42]
+    All-Classes Test Acc  : 50.80%
+    Matrix-Derived ACC_T  : 50.80%
+    S2 Cross-Check Assert : PASSED (abs diff = 0.000001 < 1e-4)
+    naive_l1c             : ACC_T = 50.80% | BWT = -41.11% | Forgetting = 41.11%
+    freeze_after_base     : ACC_T = 10.20% (BWT and Forgetting omitted per R16: identically 0.00 by construction)
+    joint_offline_headl1c : ACC   = 79.00%
+
+  [Seed 43]
+    All-Classes Test Acc  : 47.40%
+    Matrix-Derived ACC_T  : 47.40%
+    S2 Cross-Check Assert : PASSED (abs diff = 0.000001 < 1e-4)
+    naive_l1c             : ACC_T = 47.40% | BWT = -42.67% | Forgetting = 42.67%
+    freeze_after_base     : ACC_T = 10.60% (BWT and Forgetting omitted per R16: identically 0.00 by construction)
+    joint_offline_headl1c : ACC   = 80.60%
+
+  [Seed 44]
+    All-Classes Test Acc  : 47.60%
+    Matrix-Derived ACC_T  : 47.60%
+    S2 Cross-Check Assert : PASSED (abs diff = 0.000001 < 1e-4)
+    naive_l1c             : ACC_T = 47.60% | BWT = -39.11% | Forgetting = 39.11%
+    freeze_after_base     : ACC_T = 10.20% (BWT and Forgetting omitted per R16: identically 0.00 by construction)
+    joint_offline_headl1c : ACC   = 79.60%
+
+  [Seed 45]
+    All-Classes Test Acc  : 45.80%
+    Matrix-Derived ACC_T  : 45.80%
+    S2 Cross-Check Assert : PASSED (abs diff = 0.000000 < 1e-4)
+    naive_l1c             : ACC_T = 45.80% | BWT = -43.78% | Forgetting = 43.78%
+    freeze_after_base     : ACC_T = 10.40% (BWT and Forgetting omitted per R16: identically 0.00 by construction)
+    joint_offline_headl1c : ACC   = 79.20%
+
+  [Seed 46]
+    All-Classes Test Acc  : 46.40%
+    Matrix-Derived ACC_T  : 46.40%
+    S2 Cross-Check Assert : PASSED (abs diff = 0.000001 < 1e-4)
+    naive_l1c             : ACC_T = 46.40% | BWT = -43.78% | Forgetting = 43.78%
+    freeze_after_base     : ACC_T =  9.80% (BWT and Forgetting omitted per R16: identically 0.00 by construction)
+    joint_offline_headl1c : ACC   = 80.60%
+
+  Lower-Triangular R[t,i] Accuracy Matrix (naive_l1c, Seed 42):
+    Block t= 1 -> [ 94.0%]
+    Block t= 2 -> [ 84.0%  90.0%]
+    Block t= 3 -> [ 72.0%  82.0%  92.0%]
+    Block t= 4 -> [ 58.0%  78.0%  84.0%  88.0%]
+    Block t= 5 -> [ 38.0%  64.0%  72.0%  86.0%  82.0%]
+    Block t= 6 -> [ 30.0%  50.0%  66.0%  72.0%  80.0%  86.0%]
+    Block t= 7 -> [ 28.0%  42.0%  70.0%  56.0%  68.0%  82.0%  96.0%]
+    Block t= 8 -> [ 22.0%  36.0%  64.0%  48.0%  62.0%  76.0%  88.0%  84.0%]
+    Block t= 9 -> [ 14.0%  30.0%  44.0%  36.0%  40.0%  60.0%  78.0%  74.0%  86.0%]
+    Block t=10 -> [ 12.0%  28.0%  42.0%  28.0%  38.0%  60.0%  68.0%  66.0%  86.0%  80.0%]
+
+  Lower-Triangular R[t,i] Accuracy Matrix (freeze_after_base, Seed 42):
+    Block t= 1 -> [ 94.0%]
+    Block t= 2 -> [ 94.0%   6.0%]
+    Block t= 3 -> [ 94.0%   6.0%   0.0%]
+    Block t= 4 -> [ 94.0%   6.0%   0.0%   0.0%]
+    Block t= 5 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%]
+    Block t= 6 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%   2.0%]
+    Block t= 7 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%   2.0%   0.0%]
+    Block t= 8 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%   2.0%   0.0%   0.0%]
+    Block t= 9 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%   2.0%   0.0%   0.0%   0.0%]
+    Block t=10 -> [ 94.0%   6.0%   0.0%   0.0%   0.0%   2.0%   0.0%   0.0%   0.0%   0.0%]
+
+  HeadL1c Summary Table (5-Seed Mean +/- Std):
+    joint_offline_headl1c : Final ACC = 79.80% +/- 0.76%
+    naive_l1c             : Final ACC = 47.60% +/- 1.93% | BWT = -42.09% +/- 1.99% | Forgetting = 42.09% +/- 1.99%
+    freeze_after_base     : Final ACC = 10.24% +/- 0.30% (Base-only ceiling: 10.00%, reports 102.4% of ceiling)
+
+---------------------------------------------------------------------------------------------------------
+ 2. NCM CLASSIFIER FAMILY (Exact Centroid Accumulation, Order-Invariant)
+---------------------------------------------------------------------------------------------------------
+    joint_offline_ncm     : Final ACC = 85.80% (batch centroids)
+    ncm_incremental       : Final ACC = 85.80% | BWT =  -8.22% | Forgetting =  8.22%
+    freeze_after_base_ncm : Final ACC = 10.00% (Base-only ceiling: 10.00%)
+
+  [S1 ARTIFACT] Emitted 'phase_iv_results.json' successfully.
+
+=========================================================================================================
+ PRE-REGISTERED PREDICTIONS SCORECARD VERIFICATION (P5, P27, P31, P32)
+=========================================================================================================
+  P5 HeadL1c Family: naive (47.60%) & freeze (10.24%) < joint (79.80%): True -> RIGHT
+  P5 NCM Family    : ncm_incremental (85.80%) == joint_offline (85.80%): Equal by Identity
+
+  P27 Status:
+    Clause 1 (freeze - naive > 20pp): 10.24% - 47.60% = -37.36pp -> WRONG (cause: ignored 10% structural ceiling)
+    Clause 2 (ncm_incremental within 5pp of joint_ncm): VOID (UNFALSIFIABLE by mathematical identity)
+
+  P31: naive_l1c BWT computed from R matrix = -42.09% (< 0: True) -> Verdict: RIGHT
+  P32: Block-0 identical: True, 5-seed freeze std = 0.2966pp (> 0.30pp: False) -> Verdict: WRONG
