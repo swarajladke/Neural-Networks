@@ -84,5 +84,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 46. **P46**: After U3, the citation audit will still report n_fail >= 1.
 47. **P47**: No file in the repo will contain the substring "file:///" after U7.
 
+### Additional Pre-Registered Predictions (Directive W Re-Registration)
+
+53. **P53**: On the v3 benchmark, ADAPTATION_GAP = joint_offline_full_finetune - frozen_NCM will be strictly negative.
+54. **P54**: On the new benchmark, ADAPTATION_GAP will exceed +15.0 percentage points.
+55. **P55**: On the new benchmark, frozen-features + NCM will NOT be the top-performing arm.
+56. **P56**: Under naive sequential fine-tuning of the backbone, learning-time accuracy R[i,i] on block i will decline by more than 5.0 pp from block 0 to the final block (loss of plasticity, distinct from forgetting).
+57. **P57**: Continual backpropagation (least-used-unit reinitialization) will reduce the R[i,i] decline of P56 by more than 2.0 pp without worsening final ACC_T.
+
 ---
 *Scorecard and verification will be recorded after completing all phases.*
