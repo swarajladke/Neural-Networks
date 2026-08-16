@@ -68,5 +68,13 @@ The following pre-registered predictions are recorded prior to executing Phase I
 36. **P36**: verify_report_numbers.py will report n_missing == 0 once walkthrough.md is generated from build_report_tables.py.
 37. **P37**: In phase_iv_results.json, for all 5 seeds, abs(all_classes_acc - naive_acc_T) < 1e-4 will hold strictly.
 
+### Additional Pre-Registered Predictions (Directive T Re-Registration)
+
+38. **P38**: verify_report_numbers.py on the PRE-regeneration walkthrough.md will report n_missing >= 10.
+39. **P39**: The per-column NCM BWT decomposition will show at least one column with contribution more negative than -15 pp.
+40. **P40**: After T3, no document in the repo will contain the substring "% of ceiling".
+41. **P41**: The S8 citation audit over all 31 rows will report n_fail >= 3.
+42. **P42**: P28's programmatically recomputed count will not equal 5 of 11.
+
 ---
 *Scorecard and verification will be recorded after completing all phases.*
