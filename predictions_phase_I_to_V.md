@@ -65,8 +65,8 @@ The following pre-registered predictions are recorded prior to executing Phase I
 33. **P33**: 5-seed mean naive ACC_T will differ from 14.20% by more than 0.20 pp, and its std will differ from 0.82.
 34. **P34**: 5-seed mean naive BWT will differ from -90.89% by more than 0.20 pp, and its std will differ from 1.45.
 35. **P35**: joint_offline_headl1c will differ from 63.20% by more than 0.20 pp.
-36. **P36**: verify_report_numbers.py will report n_missing == 0 once walkthrough.md is generated from build_report_tables.py.
-37. **P37**: In phase_iv_results.json, for all 5 seeds, abs(all_classes_acc - naive_acc_T) < 1e-4 will hold strictly.
+36. **P36**: ncm_incremental BWT will be strictly negative, not 0.00.
+37. **P37**: verify_report_numbers.py will report n_missing >= 5 on its first run against the pre-existing walkthrough.md.
 
 ### Additional Pre-Registered Predictions (Directive T Re-Registration)
 
@@ -75,6 +75,14 @@ The following pre-registered predictions are recorded prior to executing Phase I
 40. **P40**: After T3, no document in the repo will contain the substring "% of ceiling".
 41. **P41**: The S8 citation audit over all 31 rows will report n_fail >= 3.
 42. **P42**: P28's programmatically recomputed count will not equal 5 of 11.
+
+### Additional Pre-Registered Predictions (Directive U Re-Registration)
+
+43. **P43**: The U1 statement-integrity guard will report n_mismatched >= 2 on the current walkthrough.md.
+44. **P44**: The U2 literal-presence check will report n_absent >= 1.
+45. **P45**: The recomputed U5 weight-decay disagreement count will be neither 5 nor 6 of 11.
+46. **P46**: After U3, the citation audit will still report n_fail >= 1.
+47. **P47**: No file in the repo will contain the substring "file:///" after U7.
 
 ---
 *Scorecard and verification will be recorded after completing all phases.*
