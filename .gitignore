@@ -49,8 +49,10 @@
 !verify_report_numbers_PRE_stdout.txt
 !run_w1_adaptation_gap_stdout.txt
 !run_w1b_frozen_ncm_measured_stdout.txt
+!run_w1c_preprocessing_sweep_stdout.txt
 !run_w2_benchmark_build_stdout.txt
 !run_w2c_gap_precheck_stdout.txt
+!run_w2d_gap_measured_stdout.txt
 !run_w4_baselines_stdout.txt
 !run_w5_plasticity_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
@@ -62,6 +64,7 @@
 !agnis_scaling_dataset_v3_template_split.json
 !agnis_scaling_dataset_v2.json
 !agnis_scaling_dataset_v2_expanded.json
+data/
 *.csv
 *.npz
 *.pkl
@@ -73,8 +76,10 @@
 !phase_iv_results.json
 !w1_results.json
 !w1b_results.json
+!w1c_results.json
 !w2_benchmark_summary.json
 !w2c_precheck.json
+!w2d_results.json
 !w4_results.json
 !w5_results.json
 !w6_results.json
