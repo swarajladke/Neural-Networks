@@ -1,0 +1,26 @@
+﻿=========================================================================================================
+ STEP 1 -- HONEST FROZEN-NCM MEASUREMENT ON V3 CACHE
+=========================================================================================================
+  Cache File       : smollm2_embeddings_v3_100facts_7_3_5.pt
+  Cache SHA-256    : 93447464af8a5c04338339cceb91a321b64f3e894826adc7a28fd5b95dcaeef6
+  Git Commit SHA   : 112343ab3b97b9ef53ebc8149037db664cb8a39b
+  Loaded Samples   : Train=700, Val=300, Test=500 (Classes=100)
+
+  Evaluating frozen NCM on normalized features across SEEDS = [42, 43, 44, 45, 46]...
+    Seed 42 -> Frozen NCM Test Accuracy = 40.00%
+    Seed 43 -> Frozen NCM Test Accuracy = 40.00%
+    Seed 44 -> Frozen NCM Test Accuracy = 40.00%
+    Seed 45 -> Frozen NCM Test Accuracy = 40.00%
+    Seed 46 -> Frozen NCM Test Accuracy = 40.00%
+
+  -------------------------------------------------------------------------------------------------------
+  Honest Frozen-NCM Test Accuracy : 40.00% +/- 0.00% (n=5 seeds)
+  n_optimizer_steps                : 0
+  -------------------------------------------------------------------------------------------------------
+
+  Comparison against 93.00% Joint Offline:
+    93.00% - Measured Frozen NCM (40.00%) = +53.00 percentage points
+    Comparison to 85.80% (Optimistic Ceiling)    : delta = -45.80 pp
+    Comparison to 82.60% (Honest Test Acc)       : delta = -42.60 pp
+  Emitted JSON results to C:\Users\Vicky\Desktop\Neural Networks\w1b_results.json
+=========================================================================================================

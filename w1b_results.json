@@ -1,0 +1,29 @@
+{
+  "benchmark": "v3_disjoint_template",
+  "cache_file": "smollm2_embeddings_v3_100facts_7_3_5.pt",
+  "cache_sha256": "93447464af8a5c04338339cceb91a321b64f3e894826adc7a28fd5b95dcaeef6",
+  "git_commit_sha": "112343ab3b97b9ef53ebc8149037db664cb8a39b",
+  "n_train_samples": 700,
+  "n_val_samples": 300,
+  "n_test_samples": 500,
+  "n_classes": 100,
+  "n_optimizer_steps": 0,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "seed_accuracies": [
+    40.00000059604645,
+    40.00000059604645,
+    40.00000059604645,
+    40.00000059604645,
+    40.00000059604645
+  ],
+  "frozen_ncm_mean": 40.00000059604645,
+  "frozen_ncm_std": 0.0,
+  "measured_joint_offline_reference": 93.0,
+  "adaptation_gap_corrected": 52.99999940395355
+}
