@@ -1,0 +1,117 @@
+=========================================================================================================
+ PART 2: SPLIT-CIFAR-100 ADAPTATION GAP MEASUREMENT WITHOUT STEM CONFOUND (DIRECTIVE W2d)
+=========================================================================================================
+  Session / Platform: CUDA (Kaggle GPU Accelerator)
+  GPU Model         : Tesla T4
+  GPU Total Memory  : 14.56 GB
+  Git Commit SHA    : 71e83b963a95cfa0fbe5dacb1df8722394ace83c
+  SEEDS             : [42, 43, 44, 45, 46]
+  Archive Path      : /kaggle/working/Neural-Networks/Neural-Networks/data/cifar-100-python.tar.gz
+  Archive SHA-256   : 85cd44d02ba6437773c5bbd22e183051d648de2e7d6b014e1ef29b855ba677a7
+  Data Splits       : Train=40000, Val=10000, Test=10000 (100 classes)
+
+  Verifying Pretrained Weight Loading for Primary ResNet-18...
+    100% of pretrained ImageNet-1K backbone weights loaded with 0 skipped keys.
+    Total Model Parameters: 11,227,812
+
+  =======================================================================
+  CONTROL CONDITION (Seed 42 only: 32x32 input, random 3x3 stem)
+  =======================================================================
+    Control Condition (32x32 random stem) Frozen NCM ACC: 13.78%
+
+  -----------------------------------------------------------------------
+  RUNNING SEED 42 (1/5)
+  -----------------------------------------------------------------------
+    [Arm A1] frozen_NCM_raw      -> Test ACC: 50.24% | Wall: 25.95s | Fwd: 60000
+    [Arm A2] frozen_NCM_whitened -> Test ACC: 58.71% (m*=512, Val ACC=58.41%) | Wall:  5.61s
+    [Arm A3] frozen_linear_probe -> Test ACC: 59.13% (ep 1: 52.26%, ep 15: 56.78%) | Wall: 19.34s | Steps: 9390
+      [Budget Check] Epoch 1 duration: 19.90s | Projected 5-seed x 30-epoch runtime: 0.83 hours
+      Epoch  5/30 -> Test ACC: 69.54% | ep_time: 19.77s | steps: 1565
+      Epoch 10/30 -> Test ACC: 71.40% | ep_time: 19.87s | steps: 3130
+      Epoch 15/30 -> Test ACC: 72.75% | ep_time: 19.72s | steps: 4695
+      Epoch 20/30 -> Test ACC: 73.22% | ep_time: 19.88s | steps: 6260
+      Epoch 25/30 -> Test ACC: 73.74% | ep_time: 19.96s | steps: 7825
+      Epoch 30/30 -> Test ACC: 73.83% | ep_time: 19.88s | steps: 9390
+    [Arm B] adapt_layer4         -> Test ACC: 73.83% | Wall: 724.17s | Plateaued: True (last 3ep delta: -0.03 pp)
+
+  -----------------------------------------------------------------------
+  RUNNING SEED 43 (2/5)
+  -----------------------------------------------------------------------
+    [Arm A1] frozen_NCM_raw      -> Test ACC: 50.24% | Wall: 26.05s | Fwd: 60000
+    [Arm A2] frozen_NCM_whitened -> Test ACC: 58.71% (m*=512, Val ACC=58.41%) | Wall:  5.59s
+    [Arm A3] frozen_linear_probe -> Test ACC: 58.99% (ep 1: 49.38%, ep 15: 56.95%) | Wall: 19.70s | Steps: 9390
+      Epoch  5/30 -> Test ACC: 69.80% | ep_time: 20.25s | steps: 1565
+      Epoch 10/30 -> Test ACC: 72.01% | ep_time: 20.03s | steps: 3130
+      Epoch 15/30 -> Test ACC: 72.44% | ep_time: 20.28s | steps: 4695
+      Epoch 20/30 -> Test ACC: 73.19% | ep_time: 19.63s | steps: 6260
+      Epoch 25/30 -> Test ACC: 73.46% | ep_time: 19.84s | steps: 7825
+      Epoch 30/30 -> Test ACC: 73.42% | ep_time: 19.91s | steps: 9390
+    [Arm B] adapt_layer4         -> Test ACC: 73.42% | Wall: 735.00s | Plateaued: True (last 3ep delta: -0.05 pp)
+
+  -----------------------------------------------------------------------
+  RUNNING SEED 44 (3/5)
+  -----------------------------------------------------------------------
+    [Arm A1] frozen_NCM_raw      -> Test ACC: 50.24% | Wall: 26.25s | Fwd: 60000
+    [Arm A2] frozen_NCM_whitened -> Test ACC: 58.71% (m*=512, Val ACC=58.41%) | Wall:  5.39s
+    [Arm A3] frozen_linear_probe -> Test ACC: 59.09% (ep 1: 50.95%, ep 15: 57.93%) | Wall: 19.82s | Steps: 9390
+      Epoch  5/30 -> Test ACC: 70.11% | ep_time: 19.87s | steps: 1565
+      Epoch 10/30 -> Test ACC: 71.56% | ep_time: 20.24s | steps: 3130
+      Epoch 15/30 -> Test ACC: 73.03% | ep_time: 20.00s | steps: 4695
+      Epoch 20/30 -> Test ACC: 73.53% | ep_time: 20.04s | steps: 6260
+      Epoch 25/30 -> Test ACC: 73.66% | ep_time: 19.90s | steps: 7825
+      Epoch 30/30 -> Test ACC: 73.90% | ep_time: 19.57s | steps: 9390
+    [Arm B] adapt_layer4         -> Test ACC: 73.90% | Wall: 730.91s | Plateaued: True (last 3ep delta: +0.21 pp)
+
+  -----------------------------------------------------------------------
+  RUNNING SEED 45 (4/5)
+  -----------------------------------------------------------------------
+    [Arm A1] frozen_NCM_raw      -> Test ACC: 50.24% | Wall: 25.97s | Fwd: 60000
+    [Arm A2] frozen_NCM_whitened -> Test ACC: 58.71% (m*=512, Val ACC=58.41%) | Wall:  5.49s
+    [Arm A3] frozen_linear_probe -> Test ACC: 58.95% (ep 1: 50.46%, ep 15: 57.65%) | Wall: 19.74s | Steps: 9390
+      Epoch  5/30 -> Test ACC: 69.15% | ep_time: 19.53s | steps: 1565
+      Epoch 10/30 -> Test ACC: 71.76% | ep_time: 19.51s | steps: 3130
+      Epoch 15/30 -> Test ACC: 72.89% | ep_time: 19.63s | steps: 4695
+      Epoch 20/30 -> Test ACC: 73.73% | ep_time: 20.02s | steps: 6260
+      Epoch 25/30 -> Test ACC: 74.07% | ep_time: 20.02s | steps: 7825
+      Epoch 30/30 -> Test ACC: 74.12% | ep_time: 19.77s | steps: 9390
+    [Arm B] adapt_layer4         -> Test ACC: 74.12% | Wall: 722.57s | Plateaued: True (last 3ep delta: +0.12 pp)
+
+  -----------------------------------------------------------------------
+  RUNNING SEED 46 (5/5)
+  -----------------------------------------------------------------------
+    [Arm A1] frozen_NCM_raw      -> Test ACC: 50.24% | Wall: 25.83s | Fwd: 60000
+    [Arm A2] frozen_NCM_whitened -> Test ACC: 58.71% (m*=512, Val ACC=58.41%) | Wall:  5.65s
+    [Arm A3] frozen_linear_probe -> Test ACC: 59.02% (ep 1: 53.31%, ep 15: 57.65%) | Wall: 19.55s | Steps: 9390
+      Epoch  5/30 -> Test ACC: 70.41% | ep_time: 19.56s | steps: 1565
+      Epoch 10/30 -> Test ACC: 71.51% | ep_time: 19.88s | steps: 3130
+      Epoch 15/30 -> Test ACC: 72.50% | ep_time: 19.73s | steps: 4695
+      Epoch 20/30 -> Test ACC: 73.28% | ep_time: 19.50s | steps: 6260
+      Epoch 25/30 -> Test ACC: 73.51% | ep_time: 19.72s | steps: 7825
+      Epoch 30/30 -> Test ACC: 73.70% | ep_time: 19.75s | steps: 9390
+    [Arm B] adapt_layer4         -> Test ACC: 73.70% | Wall: 716.57s | Plateaued: True (last 3ep delta: -0.02 pp)
+
+  -----------------------------------------------------------------------
+  DETERMINISM AUDIT (Re-running Seed 42 feature extraction & checking bitwise agreement)
+    Bitwise Identical Predictions on Repeated Seed 42: True
+
+  =======================================================================================================
+  FINAL STATISTICAL SUMMARY (N = 5 SEEDS: [42, 43, 44, 45, 46])
+  =======================================================================================================
+    A1_frozen_NCM_raw         : 50.24% +/- 0.00% | seeds: [50.24, 50.24, 50.24, 50.24, 50.24]
+    A2_frozen_NCM_whitened    : 58.71% +/- 0.00% | seeds: [58.71, 58.71, 58.71, 58.71, 58.71]
+    A3_frozen_linear_probe    : 59.04% +/- 0.07% | seeds: [59.13, 58.99, 59.09, 58.95, 59.02]
+    B_adapt_layer4            : 73.79% +/- 0.26% | seeds: [73.83, 73.42, 73.9, 74.12, 73.7]
+
+  Stem Confound Quantification (Seed 42):
+    Control Condition (32x32 random stem)   : 13.78%
+    Primary Condition (112x112 ImageNet stem): 50.24%
+    Stem Confound Impact                     : +36.46 percentage points
+
+  Three Definitions of ADAPTATION_GAP (Arm B minus Arm A):
+    GAP 1: B - A1 (vs. raw frozen NCM)      : +23.55 pp -> clears +15.0 pp
+    GAP 2: B - A2 (vs. whitened frozen NCM) : +15.08 pp -> clears +15.0 pp
+    GAP 3: B - A3 (vs. frozen linear probe) : +14.76 pp -> does not clear +15.0 pp
+
+  Emitted comprehensive results to /kaggle/working/Neural-Networks/Neural-Networks/w2d_results.json
+=========================================================================================================
+EXIT_CODE = 0
