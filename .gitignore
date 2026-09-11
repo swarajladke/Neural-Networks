@@ -53,6 +53,7 @@
 !run_w2_benchmark_build_stdout.txt
 !run_w2c_gap_precheck_stdout.txt
 !run_w2d_gap_measured_stdout.txt
+!run_w2e_gap_closed_stdout.txt
 !run_w4_baselines_stdout.txt
 !run_w5_plasticity_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
@@ -80,6 +81,7 @@ data/
 !w2_benchmark_summary.json
 !w2c_precheck.json
 !w2d_results.json
+!w2e_results.json
 !w4_results.json
 !w5_results.json
 !w6_results.json
