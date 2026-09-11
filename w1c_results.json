@@ -1,0 +1,76 @@
+{
+  "benchmark": "v3_disjoint_template",
+  "cache_file": "smollm2_embeddings_v3_100facts_7_3_5.pt",
+  "cache_sha256": "93447464af8a5c04338339cceb91a321b64f3e894826adc7a28fd5b95dcaeef6",
+  "git_commit_sha": "0eac381de4345cabea81394986ec649dfee4e908",
+  "n_train_samples": 700,
+  "n_val_samples": 300,
+  "n_test_samples": 500,
+  "n_classes": 100,
+  "n_forward_samples": 1500,
+  "n_optimizer_steps": 0,
+  "anisotropy_metrics": {
+    "eigenvalue_1": 85.63765631601619,
+    "eigenvalue_10": 4.178636956827388,
+    "eigenval_ratio_1_to_10": 20.494160464477442,
+    "mean_pairwise_cosine": 0.8794031143188477,
+    "std_pairwise_cosine": 0.06020038574934006,
+    "min_pairwise_cosine": 0.47853565216064453,
+    "max_pairwise_cosine": 0.9970837235450745
+  },
+  "sweep_results": [
+    {
+      "representation": "raw / no_transform (unnormalized)",
+      "test_accuracy": 40.20000100135803
+    },
+    {
+      "representation": "mean / none",
+      "test_accuracy": 40.00000059604645
+    },
+    {
+      "representation": "mean / center",
+      "test_accuracy": 38.199999928474426
+    },
+    {
+      "representation": "mean / center+ZCA_whiten [RANK-DEFICIENT: 261 of 960 directions are null, amplified 100x]",
+      "test_accuracy": 20.999999344348907
+    },
+    {
+      "representation": "mean / pca_m16_eps1e-4",
+      "test_accuracy": 38.999998569488525
+    },
+    {
+      "representation": "mean / pca_m32_eps1e-6",
+      "test_accuracy": 76.99999809265137
+    },
+    {
+      "representation": "mean / pca_m32_eps1e-4",
+      "test_accuracy": 76.99999809265137
+    },
+    {
+      "representation": "mean / pca_m64_eps1e-4",
+      "test_accuracy": 85.79999804496765
+    },
+    {
+      "representation": "mean / pca_m128_eps1e-4",
+      "test_accuracy": 47.600001096725464
+    },
+    {
+      "representation": "mean / pca_m256_eps1e-4",
+      "test_accuracy": 43.39999854564667
+    },
+    {
+      "representation": "mean / pca_m299_eps1e-4",
+      "test_accuracy": 42.59999990463257
+    },
+    {
+      "representation": "mean / ledoit_wolf",
+      "test_accuracy": 52.60000228881836
+    }
+  ],
+  "reproduction_target_85_80": {
+    "target": 85.8,
+    "measured_pca_m64": 85.79999804496765,
+    "verdict": "CONFIRMED: 'mean / pca_m64_eps1e-4' exactly reproduces 85.80% (measured 85.80%)"
+  }
+}

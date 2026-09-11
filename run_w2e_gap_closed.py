@@ -500,8 +500,8 @@ def main():
     best_eps_a2 = best_a2["eps"]
 
     # Check interior vs edge
-    m_list = sorted(list(set(x["m"] for x in GRID_A2)))
-    eps_list = sorted(list(set(x["eps"] for x in GRID_A2)))
+    m_list = sorted(list(set(x["m"] for x in a2_val_results)))
+    eps_list = sorted(list(set(x["eps"] for x in a2_val_results)))
     is_interior_a2 = (best_eps_a2 != eps_list[0] and best_eps_a2 != eps_list[-1])
     
     print(f"  Selected (m*, eps*)  : m = {best_m_a2}, eps = {best_eps_a2} (Val ACC = {best_a2['val_accuracy']:.2f}%)")

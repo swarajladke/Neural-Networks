@@ -1,0 +1,43 @@
+=========================================================================================================
+ PART 1: PREPROCESSING SENSITIVITY SWEEP ON V3 CACHE (DIRECTIVE W1c)
+=========================================================================================================
+  NumPy Version    : 1.26.4
+  Git Commit SHA   : 0eac381de4345cabea81394986ec649dfee4e908
+  Cache File       : smollm2_embeddings_v3_100facts_7_3_5.pt
+  Cache SHA-256    : 93447464af8a5c04338339cceb91a321b64f3e894826adc7a28fd5b95dcaeef6
+  Loaded Samples   : Train=700, Val=300, Test=500 (Classes=100)
+  Total Samples    : 1500
+
+  --- RAW EMBEDDING ANISOTROPY METRICS ---
+    Eigenvalue 1 (largest)             : 8.563766e+01
+    Eigenvalue 10                      : 4.178637e+00
+    Eigenvalue Ratio (lambda_1/lambda_10):    20.49
+    Mean Pairwise Cosine Similarity     : 0.8794 +/- 0.0602 [min=0.4785, max=0.9971]
+
+  --- PREPROCESSING SWEEP OVER CANDIDATE REPRESENTATIONS ---
+
+  --------------------------------------------------------------------------------
+  Representation                                                    | Test ACC (%)
+  --------------------------------------------------------------------------------
+  raw / no_transform (unnormalized)                                 |      40.20%
+  mean / none                                                       |      40.00%
+  mean / center                                                     |      38.20%
+  mean / center+ZCA_whiten [RANK-DEFICIENT: 261 of 960 directions are null, amplified 100x] |      21.00%
+  mean / pca_m16_eps1e-4                                            |      39.00%
+  mean / pca_m32_eps1e-6                                            |      77.00%
+  mean / pca_m32_eps1e-4                                            |      77.00%
+  mean / pca_m64_eps1e-4                                            |      85.80%
+  mean / pca_m128_eps1e-4                                           |      47.60%
+  mean / pca_m256_eps1e-4                                           |      43.40%
+  mean / pca_m299_eps1e-4                                           |      42.60%
+  mean / ledoit_wolf                                                |      52.60%
+  --------------------------------------------------------------------------------
+
+  Target Check for 'mean / pca_m64_eps1e-4':
+    Reported in prior docs : 85.80%
+    Measured in this run   : 85.80%
+    Verdict                : CONFIRMED: 'mean / pca_m64_eps1e-4' exactly reproduces 85.80% (measured 85.80%)
+
+  Emitted JSON results to /kaggle/working/Neural-Networks/Neural-Networks/w1c_results.json
+=========================================================================================================
+EXIT_CODE = 0
