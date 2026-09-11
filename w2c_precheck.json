@@ -1,0 +1,40 @@
+﻿{
+  "dataset": "Split-CIFAR-100",
+  "dataset_archive": "/kaggle/working/Neural-Networks/data/cifar-100-python.tar.gz",
+  "dataset_sha256": "85cd44d02ba6437773c5bbd22e183051d648de2e7d6b014e1ef29b855ba677a7",
+  "git_commit_sha": "e6832c35f59ad49f5ea537c55e1b7b3ea5654431",
+  "seed": 42,
+  "pretrained_weights": "IMAGENET1K_V1",
+  "arm_a_frozen_ncm": {
+    "accuracy": 13.14,
+    "n_optimizer_steps": 0,
+    "n_train_samples_seen": 0,
+    "wall_clock_seconds": 20.60,
+    "param_count_total": 11220132,
+    "param_count_trainable": 0
+  },
+  "arm_b_adapt_layer4": {
+    "accuracy": 46.40,
+    "epochs": 3,
+    "batch_size": 128,
+    "lr": 0.01,
+    "weight_decay": 0.0005,
+    "epoch_accuracies": [
+      38.72,
+      43.79,
+      46.40
+    ],
+    "epoch_durations_sec": [
+      15.72,
+      15.82,
+      16.31
+    ],
+    "n_optimizer_steps": 1173,
+    "n_train_samples_seen": 150000,
+    "wall_clock_seconds": 54.95,
+    "param_count_total": 11220132,
+    "param_count_trainable": 8445028
+  },
+  "single_seed_adaptation_gap": 33.26,
+  "extrapolated_5_seed_30_epoch_hours": 0.665
+}
