@@ -1,0 +1,47 @@
+===============================================================================================
+ DIRECTIVE W3 -- PART 1: AMENDED BUDGET GATE VERIFICATION
+===============================================================================================
+  Git Commit SHA     : f462e8f4fa36868f1f1ff82d01ac7b8dd2ad186a
+  Platform Device    : cuda
+  GPU Accelerator    : Tesla T4
+
+  [1/2] Running Naive Fine-Tune over 10 tasks (Epochs/task: 20, LR: 0.005)...
+    Task 0/9 complete ( 73.8s) | Agnostic ACC: 94.00% | Aware ACC: 94.00%
+    Task 1/9 complete ( 73.6s) | Agnostic ACC: 58.35% | Aware ACC: 87.90%
+    Task 2/9 complete ( 74.3s) | Agnostic ACC: 36.30% | Aware ACC: 84.97%
+    Task 3/9 complete ( 75.1s) | Agnostic ACC: 24.55% | Aware ACC: 82.08%
+    Task 4/9 complete ( 76.2s) | Agnostic ACC: 21.38% | Aware ACC: 84.36%
+    Task 5/9 complete ( 76.9s) | Agnostic ACC: 16.12% | Aware ACC: 84.02%
+    Task 6/9 complete ( 78.1s) | Agnostic ACC: 14.96% | Aware ACC: 84.36%
+    Task 7/9 complete ( 78.8s) | Agnostic ACC: 12.21% | Aware ACC: 83.38%
+    Task 8/9 complete ( 79.8s) | Agnostic ACC: 10.60% | Aware ACC: 82.74%
+    Task 9/9 complete ( 80.7s) | Agnostic ACC:  9.82% | Aware ACC: 83.59%
+
+  [2/2] Measuring Linear Probe extraction & fitting time...
+
+  --- NAIVE FINE-TUNE (SEED 42) BENCHMARK MEASUREMENTS ---
+  Measured Continual Training Duration   : 767.37s (12.79 mins)
+  Measured Linear Probe Fitting Duration : 63.01s (1.05 mins)
+  (i) Task-Agnostic (Class-IL) ACC_T     : 9.82%
+  (ii) Task-Aware ACC_T                  : 83.59%
+  Classifier Bias Gap (ii - i)           : +73.77 pp
+  (iii) Frozen Feature Linear Probe      : 65.40%
+  Peak GPU Memory                        : 861.50 MB
+
+=========================================================================================================
+ AMENDED COMPREHENSIVE BUDGET PROJECTION
+=========================================================================================================
+  1. 9 Arms x 5 Seeds Training Projection       : 8.42 hours (30311s)
+  2. 45 Frozen Linear Probes Projection         : 0.79 hours (2836s)
+  3. LwF Validation Lambda Sweep Projection     : 0.27 hours (959s)
+  4. EWC Validation Lambda Sweep Projection     : 0.27 hours (959s)
+  ---------------------------------------------------------------------------------------
+  TOTAL PROJECTED STUDY RUNTIME                 : 9.74 hours (35065s)
+  Budget Gate Limit                             : 7.00 hours (25,200s)
+  Gate Status                                   : [BUDGET GATE: EXCEEDED]
+
+  [HALT] Total projected runtime (9.74h) exceeds the 7.00-hour limit. Terminating now.
+  Per directive: A partial run is invalid, not partial credit.
+  Saved results to /kaggle/working/Neural-Networks/w3_budget_gate_results.json
+===============================================================================================
+EXIT_CODE = 0

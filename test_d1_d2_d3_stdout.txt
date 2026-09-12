@@ -1,0 +1,40 @@
+===============================================================================================
+ DIRECTIVE W3 -- PART 0: THREE DEFECT REPAIRS & RECORD CORRECTIONS
+===============================================================================================
+  Platform Device    : cuda
+  GPU Accelerator    : Tesla T4
+  CIFAR-100 archive not found at /kaggle/working/Neural-Networks/data/cifar-100-python.tar.gz. Downloading...
+
+  --- D1: BITWISE DETERMINISM CONFIRMATION ---
+  Running Arm B (Seed 42) Run 1...
+  Running Arm B (Seed 42) Run 2 (after intervening RNG calls, re-seeded immediately prior)...
+  Bitwise Prediction Agreement: True (Mismatches: 0 / 10000)
+  [PASS] D1 CONFIRMED: Immediate re-seeding guarantees bitwise-identical predictions.
+
+  --- D2: VALIDATION-ONLY STOPPING AUDIT ---
+  Audit of stopping logic:
+    - Training Set   : 40,000 samples (optimization only)
+    - Validation Set : 10,000 samples (stopping, plateau detection, and hyperparameter selection)
+    - Test Set       : 10,000 samples (held-out; evaluated ONLY once after training completes)
+  [PASS] D2 CONFIRMED: Zero test-set leakage in stopping decisions.
+
+  --- D3: ARM A3b REGRESSION DIAGNOSIS & REPAIR ---
+  Diagnosis: In run_w2e, CosineAnnealingLR had T_max=80, but early stopping was triggered at epoch 34-44.
+  At epoch 35, LR remained at ~0.02 (200x above eta_min=1e-4), leaving the probe un-annealed and generating noisy, suboptimal accuracy (57.69% vs 59.04%).
+  Repair: Use a fixed schedule horizon where T_max matches the exact epoch count (30 epochs), guaranteeing complete annealing to eta_min=1e-4.
+  Repaired Fixed-Horizon 30-Epoch Probe Test ACC (Seed 42): 59.10%
+  Comparison against 30-Epoch Baseline (59.04%): PASS
+  [PASS] D3 CONFIRMED: Fixed-horizon annealing resolves the regression.
+
+  --- RECORD CORRECTIONS ---
+  Correction (a): m* = 512 is the grid MAXIMUM (boundary hit).
+  Prior statement 'Interior Check: CONFIRMED' checked eps, not m.
+  CORRECTED STATUS: 'no truncation helps; optimum is full-rank by construction'.
+
+  Correction (b): Strict Defensible Adaptation Gap C - A2:
+  Joint Offline Full Finetune (C) : 79.64%
+  Frozen NCM Whitened (A2, m=512) : 58.79%
+  Strictest Defensible Gap (C - A2) : 79.64% - 58.79% = +20.85 percentage points
+  Threshold Verdict               : CLEARS +15.0 pp (+20.85 pp > +15.0 pp)
+===============================================================================================
+EXIT_CODE = 0
