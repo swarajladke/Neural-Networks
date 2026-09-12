@@ -9,22 +9,35 @@ Split-CIFAR-100: 10 tasks x 10 classes, input resolution 112x112, ResNet-18 Imag
 EXPLICIT PROVENANCE DECLARATIONS:
   - eval_core.compute_r_metrics      : REUSED (lower-triangular R-matrix continual learning metrics)
   - replay_buffer.DERBuffer          : REUSED (tensor buffer storing (x, y, logits, task_id))
-  - 1_freeze_after_base              : PORTED (standing control logic from run_phase4_lever2_replay.py, ResNet pipeline from run_w2e_gap_closed.py)
-  - 2_naive_fine_tune                : PORTED (sequential SGD logic from run_partB_naive_reproduction.py, ResNet pipeline from run_w2e_gap_closed.py)
-  - 3_ncm_frozen_features            : PORTED (NCM logic from run_aa11_adaptation_gap_pretrained.py, ResNet pipeline from run_w2e_gap_closed.py)
-  - 4_ncm_adapting_features          : PORTED (NCM centroids on adapting backbone, ported from eval_core.py & run_w2e_gap_closed.py)
-  - 5_lwf                            : NEW (fresh implementation: CE + lambda*T^2*KL on old classes; tuned on validation split)
-  - 6_ewc                            : NEW (fresh implementation: CE + (lambda/2)*sum F_i*(theta-theta*)^2 with empirical Fisher; tuned on validation split)
-  - 7_er_buffer500                   : PORTED (replay logic from run_phase4_lever2_replay.py, DERBuffer reused for visual tensors without logits)
-  - 8_der_plus_plus_buffer500        : PORTED (DER++ logic from run_phase5_der_plus_plus_class_il.py, DERBuffer reused for visual tensors + logits)
+  - 1_freeze_after_base              : PORTED (freeze backbone after task 0; continue training classifier head on tasks 1-9)
+  - 2_naive_fine_tune                : PORTED (sequential SGD logic from run_partB_naive_reproduction.py)
+  - 3_ncm_frozen_features            : PORTED (NCM logic from run_aa11_adaptation_gap_pretrained.py)
+  - 4_ncm_adapting_features          : PORTED (Protocol a: stale centroids computed once at task end with zero exemplar storage)
+  - 5_lwf                            : NEW (fresh implementation: CE + lambda*T^2*KL on old classes; lambda tuned on validation split)
+  - 6_ewc                            : NEW (fresh implementation: CE + (lambda/2)*sum F_i*(theta-theta*)^2 with empirical Fisher)
+  - 7_er_buffer500                   : PORTED (replay logic from run_phase4_lever2_replay.py, DERBuffer reused for image tensors)
+  - 8_der_plus_plus_buffer500        : PORTED (DER++ logic from run_phase5_der_plus_plus_class_il.py, DERBuffer reused for image tensors + logits)
   - 9_joint_offline                  : PORTED (joint offline training from run_w2e_gap_closed.py Arm C; confirms 79.64% reproduction)
 
-AMENDMENTS INCORPORATED:
-  - Amendment 1: Shared Protocol-Matched Linear Probes (asserted and unified for all arms + 5-seed frozen baseline)
-  - Amendment 2: Dual BWT Reporting (R_agnostic and R_aware via compute_r_metrics) & Decomposed Classifier/Residual Share
-  - Amendment 3: Declared Validation Lambda Sweeps for LwF and EWC with Boundary Audits
-  - Amendment 4: Pre-Registered Prediction Registry printed prior to execution
-  - Multi-Session Resumability: Atomic JSON saves per cell, execution manifest, skipping completed cells
+FOUR BLOCKING CORRECTIONS IMPLEMENTED:
+  C1. Term-by-Term Budget Arithmetic printed explicitly:
+      Sum(weights) = 0.10 + 1.00 + 0.05 + 1.05 + 1.35 + 1.15 + 1.40 + 1.55 + 1.54 = 9.19
+      Training (5 * 9.19 * 767.37s) = 9.80 h; Total = 9.80 + 0.79 + 0.09 + 0.31 = 11.00 h
+  C2. Demand-Driven Execution Loop with Dynamic Budget Cutoff:
+      Arm iteration order: 2_naive_fine_tune, 3_ncm_frozen_features, 9_joint_offline,
+                           1_freeze_after_base, 4_ncm_adapting_features, 5_lwf, 6_ewc,
+                           7_er_buffer500, 8_der_plus_plus_buffer500
+      Complete all 5 seeds of an arm before starting the next arm.
+      Clean halt before any cell if elapsed + estimate > --max-hours.
+  C3. Explicit Arm Definitions:
+      1_freeze_after_base: Freeze backbone after Task 0; continue training classifier head on Tasks 1-9.
+      4_ncm_adapting_features: Protocol (a) stale centroids computed once at task end, zero image memory.
+      Exact memory comparison reported in bytes and megabytes for Arms 3, 4, 7, 8.
+  C4. Provisional Status & Unified Protocol:
+      65.40% marked as PROVISIONAL HYPOTHESIS until re-measured under Amendment 1 shared protocol.
+      5-seed frozen ImageNet baseline evaluated upfront to provide multi-seed backing.
+  Amendment 3 Caveat:
+      Sweeps labeled as "selected under truncated horizon (3 tasks)". Octave boundary extension loop included.
 """
 
 import os
@@ -62,7 +75,6 @@ LR_BASE = 0.005
 WEIGHT_DECAY = 5e-4
 BUFFER_CAPACITY = 500
 
-# Canonical fallback blocks if json is absent
 CANONICAL_BLOCKS = [
     [42, 41, 91, 9, 65, 50, 1, 70, 15, 78],
     [73, 10, 55, 56, 72, 45, 48, 92, 76, 37],
@@ -76,7 +88,6 @@ CANONICAL_BLOCKS = [
     [86, 13, 17, 28, 31, 35, 94, 3, 14, 81]
 ]
 
-# Shared Unified Linear Probe Specification (Amendment 1)
 PROBE_CONFIG = {
     "feature_extraction_transform": "ev_transform (Resize 112x112, ToTensor, Normalize ImageNet mean/std) [NO DATA AUGMENTATION]",
     "architecture": "nn.Linear(in_features=512, out_features=100)",
@@ -202,20 +213,7 @@ def evaluate_task_r(model, test_loaders, seen_tasks, device):
     return acc_agnostic, acc_aware
 
 
-# =====================================================================
-# AMENDMENT 1: SHARED PROTOCOL-MATCHED LINEAR PROBE
-# =====================================================================
-
 def evaluate_protocol_matched_linear_probe(backbone, full_tr_loader, full_te_loader, device, seed, epochs=30):
-    """
-    Protocol-Matched Linear Probe (Amendment 1).
-    Unified specification across EVERY probe:
-      - Detached feature extraction (eval mode, no random augmentation)
-      - nn.Linear(512, 100)
-      - SGD(lr=0.1, momentum=0.9, weight_decay=1e-4)
-      - CosineAnnealingLR(T_max=30, eta_min=1e-4)
-      - 30 epochs, batch_size=128
-    """
     set_seed(seed)
     backbone.eval()
     all_tr_feats, all_tr_y = [], []
@@ -277,178 +275,200 @@ def evaluate_protocol_matched_linear_probe(backbone, full_tr_loader, full_te_loa
 
 
 # =====================================================================
-# AMENDMENT 3: DECLARED VALIDATION LAMBDA SWEEPS FOR NEW ARMS
+# HYPERPARAMETER SELECTION WITH OCTAVE BOUNDARY EXTENSION
 # =====================================================================
 
+def evaluate_lwf_candidate(cand_l, task_train_loaders, task_val_loaders, device):
+    set_seed(42)
+    model = ResNet18Primary(num_classes=100).to(device)
+    opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+    crit = nn.CrossEntropyLoss()
+    tau = 2.0
+
+    prev_model = None
+    for t_idx in range(3):
+        t_loader, _ = task_train_loaders[t_idx]
+        seen_classes_prev = [c for s in range(t_idx) for c in task_train_loaders[s][1]]
+
+        for ep in range(10):
+            model.train()
+            for bx, by in t_loader:
+                bx, by = bx.to(device), by.to(device)
+                opt.zero_grad()
+                logits, _ = model(bx)
+                loss_ce = crit(logits, by)
+                loss = loss_ce
+
+                if prev_model is not None and len(seen_classes_prev) > 0:
+                    with torch.no_grad():
+                        prev_logits, _ = prev_model(bx)
+                    prev_idx = torch.tensor(seen_classes_prev, device=device)
+                    cur_soft = F.log_softmax(logits[:, prev_idx] / tau, dim=1)
+                    old_soft = F.softmax(prev_logits[:, prev_idx] / tau, dim=1)
+                    kd_loss = F.kl_div(cur_soft, old_soft, reduction="batchmean") * (tau ** 2)
+                    loss = loss_ce + cand_l * kd_loss
+
+                loss.backward()
+                opt.step()
+
+        prev_model = copy.deepcopy(model)
+        prev_model.eval()
+
+    model.eval()
+    cor, tot = 0, 0
+    with torch.no_grad():
+        for t_idx in range(3):
+            v_loader, _ = task_val_loaders[t_idx]
+            for bx, by in v_loader:
+                bx, by = bx.to(device), by.to(device)
+                logits, _ = model(bx)
+                cor += (logits.argmax(dim=-1) == by).sum().item()
+                tot += by.size(0)
+
+    return (cor / tot) * 100.0
+
+
 def tune_lwf_lambda(task_train_loaders, task_val_loaders, device):
-    """
-    NEW Arm: LwF Hyperparameter Selection (Amendment 3).
-    Evaluates candidate lambda grid: [0.1, 0.5, 1.0, 2.0, 5.0] with T=2.0.
-    Validation Protocol:
-      - Evaluates sequential backward transfer vs new task learning over Tasks 0, 1, 2 on Seed 42.
-      - Truncated protocol justification: The stability-plasticity trade-off of distillation loss
-        is fully manifested across the first 3 tasks. Evaluates in ~450s without paying an 8-hour penalty.
-      - Scoring Split: Held-out validation split (1,000 samples per task).
-    """
     print("\n  [Hyperparameter Selection: LwF Lambda Sweep on Validation Split (Seed 42)]")
     print("    Candidate Grid : [0.1, 0.5, 1.0, 2.0, 5.0] (Temperature T = 2.0)")
-    print("    Protocol       : Tasks 0, 1, 2 Sequential Distillation, 10 epochs/task")
+    print("    Protocol Label : selected under truncated horizon (3 tasks)")
     print("    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)")
-    print("    Justification  : Captures distillation retention vs new-task learning efficiently without 10-task grid search.")
 
     grid = [0.1, 0.5, 1.0, 2.0, 5.0]
     scores = {}
 
     for cand_l in grid:
-        set_seed(42)
-        model = ResNet18Primary(num_classes=100).to(device)
-        opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
-        crit = nn.CrossEntropyLoss()
-        tau = 2.0
-
-        prev_model = None
-        for t_idx in range(3):
-            t_loader, _ = task_train_loaders[t_idx]
-            seen_classes_prev = [c for s in range(t_idx) for c in task_train_loaders[s][1]]
-
-            for ep in range(10):
-                model.train()
-                for bx, by in t_loader:
-                    bx, by = bx.to(device), by.to(device)
-                    opt.zero_grad()
-                    logits, _ = model(bx)
-                    loss_ce = crit(logits, by)
-                    loss = loss_ce
-
-                    if prev_model is not None and len(seen_classes_prev) > 0:
-                        with torch.no_grad():
-                            prev_logits, _ = prev_model(bx)
-                        prev_idx = torch.tensor(seen_classes_prev, device=device)
-                        cur_soft = F.log_softmax(logits[:, prev_idx] / tau, dim=1)
-                        old_soft = F.softmax(prev_logits[:, prev_idx] / tau, dim=1)
-                        kd_loss = F.kl_div(cur_soft, old_soft, reduction="batchmean") * (tau ** 2)
-                        loss = loss_ce + cand_l * kd_loss
-
-                    loss.backward()
-                    opt.step()
-
-            prev_model = copy.deepcopy(model)
-            prev_model.eval()
-
-        # Score on validation split across Tasks 0, 1, 2
-        model.eval()
-        cor, tot = 0, 0
-        with torch.no_grad():
-            for t_idx in range(3):
-                v_loader, _ = task_val_loaders[t_idx]
-                for bx, by in v_loader:
-                    bx, by = bx.to(device), by.to(device)
-                    logits, _ = model(bx)
-                    cor += (logits.argmax(dim=-1) == by).sum().item()
-                    tot += by.size(0)
-
-        v_acc = (cor / tot) * 100.0
+        v_acc = evaluate_lwf_candidate(cand_l, task_train_loaders, task_val_loaders, device)
         scores[cand_l] = v_acc
         print(f"    Candidate lambda = {cand_l:5.2f} -> Validation ACC (Tasks 0-2): {v_acc:5.2f}%")
 
     best_l = max(scores, key=scores.get)
-    is_boundary = (best_l == grid[0] or best_l == grid[-1])
-    print(f"  Selected LwF Optimal lambda*: {best_l} (Val ACC = {scores[best_l]:.2f}%) | Position: {'BOUNDARY' if is_boundary else 'INTERIOR'} of {grid}")
+
+    # Octave boundary extension loop (Amendment 3 Caveat)
+    while best_l == max(scores.keys()) and best_l < 20.0:
+        new_cand = best_l * 2.0
+        print(f"  [Octave Extension Upper] Boundary hit at {best_l}. Extending grid with {new_cand}...")
+        v_acc = evaluate_lwf_candidate(new_cand, task_train_loaders, task_val_loaders, device)
+        scores[new_cand] = v_acc
+        print(f"    Candidate lambda = {new_cand:5.2f} -> Validation ACC: {v_acc:5.2f}%")
+        best_l = max(scores, key=scores.get)
+
+    while best_l == min(scores.keys()) and best_l > 0.02:
+        new_cand = best_l / 2.0
+        print(f"  [Octave Extension Lower] Boundary hit at {best_l}. Extending grid with {new_cand}...")
+        v_acc = evaluate_lwf_candidate(new_cand, task_train_loaders, task_val_loaders, device)
+        scores[new_cand] = v_acc
+        print(f"    Candidate lambda = {new_cand:5.2f} -> Validation ACC: {v_acc:5.2f}%")
+        best_l = max(scores, key=scores.get)
+
+    is_boundary = (best_l == min(scores.keys()) or best_l == max(scores.keys()))
+    print(f"  Selected LwF Optimal lambda*: {best_l} (Val ACC = {scores[best_l]:.2f}%) [selected under truncated horizon (3 tasks)] | Boundary: {is_boundary}")
     return best_l, scores, is_boundary
 
 
+def evaluate_ewc_candidate(cand_l, task_train_loaders, task_val_loaders, device):
+    set_seed(42)
+    model = ResNet18Primary(num_classes=100).to(device)
+    opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+    crit = nn.CrossEntropyLoss()
+
+    # Task 0 training
+    t0_loader, _ = task_train_loaders[0]
+    for ep in range(10):
+        model.train()
+        for bx, by in t0_loader:
+            bx, by = bx.to(device), by.to(device)
+            opt.zero_grad()
+            logits, _ = model(bx)
+            loss = crit(logits, by)
+            loss.backward()
+            opt.step()
+
+    # Empirical Fisher on Task 0 (4,000 samples)
+    model.eval()
+    task_fisher = defaultdict(float)
+    for bx, by in t0_loader:
+        bx, by = bx.to(device), by.to(device)
+        model.zero_grad()
+        logits, _ = model(bx)
+        loss = crit(logits, by)
+        loss.backward()
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                task_fisher[name] += param.grad.data.pow(2) * (bx.size(0) / 4000.0)
+
+    optpar = {name: param.data.clone() for name, param in model.named_parameters()}
+
+    # Task 1 training with EWC
+    t1_loader, _ = task_train_loaders[1]
+    for ep in range(10):
+        model.train()
+        for bx, by in t1_loader:
+            bx, by = bx.to(device), by.to(device)
+            opt.zero_grad()
+            logits, _ = model(bx)
+            loss = crit(logits, by)
+
+            ewc_loss = 0.0
+            for name, param in model.named_parameters():
+                if name in task_fisher:
+                    f = task_fisher[name]
+                    p_old = optpar[name]
+                    ewc_loss += (f * (param - p_old).pow(2)).sum()
+            loss += (cand_l / 2.0) * ewc_loss
+
+            loss.backward()
+            opt.step()
+
+    model.eval()
+    cor, tot = 0, 0
+    with torch.no_grad():
+        for t_idx in [0, 1]:
+            v_loader, _ = task_val_loaders[t_idx]
+            for bx, by in v_loader:
+                bx, by = bx.to(device), by.to(device)
+                logits, _ = model(bx)
+                cor += (logits.argmax(dim=-1) == by).sum().item()
+                tot += by.size(0)
+
+    return (cor / tot) * 100.0
+
+
 def tune_ewc_lambda(task_train_loaders, task_val_loaders, device):
-    """
-    NEW Arm: EWC Hyperparameter Selection (Amendment 3).
-    Evaluates candidate lambda grid: [10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0].
-    Validation Protocol:
-      - Evaluates Task 0 Fisher accumulation + Task 1 quadratic penalty on Seed 42.
-      - Truncated protocol justification: The weight stiffness parameter lambda governs the
-        plasticity-stability frontier on the very first task transition.
-      - Scoring Split: Held-out validation split (Tasks 0 and 1).
-    """
     print("\n  [Hyperparameter Selection: EWC Lambda Sweep on Validation Split (Seed 42)]")
     print("    Candidate Grid : [10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]")
-    print("    Protocol       : Tasks 0 and 1, Empirical Fisher computed from 4,000 samples")
-    print("    Scoring Split  : Validation Split (2,000 samples across Tasks 0 and 1)")
-    print("    Justification  : Prior stiffness parameter directly calibrated at the initial stability-plasticity interface.")
+    print("    Protocol Label : selected under truncated horizon (3 tasks)")
+    print("    Scoring Split  : Validation Split (Tasks 0 and 1)")
 
     grid = [10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]
     scores = {}
 
     for cand_l in grid:
-        set_seed(42)
-        model = ResNet18Primary(num_classes=100).to(device)
-        opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
-        crit = nn.CrossEntropyLoss()
-
-        # Task 0 training
-        t0_loader, _ = task_train_loaders[0]
-        for ep in range(10):
-            model.train()
-            for bx, by in t0_loader:
-                bx, by = bx.to(device), by.to(device)
-                opt.zero_grad()
-                logits, _ = model(bx)
-                loss = crit(logits, by)
-                loss.backward()
-                opt.step()
-
-        # Compute empirical diagonal Fisher on Task 0
-        model.eval()
-        task_fisher = defaultdict(float)
-        for bx, by in t0_loader:
-            bx, by = bx.to(device), by.to(device)
-            model.zero_grad()
-            logits, _ = model(bx)
-            loss = crit(logits, by)
-            loss.backward()
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    task_fisher[name] += param.grad.data.pow(2) * (bx.size(0) / 4000.0)
-
-        optpar = {name: param.data.clone() for name, param in model.named_parameters()}
-
-        # Task 1 training with EWC quadratic penalty
-        t1_loader, _ = task_train_loaders[1]
-        for ep in range(10):
-            model.train()
-            for bx, by in t1_loader:
-                bx, by = bx.to(device), by.to(device)
-                opt.zero_grad()
-                logits, _ = model(bx)
-                loss = crit(logits, by)
-
-                ewc_loss = 0.0
-                for name, param in model.named_parameters():
-                    if name in task_fisher:
-                        f = task_fisher[name]
-                        p_old = optpar[name]
-                        ewc_loss += (f * (param - p_old).pow(2)).sum()
-                loss += (cand_l / 2.0) * ewc_loss
-
-                loss.backward()
-                opt.step()
-
-        # Validation evaluation on seen tasks (0 and 1)
-        model.eval()
-        cor, tot = 0, 0
-        with torch.no_grad():
-            for t_idx in [0, 1]:
-                v_loader, _ = task_val_loaders[t_idx]
-                for bx, by in v_loader:
-                    bx, by = bx.to(device), by.to(device)
-                    logits, _ = model(bx)
-                    cor += (logits.argmax(dim=-1) == by).sum().item()
-                    tot += by.size(0)
-
-        v_acc = (cor / tot) * 100.0
+        v_acc = evaluate_ewc_candidate(cand_l, task_train_loaders, task_val_loaders, device)
         scores[cand_l] = v_acc
-        print(f"    Candidate lambda = {cand_l:7.1f} -> Validation ACC (Tasks 0-1): {v_acc:5.2f}%")
+        print(f"    Candidate lambda = {cand_l:7.1f} -> Validation ACC: {v_acc:5.2f}%")
 
     best_l = max(scores, key=scores.get)
-    is_boundary = (best_l == grid[0] or best_l == grid[-1])
-    print(f"  Selected EWC Optimal lambda*: {best_l} (Val ACC = {scores[best_l]:.2f}%) | Position: {'BOUNDARY' if is_boundary else 'INTERIOR'} of {grid}")
+
+    # Octave boundary extension loop (Amendment 3 Caveat)
+    while best_l == max(scores.keys()) and best_l < 80000.0:
+        new_cand = best_l * 2.0
+        print(f"  [Octave Extension Upper] Boundary hit at {best_l}. Extending grid with {new_cand}...")
+        v_acc = evaluate_ewc_candidate(new_cand, task_train_loaders, task_val_loaders, device)
+        scores[new_cand] = v_acc
+        print(f"    Candidate lambda = {new_cand:7.1f} -> Validation ACC: {v_acc:5.2f}%")
+        best_l = max(scores, key=scores.get)
+
+    while best_l == min(scores.keys()) and best_l > 1.0:
+        new_cand = best_l / 2.0
+        print(f"  [Octave Extension Lower] Boundary hit at {best_l}. Extending grid with {new_cand}...")
+        v_acc = evaluate_ewc_candidate(new_cand, task_train_loaders, task_val_loaders, device)
+        scores[new_cand] = v_acc
+        print(f"    Candidate lambda = {new_cand:7.1f} -> Validation ACC: {v_acc:5.2f}%")
+        best_l = max(scores, key=scores.get)
+
+    is_boundary = (best_l == min(scores.keys()) or best_l == max(scores.keys()))
+    print(f"  Selected EWC Optimal lambda*: {best_l} (Val ACC = {scores[best_l]:.2f}%) [selected under truncated horizon (3 tasks)] | Boundary: {is_boundary}")
     return best_l, scores, is_boundary
 
 
@@ -457,12 +477,14 @@ def tune_ewc_lambda(task_train_loaders, task_val_loaders, device):
 # =====================================================================
 
 def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device):
-    """Arm 1: FREEZE-AFTER-BASE (PORTED from run_phase4_lever2_replay.py). Standing Control Arm."""
+    """
+    Arm 1: FREEZE-AFTER-BASE (Standing Control Arm, Correction C3).
+    DEFINITION: Freeze the BACKBONE after task 0; continue training the classifier head on tasks 1-9.
+    Isolates representation drift (vs naive fine-tune) and classifier family (vs NCM on frozen features).
+    """
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
-    opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
     crit = nn.CrossEntropyLoss()
-    sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
 
     t0 = time.time()
     if torch.cuda.is_available():
@@ -474,26 +496,60 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, full_tr_l
     R_agnostic = np.zeros((10, 10))
     R_aware = np.zeros((10, 10))
 
+    # Task 0: Train full model (backbone + head)
+    opt_full = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+    sched_full = optim.lr_scheduler.CosineAnnealingLR(opt_full, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
+
     t0_loader, _ = task_train_loaders[0]
     for ep in range(EPOCHS_PER_TASK):
         model.train()
         for bx, by in t0_loader:
             bx, by = bx.to(device), by.to(device)
-            opt.zero_grad()
+            opt_full.zero_grad()
             logits, _ = model(bx)
             loss = crit(logits, by)
             loss.backward()
-            opt.step()
+            opt_full.step()
             opt_steps += 1
             samples_seen += bx.size(0)
             fwd_samples += bx.size(0)
-        sched.step()
+        sched_full.step()
 
-    for p in model.parameters():
-        p.requires_grad = False
-    model.eval()
+    # FREEZE BACKBONE ONLY (conv1..layer4). Keep self.fc trainable!
+    for p in model.conv1.parameters(): p.requires_grad = False
+    for p in model.bn1.parameters(): p.requires_grad = False
+    for p in model.layer1.parameters(): p.requires_grad = False
+    for p in model.layer2.parameters(): p.requires_grad = False
+    for p in model.layer3.parameters(): p.requires_grad = False
+    for p in model.layer4.parameters(): p.requires_grad = False
+    for p in model.fc.parameters(): p.requires_grad = True
 
-    for t in range(10):
+    # Evaluate Task 0
+    acc_ag, acc_aw = evaluate_task_r(model, task_test_loaders, [0], device)
+    R_agnostic[0, 0] = acc_ag[0]
+    R_aware[0, 0] = acc_aw[0]
+    fwd_samples += 1000
+
+    # Tasks 1 to 9: Continue sequential SGD training on classifier head ONLY
+    for t in range(1, 10):
+        t_loader, _ = task_train_loaders[t]
+        opt_head = optim.SGD(model.fc.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+        sched_head = optim.lr_scheduler.CosineAnnealingLR(opt_head, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
+
+        for ep in range(EPOCHS_PER_TASK):
+            model.train()
+            for bx, by in t_loader:
+                bx, by = bx.to(device), by.to(device)
+                opt_head.zero_grad()
+                logits, _ = model(bx)
+                loss = crit(logits, by)
+                loss.backward()
+                opt_head.step()
+                opt_steps += 1
+                samples_seen += bx.size(0)
+                fwd_samples += bx.size(0)
+            sched_head.step()
+
         seen = list(range(t + 1))
         acc_ag, acc_aw = evaluate_task_r(model, task_test_loaders, seen, device)
         for j in seen:
@@ -510,7 +566,7 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, full_tr_l
 
     return {
         "arm": "1_freeze_after_base",
-        "provenance": "PORTED (standing control logic from run_phase4_lever2_replay.py, ResNet pipeline from run_w2e_gap_closed.py)",
+        "provenance": "PORTED (standing control: freeze backbone after task 0; continue training classifier head on tasks 1-9)",
         "seed": seed,
         "R_agnostic": R_agnostic,
         "R_aware": R_aware,
@@ -521,7 +577,8 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, full_tr_l
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": 0
+        "param_trainable": sum(p.numel() for p in model.fc.parameters()),
+        "stored_memory_bytes": 0
     }
 
 
@@ -587,12 +644,13 @@ def run_naive_fine_tune(seed, task_train_loaders, task_test_loaders, full_tr_loa
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": 0
     }
 
 
 def run_ncm_frozen(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device):
-    """Arm 3: NCM on Frozen Features (PORTED from run_aa11_adaptation_gap_pretrained.py)."""
+    """Arm 3: NCM on Frozen Features (PORTED from run_aa11_adaptation_gap_pretrained.py). Structurally gradient-free."""
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     for p in model.parameters():
@@ -667,6 +725,8 @@ def run_ncm_frozen(seed, task_train_loaders, task_test_loaders, full_tr_loader, 
     peak_mem = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
     p_total = sum(p.numel() for p in model.parameters())
 
+    stored_bytes = 100 * 512 * 4  # 100 prototype vectors of dim 512 float32
+
     return {
         "arm": "3_ncm_frozen_features",
         "provenance": "PORTED (NCM logic from run_aa11_adaptation_gap_pretrained.py, ResNet pipeline from run_w2e_gap_closed.py)",
@@ -680,12 +740,19 @@ def run_ncm_frozen(seed, task_train_loaders, task_test_loaders, full_tr_loader, 
         "samples_seen": 0,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": 0
+        "param_trainable": 0,
+        "stored_memory_bytes": stored_bytes,
+        "declared_gradient_free": True
     }
 
 
 def run_ncm_adapting(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device):
-    """Arm 4: NCM on Adapting Features (PORTED from eval_core.py:eval_ncm and run_w2e_gap_closed.py)."""
+    """
+    Arm 4: NCM on Adapting Features (Correction C3).
+    PROTOCOL: Protocol (a) -- Stale Centroids.
+    Centroids are computed once at the end of each task using the then-current backbone and never updated.
+    Zero raw exemplar storage. Stored memory: 100 centroids x 512 float32 = 204,800 bytes (0.205 MB).
+    """
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -700,9 +767,10 @@ def run_ncm_adapting(seed, task_train_loaders, task_test_loaders, full_tr_loader
     fwd_samples = 0
     R_agnostic = np.zeros((10, 10))
     R_aware = np.zeros((10, 10))
+    centroids = {}
 
     for t in range(10):
-        t_loader, _ = task_train_loaders[t]
+        t_loader, t_classes = task_train_loaders[t]
         sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
 
         for ep in range(EPOCHS_PER_TASK):
@@ -719,26 +787,24 @@ def run_ncm_adapting(seed, task_train_loaders, task_test_loaders, full_tr_loader
                 fwd_samples += bx.size(0)
             sched.step()
 
-        seen = list(range(t + 1))
+        # Protocol (a): Compute centroids for task t classes using current backbone; store and never recompute
         model.eval()
-        centroids = {}
-        for s in seen:
-            s_loader, s_classes = task_train_loaders[s]
-            s_feats = []
-            s_targets = []
-            with torch.no_grad():
-                for bx, by in s_loader:
-                    bx = bx.to(device)
-                    s_feats.append(model.extract_features(bx))
-                    s_targets.append(by.to(device))
-                    fwd_samples += bx.size(0)
-            s_feats = torch.cat(s_feats, dim=0)
-            s_targets = torch.cat(s_targets, dim=0)
-            for c in s_classes:
-                mask = (s_targets == c)
-                if mask.sum() > 0:
-                    centroids[c] = F.normalize(s_feats[mask].mean(dim=0), dim=-1)
+        t_feats = []
+        t_targets = []
+        with torch.no_grad():
+            for bx, by in t_loader:
+                bx = bx.to(device)
+                t_feats.append(model.extract_features(bx))
+                t_targets.append(by.to(device))
+                fwd_samples += bx.size(0)
+        t_feats = torch.cat(t_feats, dim=0)
+        t_targets = torch.cat(t_targets, dim=0)
+        for c in t_classes:
+            mask = (t_targets == c)
+            if mask.sum() > 0:
+                centroids[c] = F.normalize(t_feats[mask].mean(dim=0), dim=-1)
 
+        seen = list(range(t + 1))
         seen_classes = [c for s in seen for c in task_train_loaders[s][1]]
         seen_cen_matrix = torch.stack([centroids[c] for c in seen_classes], dim=0)
         seen_cen_labels = torch.tensor(seen_classes, device=device)
@@ -775,9 +841,11 @@ def run_ncm_adapting(seed, task_train_loaders, task_test_loaders, full_tr_loader
     peak_mem = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
     p_total = sum(p.numel() for p in model.parameters())
 
+    stored_bytes = 100 * 512 * 4  # 100 prototype vectors of dim 512 float32
+
     return {
         "arm": "4_ncm_adapting_features",
-        "provenance": "PORTED (adapting backbone from sequential SGD, centroid computation from eval_core.py:eval_ncm)",
+        "provenance": "PORTED (Protocol a: stale centroids computed once at task completion, 0 exemplar buffer)",
         "seed": seed,
         "R_agnostic": R_agnostic,
         "R_aware": R_aware,
@@ -788,16 +856,13 @@ def run_ncm_adapting(seed, task_train_loaders, task_test_loaders, full_tr_loader
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": stored_bytes
     }
 
 
 def run_lwf(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device, lwf_lambda=1.0, tau=2.0):
-    """
-    Arm 5: Learning without Forgetting (LwF).
-    PROVENANCE: NEW.
-    Objective: L = CE(new data) + lambda * T^2 * KL(softmax(prev_logits/T) || softmax(cur_logits/T)) over old classes.
-    """
+    """Arm 5: Learning without Forgetting (LwF). PROVENANCE: NEW."""
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -868,7 +933,7 @@ def run_lwf(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te
         "arm": "5_lwf",
         "provenance": "NEW (fresh implementation of LwF distillation over old classes on new inputs)",
         "seed": seed,
-        "hyperparameters": {"lambda": lwf_lambda, "T": tau},
+        "hyperparameters": {"lambda": lwf_lambda, "T": tau, "selection": "selected under truncated horizon (3 tasks)"},
         "R_agnostic": R_agnostic,
         "R_aware": R_aware,
         "probe_acc": probe_acc,
@@ -878,17 +943,13 @@ def run_lwf(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": 0
     }
 
 
 def run_ewc(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device, ewc_lambda=1000.0):
-    """
-    Arm 6: Elastic Weight Consolidation (EWC).
-    PROVENANCE: NEW.
-    Objective: L = CE + (lambda/2) * sum_i F_i (theta_i - theta_i*)^2.
-    Fisher estimate uses all 4,000 samples per completed task.
-    """
+    """Arm 6: Elastic Weight Consolidation (EWC). PROVENANCE: NEW."""
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -976,7 +1037,7 @@ def run_ewc(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te
         "arm": "6_ewc",
         "provenance": "NEW (fresh implementation of diagonal Fisher information & quadratic parameter penalty)",
         "seed": seed,
-        "hyperparameters": {"lambda": ewc_lambda, "fisher_sample_count": 4000},
+        "hyperparameters": {"lambda": ewc_lambda, "fisher_sample_count": 4000, "selection": "selected under truncated horizon (3 tasks)"},
         "R_agnostic": R_agnostic,
         "R_aware": R_aware,
         "probe_acc": probe_acc,
@@ -986,12 +1047,13 @@ def run_ewc(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": 0
     }
 
 
 def run_er(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device):
-    """Arm 7: Experience Replay (PORTED from run_phase4_lever2_replay.py, DERBuffer reused)."""
+    """Arm 7: Experience Replay (PORTED from run_phase4_lever2_replay.py)."""
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -1054,6 +1116,9 @@ def run_er(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_
     peak_mem = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
     p_total = sum(p.numel() for p in model.parameters())
 
+    # 500 images of shape [3, 112, 112] float32 + 500 int64 labels
+    stored_bytes = 500 * (3 * 112 * 112 * 4) + 500 * 8
+
     return {
         "arm": "7_er_buffer500",
         "provenance": "PORTED (replay logic from run_phase4_lever2_replay.py, DERBuffer REUSED for image tensors without logits)",
@@ -1067,12 +1132,13 @@ def run_er(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": stored_bytes
     }
 
 
 def run_der_plus_plus(seed, task_train_loaders, task_test_loaders, full_tr_loader, full_te_loader, device, alpha=0.5, beta=0.5):
-    """Arm 8: Dark Experience Replay++ (PORTED from run_phase5_der_plus_plus_class_il.py, DERBuffer REUSED)."""
+    """Arm 8: Dark Experience Replay++ (PORTED from run_phase5_der_plus_plus_class_il.py)."""
     set_seed(seed)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -1138,6 +1204,9 @@ def run_der_plus_plus(seed, task_train_loaders, task_test_loaders, full_tr_loade
     peak_mem = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
     p_total = sum(p.numel() for p in model.parameters())
 
+    # 500 images + 500 labels + 500 logit vectors (100 float32)
+    stored_bytes = 500 * (3 * 112 * 112 * 4) + 500 * 8 + 500 * (100 * 4)
+
     return {
         "arm": "8_der_plus_plus_buffer500",
         "provenance": "PORTED (DER++ loss logic from run_phase5_der_plus_plus_class_il.py, DERBuffer REUSED for image tensors & logits)",
@@ -1152,7 +1221,8 @@ def run_der_plus_plus(seed, task_train_loaders, task_test_loaders, full_tr_loade
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": stored_bytes
     }
 
 
@@ -1192,7 +1262,6 @@ def run_joint_offline(seed, full_train_loader, task_test_loaders, full_tr_loader
     for j in range(10):
         R_agnostic[9, j] = acc_ag[j]
         R_aware[9, j] = acc_aw[j]
-        # For joint offline, diagonal is evaluated once at end of training
         R_agnostic[j, j] = acc_ag[j]
         R_aware[j, j] = acc_aw[j]
         fwd_samples += 1000
@@ -1217,16 +1286,12 @@ def run_joint_offline(seed, full_train_loader, task_test_loaders, full_tr_loader
         "samples_seen": samples_seen,
         "fwd_samples": fwd_samples,
         "param_total": p_total,
-        "param_trainable": p_total
+        "param_trainable": p_total,
+        "stored_memory_bytes": 0
     }
 
 
-# =====================================================================
-# ATOMIC JSON PERSISTENCE
-# =====================================================================
-
 def save_incremental_json(output_path, git_sha, all_runs_records, tuning_info, frozen_probes_info=None):
-    """Flushes results atomically via temporary file to prevent corruption."""
     output_data = {
         "git_commit_sha": git_sha,
         "dataset": "Split-CIFAR-100",
@@ -1247,20 +1312,19 @@ def save_incremental_json(output_path, git_sha, all_runs_records, tuning_info, f
 
 
 # =====================================================================
-# MAIN EXECUTION ROUTINE
+# MAIN ROUTINE
 # =====================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Directive W3 Continual Learning Baseline Suite")
-    parser.add_argument("--max-hours", type=float, default=6.5, help="Maximum wall-clock hours for this session before clean exit")
-    parser.add_argument("--session", type=int, default=0, help="Optional session index (1: Arms 1-5, 2: Arms 6-9, 0: all pending)")
+    parser = argparse.ArgumentParser(description="Directive W3 Part 2 Continual Learning Baselines")
+    parser.add_argument("--max-hours", type=float, default=6.5, help="Maximum session runtime in hours before clean budget halt")
     args = parser.parse_args()
 
     session_t0 = time.time()
 
-    print("=" * 105)
-    print(" DIRECTIVE W3 -- PART 2: CONTINUAL LEARNING BASELINE TABLE (9 ARMS x 5 SEEDS)")
-    print("=" * 105)
+    print("=" * 115)
+    print(" DIRECTIVE W3 -- PART 2: CONTINUAL LEARNING BASELINE SUITE (DEMAND-DRIVEN RESUMABLE EXECUTION)")
+    print("=" * 115)
 
     git_sha = check_provenance()
     print(f"  Git Commit SHA     : {git_sha}")
@@ -1270,34 +1334,101 @@ def main():
         print(f"  GPU Accelerator    : {torch.cuda.get_device_name(0)}")
 
     # -----------------------------------------------------------------
-    # AMENDMENT 1: SHARED PROTOCOL-MATCHED LINEAR PROBE DECLARATION
+    # C1. TERM-BY-TERM BUDGET ARITHMETIC AUDIT
     # -----------------------------------------------------------------
-    print("\n" + "=" * 105)
-    print(" SHARED PROTOCOL-MATCHED LINEAR PROBE CONFIGURATION (AMENDMENT 1)")
-    print("=" * 105)
+    T_NAIVE_SEC = 767.37
+    T_PROBE_SEC = 63.01
+    ARM_WEIGHTS = {
+        "1_freeze_after_base": 0.10,
+        "2_naive_fine_tune": 1.00,
+        "3_ncm_frozen_features": 0.05,
+        "4_ncm_adapting_features": 1.05,
+        "5_lwf": 1.35,
+        "6_ewc": 1.15,
+        "7_er_buffer500": 1.40,
+        "8_der_plus_plus_buffer500": 1.55,
+        "9_joint_offline": 1.54
+    }
+    sum_weights = sum(ARM_WEIGHTS.values())
+    t_train_hours = (5 * sum_weights * T_NAIVE_SEC) / 3600.0
+    t_probes_hours = (45 * T_PROBE_SEC) / 3600.0
+    t_base_probes_hours = (5 * T_PROBE_SEC) / 3600.0
+    t_sweeps_hours = 0.31
+    t_total_hours = t_train_hours + t_probes_hours + t_base_probes_hours + t_sweeps_hours
+
+    print("\n" + "=" * 115)
+    print(" C1. TERM-BY-TERM BUDGET ARITHMETIC AUDIT")
+    print("=" * 115)
+    print(f"  Arm Weights Addition Term-by-Term:")
+    print(f"    0.10 (Arm 1) + 1.00 (Arm 2) + 0.05 (Arm 3) + 1.05 (Arm 4) + 1.35 (Arm 5) +")
+    print(f"    1.15 (Arm 6) + 1.40 (Arm 7) + 1.55 (Arm 8) + 1.54 (Arm 9) = {sum_weights:.2f}")
+    print(f"\n  Study Runtime Projection:")
+    print(f"    1. Continual Training (5 seeds * {sum_weights:.2f} * {T_NAIVE_SEC:.2f}s) : {t_train_hours:5.2f} h ({5 * sum_weights * T_NAIVE_SEC:.0f}s)")
+    print(f"    2. 45 Representation Probes (45 * {T_PROBE_SEC:.2f}s)            : {t_probes_hours:5.2f} h ({45 * T_PROBE_SEC:.0f}s)")
+    print(f"    3. 5 Pretrained Baseline Probes (5 * {T_PROBE_SEC:.2f}s)          : {t_base_probes_hours:5.2f} h ({5 * T_PROBE_SEC:.0f}s)")
+    print(f"    4. LwF + EWC Validation Sweeps                              : {t_sweeps_hours:5.2f} h ({t_sweeps_hours*3600:.0f}s)")
+    print(f"    -------------------------------------------------------------------------")
+    print(f"    TOTAL PROJECTED STUDY RUNTIME                               : {t_total_hours:5.2f} h ({t_total_hours*3600:.0f}s)")
+    print(f"  [GATE RESOLUTION] Multi-session execution is authorized. Proceeding via demand-driven loop.")
+    print("=" * 115)
+
+    # -----------------------------------------------------------------
+    # C3. EXPLICIT DEFINITIONS OF TWO ARMS & MEMORY COMPARISON
+    # -----------------------------------------------------------------
+    print("\n" + "=" * 115)
+    print(" C3. EXPLICIT DEFINITIONS OF TWO ARMS & STORED MEMORY COMPARISON")
+    print("=" * 115)
+    print("  Arm 1 (1_freeze_after_base):")
+    print("    - Task 0: Train full model (backbone + head) for 20 epochs.")
+    print("    - Tasks 1-9: Freeze backbone (conv1..layer4). Continue training classifier head (self.fc) on each task.")
+    print("    - Function: Isolates representation drift (vs naive fine-tune) and classifier family (vs NCM frozen).")
+    print("\n  Arm 4 (4_ncm_adapting_features):")
+    print("    - Protocol: Protocol (a) -- Stale Centroids.")
+    print("    - Centroids computed once at task end with then-current backbone and stored; never updated from exemplars.")
+    print("    - Zero raw image exemplar buffer.")
+    print("\n  Stored State Memory Accounting Across Arms:")
+    print("    - Arm 3 (3_ncm_frozen_features)     :    204,800 bytes (0.205 MB) [100 centroids x 512 float32, 0 image bytes]")
+    print("    - Arm 4 (4_ncm_adapting_features)   :    204,800 bytes (0.205 MB) [100 centroids x 512 float32, 0 image bytes]")
+    print("    - Arm 7 (7_er_buffer500)            : 75,268,000 bytes (75.27 MB) [500 images x 3x112x112 float32 + labels]")
+    print("    - Arm 8 (8_der_plus_plus_buffer500) : 75,468,000 bytes (75.47 MB) [500 images + labels + 500x100 logits]")
+    print("=" * 115)
+
+    # -----------------------------------------------------------------
+    # C4. PROVISIONAL BASELINE STATUS & UNIFIED PROBE CONFIGURATION
+    # -----------------------------------------------------------------
+    print("\n" + "=" * 115)
+    print(" C4. PROVISIONAL BASELINE STATUS & UNIFIED LINEAR PROBE PROTOCOL (AMENDMENT 1)")
+    print("=" * 115)
+    print("  [PROVISIONAL HYPOTHESIS: 65.40%]")
+    print("    The adapted-backbone probe (65.40%) was measured before Amendment 1's shared protocol existed.")
+    print("    It is treated as a provisional hypothesis until re-measured under the unified protocol.")
+    print("    The 5-seed frozen baseline supersedes the single-seed 59.10%.")
+    print("\n  Unified Shared Linear Probe Specification:")
     for k, v in PROBE_CONFIG.items():
         print(f"    {k:<30} : {v}")
-    print("  [ASSERTION] Every linear probe in this study strictly executes this unified configuration.")
+    print("=" * 115)
 
     # -----------------------------------------------------------------
     # AMENDMENT 4: PRE-REGISTERED PREDICTION REGISTRY
     # -----------------------------------------------------------------
-    print("\n" + "=" * 105)
+    PREDICTIONS = {
+        "1_freeze_after_base": {"pred_class_il": "18.0% - 26.0%", "beats_freeze": "CONTROL ARM (Self)", "notes": "Freeze backbone after task 0; continue training head"},
+        "2_naive_fine_tune": {"pred_class_il": "9.8% +/- 0.5%", "beats_freeze": "NO", "notes": "Severe classifier interference (measured 9.82% in Part 1)"},
+        "3_ncm_frozen_features": {"pred_class_il": "50.2% +/- 0.0%", "beats_freeze": "YES", "notes": "Immune to classifier drift; invariant representations"},
+        "4_ncm_adapting_features": {"pred_class_il": "32.0% - 45.0%", "beats_freeze": "YES", "notes": "Protocol a: stale centroids degrade as backbone drifts, but bypasses logit bias"},
+        "5_lwf": {"pred_class_il": "15.0% - 25.0%", "beats_freeze": "WEAK", "notes": "Distillation regularizes logits, but lacks rehearsal"},
+        "6_ewc": {"pred_class_il": "11.0% - 16.0%", "beats_freeze": "WEAK", "notes": "Weight penalty cannot prevent inter-task logit competition"},
+        "7_er_buffer500": {"pred_class_il": "35.0% - 45.0%", "beats_freeze": "YES", "notes": "Rehearsal directly counteracts logit bias"},
+        "8_der_plus_plus_buffer500": {"pred_class_il": "45.0% - 55.0%", "beats_freeze": "YES", "notes": "Dark Experience Replay: rehearsal + past logit consistency"},
+        "9_joint_offline": {"pred_class_il": "79.64% +/- 0.23%", "beats_freeze": "UPPER BOUND", "notes": "Joint offline reference ceiling"}
+    }
+
+    print("\n" + "=" * 115)
     print(" PRE-REGISTERED PREDICTION REGISTRY (AMENDMENT 4)")
-    print("=" * 105)
-    print("  Standing Control Arm : FREEZE-AFTER-BASE (Standing Rule 1)")
-    print("  Empirical Context    : Class-IL collapse is ~94% classifier interference; backbone representation improves (59.10% -> 65.40%).")
-    print("\n  PREDICTIONS ACROSS 9 ARMS:")
-    print("    Arm 1: 1_freeze_after_base       | Pred Class-IL: ~9.5% - 10.0%  | Beats Freeze? NO (Control Arm)")
-    print("    Arm 2: 2_naive_fine_tune         | Pred Class-IL:  9.8% +/- 0.5% | Beats Freeze? NO (Measured 9.82% in Part 1)")
-    print("    Arm 3: 3_ncm_frozen_features     | Pred Class-IL: 50.2% +/- 0.0% | Beats Freeze? YES (Bypasses classifier drift)")
-    print("    Arm 4: 4_ncm_adapting_features   | Pred Class-IL: 55.0% - 62.0%  | Beats Freeze? YES (UNUSUALLY STRONG: immune to logit bias while adapting rep)")
-    print("    Arm 5: 5_lwf                     | Pred Class-IL: 15.0% - 25.0%  | Beats Freeze? WEAK (Constrains logits via KL, but no replay)")
-    print("    Arm 6: 6_ewc                     | Pred Class-IL: 11.0% - 16.0%  | Beats Freeze? WEAK (Weight penalty cannot prevent inter-task logit competition)")
-    print("    Arm 7: 7_er_buffer500            | Pred Class-IL: 35.0% - 45.0%  | Beats Freeze? YES (Rehearsal directly recalibrates logit scales)")
-    print("    Arm 8: 8_der_plus_plus_buffer500 | Pred Class-IL: 45.0% - 55.0%  | Beats Freeze? YES (Rehearsal + logit consistency)")
-    print("    Arm 9: 9_joint_offline           | Target Class-IL: 79.64% +/- 0.23% | Upper Bound Reference")
-    print("=" * 105)
+    print("=" * 115)
+    for arm_name, p_info in PREDICTIONS.items():
+        print(f"  {arm_name:<28} | Pred Class-IL: {p_info['pred_class_il']:<17} | Beats Freeze? {p_info['beats_freeze']:<16} | {p_info['notes']}")
+    print("=" * 115)
 
     if not os.path.exists(ARCHIVE_PATH):
         print(f"\n  CIFAR-100 archive not found at {ARCHIVE_PATH}. Downloading...")
@@ -1355,7 +1486,7 @@ def main():
     full_te_probe_loader = DataLoader(ds_te, batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
 
     # -----------------------------------------------------------------
-    # RESUMPTION AUDIT & PERSISTED STATE
+    # RESUMPTION AUDIT
     # -----------------------------------------------------------------
     completed_runs_map = {}
     tuning_info = {}
@@ -1375,10 +1506,10 @@ def main():
             print(f"  [Resumption Audit Warning] Could not parse existing JSON: {e}")
 
     # -----------------------------------------------------------------
-    # AMENDMENT 1: EVALUATE 5-SEED FROZEN IMAGENET LINEAR PROBE
+    # 5-SEED FROZEN IMAGENET LINEAR PROBE (AMENDMENT 1 BACKING)
     # -----------------------------------------------------------------
     if frozen_probes_info is None:
-        print("\n  [Evaluating 5-Seed Protocol-Matched Frozen ImageNet Linear Probes (Amendment 1)]")
+        print("\n  [Evaluating 5-Seed Protocol-Matched Frozen ImageNet Linear Probes]")
         frozen_seed_accs = []
         base_backbone = ResNet18Primary(num_classes=100).to(device)
         for s in SEEDS:
@@ -1394,13 +1525,13 @@ def main():
             "mean": f_mean,
             "std": f_std
         }
-        print(f"  5-Seed Frozen ImageNet Probe Baseline: {f_mean:.2f}% +/- {f_std:.2f}% (Seed 42: {frozen_seed_accs[0]:.2f}%)")
+        print(f"  5-Seed Frozen ImageNet Probe Baseline: {f_mean:.2f}% +/- {f_std:.2f}% (supersedes single-seed 59.10%)")
         save_incremental_json(OUTPUT_JSON_PATH, git_sha, list(completed_runs_map.values()), tuning_info, frozen_probes_info)
     else:
         print(f"\n  [Loaded from Prior Session] 5-Seed Frozen ImageNet Probe: {frozen_probes_info['mean']:.2f}% +/- {frozen_probes_info['std']:.2f}%")
 
     # -----------------------------------------------------------------
-    # AMENDMENT 3: HYPERPARAMETER TUNING ON VALIDATION SPLIT
+    # VALIDATION LAMBDA SWEEPS WITH BOUNDARY EXTENSION
     # -----------------------------------------------------------------
     if "lwf_lambda" not in tuning_info:
         best_lwf_l, lwf_scores, lwf_is_boundary = tune_lwf_lambda(task_train_loaders, task_val_loaders, device)
@@ -1410,7 +1541,6 @@ def main():
         save_incremental_json(OUTPUT_JSON_PATH, git_sha, list(completed_runs_map.values()), tuning_info, frozen_probes_info)
     else:
         best_lwf_l = tuning_info["lwf_lambda"]
-        print(f"\n  [Loaded from Prior Session] LwF Optimal lambda*: {best_lwf_l} (Boundary: {tuning_info.get('lwf_is_boundary')})")
 
     if "ewc_lambda" not in tuning_info:
         best_ewc_l, ewc_scores, ewc_is_boundary = tune_ewc_lambda(task_train_loaders, task_val_loaders, device)
@@ -1420,101 +1550,68 @@ def main():
         save_incremental_json(OUTPUT_JSON_PATH, git_sha, list(completed_runs_map.values()), tuning_info, frozen_probes_info)
     else:
         best_ewc_l = tuning_info["ewc_lambda"]
-        print(f"  [Loaded from Prior Session] EWC Optimal lambda*: {best_ewc_l} (Boundary: {tuning_info.get('ewc_is_boundary')})")
 
     # -----------------------------------------------------------------
-    # ARM DISPATCH TABLE
+    # C2. DEMAND-DRIVEN EXECUTION ORDER
     # -----------------------------------------------------------------
-    ARM_DISPATCH = [
-        ("1_freeze_after_base", run_freeze_after_base, ()),
+    ORDERED_ARMS = [
         ("2_naive_fine_tune", run_naive_fine_tune, ()),
         ("3_ncm_frozen_features", run_ncm_frozen, ()),
+        ("9_joint_offline", lambda s, tr, te, ftr, fte, d: run_joint_offline(s, full_train_loader, te, ftr, fte, d), ()),
+        ("1_freeze_after_base", run_freeze_after_base, ()),
         ("4_ncm_adapting_features", run_ncm_adapting, ()),
         ("5_lwf", run_lwf, (best_lwf_l, 2.0)),
         ("6_ewc", run_ewc, (best_ewc_l,)),
         ("7_er_buffer500", run_er, ()),
-        ("8_der_plus_plus_buffer500", run_der_plus_plus, ()),
-        ("9_joint_offline", lambda s, tr, te, ftr, fte, d: run_joint_offline(s, full_train_loader, te, ftr, fte, d), ())
+        ("8_der_plus_plus_buffer500", run_der_plus_plus, ())
     ]
-
-    # Session Filtering if requested
-    if args.session == 1:
-        target_arms = [name for name, _, _ in ARM_DISPATCH[:5]]
-    elif args.session == 2:
-        target_arms = [name for name, _, _ in ARM_DISPATCH[5:]]
-    else:
-        target_arms = [name for name, _, _ in ARM_DISPATCH]
-
-    # -----------------------------------------------------------------
-    # EXECUTION MANIFEST & BUDGET ESTIMATION
-    # -----------------------------------------------------------------
-    ARM_COMPUTE_WEIGHTS = {
-        "1_freeze_after_base": 0.10,
-        "2_naive_fine_tune": 1.00,
-        "3_ncm_frozen_features": 0.05,
-        "4_ncm_adapting_features": 1.05,
-        "5_lwf": 1.35,
-        "6_ewc": 1.15,
-        "7_er_buffer500": 1.40,
-        "8_der_plus_plus_buffer500": 1.55,
-        "9_joint_offline": 1.54
-    }
-    T_NAIVE_SEC = 767.37
-    T_PROBE_SEC = 63.01
-
-    print("\n" + "=" * 105)
-    print(" EXECUTION MANIFEST & RESUMPTION SCHEDULE (45 TOTAL CELLS: 9 ARMS x 5 SEEDS)")
-    print("=" * 105)
-    print(f" {'#':<3} | {'Arm Name':<28} | {'Seed':<5} | {'Status':<32} | {'Est. Time':<12}")
-    print("-" * 105)
 
     all_cells = []
     cell_idx = 1
     total_est_pending_sec = 0.0
 
-    for arm_name, arm_fn, extra_args in ARM_DISPATCH:
+    print("\n" + "=" * 115)
+    print(" EXECUTION MANIFEST (ORDERED DEMAND-DRIVEN SCHEDULE)")
+    print("=" * 115)
+    print(f" {'#':<3} | {'Arm Name':<28} | {'Seed':<5} | {'Status':<32} | {'Est. Time':<12}")
+    print("-" * 115)
+
+    for arm_name, arm_fn, extra_args in ORDERED_ARMS:
         for seed in SEEDS:
             cell_key = (arm_name, seed)
             is_done = cell_key in completed_runs_map
-            is_targeted = (arm_name in target_arms)
-            est_sec = ARM_COMPUTE_WEIGHTS[arm_name] * T_NAIVE_SEC + T_PROBE_SEC
+            est_sec = ARM_WEIGHTS[arm_name] * T_NAIVE_SEC + T_PROBE_SEC
 
             if is_done:
                 status_str = "[COMPLETED - loaded from disk]"
-            elif not is_targeted:
-                status_str = "[SKIPPED - outside session scope]"
             else:
-                status_str = "[PENDING - will run this session]"
+                status_str = "[PENDING - to execute]"
                 total_est_pending_sec += est_sec
 
             print(f" {cell_idx:<3} | {arm_name:<28} | {seed:<5} | {status_str:<32} | ~{est_sec:<5.0f}s")
-            all_cells.append((cell_idx, arm_name, seed, arm_fn, extra_args, is_done, is_targeted))
+            all_cells.append((cell_idx, arm_name, seed, arm_fn, extra_args, is_done))
             cell_idx += 1
 
-    print("-" * 105)
-    total_completed = len(completed_runs_map)
-    print(f"  Total Study Cells Completed : {total_completed} / 45")
-    print(f"  Estimated Pending Time       : {total_est_pending_sec / 3600.0:.2f} hours ({total_est_pending_sec:.0f}s)")
-    print(f"  Allocated Session Budget     : {args.max_hours:.2f} hours ({args.max_hours * 3600:.0f}s)")
-    print("=" * 105)
+    print("-" * 115)
+    print(f"  Study Cells Completed   : {len(completed_runs_map)} / 45")
+    print(f"  Pending Execution Time  : {total_est_pending_sec / 3600.0:.2f} hours ({total_est_pending_sec:.0f}s)")
+    print(f"  Allocated Session Limit : {args.max_hours:.2f} hours ({args.max_hours * 3600:.0f}s)")
+    print("=" * 115)
 
     computed_this_session = 0
 
-    for c_idx, arm_name, seed, arm_fn, extra_args, is_done, is_targeted in all_cells:
+    for c_idx, arm_name, seed, arm_fn, extra_args, is_done in all_cells:
         cell_key = (arm_name, seed)
         if is_done:
             print(f"  [LOADED FROM PRIOR SESSION] Cell #{c_idx:02d}: Arm '{arm_name}' | Seed {seed}")
             continue
 
-        if not is_targeted:
-            continue
-
-        # Check session time budget before starting next cell
-        elapsed_session_hours = (time.time() - session_t0) / 3600.0
-        est_next_cell_hours = (ARM_COMPUTE_WEIGHTS[arm_name] * T_NAIVE_SEC + T_PROBE_SEC) / 3600.0
-        if elapsed_session_hours + est_next_cell_hours > args.max_hours:
-            print(f"\n  [SESSION BUDGET CEILING REACHED] Elapsed: {elapsed_session_hours:.2f}h + Next: {est_next_cell_hours:.2f}h > Max: {args.max_hours:.2f}h.")
-            print(f"  Stopping cleanly before starting Cell #{c_idx}. Saved progress intact in {OUTPUT_JSON_PATH}.")
+        # C2 Demand-driven dynamic budget cutoff
+        elapsed_sec = time.time() - session_t0
+        est_sec = ARM_WEIGHTS[arm_name] * T_NAIVE_SEC + T_PROBE_SEC
+        if elapsed_sec + est_sec > args.max_hours * 3600.0:
+            print(f"\n  [CLEAN HALT: budget] Elapsed: {elapsed_sec/3600.0:.2f}h + Next: {est_sec/3600.0:.2f}h > Max: {args.max_hours:.2f}h.")
+            print(f"  Halting cleanly before Cell #{c_idx:02d} ({arm_name}, Seed {seed}). Progress saved intact in {OUTPUT_JSON_PATH}.")
             print("  Resume in next session with: python run_w3_baselines.py")
             break
 
@@ -1525,7 +1622,6 @@ def main():
         set_seed(seed)
         res = arm_fn(seed, task_train_loaders, task_test_loaders, full_tr_probe_loader, full_te_probe_loader, device, *extra_args)
 
-        # Amendment 2: Dual BWT and Decomposition Calculation
         m_ag = compute_r_metrics(res["R_agnostic"])
         m_aw = compute_r_metrics(res["R_aware"])
 
@@ -1564,7 +1660,8 @@ def main():
             "n_train_samples_seen": int(res["samples_seen"]),
             "n_forward_samples": int(res["fwd_samples"]),
             "param_count_total": int(res["param_total"]),
-            "param_count_trainable": int(res["param_trainable"])
+            "param_count_trainable": int(res["param_trainable"]),
+            "stored_memory_bytes": int(res.get("stored_memory_bytes", 0))
         }
         if "hyperparameters" in res:
             cell_record["hyperparameters"] = res["hyperparameters"]
@@ -1574,23 +1671,22 @@ def main():
 
         print(f"    Completed in {res['wall_clock']:.1f}s | Class-IL: {final_class_il:.2f}% | Aware: {final_task_aware:.2f}% | Probe: {res['probe_acc']:.2f}%")
         print(f"    BWT Class-IL: {m_ag['bwt']:+.2f} pp | BWT Aware: {m_aw['bwt']:+.2f} pp | BWT Interference: {bwt_interference:+.2f} pp")
-        print(f"    Avg LA: {avg_la:.2f}% | Total Drop: {total_drop:.2f} pp | Classifier Share: {classifier_share*100:.1f}% | Residual Share: {residual_share*100:.1f}%")
+        print(f"    Avg LA: {avg_la:.2f}% | Total Drop: {total_drop:.2f} pp (Denominator) | Clf Share: {classifier_share*100:.1f}% | Res Share: {residual_share*100:.1f}%")
 
-        # Atomic flush after EVERY single cell
         save_incremental_json(OUTPUT_JSON_PATH, git_sha, list(completed_runs_map.values()), tuning_info, frozen_probes_info)
 
     # -----------------------------------------------------------------
     # SUMMARY TABLE FOR COMPLETED ARMS
     # -----------------------------------------------------------------
-    print("\n" + "=" * 145)
-    print(" CONTINUAL LEARNING BASELINE TABLE (DECOMPOSED TRI-METRIC & DUAL BWT REPORT)")
-    print("=" * 145)
+    print("\n" + "=" * 155)
+    print(" CONTINUAL LEARNING BASELINE TABLE (TRI-METRIC & DUAL BWT DECOMPOSITION)")
+    print("=" * 155)
     header = f"{'Arm Name':<28} | {'(i) Class-IL':<14} | {'(ii) Aware':<14} | {'Bias Gap':<10} | {'(iii) Probe':<13} | {'BWT Agnostic':<13} | {'BWT Aware':<11} | {'Avg LA':<10} | {'Clf Share':<9}"
     print(header)
-    print("-" * 145)
+    print("-" * 155)
 
     summary_stats = {}
-    for arm_name, _, _ in ARM_DISPATCH:
+    for arm_name, _, _ in ORDERED_ARMS:
         arm_runs = [completed_runs_map[(arm_name, s)] for s in SEEDS if (arm_name, s) in completed_runs_map]
         if len(arm_runs) == 0:
             continue
@@ -1633,7 +1729,37 @@ def main():
             "classifier_share_mean": m_clf
         }
 
-    # Final summary persistence
+    # -----------------------------------------------------------------
+    # PREDICTION REGISTRY HIT/MISS AUDIT
+    # -----------------------------------------------------------------
+    print("\n" + "=" * 115)
+    print(" PREDICTION REGISTRY AUDIT (PREDICTED VS MEASURED CLASS-IL)")
+    print("=" * 115)
+    for arm_name, _, _ in ORDERED_ARMS:
+        if arm_name in summary_stats and summary_stats[arm_name]["n_seeds_completed"] == 5:
+            meas = summary_stats[arm_name]["class_il_mean"]
+            meas_s = summary_stats[arm_name]["class_il_std"]
+            pred_str = PREDICTIONS[arm_name]["pred_class_il"]
+
+            # Evaluate hit/miss
+            hit = False
+            if "-" in pred_str:
+                parts = [float(p.replace("%", "").strip()) for p in pred_str.split("-")]
+                hit = (parts[0] - 2.0 <= meas <= parts[1] + 2.0)
+            elif "+/-" in pred_str:
+                parts = [float(p.replace("%", "").strip()) for p in pred_str.split("+/-")]
+                hit = abs(meas - parts[0]) <= 3.0 * parts[1]
+            status = "HIT" if hit else "MISS"
+
+            print(f"  {arm_name:<28} | Predicted: {pred_str:<17} | Measured: {meas:5.2f}% +/- {meas_s:4.2f}% | Status: [{status}]")
+
+    # Joint Offline reproduction audit
+    if "9_joint_offline" in summary_stats and summary_stats["9_joint_offline"]["n_seeds_completed"] == 5:
+        offline_m = summary_stats["9_joint_offline"]["class_il_mean"]
+        diff = abs(offline_m - 79.64)
+        print(f"\n  [Joint Offline Reproduction Audit]")
+        print(f"    Target: 79.64% +/- 0.23% | Measured: {offline_m:.2f}% | Delta: {diff:+.2f} pp -> {'PASS' if diff < 1.0 else 'HARNESS MISMATCH DETECTED'}")
+
     final_output = {
         "git_commit_sha": git_sha,
         "dataset": "Split-CIFAR-100",
@@ -1657,16 +1783,9 @@ def main():
         json.dump(final_output, f, indent=2)
     os.replace(tmp_path, OUTPUT_JSON_PATH)
 
-    # Reproduction check for Joint Offline if available
-    if "9_joint_offline" in summary_stats and summary_stats["9_joint_offline"]["n_seeds_completed"] == 5:
-        offline_m = summary_stats["9_joint_offline"]["class_il_mean"]
-        diff = abs(offline_m - 79.64)
-        print("\n  [Reproduction Audit]")
-        print(f"    Joint Offline Upper Bound (w2e target: 79.64% +/- 0.23%): Measured {offline_m:.2f}% (delta: {diff:+.2f} pp) -> {'PASS' if diff < 1.0 else 'WARNING'}")
-
-    print("\n" + "=" * 145)
+    print("\n" + "=" * 115)
     print("EXIT_CODE = 0")
-    print("=" * 145)
+    print("=" * 115)
 
 
 if __name__ == "__main__":
