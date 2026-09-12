@@ -58,13 +58,7 @@
 !run_w5_plasticity_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
 !build_cache_v3_stdout.log
-!class_permutation_seed42.json
-!class_order_split_cifar100.json
-!number_classification.json
 !number_verification_map.tsv
-!agnis_scaling_dataset_v3_template_split.json
-!agnis_scaling_dataset_v2.json
-!agnis_scaling_dataset_v2_expanded.json
 data/
 *.csv
 *.npz
@@ -75,6 +69,13 @@ data/
 *.json
 !results_*.json
 !phase_iv_results.json
+!class_order_split_cifar100.json
+!class_permutation_seed42.json
+!number_classification.json
+!agnis_scaling_dataset_v3_template_split.json
+!agnis_scaling_dataset_v2.json
+!agnis_scaling_dataset_v2_expanded.json
+!agnis_scaling_dataset.json
 !w1_results.json
 !w1b_results.json
 !w1c_results.json
@@ -82,11 +83,15 @@ data/
 !w2c_precheck.json
 !w2d_results.json
 !w2e_results.json
+!w3_budget_gate_results.json
+!w3_baselines.json
 !w4_results.json
 !w5_results.json
 !w6_results.json
-!agnis_scaling_dataset.json
-!agnis_scaling_dataset_v2.json
+!test_d1_d2_d3_stdout.txt
+!run_w3_budget_gate_stdout.txt
+!run_w3_baselines_stdout.txt
+
 
 # Visualizations / Reports
 *.png

@@ -152,8 +152,10 @@ def main():
 
     # Ensure dataset is available
     if not os.path.exists(ARCHIVE_PATH):
-        print(f"  [Error] CIFAR-100 archive not found at {ARCHIVE_PATH}")
-        sys.exit(1)
+        print(f"  CIFAR-100 archive not found at {ARCHIVE_PATH}. Downloading...")
+        torchvision.datasets.CIFAR100(root=DATA_DIR, train=True, download=True)
+        torchvision.datasets.CIFAR100(root=DATA_DIR, train=False, download=True)
+
 
     norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     tr_transform = transforms.Compose([
