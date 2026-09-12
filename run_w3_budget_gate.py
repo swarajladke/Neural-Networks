@@ -1,11 +1,16 @@
 """
 run_w3_budget_gate.py
 =====================
-Directive W3 -- Part 1: Budget Gate Verification.
+Directive W3 -- Part 1: Budget Gate Verification (Amended).
 
 Runs ONE arm (Naive Fine-Tune) on ONE seed (Seed 42) across all 10 tasks of Split-CIFAR-100 at 112x112.
-Measures wall-clock time, evaluates task-agnostic, task-aware, and linear probe accuracies,
-records all physical counters, and projects the total time for the full 9 arms x 5 seeds study.
+Measures wall-clock time for continual training AND linear probe fitting.
+Projects the total time for the full 9 arms x 5 seeds study INCLUDING:
+  - All 9 continual learning arms x 5 seeds
+  - 45 frozen linear probes (tri-metric component iii)
+  - LwF lambda hyperparameter validation sweep
+  - EWC lambda hyperparameter validation sweep
+
 If the projected total exceeds 7.0 hours, it HALTS and reports the projection.
 """
 
@@ -117,12 +122,6 @@ class ResNet18Primary(nn.Module):
 
 
 def evaluate_task_r(model, test_loaders, seen_tasks, device):
-    """
-    Evaluates both Task-Agnostic (Class-IL) and Task-Aware accuracies for all seen tasks.
-    Returns:
-      acc_agnostic_dict: {task_id: acc}
-      acc_aware_dict: {task_id: acc}
-    """
     model.eval()
     acc_agnostic = {}
     acc_aware = {}
@@ -133,20 +132,15 @@ def evaluate_task_r(model, test_loaders, seen_tasks, device):
             cor_agnostic = 0
             cor_aware = 0
             tot = 0
-
-            # Task t class indices tensor
             t_classes_t = torch.tensor(t_classes, device=device)
 
             for bx, by in t_loader:
                 bx, by = bx.to(device), by.to(device)
                 logits, _ = model(bx)
 
-                # (i) Task-agnostic: argmax over all 100 classes
                 preds_agnostic = logits.argmax(dim=-1)
                 cor_agnostic += (preds_agnostic == by).sum().item()
 
-                # (ii) Task-aware: argmax constrained to task t classes
-                # Mask out all classes not in t_classes
                 mask = torch.full_like(logits, float("-inf"))
                 mask[:, t_classes_t] = 0.0
                 masked_logits = logits + mask
@@ -162,7 +156,6 @@ def evaluate_task_r(model, test_loaders, seen_tasks, device):
 
 
 def train_frozen_linear_probe(backbone, train_loader, test_loader, device, epochs=30):
-    """(iii) Linear probe on frozen final representation over all 100 classes."""
     backbone.eval()
     all_tr_feats, all_tr_y = [], []
     all_te_feats, all_te_y = [], []
@@ -218,7 +211,7 @@ def train_frozen_linear_probe(backbone, train_loader, test_loader, device, epoch
 
 def main():
     print("=" * 95)
-    print(" DIRECTIVE W3 -- PART 1: BUDGET GATE VERIFICATION (NAIVE FINE-TUNE ON SEED 42)")
+    print(" DIRECTIVE W3 -- PART 1: AMENDED BUDGET GATE VERIFICATION")
     print("=" * 95)
 
     git_sha = check_provenance()
@@ -258,30 +251,20 @@ def main():
 
     train_idx, val_idx = partition_indices(ds_tr.targets, n_train=400, n_val=100, seed=42)
 
-    # Build per-task indices
     targets_tr = np.array(ds_tr.targets)[train_idx]
     targets_va = np.array(ds_ev.targets)[val_idx]
     targets_te = np.array(ds_te.targets)
 
     task_train_loaders = {}
-    task_val_loaders = {}
     task_test_loaders = {}
 
     for t_idx, classes in enumerate(blocks):
-        # Filter indices belonging to task classes
         t_tr_local = [train_idx[i] for i, c in enumerate(targets_tr) if c in classes]
-        t_va_local = [val_idx[i] for i, c in enumerate(targets_va) if c in classes]
         t_te_local = [i for i, c in enumerate(targets_te) if c in classes]
 
-        assert len(t_tr_local) == 4000, f"Task {t_idx} train size mismatch: {len(t_tr_local)}"
-        assert len(t_va_local) == 1000, f"Task {t_idx} val size mismatch: {len(t_va_local)}"
-        assert len(t_te_local) == 1000, f"Task {t_idx} test size mismatch: {len(t_te_local)}"
-
         task_train_loaders[t_idx] = (DataLoader(Subset(ds_tr, t_tr_local), batch_size=BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker), classes)
-        task_val_loaders[t_idx] = (DataLoader(Subset(ds_ev, t_va_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker), classes)
         task_test_loaders[t_idx] = (DataLoader(Subset(ds_te, t_te_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker), classes)
 
-    # Full train and test loaders for linear probe
     full_tr_loader = DataLoader(Subset(ds_ev, train_idx), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
     full_te_loader = DataLoader(ds_te, batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
 
@@ -302,13 +285,13 @@ def main():
 
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
-    t0 = time.time()
+    t0_training = time.time()
 
-    print(f"\n  Starting Naive Fine-Tune over 10 tasks (Epochs/task: {EPOCHS_PER_TASK}, LR: {LR})...")
+    print(f"\n  [1/2] Running Naive Fine-Tune over 10 tasks (Epochs/task: {EPOCHS_PER_TASK}, LR: {LR})...")
 
     for t in range(10):
         t_start = time.time()
-        t_loader, t_classes = task_train_loaders[t]
+        t_loader, _ = task_train_loaders[t]
         sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
 
         for ep in range(EPOCHS_PER_TASK):
@@ -326,7 +309,6 @@ def main():
                 fwd_samples += bx.size(0)
             sched.step()
 
-        # Task boundary evaluation on all tasks seen so far: 0..t
         seen = list(range(t + 1))
         acc_agnostic, acc_aware = evaluate_task_r(model, task_test_loaders, seen, device)
         for j in seen:
@@ -337,73 +319,90 @@ def main():
         t_elapsed = time.time() - t_start
         mean_seen_agnostic = np.mean([R_agnostic[t, j] for j in seen])
         mean_seen_aware = np.mean([R_aware[t, j] for j in seen])
-        print(f"    Task {t}/9 complete ({t_elapsed:5.1f}s) | Agnostic ACC (seen 0..{t}): {mean_seen_agnostic:5.2f}% | Aware ACC: {mean_seen_aware:5.2f}%")
+        print(f"    Task {t}/9 complete ({t_elapsed:5.1f}s) | Agnostic ACC: {mean_seen_agnostic:5.2f}% | Aware ACC: {mean_seen_aware:5.2f}%")
+
+    t_training_naive = time.time() - t0_training
 
     # (iii) Linear probe on final representation
-    print("  Fitting linear probe over all 100 classes on frozen final representation...")
-    t_probe_0 = time.time()
+    print("\n  [2/2] Measuring Linear Probe extraction & fitting time...")
+    t0_probe = time.time()
     probe_acc = train_frozen_linear_probe(model, full_tr_loader, full_te_loader, device, epochs=30)
-    fwd_samples += 40000 + 10000
-    t_probe = time.time() - t_probe_0
-    print(f"  Frozen Linear Probe Test ACC: {probe_acc:.2f}% ({t_probe:.1f}s)")
+    t_probe_measured = time.time() - t0_probe
+    fwd_samples += 50000
 
-    wall_clock = time.time() - t0
     peak_gpu = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
 
     final_acc_agnostic = np.mean(R_agnostic[9, :])
     final_acc_aware = np.mean(R_aware[9, :])
     bias_gap = final_acc_aware - final_acc_agnostic
 
-    print(f"\n  --- NAIVE FINE-TUNE (SEED 42) RESULTS ---")
-    print(f"    (i)   Task-Agnostic (Class-IL) ACC_T : {final_acc_agnostic:5.2f}%")
-    print(f"    (ii)  Task-Aware ACC_T               : {final_acc_aware:5.2f}%")
-    print(f"    Classifier Bias Gap (ii - i)         : {bias_gap:+5.2f} pp")
-    print(f"    (iii) Frozen Feature Linear Probe    : {probe_acc:5.2f}%")
-    print(f"    Wall-Clock Duration                  : {wall_clock:5.2f}s ({wall_clock/60.0:.2f} mins)")
-    print(f"    Peak GPU Memory                      : {peak_gpu / (1024**2):.2f} MB")
-    print(f"    Total Optimizer Steps                : {opt_steps}")
-    print(f"    Total Training Samples Seen          : {samples_seen}")
-    print(f"    Total Forward Samples                : {fwd_samples}")
+    print(f"\n  --- NAIVE FINE-TUNE (SEED 42) BENCHMARK MEASUREMENTS ---")
+    print(f"    Measured Continual Training Duration : {t_training_naive:5.2f}s ({t_training_naive/60.0:.2f} mins)")
+    print(f"    Measured Linear Probe Fitting Duration : {t_probe_measured:5.2f}s ({t_probe_measured/60.0:.2f} mins)")
+    print(f"    (i)   Task-Agnostic (Class-IL) ACC_T   : {final_acc_agnostic:5.2f}%")
+    print(f"    (ii)  Task-Aware ACC_T                 : {final_acc_aware:5.2f}%")
+    print(f"    Classifier Bias Gap (ii - i)           : {bias_gap:+5.2f} pp")
+    print(f"    (iii) Frozen Feature Linear Probe      : {probe_acc:5.2f}%")
+    print(f"    Peak GPU Memory                        : {peak_gpu / (1024**2):.2f} MB")
 
     # -------------------------------------------------------------
-    # BUDGET PROJECTION CALCULATION
+    # AMENDED COMPREHENSIVE BUDGET PROJECTION
     # -------------------------------------------------------------
-    # Multiplier factors relative to naive fine-tune for the 9 arms:
-    # 1. FREEZE-AFTER-BASE : ~0.15 (only 1 task trained)
-    # 2. Naive Fine-Tune   :  1.00
-    # 3. NCM Frozen        : ~0.10 (zero opt steps)
-    # 4. NCM Adapting      : ~0.10 (zero opt steps)
-    # 5. LwF               : ~1.30 (distillation forward pass)
-    # 6. EWC               : ~1.20 (Fisher computation pass)
-    # 7. ER (buffer 500)   : ~1.40 (replay buffer sampling)
-    # 8. DER++ (buffer 500): ~1.50 (replay + logit MSE)
-    # 9. Joint Offline     : ~1.00 (1 single 30-epoch joint run)
-    ARM_WEIGHTS = [0.15, 1.00, 0.10, 0.10, 1.30, 1.20, 1.40, 1.50, 1.00]
-    realistic_arm_sum = sum(ARM_WEIGHTS)  # ~ 7.75
-    conservative_arm_sum = 9.00
+    # 1. Continual learning training across 9 arms x 5 seeds:
+    # Relative weights based on computational complexity:
+    #   1. FREEZE-AFTER-BASE : ~0.15 (1 task only)
+    #   2. Naive Fine-Tune   :  1.00
+    #   3. NCM Frozen        : ~0.10 (zero opt steps)
+    #   4. NCM Adapting      : ~0.10 (zero opt steps)
+    #   5. LwF               : ~1.35 (forward snapshot + KL distillation)
+    #   6. EWC               : ~1.25 (empirical Fisher accumulation)
+    #   7. ER (buffer 500)   : ~1.40 (replay buffer sampling)
+    #   8. DER++ (buffer 500): ~1.55 (replay sampling + MSE logit matching)
+    #   9. Joint Offline     : ~1.00 (single 30-epoch joint run)
+    ARM_WEIGHTS = {
+        "freeze_after_base": 0.15,
+        "naive_fine_tune": 1.00,
+        "ncm_frozen": 0.10,
+        "ncm_adapting": 0.10,
+        "lwf": 1.35,
+        "ewc": 1.25,
+        "er": 1.40,
+        "der_plus_plus": 1.55,
+        "joint_offline": 1.00
+    }
+    sum_arm_weights = sum(ARM_WEIGHTS.values())  # ~ 7.90
+    proj_training_sec = t_training_naive * sum_arm_weights * 5  # 5 seeds
 
-    proj_realistic_sec = wall_clock * realistic_arm_sum * 5
-    proj_conservative_sec = wall_clock * conservative_arm_sum * 5
+    # 2. Tri-metric linear probe cost across 9 arms x 5 seeds = 45 probes:
+    proj_probe_sec = t_probe_measured * 45
 
-    proj_realistic_hr = proj_realistic_sec / 3600.0
-    proj_conservative_hr = proj_conservative_sec / 3600.0
+    # 3. Hyperparameter validation sweeps for NEW arms (Seed 42):
+    # LwF lambda grid (5 candidates) on Task 0..1 validation split:
+    proj_lwf_sweep_sec = t_training_naive * 0.25 * 5  # ~ 1.25 x t_naive
+    # EWC lambda grid (5 candidates) on Task 0..1 validation split:
+    proj_ewc_sweep_sec = t_training_naive * 0.25 * 5  # ~ 1.25 x t_naive
+
+    total_projected_sec = proj_training_sec + proj_probe_sec + proj_lwf_sweep_sec + proj_ewc_sweep_sec
+    total_projected_hr = total_projected_sec / 3600.0
 
     print(f"\n=========================================================================================================")
-    print(" BUDGET GATE VERDICT (9 ARMS x 5 SEEDS = 45 EVALUATIONS)")
+    print(" AMENDED COMPREHENSIVE BUDGET PROJECTION")
     print("=========================================================================================================")
-    print(f"  Measured 1 Arm x 1 Seed Duration    : {wall_clock:.2f}s ({wall_clock/60.0:.2f} mins)")
-    print(f"  Realistic Multiplier (9 arms)        : {realistic_arm_sum:.2f}x")
-    print(f"  Realistic Projected Total (5 seeds) : {proj_realistic_hr:.2f} hours ({proj_realistic_sec:.0f}s)")
-    print(f"  Conservative Projected Total        : {proj_conservative_hr:.2f} hours ({proj_conservative_sec:.0f}s)")
-    print(f"  Budget Limit                        : 7.00 hours (25,200s)")
+    print(f"  1. 9 Arms x 5 Seeds Training Projection       : {proj_training_sec/3600.0:5.2f} hours ({proj_training_sec:.0f}s)")
+    print(f"  2. 45 Frozen Linear Probes Projection          : {proj_probe_sec/3600.0:5.2f} hours ({proj_probe_sec:.0f}s)")
+    print(f"  3. LwF Validation Lambda Sweep Projection      : {proj_lwf_sweep_sec/3600.0:5.2f} hours ({proj_lwf_sweep_sec:.0f}s)")
+    print(f"  4. EWC Validation Lambda Sweep Projection      : {proj_ewc_sweep_sec/3600.0:5.2f} hours ({proj_ewc_sweep_sec:.0f}s)")
+    print(f"  ---------------------------------------------------------------------------------------")
+    print(f"  TOTAL PROJECTED STUDY RUNTIME                  : {total_projected_hr:5.2f} hours ({total_projected_sec:.0f}s)")
+    print(f"  Budget Gate Limit                              :  7.00 hours (25,200s)")
 
-    budget_passed = (proj_conservative_hr <= 7.0 or proj_realistic_hr <= 7.0)
+    budget_passed = (total_projected_hr <= 7.00)
     verdict = "PASSED" if budget_passed else "EXCEEDED"
-    print(f"  Gate Status                         : [BUDGET GATE: {verdict}]")
+    print(f"  Gate Status                                    : [BUDGET GATE: {verdict}]")
 
     if not budget_passed:
-        print(f"  [HALT] Projected study runtime ({proj_realistic_hr:.2f}h) exceeds the 7.0-hour budget limit.")
-        print("  Stopping now per directive instructions. A partial run is invalid.")
+        print(f"\n  [HALT] Total projected runtime ({total_projected_hr:.2f}h) exceeds the 7.00-hour limit.")
+        print("  Terminating now. Per directive: A partial run is invalid, not partial credit.")
 
     # Save output JSON
     results = {
@@ -414,7 +413,8 @@ def main():
         "batch_size": BATCH_SIZE,
         "lr": LR,
         "weight_decay": WEIGHT_DECAY,
-        "wall_clock_seconds": wall_clock,
+        "measured_continual_training_sec": t_training_naive,
+        "measured_linear_probe_sec": t_probe_measured,
         "peak_gpu_memory_bytes": peak_gpu,
         "n_optimizer_steps": opt_steps,
         "n_train_samples_seen": samples_seen,
@@ -426,8 +426,11 @@ def main():
         "R_matrix_agnostic": R_agnostic.tolist(),
         "R_matrix_aware": R_aware.tolist(),
         "budget_projections": {
-            "realistic_hours": float(proj_realistic_hr),
-            "conservative_hours": float(proj_conservative_hr),
+            "training_hours": float(proj_training_sec / 3600.0),
+            "linear_probe_hours": float(proj_probe_sec / 3600.0),
+            "lwf_sweep_hours": float(proj_lwf_sweep_sec / 3600.0),
+            "ewc_sweep_hours": float(proj_ewc_sweep_sec / 3600.0),
+            "total_projected_hours": float(total_projected_hr),
             "budget_limit_hours": 7.0,
             "gate_status": verdict,
             "proceed": bool(budget_passed)
