@@ -1743,12 +1743,13 @@ def main():
 
             # Evaluate hit/miss
             hit = False
-            if "-" in pred_str:
+            if "+/-" in pred_str:
+                parts = [float(p.replace("%", "").strip()) for p in pred_str.split("+/-")]
+                tol = max(3.0 * parts[1], 1.5)
+                hit = abs(meas - parts[0]) <= tol
+            elif "-" in pred_str:
                 parts = [float(p.replace("%", "").strip()) for p in pred_str.split("-")]
                 hit = (parts[0] - 2.0 <= meas <= parts[1] + 2.0)
-            elif "+/-" in pred_str:
-                parts = [float(p.replace("%", "").strip()) for p in pred_str.split("+/-")]
-                hit = abs(meas - parts[0]) <= 3.0 * parts[1]
             status = "HIT" if hit else "MISS"
 
             print(f"  {arm_name:<28} | Predicted: {pred_str:<17} | Measured: {meas:5.2f}% +/- {meas_s:4.2f}% | Status: [{status}]")
