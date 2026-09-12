@@ -1,0 +1,146 @@
+=========================================================================================================
+ DIRECTIVE W2e: CLOSED-LOOP ADAPTATION GAP MEASUREMENT ON SPLIT-CIFAR-100
+=========================================================================================================
+  Session / Platform: CUDA (Kaggle GPU Accelerator)
+  GPU Model         : Tesla T4
+  GPU Total Memory  : 14.56 GB
+  Git Commit SHA    : 8b6c0332780b4e065b0c1b30af201228fb02d2b8
+  SEEDS             : [42, 43, 44, 45, 46]
+  CIFAR-100 archive not found at /kaggle/working/Neural-Networks/data/cifar-100-python.tar.gz. Downloading...
+100%|██████████| 169M/169M [00:21<00:00, 7.90MB/s]
+  Archive Path      : /kaggle/working/Neural-Networks/data/cifar-100-python.tar.gz
+  Archive SHA-256   : 85cd44d02ba6437773c5bbd22e183051d648de2e7d6b014e1ef29b855ba677a7
+  Data Splits       : Train=40000, Val=10000, Test=10000 (100 classes)
+Downloading: "https://download.pytorch.org/models/resnet18-f37072fd.pth" to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth
+100%|██████████| 44.7M/44.7M [00:00<00:00, 186MB/s]
+  Pretrained Weights: 100% of ImageNet-1K parameters loaded strictly with 0 skipped keys.
+  Total Model Params: 11,227,812
+
+=========================================================================================================
+ PROBLEM 3: 2x2 FACTORIAL DECOMPOSITION OF STEM & RESOLUTION (SEED 42, FROZEN NCM)
+=========================================================================================================
+  Evaluating Factorial Cells...
+
+  -----------------------------------------------------------------------------------------------
+  2x2 FACTORIAL RESULTS TABLE (Frozen NCM Accuracy on Seed 42):
+  -----------------------------------------------------------------------------------------------
+  Resolution      | Random 3x3 Stem      | Pretrained 7x7 Stem    | Stem Effect (pp)
+  ----------------|----------------------|------------------------|-----------------
+  32x32           |              13.78% |                27.64% |         +13.86 pp
+  112x112         |              11.36% |                50.24% |         +38.88 pp
+  ----------------|----------------------|------------------------|-----------------
+  Res Effect      |              -2.42 pp |               +22.60 pp | Interaction: +25.02 pp
+  -----------------------------------------------------------------------------------------------
+  ANOVA Factorial Decomposition:
+    Stem Main Effect        : +26.37 percentage points
+    Resolution Main Effect  : +10.09 percentage points
+    Stem x Resolution Inter : +25.02 percentage points
+    Total Shift (112,pre - 32,rand) : +36.46 percentage points
+  Retraction Statement:
+    Prior attribution of the entire +36.46 pp shift to stem initialization alone is
+    RETRACTED. The true stem effect is +38.88 pp at 112x112 (+13.86 pp at 32x32),
+    while resolution accounts for +10.09 pp.
+
+=========================================================================================================
+ PROBLEM 1: ARM C LEARNING RATE SELECTION ON VALIDATION SPLIT (SEED 42)
+=========================================================================================================
+  Declared Learning Rate Grid: [0.001, 0.005, 0.01, 0.02]
+  Evaluating candidate LRs on Validation Split (5 probe epochs per candidate)...
+    Candidate LR = 0.001  -> 5-epoch Val ACC: 71.80%
+    Candidate LR = 0.005  -> 5-epoch Val ACC: 74.19%
+    Candidate LR = 0.01   -> 5-epoch Val ACC: 71.37%
+    Candidate LR = 0.02   -> 5-epoch Val ACC: 66.68%
+  Selected LR for Arm C: 0.005 (Val ACC = 74.19%)
+  Grid Position        : INTERIOR of [0.001, 0.005, 0.01, 0.02]
+
+=========================================================================================================
+ PROBLEM 2: ARM A2 BRACKETED (m, eps) GRID SEARCH ON VALIDATION (SEED 42)
+=========================================================================================================
+  Sweeping 14 candidate (m, eps) pairs on Validation Split...
+  Selected (m*, eps*)  : m = 512, eps = 0.01 (Val ACC = 58.50%)
+  Grid Position        : INTERIOR (eps in [1e-06, 10.0])
+
+=========================================================================================================
+ PRIMARY 5-SEED MEASUREMENT SUITE (SEEDS = [42, 43, 44, 45, 46])
+=========================================================================================================
+
+-------------------------------------------------------------------------------------------------
+ SEED 42 (1/5)
+-------------------------------------------------------------------------------------------------
+  [Arm A1] frozen_NCM_raw                  -> Test ACC: 50.24% | Wall: 25.27s | Steps: 0
+  [Arm A2] frozen_NCM_whitened             -> Test ACC: 58.79% (m=512, eps=0.01) | Wall:  1.15s
+  [Arm A3b] frozen_linear_probe_saturated -> Test ACC: 58.14% (epochs=44, delta_3ep=0.050 pp) | Wall: 28.69s
+  [Arm B] adapt_layer4                     -> Test ACC: 73.68% | Wall: 707.21s | Steps: 9390
+  [Arm C] joint_offline_full_finetune      -> Test ACC: 79.38% (epochs=30, plateaued=True) | Wall: 1180.90s | Steps: 9390
+
+-------------------------------------------------------------------------------------------------
+ SEED 43 (2/5)
+-------------------------------------------------------------------------------------------------
+  [Arm A1] frozen_NCM_raw                  -> Test ACC: 50.24% | Wall: 25.52s | Steps: 0
+  [Arm A2] frozen_NCM_whitened             -> Test ACC: 58.79% (m=512, eps=0.01) | Wall:  1.08s
+  [Arm A3b] frozen_linear_probe_saturated -> Test ACC: 57.56% (epochs=39, delta_3ep=0.000 pp) | Wall: 25.90s
+  [Arm B] adapt_layer4                     -> Test ACC: 73.99% | Wall: 702.18s | Steps: 9390
+  [Arm C] joint_offline_full_finetune      -> Test ACC: 79.86% (epochs=30, plateaued=True) | Wall: 1178.91s | Steps: 9390
+
+-------------------------------------------------------------------------------------------------
+ SEED 44 (3/5)
+-------------------------------------------------------------------------------------------------
+  [Arm A1] frozen_NCM_raw                  -> Test ACC: 50.24% | Wall: 25.18s | Steps: 0
+  [Arm A2] frozen_NCM_whitened             -> Test ACC: 58.79% (m=512, eps=0.01) | Wall:  1.04s
+  [Arm A3b] frozen_linear_probe_saturated -> Test ACC: 57.53% (epochs=40, delta_3ep=0.030 pp) | Wall: 25.95s
+  [Arm B] adapt_layer4                     -> Test ACC: 74.22% | Wall: 703.61s | Steps: 9390
+  [Arm C] joint_offline_full_finetune      -> Test ACC: 79.78% (epochs=30, plateaued=True) | Wall: 1179.73s | Steps: 9390
+
+-------------------------------------------------------------------------------------------------
+ SEED 45 (4/5)
+-------------------------------------------------------------------------------------------------
+  [Arm A1] frozen_NCM_raw                  -> Test ACC: 50.24% | Wall: 25.32s | Steps: 0
+  [Arm A2] frozen_NCM_whitened             -> Test ACC: 58.79% (m=512, eps=0.01) | Wall:  1.02s
+  [Arm A3b] frozen_linear_probe_saturated -> Test ACC: 57.34% (epochs=34, delta_3ep=0.050 pp) | Wall: 21.08s
+  [Arm B] adapt_layer4                     -> Test ACC: 73.71% | Wall: 696.88s | Steps: 9390
+  [Arm C] joint_offline_full_finetune      -> Test ACC: 79.41% (epochs=30, plateaued=True) | Wall: 1178.96s | Steps: 9390
+
+-------------------------------------------------------------------------------------------------
+ SEED 46 (5/5)
+-------------------------------------------------------------------------------------------------
+  [Arm A1] frozen_NCM_raw                  -> Test ACC: 50.24% | Wall: 25.02s | Steps: 0
+  [Arm A2] frozen_NCM_whitened             -> Test ACC: 58.79% (m=512, eps=0.01) | Wall:  1.05s
+  [Arm A3b] frozen_linear_probe_saturated -> Test ACC: 57.88% (epochs=41, delta_3ep=0.040 pp) | Wall: 27.34s
+  [Arm B] adapt_layer4                     -> Test ACC: 73.41% | Wall: 701.30s | Steps: 9390
+  [Arm C] joint_offline_full_finetune      -> Test ACC: 79.79% (epochs=30, plateaued=True) | Wall: 1177.55s | Steps: 9390
+
+=========================================================================================================
+ DECLARATIONS & SYSTEMATIC CONSISTENCY AUDIT
+=========================================================================================================
+  DECLARATION 1 (Structural Invariance of A1 and A2):
+    Arms A1 and A2 evaluate deterministic class centroids on frozen penultimate features.
+    Because feature representations are identical and centroid calculation is order-invariant,
+    the metric is STRUCTURALLY CONSTANT with respect to seed. The reported variance (+/- 0.00)
+    serves strictly as a deterministic pipeline audit, NOT an empirical variance estimate.
+
+  DECLARATION 2 (Counter Verification Consistency):
+    All 25 arm-seed executions verified: n_optimizer_steps == epochs x ceil(n_train/batch_size) [313] and n_train_samples_seen == epochs x 40,000.
+    Counter Consistency Check: PASSED.
+
+=========================================================================================================
+ FINAL STATISTICAL SUMMARY (N = 5 SEEDS: [42, 43, 44, 45, 46])
+=========================================================================================================
+    A1_frozen_NCM_raw                   : 50.24% +/- 0.00% | seeds: [50.24, 50.24, 50.24, 50.24, 50.24]
+    A2_frozen_NCM_whitened              : 58.79% +/- 0.00% | seeds: [58.79, 58.79, 58.79, 58.79, 58.79]
+    A3b_frozen_linear_probe_saturated   : 57.69% +/- 0.32% | seeds: [58.14, 57.56, 57.53, 57.34, 57.88]
+    B_adapt_layer4                      : 73.80% +/- 0.31% | seeds: [73.68, 73.99, 74.22, 73.71, 73.41]
+    C_joint_offline_full_finetune       : 79.64% +/- 0.23% | seeds: [79.38, 79.86, 79.78, 79.41, 79.79]
+
+  -----------------------------------------------------------------------------------------------
+  ADAPTATION GAP DECOMPOSITION & VERDICTS:
+  -----------------------------------------------------------------------------------------------
+    1. Pre-Registered Gap (Arm C - Arm A1 vs Raw Frozen NCM)        : +29.40 pp -> clears +15.0 pp
+    2. Representation Adaptation Gap (Arm C - Arm A3b Linear Fixed) : +21.95 pp -> clears +15.0 pp
+    3. Head Expressivity Contribution (Arm A3b - Arm A1)           : +7.45 pp ( 25.3% of total gap)
+    4. Representation Learning Contribution (Arm C - Arm A3b)      : +21.95 pp ( 74.7% of total gap)
+    5. Gain of Full Fine-Tuning over Layer4-Only (Arm C - Arm B)   : +5.84 pp
+  -----------------------------------------------------------------------------------------------
+
+  Emitted comprehensive closed results to /kaggle/working/Neural-Networks/w2e_results.json
+=========================================================================================================
+EXIT_CODE = 0
