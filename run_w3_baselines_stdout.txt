@@ -1,0 +1,392 @@
+Your branch is up to date with 'origin/main'.
+HEAD is now at 7d85faa FIX PREDICTION STRING PARSING ORDER (+/- BEFORE -) IN RUN_W3_BASELINES.PY
+===================================================================================================================
+ DIRECTIVE W3 -- PART 2: CONTINUAL LEARNING BASELINE SUITE (DEMAND-DRIVEN RESUMABLE EXECUTION)
+===================================================================================================================
+  Git Commit SHA     : 7d85faaa3399659b3add61b40a3c765988b91dcd
+  Platform Device    : cuda
+  GPU Accelerator    : Tesla T4
+
+===================================================================================================================
+ C1. TERM-BY-TERM BUDGET ARITHMETIC AUDIT
+===================================================================================================================
+  Arm Weights Addition Term-by-Term:
+    0.10 (Arm 1) + 1.00 (Arm 2) + 0.05 (Arm 3) + 1.05 (Arm 4) + 1.35 (Arm 5) +
+    1.15 (Arm 6) + 1.40 (Arm 7) + 1.55 (Arm 8) + 1.54 (Arm 9) = 9.19
+
+  Study Runtime Projection:
+    1. Continual Training (5 seeds * 9.19 * 767.37s) :  9.79 h (35261s)
+    2. 45 Representation Probes (45 * 63.01s)            :  0.79 h (2835s)
+    3. 5 Pretrained Baseline Probes (5 * 63.01s)          :  0.09 h (315s)
+    4. LwF + EWC Validation Sweeps                              :  0.31 h (1116s)
+    -------------------------------------------------------------------------
+    TOTAL PROJECTED STUDY RUNTIME                               : 10.98 h (39527s)
+  [GATE RESOLUTION] Multi-session execution is authorized. Proceeding via demand-driven loop.
+===================================================================================================================
+
+===================================================================================================================
+ C3. EXPLICIT DEFINITIONS OF TWO ARMS & STORED MEMORY COMPARISON
+===================================================================================================================
+  Arm 1 (1_freeze_after_base):
+    - Task 0: Train full model (backbone + head) for 20 epochs.
+    - Tasks 1-9: Freeze backbone (conv1..layer4). Continue training classifier head (self.fc) on each task.
+    - Function: Isolates representation drift (vs naive fine-tune) and classifier family (vs NCM frozen).
+
+  Arm 4 (4_ncm_adapting_features):
+    - Protocol: Protocol (a) -- Stale Centroids.
+    - Centroids computed once at task end with then-current backbone and stored; never updated from exemplars.
+    - Zero raw image exemplar buffer.
+
+  Stored State Memory Accounting Across Arms:
+    - Arm 3 (3_ncm_frozen_features)     :    204,800 bytes (0.205 MB) [100 centroids x 512 float32, 0 image bytes]
+    - Arm 4 (4_ncm_adapting_features)   :    204,800 bytes (0.205 MB) [100 centroids x 512 float32, 0 image bytes]
+    - Arm 7 (7_er_buffer500)            : 75,268,000 bytes (75.27 MB) [500 images x 3x112x112 float32 + labels]
+    - Arm 8 (8_der_plus_plus_buffer500) : 75,468,000 bytes (75.47 MB) [500 images + labels + 500x100 logits]
+===================================================================================================================
+
+===================================================================================================================
+ C4. PROVISIONAL BASELINE STATUS & UNIFIED LINEAR PROBE PROTOCOL (AMENDMENT 1)
+===================================================================================================================
+  [PROVISIONAL HYPOTHESIS: 65.40%]
+    The adapted-backbone probe (65.40%) was measured before Amendment 1's shared protocol existed.
+    It is treated as a provisional hypothesis until re-measured under the unified protocol.
+    The 5-seed frozen baseline supersedes the single-seed 59.10%.
+
+  Unified Shared Linear Probe Specification:
+    feature_extraction_transform   : ev_transform (Resize 112x112, ToTensor, Normalize ImageNet mean/std) [NO DATA AUGMENTATION]
+    architecture                   : nn.Linear(in_features=512, out_features=100)
+    optimizer                      : SGD(lr=0.1, momentum=0.9, weight_decay=1e-4)
+    scheduler                      : CosineAnnealingLR(T_max=30, eta_min=1e-4)
+    epochs                         : 30
+    batch_size                     : 128
+    criterion                      : CrossEntropyLoss
+===================================================================================================================
+
+===================================================================================================================
+ PRE-REGISTERED PREDICTION REGISTRY (AMENDMENT 4)
+===================================================================================================================
+  1_freeze_after_base          | Pred Class-IL: 18.0% - 26.0%     | Beats Freeze? CONTROL ARM (Self) | Freeze backbone after task 0; continue training head
+  2_naive_fine_tune            | Pred Class-IL: 9.8% +/- 0.5%     | Beats Freeze? NO               | Severe classifier interference (measured 9.82% in Part 1)
+  3_ncm_frozen_features        | Pred Class-IL: 50.2% +/- 0.0%    | Beats Freeze? YES              | Immune to classifier drift; invariant representations
+  4_ncm_adapting_features      | Pred Class-IL: 32.0% - 45.0%     | Beats Freeze? YES              | Protocol a: stale centroids degrade as backbone drifts, but bypasses logit bias
+  5_lwf                        | Pred Class-IL: 15.0% - 25.0%     | Beats Freeze? WEAK             | Distillation regularizes logits, but lacks rehearsal
+  6_ewc                        | Pred Class-IL: 11.0% - 16.0%     | Beats Freeze? WEAK             | Weight penalty cannot prevent inter-task logit competition
+  7_er_buffer500               | Pred Class-IL: 35.0% - 45.0%     | Beats Freeze? YES              | Rehearsal directly counteracts logit bias
+  8_der_plus_plus_buffer500    | Pred Class-IL: 45.0% - 55.0%     | Beats Freeze? YES              | Dark Experience Replay: rehearsal + past logit consistency
+  9_joint_offline              | Pred Class-IL: 79.64% +/- 0.23%  | Beats Freeze? UPPER BOUND      | Joint offline reference ceiling
+===================================================================================================================
+
+  CIFAR-100 archive not found at /kaggle/working/Neural-Networks/data/cifar-100-python.tar.gz. Downloading...
+100%|██████████| 169M/169M [00:15<00:00, 11.2MB/s]
+
+  [Evaluating 5-Seed Protocol-Matched Frozen ImageNet Linear Probes]
+Downloading: "https://download.pytorch.org/models/resnet18-f37072fd.pth" to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth
+100%|██████████| 44.7M/44.7M [00:00<00:00, 191MB/s]
+    Seed 42 -> Frozen ImageNet Probe Test ACC: 59.10% (feat: 45.4s, probe: 15.8s)
+    Seed 43 -> Frozen ImageNet Probe Test ACC: 59.14% (feat: 41.7s, probe: 15.6s)
+    Seed 44 -> Frozen ImageNet Probe Test ACC: 59.32% (feat: 41.8s, probe: 15.6s)
+    Seed 45 -> Frozen ImageNet Probe Test ACC: 59.25% (feat: 41.8s, probe: 15.5s)
+    Seed 46 -> Frozen ImageNet Probe Test ACC: 59.14% (feat: 41.8s, probe: 15.5s)
+  5-Seed Frozen ImageNet Probe Baseline: 59.19% +/- 0.09% (supersedes single-seed 59.10%)
+
+  [Hyperparameter Selection: LwF Lambda Sweep on Validation Split (Seed 42)]
+    Candidate Grid : [0.1, 0.5, 1.0, 2.0, 5.0] (Temperature T = 2.0)
+    Protocol Label : selected under truncated horizon (3 tasks)
+    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
+    Candidate lambda =  0.10 -> Validation ACC (Tasks 0-2): 30.77%
+    Candidate lambda =  0.50 -> Validation ACC (Tasks 0-2): 30.47%
+    Candidate lambda =  1.00 -> Validation ACC (Tasks 0-2): 30.43%
+    Candidate lambda =  2.00 -> Validation ACC (Tasks 0-2): 30.63%
+    Candidate lambda =  5.00 -> Validation ACC (Tasks 0-2): 29.73%
+  [Octave Extension Lower] Boundary hit at 0.1. Extending grid with 0.05...
+    Candidate lambda =  0.05 -> Validation ACC: 30.70%
+  Selected LwF Optimal lambda*: 0.1 (Val ACC = 30.77%) [selected under truncated horizon (3 tasks)] | Boundary: False
+
+  [Hyperparameter Selection: EWC Lambda Sweep on Validation Split (Seed 42)]
+    Candidate Grid : [10.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0]
+    Protocol Label : selected under truncated horizon (3 tasks)
+    Scoring Split  : Validation Split (Tasks 0 and 1)
+    Candidate lambda =    10.0 -> Validation ACC: 45.40%
+    Candidate lambda =   100.0 -> Validation ACC: 45.50%
+    Candidate lambda =   500.0 -> Validation ACC: 45.10%
+    Candidate lambda =  1000.0 -> Validation ACC: 45.75%
+    Candidate lambda =  5000.0 -> Validation ACC: 45.70%
+    Candidate lambda = 10000.0 -> Validation ACC: 45.55%
+  Selected EWC Optimal lambda*: 1000.0 (Val ACC = 45.75%) [selected under truncated horizon (3 tasks)] | Boundary: False
+
+===================================================================================================================
+ EXECUTION MANIFEST (ORDERED DEMAND-DRIVEN SCHEDULE)
+===================================================================================================================
+ #   | Arm Name                     | Seed  | Status                           | Est. Time   
+-------------------------------------------------------------------------------------------------------------------
+ 1   | 2_naive_fine_tune            | 42    | [PENDING - to execute]           | ~830  s
+ 2   | 2_naive_fine_tune            | 43    | [PENDING - to execute]           | ~830  s
+ 3   | 2_naive_fine_tune            | 44    | [PENDING - to execute]           | ~830  s
+ 4   | 2_naive_fine_tune            | 45    | [PENDING - to execute]           | ~830  s
+ 5   | 2_naive_fine_tune            | 46    | [PENDING - to execute]           | ~830  s
+ 6   | 3_ncm_frozen_features        | 42    | [PENDING - to execute]           | ~101  s
+ 7   | 3_ncm_frozen_features        | 43    | [PENDING - to execute]           | ~101  s
+ 8   | 3_ncm_frozen_features        | 44    | [PENDING - to execute]           | ~101  s
+ 9   | 3_ncm_frozen_features        | 45    | [PENDING - to execute]           | ~101  s
+ 10  | 3_ncm_frozen_features        | 46    | [PENDING - to execute]           | ~101  s
+ 11  | 9_joint_offline              | 42    | [PENDING - to execute]           | ~1245 s
+ 12  | 9_joint_offline              | 43    | [PENDING - to execute]           | ~1245 s
+ 13  | 9_joint_offline              | 44    | [PENDING - to execute]           | ~1245 s
+ 14  | 9_joint_offline              | 45    | [PENDING - to execute]           | ~1245 s
+ 15  | 9_joint_offline              | 46    | [PENDING - to execute]           | ~1245 s
+ 16  | 1_freeze_after_base          | 42    | [PENDING - to execute]           | ~140  s
+ 17  | 1_freeze_after_base          | 43    | [PENDING - to execute]           | ~140  s
+ 18  | 1_freeze_after_base          | 44    | [PENDING - to execute]           | ~140  s
+ 19  | 1_freeze_after_base          | 45    | [PENDING - to execute]           | ~140  s
+ 20  | 1_freeze_after_base          | 46    | [PENDING - to execute]           | ~140  s
+ 21  | 4_ncm_adapting_features      | 42    | [PENDING - to execute]           | ~869  s
+ 22  | 4_ncm_adapting_features      | 43    | [PENDING - to execute]           | ~869  s
+ 23  | 4_ncm_adapting_features      | 44    | [PENDING - to execute]           | ~869  s
+ 24  | 4_ncm_adapting_features      | 45    | [PENDING - to execute]           | ~869  s
+ 25  | 4_ncm_adapting_features      | 46    | [PENDING - to execute]           | ~869  s
+ 26  | 5_lwf                        | 42    | [PENDING - to execute]           | ~1099 s
+ 27  | 5_lwf                        | 43    | [PENDING - to execute]           | ~1099 s
+ 28  | 5_lwf                        | 44    | [PENDING - to execute]           | ~1099 s
+ 29  | 5_lwf                        | 45    | [PENDING - to execute]           | ~1099 s
+ 30  | 5_lwf                        | 46    | [PENDING - to execute]           | ~1099 s
+ 31  | 6_ewc                        | 42    | [PENDING - to execute]           | ~945  s
+ 32  | 6_ewc                        | 43    | [PENDING - to execute]           | ~945  s
+ 33  | 6_ewc                        | 44    | [PENDING - to execute]           | ~945  s
+ 34  | 6_ewc                        | 45    | [PENDING - to execute]           | ~945  s
+ 35  | 6_ewc                        | 46    | [PENDING - to execute]           | ~945  s
+ 36  | 7_er_buffer500               | 42    | [PENDING - to execute]           | ~1137 s
+ 37  | 7_er_buffer500               | 43    | [PENDING - to execute]           | ~1137 s
+ 38  | 7_er_buffer500               | 44    | [PENDING - to execute]           | ~1137 s
+ 39  | 7_er_buffer500               | 45    | [PENDING - to execute]           | ~1137 s
+ 40  | 7_er_buffer500               | 46    | [PENDING - to execute]           | ~1137 s
+ 41  | 8_der_plus_plus_buffer500    | 42    | [PENDING - to execute]           | ~1252 s
+ 42  | 8_der_plus_plus_buffer500    | 43    | [PENDING - to execute]           | ~1252 s
+ 43  | 8_der_plus_plus_buffer500    | 44    | [PENDING - to execute]           | ~1252 s
+ 44  | 8_der_plus_plus_buffer500    | 45    | [PENDING - to execute]           | ~1252 s
+ 45  | 8_der_plus_plus_buffer500    | 46    | [PENDING - to execute]           | ~1252 s
+-------------------------------------------------------------------------------------------------------------------
+  Study Cells Completed   : 0 / 45
+  Pending Execution Time  : 10.58 hours (38096s)
+  Allocated Session Limit : 6.50 hours (23400s)
+===================================================================================================================
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #01/45: Arm '2_naive_fine_tune' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 882.5s | Class-IL: 9.82% | Aware: 83.59% | Probe: 65.42%
+    BWT Class-IL: -87.59 pp | BWT Aware: -5.64 pp | BWT Interference: +81.94 pp
+    Avg LA: 88.65% | Total Drop: 78.83 pp (Denominator) | Clf Share: 93.6% | Res Share: 6.4%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #02/45: Arm '2_naive_fine_tune' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 871.7s | Class-IL: 9.65% | Aware: 83.22% | Probe: 65.68%
+    BWT Class-IL: -87.74 pp | BWT Aware: -6.03 pp | BWT Interference: +81.71 pp
+    Avg LA: 88.62% | Total Drop: 78.97 pp (Denominator) | Clf Share: 93.2% | Res Share: 6.8%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #03/45: Arm '2_naive_fine_tune' | Seed 44
+-------------------------------------------------------------------------------------------------
+    Completed in 866.9s | Class-IL: 9.36% | Aware: 83.62% | Probe: 66.29%
+    BWT Class-IL: -88.39 pp | BWT Aware: -5.88 pp | BWT Interference: +82.51 pp
+    Avg LA: 88.91% | Total Drop: 79.55 pp (Denominator) | Clf Share: 93.4% | Res Share: 6.6%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #04/45: Arm '2_naive_fine_tune' | Seed 45
+-------------------------------------------------------------------------------------------------
+    Completed in 889.1s | Class-IL: 9.30% | Aware: 83.75% | Probe: 64.83%
+    BWT Class-IL: -88.00 pp | BWT Aware: -5.28 pp | BWT Interference: +82.72 pp
+    Avg LA: 88.50% | Total Drop: 79.20 pp (Denominator) | Clf Share: 94.0% | Res Share: 6.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #05/45: Arm '2_naive_fine_tune' | Seed 46
+-------------------------------------------------------------------------------------------------
+    Completed in 888.0s | Class-IL: 9.52% | Aware: 83.67% | Probe: 66.31%
+    BWT Class-IL: -88.56 pp | BWT Aware: -6.17 pp | BWT Interference: +82.39 pp
+    Avg LA: 89.22% | Total Drop: 79.70 pp (Denominator) | Clf Share: 93.0% | Res Share: 7.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #06/45: Arm '3_ncm_frozen_features' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 138.1s | Class-IL: 47.10% | Aware: 78.38% | Probe: 59.10%
+    BWT Class-IL: -13.18 pp | BWT Aware: +0.00 pp | BWT Interference: +13.18 pp
+    Avg LA: 58.96% | Total Drop: 11.86 pp (Denominator) | Clf Share: 263.7% | Res Share: -163.7%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #07/45: Arm '3_ncm_frozen_features' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 139.0s | Class-IL: 47.06% | Aware: 78.34% | Probe: 59.14%
+    BWT Class-IL: -13.36 pp | BWT Aware: +0.00 pp | BWT Interference: +13.36 pp
+    Avg LA: 59.08% | Total Drop: 12.02 pp (Denominator) | Clf Share: 260.2% | Res Share: -160.2%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #08/45: Arm '3_ncm_frozen_features' | Seed 44
+-------------------------------------------------------------------------------------------------
+    Completed in 138.0s | Class-IL: 47.25% | Aware: 78.64% | Probe: 59.32%
+    BWT Class-IL: -13.42 pp | BWT Aware: +0.00 pp | BWT Interference: +13.42 pp
+    Avg LA: 59.33% | Total Drop: 12.08 pp (Denominator) | Clf Share: 259.9% | Res Share: -159.9%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #09/45: Arm '3_ncm_frozen_features' | Seed 45
+-------------------------------------------------------------------------------------------------
+    Completed in 145.1s | Class-IL: 47.12% | Aware: 78.50% | Probe: 59.25%
+    BWT Class-IL: -13.66 pp | BWT Aware: +0.00 pp | BWT Interference: +13.66 pp
+    Avg LA: 59.41% | Total Drop: 12.29 pp (Denominator) | Clf Share: 255.3% | Res Share: -155.3%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #10/45: Arm '3_ncm_frozen_features' | Seed 46
+-------------------------------------------------------------------------------------------------
+    Completed in 147.2s | Class-IL: 47.07% | Aware: 78.66% | Probe: 59.14%
+    BWT Class-IL: -13.59 pp | BWT Aware: +0.00 pp | BWT Interference: +13.59 pp
+    Avg LA: 59.30% | Total Drop: 12.23 pp (Denominator) | Clf Share: 258.3% | Res Share: -158.3%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #11/45: Arm '9_joint_offline' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 1235.3s | Class-IL: 79.72% | Aware: 94.60% | Probe: 79.36%
+    BWT Class-IL: +0.00 pp | BWT Aware: +0.00 pp | BWT Interference: +0.00 pp
+    Avg LA: 79.72% | Total Drop: 0.00 pp (Denominator) | Clf Share: 0.0% | Res Share: 0.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #12/45: Arm '9_joint_offline' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 1236.6s | Class-IL: 79.75% | Aware: 94.25% | Probe: 79.21%
+    BWT Class-IL: +0.00 pp | BWT Aware: +0.00 pp | BWT Interference: +0.00 pp
+    Avg LA: 79.75% | Total Drop: 0.00 pp (Denominator) | Clf Share: 0.0% | Res Share: 0.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #13/45: Arm '9_joint_offline' | Seed 44
+-------------------------------------------------------------------------------------------------
+    Completed in 1227.6s | Class-IL: 79.61% | Aware: 94.60% | Probe: 79.32%
+    BWT Class-IL: +0.00 pp | BWT Aware: +0.00 pp | BWT Interference: +0.00 pp
+    Avg LA: 79.61% | Total Drop: 0.00 pp (Denominator) | Clf Share: 0.0% | Res Share: 0.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #14/45: Arm '9_joint_offline' | Seed 45
+-------------------------------------------------------------------------------------------------
+    Completed in 1237.8s | Class-IL: 79.27% | Aware: 94.22% | Probe: 79.18%
+    BWT Class-IL: +0.00 pp | BWT Aware: +0.00 pp | BWT Interference: +0.00 pp
+    Avg LA: 79.27% | Total Drop: 0.00 pp (Denominator) | Clf Share: 0.0% | Res Share: 0.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #15/45: Arm '9_joint_offline' | Seed 46
+-------------------------------------------------------------------------------------------------
+    Completed in 1234.9s | Class-IL: 79.77% | Aware: 94.57% | Probe: 79.44%
+    BWT Class-IL: +0.00 pp | BWT Aware: +0.00 pp | BWT Interference: +0.00 pp
+    Avg LA: 79.77% | Total Drop: 0.00 pp (Denominator) | Clf Share: 0.0% | Res Share: 0.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #16/45: Arm '1_freeze_after_base' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 692.1s | Class-IL: 8.65% | Aware: 73.35% | Probe: 58.46%
+    BWT Class-IL: -88.02 pp | BWT Aware: -16.13 pp | BWT Interference: +71.89 pp
+    Avg LA: 87.87% | Total Drop: 79.22 pp (Denominator) | Clf Share: 81.7% | Res Share: 18.3%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #17/45: Arm '1_freeze_after_base' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 689.0s | Class-IL: 8.68% | Aware: 71.40% | Probe: 58.52%
+    BWT Class-IL: -88.23 pp | BWT Aware: -18.54 pp | BWT Interference: +69.69 pp
+    Avg LA: 88.09% | Total Drop: 79.41 pp (Denominator) | Clf Share: 79.0% | Res Share: 21.0%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #18/45: Arm '1_freeze_after_base' | Seed 44
+-------------------------------------------------------------------------------------------------
+    Completed in 688.3s | Class-IL: 8.66% | Aware: 72.31% | Probe: 59.11%
+    BWT Class-IL: -88.30 pp | BWT Aware: -17.58 pp | BWT Interference: +70.72 pp
+    Avg LA: 88.13% | Total Drop: 79.47 pp (Denominator) | Clf Share: 80.1% | Res Share: 19.9%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #19/45: Arm '1_freeze_after_base' | Seed 45
+-------------------------------------------------------------------------------------------------
+    Completed in 681.2s | Class-IL: 8.74% | Aware: 72.46% | Probe: 57.67%
+    BWT Class-IL: -87.82 pp | BWT Aware: -17.02 pp | BWT Interference: +70.80 pp
+    Avg LA: 87.78% | Total Drop: 79.04 pp (Denominator) | Clf Share: 80.6% | Res Share: 19.4%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #20/45: Arm '1_freeze_after_base' | Seed 46
+-------------------------------------------------------------------------------------------------
+    Completed in 679.1s | Class-IL: 8.62% | Aware: 73.94% | Probe: 58.21%
+    BWT Class-IL: -88.08 pp | BWT Aware: -15.50 pp | BWT Interference: +72.58 pp
+    Avg LA: 87.89% | Total Drop: 79.27 pp (Denominator) | Clf Share: 82.4% | Res Share: 17.6%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #21/45: Arm '4_ncm_adapting_features' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 925.2s | Class-IL: 41.23% | Aware: 83.77% | Probe: 65.24%
+    BWT Class-IL: -44.27 pp | BWT Aware: -4.77 pp | BWT Interference: +39.50 pp
+    Avg LA: 81.07% | Total Drop: 39.84 pp (Denominator) | Clf Share: 106.8% | Res Share: -6.8%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #22/45: Arm '4_ncm_adapting_features' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 925.7s | Class-IL: 42.96% | Aware: 83.32% | Probe: 65.71%
+    BWT Class-IL: -41.87 pp | BWT Aware: -5.47 pp | BWT Interference: +36.40 pp
+    Avg LA: 80.64% | Total Drop: 37.68 pp (Denominator) | Clf Share: 107.1% | Res Share: -7.1%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #23/45: Arm '4_ncm_adapting_features' | Seed 44
+-------------------------------------------------------------------------------------------------
+    Completed in 929.7s | Class-IL: 43.62% | Aware: 84.34% | Probe: 66.20%
+    BWT Class-IL: -41.11 pp | BWT Aware: -4.32 pp | BWT Interference: +36.79 pp
+    Avg LA: 80.62% | Total Drop: 37.00 pp (Denominator) | Clf Share: 110.1% | Res Share: -10.1%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #24/45: Arm '4_ncm_adapting_features' | Seed 45
+-------------------------------------------------------------------------------------------------
+    Completed in 934.3s | Class-IL: 40.57% | Aware: 84.21% | Probe: 64.83%
+    BWT Class-IL: -44.58 pp | BWT Aware: -4.37 pp | BWT Interference: +40.21 pp
+    Avg LA: 80.69% | Total Drop: 40.12 pp (Denominator) | Clf Share: 108.8% | Res Share: -8.8%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #25/45: Arm '4_ncm_adapting_features' | Seed 46
+-------------------------------------------------------------------------------------------------
+    Completed in 928.2s | Class-IL: 41.50% | Aware: 83.57% | Probe: 66.15%
+    BWT Class-IL: -43.79 pp | BWT Aware: -5.10 pp | BWT Interference: +38.69 pp
+    Avg LA: 80.91% | Total Drop: 39.41 pp (Denominator) | Clf Share: 106.7% | Res Share: -6.7%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #26/45: Arm '5_lwf' | Seed 42
+-------------------------------------------------------------------------------------------------
+    Completed in 1148.0s | Class-IL: 10.44% | Aware: 85.14% | Probe: 65.52%
+    BWT Class-IL: -86.90 pp | BWT Aware: -3.92 pp | BWT Interference: +82.98 pp
+    Avg LA: 88.65% | Total Drop: 78.21 pp (Denominator) | Clf Share: 95.5% | Res Share: 4.5%
+
+-------------------------------------------------------------------------------------------------
+  [COMPUTED THIS SESSION] Cell #27/45: Arm '5_lwf' | Seed 43
+-------------------------------------------------------------------------------------------------
+    Completed in 1119.0s | Class-IL: 10.32% | Aware: 84.87% | Probe: 66.02%
+    BWT Class-IL: -87.24 pp | BWT Aware: -4.47 pp | BWT Interference: +82.78 pp
+    Avg LA: 88.84% | Total Drop: 78.52 pp (Denominator) | Clf Share: 94.9% | Res Share: 5.1%
+
+  [CLEAN HALT: budget] Elapsed: 6.47h + Next: 0.31h > Max: 6.50h.
+  Halting cleanly before Cell #28 (5_lwf, Seed 44). Progress saved intact in /kaggle/working/Neural-Networks/w3_baselines.json.
+  Resume in next session with: python run_w3_baselines.py
+
+===========================================================================================================================================================
+ CONTINUAL LEARNING BASELINE TABLE (TRI-METRIC & DUAL BWT DECOMPOSITION)
+===========================================================================================================================================================
+Arm Name                     | (i) Class-IL   | (ii) Aware     | Bias Gap   | (iii) Probe   | BWT Agnostic  | BWT Aware   | Avg LA     | Clf Share
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+2_naive_fine_tune            |  9.53% +/-0.21 | 83.57% +/-0.20 | +74.04 pp | 65.71% +/-0.62 | -88.06 pp    | -5.80 pp  | 88.78%    |  93.4% (n=5)
+3_ncm_frozen_features        | 47.12% +/-0.08 | 78.50% +/-0.15 | +31.38 pp | 59.19% +/-0.09 | -13.44 pp    | +0.00 pp  | 59.22%    | 259.5% (n=5)
+9_joint_offline              | 79.62% +/-0.21 | 94.45% +/-0.20 | +14.82 pp | 79.30% +/-0.11 | +0.00 pp    | +0.00 pp  | 79.62%    |   0.0% (n=5)
+1_freeze_after_base          |  8.67% +/-0.04 | 72.69% +/-0.98 | +64.02 pp | 58.39% +/-0.52 | -88.09 pp    | -16.96 pp  | 87.95%    |  80.8% (n=5)
+4_ncm_adapting_features      | 41.98% +/-1.27 | 83.84% +/-0.43 | +41.87 pp | 65.63% +/-0.59 | -43.12 pp    | -4.80 pp  | 80.79%    | 107.9% (n=5)
+5_lwf                        | 10.38% +/-0.08 | 85.00% +/-0.19 | +74.62 pp | 65.77% +/-0.35 | -87.07 pp    | -4.19 pp  | 88.75%    |  95.2% (n=2)
+
+===================================================================================================================
+ PREDICTION REGISTRY AUDIT (PREDICTED VS MEASURED CLASS-IL)
+===================================================================================================================
+  2_naive_fine_tune            | Predicted: 9.8% +/- 0.5%     | Measured:  9.53% +/- 0.21% | Status: [HIT]
+  3_ncm_frozen_features        | Predicted: 50.2% +/- 0.0%    | Measured: 47.12% +/- 0.08% | Status: [MISS]
+  9_joint_offline              | Predicted: 79.64% +/- 0.23%  | Measured: 79.62% +/- 0.21% | Status: [HIT]
+  1_freeze_after_base          | Predicted: 18.0% - 26.0%     | Measured:  8.67% +/- 0.04% | Status: [MISS]
+  4_ncm_adapting_features      | Predicted: 32.0% - 45.0%     | Measured: 41.98% +/- 1.27% | Status: [HIT]
+
+  [Joint Offline Reproduction Audit]
+    Target: 79.64% +/- 0.23% | Measured: 79.62% | Delta: +0.02 pp -> PASS
+
+===================================================================================================================
+EXIT_CODE = 0
+===================================================================================================================
