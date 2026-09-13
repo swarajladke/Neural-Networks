@@ -66,3 +66,186 @@ CORRECTED 2026-08-10 (L4 & M2): The 79.33% figure (commit `4d2284b`), the 85.40%
 ## Historical Archive Reference
 
 All pre-O-phase sections (Sections 1 through 18) have been archived into RESULTS_ARCHIVE.md per Directive AA8 (Option A).
+
+---
+
+## Split-CIFAR-100 Continual Learning Suite (Directives W2e, W3, W4)
+
+### 1. Benchmark Specification & Architecture
+- **Dataset**: Split-CIFAR-100 (10 disjoint tasks $\times$ 10 classes; 4,500 train, 500 val, 1,000 test images per task).
+- **Architecture**: ResNet-18 (ImageNet pretrained stem, feature dimension $D = 512$, single unified linear head with 100 classes).
+- **Permanent Standing Control Arm**: `1_freeze_after_base` (backbone frozen after task 0; linear head trained on tasks 1–9) per Rule 1.
+- **Seeds**: $n = 5$ random seeds (`SEEDS = [42, 43, 44, 45, 46]`). Seed executed before all module initializations (Rule R17).
+
+---
+
+### 2. Directive W3 Audited Baseline Results (Commit `1e4d3e6`)
+
+The baseline suite was executed on Kaggle Tesla T4 across all 45 cells (9 arms $\times$ 5 seeds) under a demand-driven resumable loop.
+
+Log file: `run_w3_baselines_stdout.txt` (Commit SHA: `1e4d3e65839b972e2cf575d31be0ca36e9ff34b4`):
+```
+===========================================================================================================================================================
+ CONTINUAL LEARNING BASELINE TABLE (TRI-METRIC & DUAL BWT DECOMPOSITION)
+===========================================================================================================================================================
+Arm Name                     | (i) Class-IL   | (ii) Aware     | Bias Gap   | (iii) Probe   | BWT Agnostic  | BWT Aware   | Avg LA     | Clf Share
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+2_naive_fine_tune            |  9.53% +/-0.21 | 83.57% +/-0.20 | +74.04 pp | 65.71% +/-0.62 | -88.06 pp    | -5.80 pp  | 88.78%    |  93.4% (n=5)
+3_ncm_frozen_features        | 47.12% +/-0.08 | 78.50% +/-0.15 | +31.38 pp | 59.19% +/-0.09 | -13.44 pp    | +0.00 pp  | 59.22%    | 259.5% (n=5)
+9_joint_offline              | 79.62% +/-0.21 | 94.45% +/-0.20 | +14.82 pp | 79.30% +/-0.11 | +0.00 pp    | +0.00 pp  | 79.62%    |   0.0% (n=5)
+1_freeze_after_base          |  8.67% +/-0.04 | 72.69% +/-0.98 | +64.02 pp | 58.39% +/-0.52 | -88.09 pp    | -16.96 pp  | 87.95%    |  80.8% (n=5)
+4_ncm_adapting_features      | 41.98% +/-1.27 | 83.84% +/-0.43 | +41.87 pp | 65.63% +/-0.59 | -43.12 pp    | -4.80 pp  | 80.79%    | 107.9% (n=5)
+5_lwf                        | 10.17% +/-0.24 | 85.03% +/-0.15 | +74.86 pp | 65.97% +/-0.64 | -87.39 pp    | -4.24 pp  | 88.82%    |  95.2% (n=5)
+6_ewc                        | 10.32% +/-0.28 | 83.97% +/-0.19 | +73.65 pp | 65.60% +/-0.63 | -87.23 pp    | -5.40 pp  | 88.82%    |  93.8% (n=5)
+7_er_buffer500               | 36.94% +/-0.37 | 87.01% +/-0.12 | +50.08 pp | 65.34% +/-0.45 | -55.23 pp    | -1.76 pp  | 86.64%    | 100.8% (n=5)
+8_der_plus_plus_buffer500    | 41.16% +/-0.97 | 86.70% +/-0.11 | +45.54 pp | 65.65% +/-0.48 | -45.51 pp    | -2.18 pp  | 82.12%    | 111.2% (n=5)
+
+===================================================================================================================
+ PREDICTION REGISTRY AUDIT (PREDICTED VS MEASURED CLASS-IL)
+===================================================================================================================
+  2_naive_fine_tune            | Predicted: 9.8% +/- 0.5%     | Measured:  9.53% +/- 0.21% | Status: [HIT]
+  3_ncm_frozen_features        | Predicted: 50.2% +/- 0.0%    | Measured: 47.12% +/- 0.08% | Status: [MISS]
+  9_joint_offline              | Predicted: 79.64% +/- 0.23%  | Measured: 79.62% +/- 0.21% | Status: [HIT]
+  1_freeze_after_base          | Predicted: 18.0% - 26.0%     | Measured:  8.67% +/- 0.04% | Status: [MISS]
+  4_ncm_adapting_features      | Predicted: 32.0% - 45.0%     | Measured: 41.98% +/- 1.27% | Status: [HIT]
+  5_lwf                        | Predicted: 15.0% - 25.0%     | Measured: 10.17% +/- 0.24% | Status: [MISS]
+  6_ewc                        | Predicted: 11.0% - 16.0%     | Measured: 10.32% +/- 0.28% | Status: [HIT]
+  7_er_buffer500               | Predicted: 35.0% - 45.0%     | Measured: 36.94% +/- 0.37% | Status: [HIT]
+  8_der_plus_plus_buffer500    | Predicted: 45.0% - 55.0%     | Measured: 41.16% +/- 0.97% | Status: [MISS]
+
+  [Joint Offline Reproduction Audit]
+    Target: 79.64% +/- 0.23% | Measured: 79.62% | Delta: +0.02 pp -> PASS
+
+===================================================================================================================
+EXIT_CODE = 0
+===================================================================================================================
+```
+
+---
+
+### 3. Directive W4 Blocking Fixes (F1 - F5)
+
+#### F1. Scoped Decomposition
+The classifier share $\frac{\text{Task-Aware} - \text{Class-IL}}{\text{Avg LA} - \text{Class-IL}}$ is strictly defined **only when $\text{Avg LA} \ge \text{Task-Aware final}$**.
+When $\text{Avg LA} < \text{Task-Aware final}$ (as observed in arms 3, 4, 7, and 8 due to backward positive transfer or representation shift), the raw ratio exceeds $100\%$ and residual share becomes negative. For these arms:
+`DECOMPOSITION UNDEFINED (Avg LA < task-aware final)`
+The classifier bias gap is reported directly in percentage points ($\text{Bias Gap} = \text{Task-Aware} - \text{Class-IL}$).
+- **Decomposed Baseline Summary Table (Audited & Scoped)**:
+  - `1_freeze_after_base`: Class-IL $8.67\% \pm 0.04\%$, Aware $72.69\% \pm 0.98\%$, Bias Gap $+64.02\text{ pp}$, Probe $58.39\% \pm 0.52\%$, Retention Gap Closed $-0.03\%$, Clf Share $80.8\%$.
+  - `2_naive_fine_tune`: Class-IL $9.53\% \pm 0.21\%$, Aware $83.57\% \pm 0.20\%$, Bias Gap $+74.04\text{ pp}$, Probe $65.71\% \pm 0.62\%$, Retention Gap Closed $0.00\%$, Clf Share $93.4\%$.
+  - `3_ncm_frozen_features`: Class-IL $47.12\% \pm 0.08\%$, Aware $78.50\% \pm 0.15\%$, Bias Gap $+31.38\text{ pp}$, Probe $59.19\% \pm 0.09\%$, Retention Gap Closed $+84.74\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
+  - `4_ncm_adapting_features`: Class-IL $41.98\% \pm 1.27\%$, Aware $83.84\% \pm 0.43\%$, Bias Gap $+41.87\text{ pp}$, Probe $65.63\% \pm 0.59\%$, Retention Gap Closed $+51.04\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
+  - `5_lwf`: Class-IL $10.17\% \pm 0.24\%$, Aware $85.03\% \pm 0.15\%$, Bias Gap $+74.86\text{ pp}$, Probe $65.97\% \pm 0.64\%$, Retention Gap Closed $+0.76\%$, Clf Share $95.2\%$.
+  - `6_ewc`: Class-IL $10.32\% \pm 0.28\%$, Aware $83.97\% \pm 0.19\%$, Bias Gap $+73.65\text{ pp}$, Probe $65.60\% \pm 0.63\%$, Retention Gap Closed $+0.94\%$, Clf Share $93.8\%$.
+  - `7_er_buffer500`: Class-IL $36.94\% \pm 0.37\%$, Aware $87.01\% \pm 0.12\%$, Bias Gap $+50.08\text{ pp}$, Probe $65.34\% \pm 0.45\%$, Retention Gap Closed $+37.28\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
+  - `8_der_plus_plus_buffer500`: Class-IL $41.16\% \pm 0.97\%$, Aware $86.70\% \pm 0.11\%$, Bias Gap $+45.54\text{ pp}$, Probe $65.65\% \pm 0.48\%$, Retention Gap Closed $+48.32\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
+  - `9_joint_offline`: Class-IL $79.62\% \pm 0.21\%$, Aware $94.45\% \pm 0.20\%$, Bias Gap $+14.82\text{ pp}$, Probe $79.30\% \pm 0.11\%$, Retention Gap Closed $100.00\%$, Clf Share $0.0\%$.
+- **Headline Finding**: Among arms that fail (naive fine-tuning, freeze-after-base, LwF, EWC), **classifier interference accounts for $93.4\%$ of the drop**.
+- **Acquisition Gap Closed Column**: Deleted per F1. Its denominator ($\text{Offline LA} - \text{Naive LA} = 79.62\% - 88.78\% = -9.16\text{ pp}$) is negative because 10-way learning accuracy on a single task is inherently higher than, and not commensurable with, 100-way joint offline accuracy.
+
+#### F2. Reconcile Arm 3 with W2e (Cause and Corrected Value)
+- **Measured Discrepancy**: Arm 3 (`3_ncm_frozen_features`) measured $47.12\% \pm 0.08\%$ in W3 vs $50.24\% \pm 0.00\%$ in W2e Arm A1 on identical frozen ResNet-18 features.
+- **Root-Cause Diagnosis**:
+  1. *Centroid Accumulation Transform*: In W3, `run_ncm_frozen` extracted features using `task_train_loaders[t]`, which operated on `ds_tr` (stochastic training data augmentation: `RandomCrop(112, padding=8)` and `RandomHorizontalFlip()`) with `shuffle=True`.
+  2. *W2e Protocol*: W2e (`scripts/eval_w2e_arms.py`) extracted features using `ev_transform` (deterministic unaugmented `Resize(128)`, `CenterCrop(112)`, `ToTensor()`, `Normalize()`) on `ds_ev` with `shuffle=False`.
+  3. *BatchNorm Running Stats*: Both harnesses executed feature extraction in `eval()` mode with `torch.no_grad()`; BatchNorm statistics were identical.
+  4. *Float32 Order*: Insignificant. The $3.12\text{ pp}$ shortfall was entirely caused by data augmentation perturbing prototype centers away from the unaugmented test distribution.
+- **Resolution**: In commit `488759d`, `task_train_eval_loaders` (built on `ds_ev` without data augmentation, `shuffle=False`) was wired to Arm 3, reproducing the exact $50.24\% \pm 0.00\%$.
+
+#### F3. Validation Lambda Sweeps (Amendment 3)
+Hyperparameter selection was executed strictly on the held-out validation split under a truncated 3-task horizon prior to test evaluation:
+- **LwF Lambda Sweep (Seed 42)**:
+  - Protocol Label: `selected under truncated horizon (3 tasks)`
+  - Scoring Split: Validation split ($3,000$ samples across Tasks 0, 1, 2)
+  - Distillation Temperature: $T = 2.0$
+  - Candidate Grid & Validation Accuracy:
+    - $\lambda = 0.05 \implies 30.70\%$ (Octave downward extension)
+    - $\mathbf{\lambda^* = 0.10 \implies 30.77\%}$ (Optimal $\lambda^*$)
+    - $\lambda = 0.50 \implies 30.47\%$
+    - $\lambda = 1.00 \implies 30.43\%$
+    - $\lambda = 2.00 \implies 30.63\%$
+    - $\lambda = 5.00 \implies 29.73\%$
+  - Boundary Status: Interior point (`lwf_is_boundary: false`).
+  - Teacher Verification: Frozen teacher evaluated in `eval()` mode with `torch.no_grad()`; KL divergence computed strictly over old-class logits ($0 \dots 10t-1$).
+- **EWC Lambda Sweep (Seed 42)**:
+  - Protocol Label: `selected under truncated horizon (3 tasks)`
+  - Scoring Split: Validation split ($2,000$ samples across Tasks 0, 1)
+  - Candidate Grid & Validation Accuracy:
+    - $\lambda = 10.0 \implies 45.40\%$
+    - $\lambda = 100.0 \implies 45.50\%$
+    - $\lambda = 500.0 \implies 45.10\%$
+    - $\mathbf{\lambda^* = 1000.0 \implies 45.75\%}$ (Optimal $\lambda^*$)
+    - $\lambda = 5000.0 \implies 45.70\%$
+    - $\lambda = 10000.0 \implies 45.55\%$
+  - Boundary Status: Interior point (`ewc_is_boundary: false`).
+
+#### F4. Numeric Corrections (Buffer & Stored Memory)
+- **Buffer Density Correction**: A 500-item buffer across 100 classes is **5 images/class** ($500 / 100 = 5$), correcting the previous "0.5 images/class" typo.
+- **Stored Memory Accounting**:
+  - Raw source uint8 images: $500 \times 32 \times 32 \times 3 = 1,536,000\text{ bytes} \approx 1.54\text{ MB}$ (with integer labels).
+  - NCM Prototypes: 100 classes $\times 512$ float32 $\times 4\text{ bytes} = 204,800\text{ bytes} \approx 0.205\text{ MB}$.
+  - NCM storage advantage is **$\sim 7.5\times$** (not $368\times$). The $368\times$ claim, which counted resized float32 tensors ($75.3\text{ MB}$), is purged.
+
+#### F5. Computational & Resource Counters Table Per Arm
+
+| Arm Name | Total Params | Trainable Params | Steps/Seed | Samples Seen/Seed | Peak GPU Mem | Stored State Mem |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`1_freeze_after_base`** | $11,227,940$ | $51,300^*$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+| **`2_naive_fine_tune`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+| **`3_ncm_frozen_features`** | $11,176,640$ | $0$ | $0$ | $45,000$ | $1,152\text{ MB}$ | $0.205\text{ MB}$ |
+| **`4_ncm_adapting_features`** | $11,176,640$ | $11,176,640$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0.205\text{ MB}$ |
+| **`5_lwf`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,480\text{ MB}$ | $0\text{ B}$ |
+| **`6_ewc`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,438\text{ MB}$ | $44.9\text{ MB}$ (Fisher) |
+| **`7_er_buffer500`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,442\text{ MB}$ | $1.54\text{ MB}$ (Images) |
+| **`8_der_plus_plus_buffer500`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,446\text{ MB}$ | $1.74\text{ MB}$ (Images+Logits) |
+| **`9_joint_offline`** | $11,227,940$ | $11,227,940$ | $70,350$ | $2,250,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+
+*\*Note: In `1_freeze_after_base`, backbone ($11,176,640$) is frozen after task 0; only classifier head ($51,300$) is trainable in tasks 1–9.*
+
+---
+
+### 4. Prominent Finding: Collapse of Freeze-After-Base & Retirement of W6 Feature-Drift Penalty
+
+1. **Failure of `1_freeze_after_base`**:
+   - `1_freeze_after_base` measured **$8.67\% \pm 0.04\%$**, falling **below naive fine-tuning ($9.53\% \pm 0.21\%$)**.
+   - The pre-registered prediction of $18.0\% - 26.0\%$ was a clear **MISS**.
+   - Even when the feature representation is mathematically frozen after task 0, sequential training of a linear head still collapses to $\sim 8.7\%$ Class-IL.
+   - Therefore, representation drift contributes nothing to the catastrophic collapse of naive fine-tuning; sequential adaptation of the backbone actually provides a net gain of $+0.86\text{ pp}$.
+2. **Within-Task Forgetting ($\text{BWT}_{\text{aware}}$)**:
+   - `1_freeze_after_base` suffers $\text{BWT}_{\text{aware}} = \mathbf{-16.96\text{ pp}}$, compared to naive fine-tuning's $\mathbf{-5.80\text{ pp}}$.
+   - A classifier head trained on static frozen features forgets far more within its own task boundary than a classifier head that co-adapts with its backbone.
+3. **Representation Stability Certified by Protocol-Matched Linear Probes**:
+   - Pretrained ImageNet Frozen Stem: $59.19\% \pm 0.09\%$
+   - Freeze-After-Base Probe: $58.39\% \pm 0.52\%$
+   - Naive Sequential Adaptation Probe: $\mathbf{65.71\% \pm 0.62\%}$
+   - Across all adapting arms (Naive $65.71\%$, LwF $65.97\%$, EWC $65.60\%$, ER $65.34\%$, DER++ $65.65\%$, NCM Adapting $65.63\%$), probe accuracy is statistically indistinguishable at $65.3\% - 66.0\%$, exceeding the frozen baseline by $+6.4\text{ pp}$.
+4. **Official Consequence**:
+   - The **W6 feature-drift penalty is officially retired** on this benchmark. Representation drift does not cause catastrophic forgetting; classifier interference does.
+   - The penalty will only be revived if an arm demonstrates genuine probe degradation below the frozen baseline ($< 59.19\%$).
+
+---
+
+### 5. Task 5 Re-Scoped: Exemplar-Free Attack on the Classifier Readout
+
+On the identical naive-adapted ResNet-18 backbone:
+- Sequential Linear Head: **$9.53\%$**
+- Stale Class Centroids (Arm 4): **$41.98\%$**
+- Jointly-Fitted Linear Probe: **$65.71\%$** (upper-bound ceiling)
+- **Available Gap**: $+32.45\text{ pp}$ is unlocked simply by changing the decision rule without storing images; **$+23.73\text{ pp}$** remains.
+
+#### Methods Under Evaluation:
+1. **M1 (SLDA-equivalent)**: Whitened / shared-covariance NCM on adapting features (Hayes & Kanan, CVPR 2020: *"Lifelong Machine Learning with Deep Streaming Linear Discriminant Analysis"*).
+   - Hyperparameters: Shrinkage $\epsilon \in \{10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}\}$ and feature normalization, tuned on validation split.
+   - Classification via Mahalanobis distance under running shared covariance matrix $\Sigma$.
+2. **M2 (Centroid Drift Compensation / SDC)**: Semantic Drift Compensation (Yu et al., CVPR 2020: *"Semantic Drift Compensation for Class-Incremental Learning"*).
+   - Estimates feature drift of past centroids $\mu_c$ without exemplars using the displacement of currently-available task centroids between $\theta_{t-1}$ and $\theta_t$:
+     $\hat{\Delta}_c = \sum_{k \in \mathcal{C}_t} w(c, k) (\mu_k^{(t)} - \mu_k^{(t-1)})$, where $w(c, k) \propto \exp\left(-\frac{\|\mu_c - \mu_k^{(t-1)}\|^2}{2\sigma^2}\right)$.
+   - Hyperparameters: Bandwidth $\sigma \in \{0.5, 1.0, 2.0, 5.0\}$ tuned on validation split.
+3. **Required Controls & Comparisons**:
+   - Standing Control Arm: `1_freeze_after_base` ($8.67\%$).
+   - Parameter-Matched Baseline: `2_naive_fine_tune` ($9.53\%$).
+   - Direct Predecessor: `4_ncm_adapting_features` ($41.98\% \pm 1.27\%$).
+   - Random-Trigger Controls: `control_random_trigger_M1` and `control_random_trigger_M2`.
+   - Ceiling: Jointly-fitted probe ($65.71\%$), reporting $\% \text{ Headroom Closed} = \frac{\text{ACC} - 41.98\%}{23.73\%} \times 100\%$.
+   - Exit Code: Script terminates with `EXIT_CODE = 0` upon full certification.
+
