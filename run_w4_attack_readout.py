@@ -3,6 +3,7 @@
 ===================================================================================================
 DIRECTIVE W4 (TASK 5 RE-SCOPED) -- EXEMPLAR-FREE ATTACK ON THE CLASSIFIER READOUT
 ===================================================================================================
+Strictly protocol-matched to Directive W3 (ResNet-18, 20 epochs/task, batch_size=128, lr=0.005).
 Audits the +23.73 pp headroom between stale class centroids (41.98%) and the jointly-fitted
 linear probe ceiling (65.71%) on the identical naive-adapted ResNet-18 backbone:
   - M1: Whitened / Shared-Covariance NCM (SLDA-equivalent; Hayes & Kanan, CVPR 2020)
@@ -33,21 +34,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
-from torchvision.models import resnet18, ResNet18_Weights
+from torch.utils.data import DataLoader, Subset, TensorDataset
+import torchvision
+from torchvision import datasets, transforms, models
 
 # ---------------------------------------------------------------------
-# BENCHMARK AND HARNESS CONFIGURATION
+# BENCHMARK AND HARNESS CONFIGURATION (MATCHED TO W3)
 # ---------------------------------------------------------------------
 SEEDS = [42, 43, 44, 45, 46]
 NUM_CLASSES = 100
 CLASSES_PER_TASK = 10
 NUM_TASKS = 10
-BATCH_SIZE = 32
-LR_BASE = 0.01
+BATCH_SIZE = 128
+EPOCHS_PER_TASK = 20
+LR_BASE = 0.005
 WEIGHT_DECAY = 1e-4
-EPOCHS_PER_TASK = 5
 
 CEILING_PROBE_ACC = 65.71
 PREDECESSOR_ACC = 41.98
@@ -60,60 +61,68 @@ OUTPUT_JSON_PATH = "w4_attack_readout.json"
 
 
 def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
 
 
 def seed_worker(worker_id):
-    worker_seed = torch.initial_seed() % 2**32
+    worker_seed = torch.initial_seed() % (2**32)
     np.random.seed(worker_seed)
     random.seed(worker_seed)
+
+
+def partition_indices(targets, n_train=400, n_val=100, seed=42):
+    g = torch.Generator().manual_seed(seed)
+    targets_t = torch.tensor(targets)
+    train_indices = []
+    val_indices = []
+    for c in range(100):
+        c_idxs = (targets_t == c).nonzero(as_tuple=True)[0]
+        perm = torch.randperm(len(c_idxs), generator=g)
+        shuffled = c_idxs[perm]
+        train_indices.extend(shuffled[:n_train].tolist())
+        val_indices.extend(shuffled[n_train:n_train + n_val].tolist())
+    return train_indices, val_indices
 
 
 # ---------------------------------------------------------------------
 # DATASET SPLIT-CIFAR-100 (10 TASKS x 10 CLASSES)
 # ---------------------------------------------------------------------
 def get_cifar100_loaders(data_root="./data"):
+    norm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     tr_transform = transforms.Compose([
         transforms.Resize((112, 112)),
         transforms.RandomCrop(112, padding=8),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        norm
     ])
-
     ev_transform = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.CenterCrop(112),
+        transforms.Resize((112, 112)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        norm
     ])
 
     try:
-        ds_tr_full = datasets.CIFAR100(root=data_root, train=True, download=False, transform=tr_transform)
-        ds_ev_full = datasets.CIFAR100(root=data_root, train=True, download=False, transform=ev_transform)
+        ds_tr = datasets.CIFAR100(root=data_root, train=True, download=False, transform=tr_transform)
+        ds_ev = datasets.CIFAR100(root=data_root, train=True, download=False, transform=ev_transform)
         ds_te = datasets.CIFAR100(root=data_root, train=False, download=False, transform=ev_transform)
     except Exception:
         print("  CIFAR-100 archive not found locally. Downloading to:", data_root)
-        ds_tr_full = datasets.CIFAR100(root=data_root, train=True, download=True, transform=tr_transform)
-        ds_ev_full = datasets.CIFAR100(root=data_root, train=True, download=True, transform=ev_transform)
+        ds_tr = datasets.CIFAR100(root=data_root, train=True, download=True, transform=tr_transform)
+        ds_ev = datasets.CIFAR100(root=data_root, train=True, download=True, transform=ev_transform)
         ds_te = datasets.CIFAR100(root=data_root, train=False, download=True, transform=ev_transform)
 
-    # 45k train, 5k val stratified
-    targets_tr_full = np.array(ds_tr_full.targets)
-    train_idx = []
-    val_idx = []
-    g = np.random.RandomState(42)
-    for c in range(NUM_CLASSES):
-        c_idx = np.where(targets_tr_full == c)[0]
-        g.shuffle(c_idx)
-        val_idx.extend(c_idx[:50])
-        train_idx.extend(c_idx[50:])
+    train_idx, val_idx = partition_indices(ds_tr.targets, n_train=400, n_val=100, seed=42)
+
+    targets_tr = np.array(ds_tr.targets)[train_idx]
+    targets_va = np.array(ds_ev.targets)[val_idx]
+    targets_te = np.array(ds_te.targets)
 
     blocks = [list(range(t * CLASSES_PER_TASK, (t + 1) * CLASSES_PER_TASK)) for t in range(NUM_TASKS)]
 
@@ -122,25 +131,21 @@ def get_cifar100_loaders(data_root="./data"):
     task_val_loaders = {}
     task_test_loaders = {}
 
-    targets_tr = targets_tr_full[train_idx]
-    targets_va = targets_tr_full[val_idx]
-    targets_te = np.array(ds_te.targets)
-
     for t_idx, classes in enumerate(blocks):
         t_tr_local = [train_idx[i] for i, c in enumerate(targets_tr) if c in classes]
         t_va_local = [val_idx[i] for i, c in enumerate(targets_va) if c in classes]
         t_te_local = [i for i, c in enumerate(targets_te) if c in classes]
 
         task_train_loaders[t_idx] = (
-            DataLoader(Subset(ds_tr_full, t_tr_local), batch_size=BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker),
+            DataLoader(Subset(ds_tr, t_tr_local), batch_size=BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker),
             classes
         )
         task_train_eval_loaders[t_idx] = (
-            DataLoader(Subset(ds_ev_full, t_tr_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker),
+            DataLoader(Subset(ds_ev, t_tr_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker),
             classes
         )
         task_val_loaders[t_idx] = (
-            DataLoader(Subset(ds_ev_full, t_va_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker),
+            DataLoader(Subset(ds_ev, t_va_local), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker),
             classes
         )
         task_test_loaders[t_idx] = (
@@ -148,7 +153,7 @@ def get_cifar100_loaders(data_root="./data"):
             classes
         )
 
-    full_tr_probe_loader = DataLoader(Subset(ds_ev_full, train_idx), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
+    full_tr_probe_loader = DataLoader(Subset(ds_ev, train_idx), batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
     full_te_probe_loader = DataLoader(ds_te, batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
 
     return (task_train_loaders, task_train_eval_loaders, task_val_loaders,
@@ -161,8 +166,8 @@ def get_cifar100_loaders(data_root="./data"):
 class ResNet18Primary(nn.Module):
     def __init__(self, num_classes=100):
         super().__init__()
-        weights = ResNet18_Weights.IMAGENET1K_V1
-        base = resnet18(weights=weights)
+        weights = models.ResNet18_Weights.IMAGENET1K_V1
+        base = models.resnet18(weights=weights)
         self.conv1 = base.conv1
         self.bn1 = base.bn1
         self.relu = base.relu
@@ -175,17 +180,14 @@ class ResNet18Primary(nn.Module):
         self.fc = nn.Linear(512, num_classes)
 
     def extract_features(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.maxpool(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.avgpool(x)
-        feats = torch.flatten(x, 1)
-        return feats
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.maxpool(out)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = self.avgpool(out)
+        return torch.flatten(out, 1)
 
     def forward(self, x):
         feats = self.extract_features(x)
@@ -203,57 +205,62 @@ def compute_r_metrics(R):
     return {"acc_T": acc_T, "bwt": bwt}
 
 
-def evaluate_protocol_matched_linear_probe(backbone, train_loader, test_loader, device, seed=42):
-    """30-epoch linear probe on extracted features."""
+def evaluate_protocol_matched_linear_probe(backbone, full_tr_loader, full_te_loader, device, seed=42, epochs=30):
+    """Protocol-matched 30-epoch linear probe on extracted features (exactly matching W3)."""
     set_seed(seed)
     backbone.eval()
-    train_feats, train_targets = [], []
-    with torch.no_grad():
-        for bx, by in train_loader:
-            bx = bx.to(device)
-            f = backbone.extract_features(bx)
-            train_feats.append(f.cpu())
-            train_targets.append(by)
-    X_tr = torch.cat(train_feats, dim=0)
-    y_tr = torch.cat(train_targets, dim=0)
+    all_tr_feats, all_tr_y = [], []
+    all_te_feats, all_te_y = [], []
 
-    test_feats, test_targets = [], []
     with torch.no_grad():
-        for bx, by in test_loader:
+        for bx, by in full_tr_loader:
             bx = bx.to(device)
-            f = backbone.extract_features(bx)
-            test_feats.append(f.cpu())
-            test_targets.append(by)
-    X_te = torch.cat(test_feats, dim=0)
-    y_te = torch.cat(test_targets, dim=0)
+            all_tr_feats.append(backbone.extract_features(bx).cpu())
+            all_tr_y.append(by)
+        for bx, by in full_te_loader:
+            bx = bx.to(device)
+            all_te_feats.append(backbone.extract_features(bx).cpu())
+            all_te_y.append(by)
 
+    tr_x = torch.cat(all_tr_feats, dim=0)
+    tr_y = torch.cat(all_tr_y, dim=0)
+    te_x = torch.cat(all_te_feats, dim=0)
+    te_y = torch.cat(all_te_y, dim=0)
+
+    tr_ds = TensorDataset(tr_x, tr_y)
+    te_ds = TensorDataset(te_x, te_y)
+    ld_tr = DataLoader(tr_ds, batch_size=BATCH_SIZE, shuffle=True, worker_init_fn=seed_worker)
+    ld_te = DataLoader(te_ds, batch_size=BATCH_SIZE, shuffle=False, worker_init_fn=seed_worker)
+
+    set_seed(seed)
     probe = nn.Linear(512, 100).to(device)
-    nn.init.zeros_(probe.weight)
-    nn.init.zeros_(probe.bias)
-    p_opt = optim.SGD(probe.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
-    p_sched = optim.lr_scheduler.CosineAnnealingLR(p_opt, T_max=30, eta_min=1e-4)
+    opt = optim.SGD(probe.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
+    sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs, eta_min=1e-4)
     crit = nn.CrossEntropyLoss()
 
-    ds_p = torch.utils.data.TensorDataset(X_tr, y_tr)
-    p_loader = DataLoader(ds_p, batch_size=128, shuffle=True)
-
-    for _ in range(30):
+    for ep in range(epochs):
         probe.train()
-        for p_bx, p_by in p_loader:
-            p_bx, p_by = p_bx.to(device), p_by.to(device)
-            p_opt.zero_grad()
-            p_loss = crit(probe(p_bx), p_by)
-            p_loss.backward()
-            p_opt.step()
-        p_sched.step()
+        for bx, by in ld_tr:
+            bx, by = bx.to(device), by.to(device)
+            opt.zero_grad()
+            out = probe(bx)
+            loss = crit(out, by)
+            loss.backward()
+            opt.step()
+        sched.step()
 
     probe.eval()
+    cor, tot = 0, 0
     with torch.no_grad():
-        te_logits = probe(X_te.to(device))
-        te_preds = te_logits.argmax(dim=1).cpu()
-        acc = float((te_preds == y_te).float().mean().item() * 100.0)
+        for bx, by in ld_te:
+            bx, by = bx.to(device), by.to(device)
+            out = probe(bx)
+            preds = out.argmax(dim=-1)
+            cor += (preds == by).sum().item()
+            tot += by.size(0)
 
-    return acc
+    acc = (cor / tot) * 100.0
+    return float(acc)
 
 
 # ---------------------------------------------------------------------
@@ -266,7 +273,7 @@ def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
     """
     print("\n  [Validation Hyperparameter Sweep: M1 Whitened / Shared-Covariance NCM (SLDA)]")
     print("    Protocol Label : selected under truncated horizon (3 tasks)")
-    print("    Scoring Split  : Validation Split (1,500 samples across Tasks 0, 1, 2)")
+    print("    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)")
     print("    Candidates     : eps in [0.0001, 0.001, 0.01, 0.1, 1.0], normalize in [True, False]")
 
     set_seed(42)
@@ -362,15 +369,13 @@ def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
                 inv_cov = torch.linalg.pinv(reg_cov)
 
             seen_classes = sorted(list(centroids.keys()))
-            cen_matrix = torch.stack([centroids[c] for c in seen_classes], dim=0)  # [30, 512]
+            cen_matrix = torch.stack([centroids[c] for c in seen_classes], dim=0)
             labels_tensor = torch.tensor(seen_classes, device=device)
 
-            # Mahalanobis distance: d(x, mu) = (x - mu)^T inv_cov (x - mu)
-            # score = x^T inv_cov mu - 0.5 * mu^T inv_cov mu
-            W = torch.matmul(inv_cov, cen_matrix.T)  # [512, 30]
-            b = -0.5 * (cen_matrix * torch.matmul(cen_matrix, inv_cov)).sum(dim=1)  # [30]
+            W = torch.matmul(inv_cov, cen_matrix.T)
+            b = -0.5 * (cen_matrix * torch.matmul(cen_matrix, inv_cov)).sum(dim=1)
 
-            logits_val = torch.matmul(X_eval, W) + b  # [1500, 30]
+            logits_val = torch.matmul(X_eval, W) + b
             preds = labels_tensor[logits_val.argmax(dim=1)]
             val_acc = float((preds == y_val).float().mean().item() * 100.0)
 
@@ -394,7 +399,7 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
     """
     print("\n  [Validation Hyperparameter Sweep: M2 Semantic Drift Compensation (SDC)]")
     print("    Protocol Label : selected under truncated horizon (3 tasks)")
-    print("    Scoring Split  : Validation Split (1,500 samples across Tasks 0, 1, 2)")
+    print("    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)")
     print("    Candidates     : sigma in [0.25, 0.5, 1.0, 2.0, 5.0], renormalize in [True, False]")
 
     set_seed(42)
@@ -428,7 +433,6 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
 
     for renorm in grid_renorm:
         for sigma in grid_sigma:
-            # Simulate SDC drift tracking
             centroids = {}
             for t in range(3):
                 model.load_state_dict(checkpoints[t])
@@ -444,7 +448,6 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                 t_f_new = torch.cat(t_f_new, dim=0)
                 t_targets = torch.cat(t_targets, dim=0)
 
-                # Current task centroids under new backbone
                 cur_mu_new = {}
                 for c in t_classes:
                     mask = (t_targets == c)
@@ -452,7 +455,6 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                     cur_mu_new[c] = F.normalize(m, dim=-1) if renorm else m
 
                 if t > 0:
-                    # Current task data passed through previous backbone
                     prev_model = ResNet18Primary(num_classes=100).to(device)
                     prev_model.load_state_dict(checkpoints[t - 1])
                     prev_model.eval()
@@ -470,13 +472,10 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                         m_old = t_f_old[mask].mean(dim=0)
                         cur_mu_old[c] = F.normalize(m_old, dim=-1) if renorm else m_old
 
-                    # Current class drift displacements: Delta_k = mu_k^(t) - mu_k^(t-1)
                     cur_drifts = {c: (cur_mu_new[c] - cur_mu_old[c]) for c in t_classes}
 
-                    # SDC Compensation for past centroids
                     for past_c in list(centroids.keys()):
                         past_mu = centroids[past_c]
-                        # Compute similarity to current class old centroids
                         dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
                         weights = F.softmax(-dists / (2.0 * (sigma ** 2)), dim=0)
                         drift_vec = sum(weights[i] * cur_drifts[k] for i, k in enumerate(t_classes))
@@ -486,11 +485,9 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                             updated_mu = F.normalize(updated_mu, dim=-1)
                         centroids[past_c] = updated_mu
 
-                # Store new centroids
                 for c in t_classes:
                     centroids[c] = cur_mu_new[c]
 
-            # Evaluate on val split at t=2
             model.load_state_dict(checkpoints[2])
             model.eval()
 
@@ -541,12 +538,11 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, device):
     crit = nn.CrossEntropyLoss()
 
     R_agnostic = np.zeros((10, 10))
-    R_aware = np.zeros((10, 10))
 
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
     t0_loader, _ = task_train_loaders[0]
-    sched0 = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=20, eta_min=1e-4)
-    for ep in range(20):
+    sched0 = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
+    for ep in range(EPOCHS_PER_TASK):
         model.train()
         for bx, by in t0_loader:
             bx, by = bx.to(device), by.to(device)
@@ -570,10 +566,9 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, device):
         for bx, by in t0_test:
             bx, by = bx.to(device), by.to(device)
             logits, _ = model(bx)
-            cor += (logits.argmax(dim=1) == by).sum().item()
+            cor += (logits.argmax(dim=-1) == by).sum().item()
             tot += by.size(0)
     R_agnostic[0, 0] = (cor / tot) * 100.0
-    R_aware[0, 0] = (cor / tot) * 100.0
 
     # Train tasks 1-9 (head only)
     opt_head = optim.SGD(model.fc.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
@@ -595,30 +590,17 @@ def run_freeze_after_base(seed, task_train_loaders, task_test_loaders, device):
         # Evaluate seen tasks
         model.eval()
         seen = list(range(t + 1))
-        seen_classes = [c for s in seen for c in task_train_loaders[s][1]]
-        mask_old = torch.ones(100, dtype=torch.bool, device=device)
-        mask_old[seen_classes] = False
-
         for j in seen:
-            j_loader, j_classes = task_test_loaders[j]
-            cor_ag, cor_aw, tot_j = 0, 0, 0
+            j_loader, _ = task_test_loaders[j]
+            cor_ag, tot_j = 0, 0
             with torch.no_grad():
                 for bx, by in j_loader:
                     bx, by = bx.to(device), by.to(device)
                     logits, _ = model(bx)
-                    logits_ag = logits.clone()
-                    logits_ag[:, mask_old] = -float("inf")
-                    cor_ag += (logits_ag.argmax(dim=1) == by).sum().item()
-
-                    mask_aw = torch.zeros(100, dtype=torch.bool, device=device)
-                    mask_aw[j_classes] = True
-                    logits_aw = logits.clone()
-                    logits_aw[:, ~mask_aw] = -float("inf")
-                    cor_aw += (logits_aw.argmax(dim=1) == by).sum().item()
+                    preds_ag = logits.argmax(dim=-1)
+                    cor_ag += (preds_ag == by).sum().item()
                     tot_j += by.size(0)
-
             R_agnostic[t, j] = (cor_ag / tot_j) * 100.0
-            R_aware[t, j] = (cor_aw / tot_j) * 100.0
 
     return compute_r_metrics(R_agnostic)
 
@@ -722,7 +704,6 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
             cur_mu_new[c] = F.normalize(m_new, dim=-1) if m2_renorm else m_new
 
         if t > 0 and prev_model is not None:
-            # Extract features of current task using previous backbone
             prev_model.eval()
             t_feats_prev = []
             with torch.no_grad():
@@ -737,10 +718,8 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
                 m_old = t_feats_prev[mask].mean(dim=0)
                 cur_mu_old[c] = F.normalize(m_old, dim=-1) if m2_renorm else m_old
 
-            # Displacement vectors
             cur_drifts = {c: (cur_mu_new[c] - cur_mu_old[c]) for c in t_classes}
 
-            # Update past centroids for M2 (SDC)
             for past_c in list(centroids_m2_sdc.keys()):
                 past_mu = centroids_m2_sdc[past_c]
                 dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
@@ -776,7 +755,6 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
         except Exception:
             m1_inv_cov = torch.linalg.pinv(m1_reg_cov)
 
-        # Control M1: Randomly permuted covariance
         p_idx = torch.randperm(512, device=device)
         m1_inv_cov_ctrl = m1_inv_cov[p_idx, :][:, p_idx]
 
@@ -785,14 +763,8 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
         seen_classes = [c for s in seen for c in task_train_loaders[s][1]]
         seen_labels = torch.tensor(seen_classes, device=device)
 
-        # Linear head mask
-        mask_old = torch.ones(100, dtype=torch.bool, device=device)
-        mask_old[seen_classes] = False
-
-        # Stale centroids matrix
         cen_mat_stale = torch.stack([centroids_stale[c] for c in seen_classes], dim=0)
 
-        # M1 SLDA weights and biases
         m1_cen_mat = torch.stack([m1_centroids[c] for c in seen_classes], dim=0)
         W_m1 = torch.matmul(m1_inv_cov, m1_cen_mat.T)
         b_m1 = -0.5 * (m1_cen_mat * torch.matmul(m1_cen_mat, m1_inv_cov)).sum(dim=1)
@@ -800,7 +772,6 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
         W_m1_ctrl = torch.matmul(m1_inv_cov_ctrl, m1_cen_mat.T)
         b_m1_ctrl = -0.5 * (m1_cen_mat * torch.matmul(m1_cen_mat, m1_inv_cov_ctrl)).sum(dim=1)
 
-        # M2 SDC centroid matrices
         cen_mat_sdc = torch.stack([centroids_m2_sdc[c] for c in seen_classes], dim=0)
         cen_mat_ctrl_sdc = torch.stack([centroids_m2_ctrl[c] for c in seen_classes], dim=0)
 
@@ -817,33 +788,32 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
                     logits, raw_f = model(bx)
                     norm_f = F.normalize(raw_f, dim=-1)
 
-                    # 1. Linear head
-                    log_masked = logits.clone()
-                    log_masked[:, mask_old] = -float("inf")
-                    cor_lin += (log_masked.argmax(dim=1) == by).sum().item()
+                    # 1. Linear head (global argmax over 100 classes per W3 standard)
+                    preds_lin = logits.argmax(dim=-1)
+                    cor_lin += (preds_lin == by).sum().item()
 
                     # 2. Stale centroids
                     sims_stale = torch.matmul(norm_f, cen_mat_stale.T)
-                    cor_stale += (seen_labels[sims_stale.argmax(dim=1)] == by).sum().item()
+                    cor_stale += (seen_labels[sims_stale.argmax(dim=-1)] == by).sum().item()
 
                     # 3. M1 SLDA
                     m1_input = norm_f if m1_norm else raw_f
                     log_m1 = torch.matmul(m1_input, W_m1) + b_m1
-                    cor_m1 += (seen_labels[log_m1.argmax(dim=1)] == by).sum().item()
+                    cor_m1 += (seen_labels[log_m1.argmax(dim=-1)] == by).sum().item()
 
                     # 4. Control M1
                     log_m1_ctrl = torch.matmul(m1_input, W_m1_ctrl) + b_m1_ctrl
-                    cor_m1_ctrl += (seen_labels[log_m1_ctrl.argmax(dim=1)] == by).sum().item()
+                    cor_m1_ctrl += (seen_labels[log_m1_ctrl.argmax(dim=-1)] == by).sum().item()
 
                     # 5. M2 SDC
                     if m2_renorm:
                         sims_sdc = torch.matmul(norm_f, cen_mat_sdc.T)
-                        preds_m2 = seen_labels[sims_sdc.argmax(dim=1)]
+                        preds_m2 = seen_labels[sims_sdc.argmax(dim=-1)]
                         sims_m2_ctrl = torch.matmul(norm_f, cen_mat_ctrl_sdc.T)
-                        preds_m2_ctrl = seen_labels[sims_m2_ctrl.argmax(dim=1)]
+                        preds_m2_ctrl = seen_labels[sims_m2_ctrl.argmax(dim=-1)]
                     else:
-                        preds_m2 = seen_labels[torch.cdist(raw_f, cen_mat_sdc).argmin(dim=1)]
-                        preds_m2_ctrl = seen_labels[torch.cdist(raw_f, cen_mat_ctrl_sdc).argmin(dim=1)]
+                        preds_m2 = seen_labels[torch.cdist(raw_f, cen_mat_sdc).argmin(dim=-1)]
+                        preds_m2_ctrl = seen_labels[torch.cdist(raw_f, cen_mat_ctrl_sdc).argmin(dim=-1)]
 
                     cor_m2 += (preds_m2 == by).sum().item()
                     cor_m2_ctrl += (preds_m2_ctrl == by).sum().item()
@@ -859,7 +829,7 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
 
     # 4. Evaluate Protocol-Matched Linear Probe Ceiling on adapting backbone
     probe_acc = evaluate_protocol_matched_linear_probe(
-        model, full_tr_probe_loader, full_te_probe_loader, device, seed=seed
+        model, full_tr_probe_loader, full_te_probe_loader, device, seed=seed, epochs=30
     )
 
     # 5. Standing Control Arm
@@ -906,7 +876,7 @@ def main():
 
     print("=" * 115)
     print(" DIRECTIVE W4 -- TASK 5 RE-SCOPED: ATTACK THE READOUT (EXEMPLAR-FREE HEADROOM AUDIT)")
-    print("=" * 115)
+    print("===================================================================================")
     print(f"  Git Commit SHA     : {git_sha}")
     print(f"  Platform Device    : {device}")
     if torch.cuda.is_available():
@@ -979,7 +949,6 @@ def main():
         print(f"    Control M2 (Rand) : Class-IL = {res['control_m2']['acc_T']:.2f}% | BWT = {res['control_m2']['bwt']:+.2f} pp")
         print(f"    Linear Probe Ceil : ACC = {res['probe_ceiling']:.2f}%")
 
-        # Save incremental
         out_data = {
             "git_commit_sha": git_sha,
             "tuning_info": tuning_info,
