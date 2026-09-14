@@ -1,50 +1,22 @@
 ===================================================================================================================
  DIRECTIVE W4 -- TASK 5 RE-SCOPED: ATTACK THE READOUT (EXEMPLAR-FREE HEADROOM AUDIT)
 ===================================================================================
-  Git Commit SHA     : ce24e4b3375696ee5bd225c9da08056d5742d65c
+  Git Commit SHA     : 66e68ba8f60a040f7669cbad0d98a442b5434c21
   Platform Device    : cuda
   GPU Accelerator    : Tesla T4
   Evaluation Seeds   : [42, 43, 44, 45, 46] (n=5)
-  Available Headroom : +23.73 pp (Ceiling 65.71% - Predecessor 41.98%)
+  Available Headroom : +22.32 pp (Ceiling 65.58% - Predecessor 43.26%)
+  Headroom (vs W3)   : +22.45 pp (W3 Ceiling 65.71% - Predecessor 43.26%)
 ===================================================================================================================
-  CIFAR-100 archive not found locally. Downloading to: /kaggle/working/data
+  [Resumption Audit] Loaded 0 / 5 completed seeds from w4_attack_readout.json.
 
-  [Validation Hyperparameter Sweep: M1 Whitened / Shared-Covariance NCM (SLDA)]
-    Protocol Label : selected under truncated horizon (3 tasks)
-    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
-    Candidates     : eps in [0.0001, 0.001, 0.01, 0.1, 1.0], normalize in [True, False]
-    Candidate: eps=0.0001 | normalize=True  -> Validation ACC: 59.70%
-    Candidate: eps=0.001  | normalize=True  -> Validation ACC: 62.20%
-    Candidate: eps=0.01   | normalize=True  -> Validation ACC: 62.50%
-    Candidate: eps=0.1    | normalize=True  -> Validation ACC: 62.40%
-    Candidate: eps=1.0    | normalize=True  -> Validation ACC: 62.37%
-    Candidate: eps=0.0001 | normalize=False -> Validation ACC: 56.87%
-    Candidate: eps=0.001  | normalize=False -> Validation ACC: 56.87%
-    Candidate: eps=0.01   | normalize=False -> Validation ACC: 56.97%
-    Candidate: eps=0.1    | normalize=False -> Validation ACC: 58.93%
-    Candidate: eps=1.0    | normalize=False -> Validation ACC: 61.23%
-  Selected M1 (SLDA) Optimal Config: eps=0.01, norm=True (Val ACC: 62.50%) | Boundary: False
-
-  [Validation Hyperparameter Sweep: M2 Semantic Drift Compensation (SDC)]
-    Protocol Label : selected under truncated horizon (3 tasks)
-    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
-    Candidates     : sigma in [0.25, 0.5, 1.0, 2.0, 5.0], renormalize in [True, False]
-    Candidate: sigma=0.25 | renormalize=True  -> Validation ACC: 61.40%
-    Candidate: sigma=0.5  | renormalize=True  -> Validation ACC: 60.97%
-    Candidate: sigma=1.0  | renormalize=True  -> Validation ACC: 61.17%
-    Candidate: sigma=2.0  | renormalize=True  -> Validation ACC: 60.97%
-    Candidate: sigma=5.0  | renormalize=True  -> Validation ACC: 61.13%
-    Candidate: sigma=0.25 | renormalize=False -> Validation ACC: 40.13%
-    Candidate: sigma=0.5  | renormalize=False -> Validation ACC: 43.33%
-    Candidate: sigma=1.0  | renormalize=False -> Validation ACC: 53.47%
-    Candidate: sigma=2.0  | renormalize=False -> Validation ACC: 60.63%
-    Candidate: sigma=5.0  | renormalize=False -> Validation ACC: 63.00%
-  Selected M2 (SDC) Optimal Config: sigma=5.0, renorm=False (Val ACC: 63.00%) | Boundary: True
+  [Loaded from Prior Session] M1 (SLDA) Optimal Config: eps=0.01, norm=True
+  [Loaded from Prior Session] M2 (SDC) Optimal Config: sigma=5.0, renorm=False
 
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 42] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1533.6s
+    Completed in 1472.8s
     Linear Head       : Class-IL = 10.09% | BWT = -88.67 pp
     Stale Centroids   : Class-IL = 42.31% | BWT = -44.42 pp
     M1 (SLDA Whitened): Class-IL = 42.57% | BWT = -45.13 pp
@@ -56,7 +28,7 @@
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 43] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1549.1s
+    Completed in 1609.8s
     Linear Head       : Class-IL = 9.86% | BWT = -89.39 pp
     Stale Centroids   : Class-IL = 43.63% | BWT = -43.24 pp
     M1 (SLDA Whitened): Class-IL = 43.58% | BWT = -44.68 pp
@@ -68,7 +40,7 @@
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 44] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1540.5s
+    Completed in 1594.6s
     Linear Head       : Class-IL = 9.74% | BWT = -89.30 pp
     Stale Centroids   : Class-IL = 43.35% | BWT = -42.56 pp
     M1 (SLDA Whitened): Class-IL = 43.58% | BWT = -43.63 pp
@@ -80,7 +52,7 @@
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 45] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1541.8s
+    Completed in 1612.5s
     Linear Head       : Class-IL = 10.05% | BWT = -88.92 pp
     Stale Centroids   : Class-IL = 43.23% | BWT = -43.60 pp
     M1 (SLDA Whitened): Class-IL = 43.42% | BWT = -44.61 pp
@@ -92,7 +64,7 @@
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 46] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1535.8s
+    Completed in 1614.5s
     Linear Head       : Class-IL = 10.06% | BWT = -88.91 pp
     Stale Centroids   : Class-IL = 43.79% | BWT = -42.57 pp
     M1 (SLDA Whitened): Class-IL = 44.01% | BWT = -43.63 pp
@@ -106,19 +78,29 @@
 =================================================================================================================================================
 Method / Arm Name                  | Class-IL ACC     | BWT Agnostic   | Ret Gap Closed  | % Headroom Closed   
 -------------------------------------------------------------------------------------------------------------------------------------------------
-1_freeze_after_base (Control)      |  9.41% +/- 0.16% | -82.88 pp    |  +5.88%         | -137.24% (/23.73pp) 
-2_naive_fine_tune (Linear)         |  9.96% +/- 0.15% | -89.04 pp    |  -1.11%         | -134.93% (/23.73pp) 
-4_ncm_adapting (Stale Centroids)   | 43.26% +/- 0.58% | -43.28 pp    | +50.85%         |  +5.40% (/23.73pp)  
-control_random_trigger_M1          | 43.25% +/- 0.51% | -43.29 pp    | +50.84%         |  +5.35% (/23.73pp)  
-M1_slda_whitened (SLDA)            | 43.43% +/- 0.53% | -44.34 pp    | +49.65%         |  +6.12% (/23.73pp)  
-control_random_trigger_M2          | 19.79% +/- 0.54% | -76.02 pp    | +13.68%         | -93.49% (/23.73pp)  
-M2_sdc_drift_compensated           | 44.33% +/- 0.66% | -39.05 pp    | +55.65%         |  +9.89% (/23.73pp)  
-joint_linear_probe (Ceiling)       | 65.58% +/- 0.41% |  +0.00 pp    | +100.00%        | +99.46% (/23.73pp)  
+1_freeze_after_base (Control)      |  9.41% +/- 0.16% | -82.88 pp    |  +5.88%         | -151.65% (/22.32pp) 
+2_naive_fine_tune (Linear)         |  9.96% +/- 0.15% | -89.04 pp    |  -1.11%         | -149.19% (/22.32pp) 
+4_ncm_adapting (Stale Centroids)   | 43.26% +/- 0.58% | -43.28 pp    | +50.85%         |  +0.01% (/22.32pp)  
+control_random_trigger_M1          | 43.25% +/- 0.51% | -43.29 pp    | +50.84%         |  -0.04% (/22.32pp)  
+M1_slda_whitened (SLDA)            | 43.43% +/- 0.53% | -44.34 pp    | +49.65%         |  +0.77% (/22.32pp)  
+control_random_trigger_M2          | 19.79% +/- 0.54% | -76.02 pp    | +13.68%         | -105.13% (/22.32pp) 
+M2_sdc_drift_compensated           | 44.33% +/- 0.66% | -39.05 pp    | +55.65%         |  +4.78% (/22.32pp)  
+joint_linear_probe (Ceiling)       | 65.58% +/- 0.41% |  +0.00 pp    | +100.00%        | +100.01% (/22.32pp) 
 =================================================================================================================================================
 
-  [Headroom Closure Significance Test vs Direct Predecessor (41.98% +/- 1.27%)]
-    M1_slda_whitened (SLDA)       : 43.43% +/- 0.53% | Delta: +1.45 pp | Status: [BEATS 1-SIGMA]
-    M2_sdc_drift_compensated      : 44.33% +/- 0.66% | Delta: +2.35 pp | Status: [BEATS 1-SIGMA]
+  [Headroom Closure Significance Test vs Corrected Predecessor (43.26% +/- 0.58%)]
+    M1_slda_whitened (SLDA)       : 43.43% +/- 0.53% | Delta: +0.17 pp | Status: [WITHIN 1-SIGMA NOISE / NEGATIVE]
+    M2_sdc_drift_compensated      : 44.33% +/- 0.66% | Delta: +1.07 pp | Status: [BEATS 1-SIGMA]
+
+  [Stored State Memory Accounting Across Arms]
+    1_freeze_after_base (Control)     : 0 B
+    2_naive_fine_tune (Linear)        : 0 B
+    4_ncm_adapting (Stale Centroids)  : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    control_random_trigger_M1         : 1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]
+    M1_slda_whitened (SLDA)           : 1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]
+    control_random_trigger_M2         : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    M2_sdc_drift_compensated          : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    joint_linear_probe (Ceiling)      : 0 B [Upper bound ceiling probe]
 
 ===================================================================================================================
 EXIT_CODE = 0

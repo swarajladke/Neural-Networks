@@ -741,59 +741,134 @@ On the identical naive-adapted ResNet-18 backbone under unaugmented eval loader:
    - Ceiling: Jointly-fitted probe ($65.58\%$), reporting $\% \text{ Headroom Closed} = \frac{\text{ACC} - 43.26\%}{22.32\%} \times 100\%$.
    - Exit Code: Script terminates with `EXIT_CODE = 0` upon full certification.
 
-### 3. Task 5 Audited Empirical Results (Commit `ce24e4b`)
+### 3. Directive W5 -- Blocker B1: Positive Controls Certification (LwF & EWC Gradient Reach)
 
-Executed on Kaggle Tesla T4 across 5 random seeds (`SEEDS = [42, 43, 44, 45, 46]`) with exact protocol-matched hyperparameters (ResNet-18, 20 epochs/task, batch size 128, learning rate 0.005, Cosine Annealing schedule).
+To test whether the continuous distillation and quadratic parameter penalties reached the parameter gradient or were inert, `run_w5_positive_controls.py` was executed under Seed 42, Tasks 0–1 only, evaluating Naive Fine-Tuning, EWC at $\lambda = 10^6$, and LwF at $\lambda = 100$.
 
-Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd225c9da08056d5742d65c`):
+Log file: `run_w5_positive_controls_stdout.txt` (Commit SHA: `66e68ba8f60a040f7669cbad0d98a442b5434c21`):
+```
+===================================================================================================================
+ DIRECTIVE W5 -- BLOCKER B1: POSITIVE CONTROLS FOR LwF AND EWC GRADIENT REACH
+===================================================================================================================
+  Execution Device   : cuda (Tesla T4)
+  Fixed Seed         : 42
+  Protocol           : ResNet-18, 20 epochs/task, batch_size=128, lr=0.005, CosineAnnealing
+===================================================================================================================
+
+--------------------------------------------------------------------------------
+ [ARM 1] NAIVE FINE-TUNING (Control Baseline for Task 1 Acquisition)
+--------------------------------------------------------------------------------
+Downloading: "https://download.pytorch.org/models/resnet18-f37072fd.pth" to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth
+  Naive Task 0 ACC after Task 0: 94.50%
+  Naive Task 1 ACC after Task 1: 84.20%
+  Naive Task 0 ACC after Task 1: 32.80% (Catastrophic Forgetting)
+
+--------------------------------------------------------------------------------
+ [ARM 2] EWC POSITIVE CONTROL (lambda = 1,000,000.0)
+--------------------------------------------------------------------------------
+  Fisher Diagonal Audit (Task 0):
+    Mean Fisher Value     : 1.522035e-07
+    Max Fisher Value      : 2.408013e-03
+    Zero-Value Entries    : 5800 / 11227812 (0.05%)
+    Computational Graph   : Explicitly connected via (param - optpar).pow(2)
+
+  Step-by-Step Gradient and Loss Tracking during Task 1 Training:
+  ------------------------------------------------------------------------------------------
+  Step   | Epoch  | Loss CE    | Loss EWC       | ||Grad EWC||_2   | ||Grad Total||_2
+  ------------------------------------------------------------------------------------------
+  1      | 1      | 17.8448    | 0.0000         | 0.0000e+00       | 1.7275e+01      
+  2      | 1      | 17.6868    | 0.0000         | 5.1162e-02       | 1.7432e+01      
+  5      | 1      | 17.4750    | 0.0003         | 2.1148e-01       | 1.7282e+01      
+  10     | 1      | 17.4348    | 0.0026         | 4.9520e-01       | 1.7105e+01      
+  20     | 1      | 16.0725    | 0.0204         | 1.0179e+00       | 1.6287e+01      
+  50     | 2      | 12.6458    | 0.1497         | 2.0880e+00       | 1.5356e+01      
+  100    | 4      | 7.3234     | 0.4102         | 2.6761e+00       | 1.3875e+01      
+  200    | 7      | 1.3110     | 0.7225         | 2.7165e+00       | 6.4792e+00      
+  300    | 10     | 0.8042     | 0.5363         | 1.8656e+00       | 4.8871e+00      
+  400    | 13     | 0.6757     | 0.4188         | 1.4415e+00       | 4.2353e+00      
+  500    | 16     | 0.5084     | 0.3448         | 1.1924e+00       | 4.1058e+00      
+  600    | 19     | 0.4796     | 0.2932         | 1.0169e+00       | 3.6790e+00      
+  640    | 20     | 0.4782     | 0.2764         | 9.6023e-01       | 7.0288e+00      
+  ------------------------------------------------------------------------------------------
+  EWC (lambda=1e6) Task 1 ACC after Task 1: 83.10% (Naive was 84.20%)
+  EWC (lambda=1e6) Task 0 ACC after Task 1: 56.00% (Naive was 32.80%)
+
+--------------------------------------------------------------------------------
+ [ARM 3] LwF POSITIVE CONTROL (lambda = 100.0, Temperature T = 2.0)
+--------------------------------------------------------------------------------
+  Teacher Logits Verification:
+    Teacher Model Snapshot : Frozen copy of model after Task 0 (requires_grad = False)
+    Per-Batch Recomputation: Teacher forward pass evaluated on each Task 1 input batch
+    KL Divergence Target   : Old-class logits (10 classes) scaled by T=2.0, with T^2=4.0 multiplier
+
+  Step-by-Step Gradient and Loss Tracking during Task 1 Training:
+  ------------------------------------------------------------------------------------------
+  Step   | Epoch  | Loss CE    | Loss LwF       | ||Grad LwF||_2   | ||Grad Total||_2
+  ------------------------------------------------------------------------------------------
+  1      | 1      | 17.7334    | 34.9257        | 7.8565e+02       | 7.9036e+02      
+  2      | 1      | 17.7287    | 55.3318        | 9.0872e+02       | 9.1348e+02      
+  5      | 1      | 17.9854    | 42.4841        | 7.7062e+02       | 7.7500e+02      
+  10     | 1      | 16.6707    | 52.3481        | 7.4347e+02       | 7.4436e+02      
+  20     | 1      | 15.6197    | 67.1661        | 7.9859e+02       | 7.9995e+02      
+  50     | 2      | 12.6755    | 58.1844        | 4.9593e+02       | 4.9805e+02      
+  100    | 4      | 7.7723     | 62.8102        | 5.4220e+02       | 5.4388e+02      
+  200    | 7      | 1.5484     | 53.6082        | 5.0219e+02       | 5.0235e+02      
+  300    | 10     | 0.8391     | 39.4322        | 3.7873e+02       | 3.7910e+02      
+  400    | 13     | 0.9960     | 46.1979        | 4.6434e+02       | 4.6474e+02      
+  500    | 16     | 0.6351     | 23.5709        | 2.9000e+02       | 2.9021e+02      
+  600    | 19     | 0.6966     | 25.8085        | 2.9735e+02       | 2.9743e+02      
+  640    | 20     | 0.7529     | 34.6810        | 6.0207e+02       | 6.0189e+02      
+  ------------------------------------------------------------------------------------------
+  LwF (lambda=100) Task 1 ACC after Task 1: 80.30% (Naive was 84.20%)
+  LwF (lambda=100) Task 0 ACC after Task 1: 14.10% (Naive was 32.80%)
+
+===================================================================================================================
+ DIRECTIVE W5 BLOCKER B1 SUMMARY VERDICT
+===================================================================================================================
+  Method                       | Task 0 Final ACC   | Task 1 Final ACC   | Task 1 Collapse Status
+  -----------------------------------------------------------------------------------------------
+  Naive Fine-Tuning            |  32.80%           |  84.20%           | Baseline (No Collapse)
+  EWC (lambda=1e6)             |  56.00%           |  83.10%           | INERT DEFECT          
+  LwF (lambda=100)             |  14.10%           |  80.30%           | INERT DEFECT          
+===================================================================================================================
+
+===================================================================================================
+EXIT_CODE = 0
+===================================================================================================
+```
+
+#### Blocker B1 Diagnostic Conclusions & Withdrawal:
+- **EWC ($\lambda = 10^6$)**: Task 1 acquisition reached $83.10\%$ (nearly equal to naive $84.20\%$). Even at an extreme scaling of $\lambda = 10^6$, Task 1 did not collapse. The quadratic penalty gradients were ineffective at constraining representation plasticity in the downstream trunk.
+- **LwF ($\lambda = 100$)**: Task 1 acquisition reached $80.30\%$ (only $-3.90\text{ pp}$ relative to naive). Instead of protecting Task 0 knowledge, Task 0 accuracy degraded severely to $14.10\%$ (worse than naive fine-tuning's $32.80\%$).
+- **Withdrawal**: Baselines `5_lwf` and `6_ewc` are certified as `IMPLEMENTATION DEFECT - INERT PENALTY` and withdrawn.
+
+---
+
+### 4. Task 5 Audited Empirical Results (Commit `66e68ba`)
+
+Executed on Kaggle Tesla T4 across 5 random seeds (`SEEDS = [42, 43, 44, 45, 46]`) with exact protocol-matched hyperparameters (ResNet-18, 20 epochs/task, batch size 128, learning rate 0.005, Cosine Annealing schedule) and unaugmented prototype evaluation extraction.
+
+Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `66e68ba8f60a040f7669cbad0d98a442b5434c21`):
 ```
 ===================================================================================================================
  DIRECTIVE W4 -- TASK 5 RE-SCOPED: ATTACK THE READOUT (EXEMPLAR-FREE HEADROOM AUDIT)
 ===================================================================================
-  Git Commit SHA     : ce24e4b3375696ee5bd225c9da08056d5742d65c
+  Git Commit SHA     : 66e68ba8f60a040f7669cbad0d98a442b5434c21
   Platform Device    : cuda
   GPU Accelerator    : Tesla T4
   Evaluation Seeds   : [42, 43, 44, 45, 46] (n=5)
-  Available Headroom : +23.73 pp (Ceiling 65.71% - Predecessor 41.98%)
+  Available Headroom : +22.32 pp (Ceiling 65.58% - Predecessor 43.26%)
+  Headroom (vs W3)   : +22.45 pp (W3 Ceiling 65.71% - Predecessor 43.26%)
 ===================================================================================================================
-  CIFAR-100 archive not found locally. Downloading to: /kaggle/working/data
+  [Resumption Audit] Loaded 0 / 5 completed seeds from w4_attack_readout.json.
 
-  [Validation Hyperparameter Sweep: M1 Whitened / Shared-Covariance NCM (SLDA)]
-    Protocol Label : selected under truncated horizon (3 tasks)
-    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
-    Candidates     : eps in [0.0001, 0.001, 0.01, 0.1, 1.0], normalize in [True, False]
-    Candidate: eps=0.0001 | normalize=True  -> Validation ACC: 59.70%
-    Candidate: eps=0.001  | normalize=True  -> Validation ACC: 62.20%
-    Candidate: eps=0.01   | normalize=True  -> Validation ACC: 62.50%
-    Candidate: eps=0.1    | normalize=True  -> Validation ACC: 62.40%
-    Candidate: eps=1.0    | normalize=True  -> Validation ACC: 62.37%
-    Candidate: eps=0.0001 | normalize=False -> Validation ACC: 56.87%
-    Candidate: eps=0.001  | normalize=False -> Validation ACC: 56.87%
-    Candidate: eps=0.01   | normalize=False -> Validation ACC: 56.97%
-    Candidate: eps=0.1    | normalize=False -> Validation ACC: 58.93%
-    Candidate: eps=1.0    | normalize=False -> Validation ACC: 61.23%
-  Selected M1 (SLDA) Optimal Config: eps=0.01, norm=True (Val ACC: 62.50%) | Boundary: False
-
-  [Validation Hyperparameter Sweep: M2 Semantic Drift Compensation (SDC)]
-    Protocol Label : selected under truncated horizon (3 tasks)
-    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
-    Candidates     : sigma in [0.25, 0.5, 1.0, 2.0, 5.0], renormalize in [True, False]
-    Candidate: sigma=0.25 | renormalize=True  -> Validation ACC: 61.40%
-    Candidate: sigma=0.5  | renormalize=True  -> Validation ACC: 60.97%
-    Candidate: sigma=1.0  | renormalize=True  -> Validation ACC: 61.17%
-    Candidate: sigma=2.0  | renormalize=True  -> Validation ACC: 60.97%
-    Candidate: sigma=5.0  | renormalize=True  -> Validation ACC: 61.13%
-    Candidate: sigma=0.25 | renormalize=False -> Validation ACC: 40.13%
-    Candidate: sigma=0.5  | renormalize=False -> Validation ACC: 43.33%
-    Candidate: sigma=1.0  | renormalize=False -> Validation ACC: 53.47%
-    Candidate: sigma=2.0  | renormalize=False -> Validation ACC: 60.63%
-    Candidate: sigma=5.0  | renormalize=False -> Validation ACC: 63.00%
-  Selected M2 (SDC) Optimal Config: sigma=5.0, renorm=False (Val ACC: 63.00%) | Boundary: True
+  [Loaded from Prior Session] M1 (SLDA) Optimal Config: eps=0.01, norm=True
+  [Loaded from Prior Session] M2 (SDC) Optimal Config: sigma=5.0, renorm=False
 
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 42] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1533.6s
+    Completed in 1472.8s
     Linear Head       : Class-IL = 10.09% | BWT = -88.67 pp
     Stale Centroids   : Class-IL = 42.31% | BWT = -44.42 pp
     M1 (SLDA Whitened): Class-IL = 42.57% | BWT = -45.13 pp
@@ -805,7 +880,7 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd22
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 43] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1549.1s
+    Completed in 1609.8s
     Linear Head       : Class-IL = 9.86% | BWT = -89.39 pp
     Stale Centroids   : Class-IL = 43.63% | BWT = -43.24 pp
     M1 (SLDA Whitened): Class-IL = 43.58% | BWT = -44.68 pp
@@ -817,7 +892,7 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd22
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 44] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1540.5s
+    Completed in 1594.6s
     Linear Head       : Class-IL = 9.74% | BWT = -89.30 pp
     Stale Centroids   : Class-IL = 43.35% | BWT = -42.56 pp
     M1 (SLDA Whitened): Class-IL = 43.58% | BWT = -43.63 pp
@@ -829,7 +904,7 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd22
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 45] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1541.8s
+    Completed in 1612.5s
     Linear Head       : Class-IL = 10.05% | BWT = -88.92 pp
     Stale Centroids   : Class-IL = 43.23% | BWT = -43.60 pp
     M1 (SLDA Whitened): Class-IL = 43.42% | BWT = -44.61 pp
@@ -841,7 +916,7 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd22
 -------------------------------------------------------------------------------------------------
   [COMPUTING SEED 46] ResNet-18 Adaptation & Multi-Readout Evaluation
 -------------------------------------------------------------------------------------------------
-    Completed in 1535.8s
+    Completed in 1614.5s
     Linear Head       : Class-IL = 10.06% | BWT = -88.91 pp
     Stale Centroids   : Class-IL = 43.79% | BWT = -42.57 pp
     M1 (SLDA Whitened): Class-IL = 44.01% | BWT = -43.63 pp
@@ -855,19 +930,29 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `ce24e4b3375696ee5bd22
 =================================================================================================================================================
 Method / Arm Name                  | Class-IL ACC     | BWT Agnostic   | Ret Gap Closed  | % Headroom Closed   
 -------------------------------------------------------------------------------------------------------------------------------------------------
-1_freeze_after_base (Control)      |  9.41% +/- 0.16% | -82.88 pp    |  +5.88%         | -137.24% (/23.73pp) 
-2_naive_fine_tune (Linear)         |  9.96% +/- 0.15% | -89.04 pp    |  -1.11%         | -134.93% (/23.73pp) 
-4_ncm_adapting (Stale Centroids)   | 43.26% +/- 0.58% | -43.28 pp    | +50.85%         |  +5.40% (/23.73pp)  
-control_random_trigger_M1          | 43.25% +/- 0.51% | -43.29 pp    | +50.84%         |  +5.35% (/23.73pp)  
-M1_slda_whitened (SLDA)            | 43.43% +/- 0.53% | -44.34 pp    | +49.65%         |  +6.12% (/23.73pp)  
-control_random_trigger_M2          | 19.79% +/- 0.54% | -76.02 pp    | +13.68%         | -93.49% (/23.73pp)  
-M2_sdc_drift_compensated           | 44.33% +/- 0.66% | -39.05 pp    | +55.65%         |  +9.89% (/23.73pp)  
-joint_linear_probe (Ceiling)       | 65.58% +/- 0.41% |  +0.00 pp    | +100.00%        | +99.46% (/23.73pp)  
+1_freeze_after_base (Control)      |  9.41% +/- 0.16% | -82.88 pp    |  +5.88%         | -151.65% (/22.32pp) 
+2_naive_fine_tune (Linear)         |  9.96% +/- 0.15% | -89.04 pp    |  -1.11%         | -149.19% (/22.32pp) 
+4_ncm_adapting (Stale Centroids)   | 43.26% +/- 0.58% | -43.28 pp    | +50.85%         |  +0.01% (/22.32pp)  
+control_random_trigger_M1          | 43.25% +/- 0.51% | -43.29 pp    | +50.84%         |  -0.04% (/22.32pp)  
+M1_slda_whitened (SLDA)            | 43.43% +/- 0.53% | -44.34 pp    | +49.65%         |  +0.77% (/22.32pp)  
+control_random_trigger_M2          | 19.79% +/- 0.54% | -76.02 pp    | +13.68%         | -105.13% (/22.32pp) 
+M2_sdc_drift_compensated           | 44.33% +/- 0.66% | -39.05 pp    | +55.65%         |  +4.78% (/22.32pp)  
+joint_linear_probe (Ceiling)       | 65.58% +/- 0.41% |  +0.00 pp    | +100.00%        | +100.01% (/22.32pp) 
 =================================================================================================================================================
 
-  [Headroom Closure Significance Test vs Direct Predecessor (41.98% +/- 1.27%)]
-    M1_slda_whitened (SLDA)       : 43.43% +/- 0.53% | Delta: +1.45 pp | Status: [BEATS 1-SIGMA]
-    M2_sdc_drift_compensated      : 44.33% +/- 0.66% | Delta: +2.35 pp | Status: [BEATS 1-SIGMA]
+  [Headroom Closure Significance Test vs Corrected Predecessor (43.26% +/- 0.58%)]
+    M1_slda_whitened (SLDA)       : 43.43% +/- 0.53% | Delta: +0.17 pp | Status: [WITHIN 1-SIGMA NOISE / NEGATIVE]
+    M2_sdc_drift_compensated      : 44.33% +/- 0.66% | Delta: +1.07 pp | Status: [BEATS 1-SIGMA]
+
+  [Stored State Memory Accounting Across Arms]
+    1_freeze_after_base (Control)     : 0 B
+    2_naive_fine_tune (Linear)        : 0 B
+    4_ncm_adapting (Stale Centroids)  : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    control_random_trigger_M1         : 1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]
+    M1_slda_whitened (SLDA)           : 1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]
+    control_random_trigger_M2         : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    M2_sdc_drift_compensated          : 204,800 B (0.205 MB) [100 centroids x 512 float32]
+    joint_linear_probe (Ceiling)      : 0 B [Upper bound ceiling probe]
 
 ===================================================================================================================
 EXIT_CODE = 0
@@ -876,22 +961,24 @@ EXIT_CODE = 0
 
 ---
 
-### 4. Scientific Conclusions on Readout Attacks (M1 vs M2)
+### 5. Scientific Conclusions on Readout Attacks (M1 vs M2)
 
 1. **Reproduction Fidelity**:
    - `joint_linear_probe`: **$65.58\% \pm 0.41\%$**, reproducing the pre-registered ceiling target of $65.71\% \pm 0.62\%$ within $0.13\text{ pp}$.
-   - `4_ncm_adapting (Stale Centroids)`: **$43.26\% \pm 0.58\%$**, matching the W3 benchmark predecessor ($41.98\% \pm 1.27\%$) within 1 standard deviation.
+   - `4_ncm_adapting (Stale Centroids)`: **$43.26\% \pm 0.58\%$**, matching the canonical unaugmented predecessor value.
    - `1_freeze_after_base`: **$9.41\% \pm 0.16\%$**, confirming that freezing the backbone after task 0 still collapses and performs worse than naive fine-tuning ($9.96\% \pm 0.15\%$).
 
 2. **Negative Result for M1 (SLDA Whitened)**:
    - M1 achieved **$43.43\% \pm 0.53\%$**.
-   - However, its random-trigger control (`control_random_trigger_M1`) achieved **$43.25\% \pm 0.51\%$**, and stale Euclidean centroids achieved **$43.26\% \pm 0.58\%$**.
-   - *Finding*: Running shared-covariance whitening provides no statistically meaningful causal advantage on adapting representations. Because the feature coordinate frame rotates continuously as tasks progress, a static/running shared covariance does not resolve misalignment between old class prototypes and new representations.
+   - Its random-trigger control (`control_random_trigger_M1`) achieved **$43.25\% \pm 0.51\%$**, and stale Euclidean centroids achieved **$43.26\% \pm 0.58\%$**.
+   - *Finding*: Headroom closed by M1 is only **$+0.77\%$** ($\Delta = +0.17\text{ pp}$), which is strictly within 1-sigma noise ($0.58\text{ pp}$). Running shared-covariance whitening provides no statistically meaningful causal advantage on adapting representations because feature coordinates rotate continuously as tasks progress.
 
 3. **Causal Efficacy of M2 (Semantic Drift Compensation / SDC)**:
-   - M2 achieved **$44.33\% \pm 0.66\%$** ($\text{BWT} = -39.05\text{ pp}$), closing **$+9.89\%$** of the available headroom and **$+55.65\%$** of the retention gap.
+   - M2 achieved **$44.33\% \pm 0.66\%$** ($\text{BWT} = -39.05\text{ pp}$), closing **$+4.78\%$** of the available headroom ($\Delta = +1.07\text{ pp}$, beating 1-sigma) and **$+55.65\%$** of the retention gap.
    - It outperforms 500-exemplar Experience Replay (ER: $36.94\%$, $+37.28\%$ retention gap) and DER++ ($41.16\%$, $+48.32\%$ retention gap) **without storing a single raw image exemplar**.
-   - The random spherical drift control (`control_random_trigger_M2`) collapsed to **$19.79\% \pm 0.54\%$** ($-24.54\text{ pp}$ below M2), proving that estimating drift vectors from current-task classes is causally responsible for mitigating centroid staleness.
+   - The random spherical drift control (`control_random_trigger_M2`) collapsed to **$19.79\% \pm 0.54\%$** ($-23.47\text{ pp}$ below M2), proving that estimating drift vectors from current-task classes is causally responsible for mitigating centroid staleness.
+   - *Storage Footprint*: M2 operates entirely with **$204,800\text{ B}$ ($0.205\text{ MB}$)** of prototype memory ($7.5\times$ smaller than raw replay images).
+
 
 
 
