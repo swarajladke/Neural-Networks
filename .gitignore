@@ -58,6 +58,7 @@
 !run_w4_attack_readout_stdout.txt
 !run_w5_plasticity_stdout.txt
 !run_w5_positive_controls_stdout.txt
+!run_w6_diagnostics_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
 !build_cache_v3_stdout.log
 !number_verification_map.tsv

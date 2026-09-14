@@ -1005,12 +1005,15 @@ def main():
         print(f"{'Method / Arm Name':<34} | {'Class-IL ACC':<16} | {'BWT Agnostic':<14} | {'Ret Gap Closed':<15} | {'% Headroom Closed':<20}")
         print("-" * 145)
 
+        naive_bwt_run = float(np.mean([r["linear_head"]["bwt"] for r in runs]))
+        ret_denom_run = OFFLINE_BWT - naive_bwt_run
+
         summary_results = {}
         for name, fn_acc, fn_bwt in arms:
             m_acc, s_acc, vals_acc = get_stats(fn_acc)
             m_bwt, s_bwt, _ = get_stats(fn_bwt)
 
-            ret_gap = ((m_bwt - NAIVE_BWT) / RETENTION_DENOMINATOR) * 100.0
+            ret_gap = ((m_bwt - naive_bwt_run) / ret_denom_run) * 100.0
             headroom_closed = ((m_acc - PREDECESSOR_ACC) / HEADROOM_DENOMINATOR) * 100.0
 
             ret_str = f"{ret_gap:+6.2f}%" if "Probe" not in name else "N/A"
