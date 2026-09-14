@@ -1,0 +1,99 @@
+{
+  "git_commit_sha": "ce24e4b3375696ee5bd225c9da08056d5742d65c",
+  "tuning_info": {
+    "m1_cfg": [
+      0.01,
+      true
+    ],
+    "m1_scores": {
+      "eps=0.0001_norm=True": 59.7,
+      "eps=0.001_norm=True": 62.2,
+      "eps=0.01_norm=True": 62.5,
+      "eps=0.1_norm=True": 62.4,
+      "eps=1.0_norm=True": 62.37,
+      "eps=0.0001_norm=False": 56.87,
+      "eps=0.001_norm=False": 56.87,
+      "eps=0.01_norm=False": 56.97,
+      "eps=0.1_norm=False": 58.93,
+      "eps=1.0_norm=False": 61.23
+    },
+    "m1_boundary": false,
+    "m2_cfg": [
+      5.0,
+      false
+    ],
+    "m2_scores": {
+      "sigma=0.25_renorm=True": 61.4,
+      "sigma=0.5_renorm=True": 60.97,
+      "sigma=1.0_renorm=True": 61.17,
+      "sigma=2.0_renorm=True": 60.97,
+      "sigma=5.0_renorm=True": 61.13,
+      "sigma=0.25_renorm=False": 40.13,
+      "sigma=0.5_renorm=False": 43.33,
+      "sigma=1.0_renorm=False": 53.47,
+      "sigma=2.0_renorm=False": 60.63,
+      "sigma=5.0_renorm=False": 63.0
+    },
+    "m2_boundary": true
+  },
+  "headroom_denominator_pp": 23.73,
+  "retention_denominator_pp": 88.06,
+  "summary": {
+    "1_freeze_after_base (Control)": {
+      "class_il_mean": 9.41,
+      "class_il_std": 0.16,
+      "bwt_mean": -82.88,
+      "retention_gap_closed": 5.88,
+      "headroom_closed": -137.24
+    },
+    "2_naive_fine_tune (Linear)": {
+      "class_il_mean": 9.96,
+      "class_il_std": 0.15,
+      "bwt_mean": -89.04,
+      "retention_gap_closed": -1.11,
+      "headroom_closed": -134.93
+    },
+    "4_ncm_adapting (Stale Centroids)": {
+      "class_il_mean": 43.26,
+      "class_il_std": 0.58,
+      "bwt_mean": -43.28,
+      "retention_gap_closed": 50.85,
+      "headroom_closed": 5.4
+    },
+    "control_random_trigger_M1": {
+      "class_il_mean": 43.25,
+      "class_il_std": 0.51,
+      "bwt_mean": -43.29,
+      "retention_gap_closed": 50.84,
+      "headroom_closed": 5.35
+    },
+    "M1_slda_whitened (SLDA)": {
+      "class_il_mean": 43.43,
+      "class_il_std": 0.53,
+      "bwt_mean": -44.34,
+      "retention_gap_closed": 49.65,
+      "headroom_closed": 6.12
+    },
+    "control_random_trigger_M2": {
+      "class_il_mean": 19.79,
+      "class_il_std": 0.54,
+      "bwt_mean": -76.02,
+      "retention_gap_closed": 13.68,
+      "headroom_closed": -93.49
+    },
+    "M2_sdc_drift_compensated": {
+      "class_il_mean": 44.33,
+      "class_il_std": 0.66,
+      "bwt_mean": -39.05,
+      "retention_gap_closed": 55.65,
+      "headroom_closed": 9.89
+    },
+    "joint_linear_probe (Ceiling)": {
+      "class_il_mean": 65.58,
+      "class_il_std": 0.41,
+      "bwt_mean": 0.0,
+      "retention_gap_closed": 100.0,
+      "headroom_closed": 99.46
+    }
+  }
+}

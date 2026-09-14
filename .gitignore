@@ -55,6 +55,7 @@
 !run_w2d_gap_measured_stdout.txt
 !run_w2e_gap_closed_stdout.txt
 !run_w4_baselines_stdout.txt
+!run_w4_attack_readout_stdout.txt
 !run_w5_plasticity_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
 !build_cache_v3_stdout.log
@@ -85,6 +86,7 @@ data/
 !w2e_results.json
 !w3_budget_gate_results.json
 !w3_baselines.json
+!w4_attack_readout.json
 !w4_results.json
 !w5_results.json
 !w6_results.json
