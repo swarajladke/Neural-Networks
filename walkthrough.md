@@ -607,14 +607,27 @@ Per Directive W4 Fix F1:
 #### F1. Scoped Decomposition
 Classifier/residual share is strictly conditioned on $\text{Avg LA} \ge \text{Task-Aware final}$. For arms 3, 4, 7, and 8, the report explicitly states: `DECOMPOSITION UNDEFINED (Avg LA < task-aware final)` and reports the bias gap directly in percentage points.
 
-#### F2. Reconcile Arm 3 with W2e ($47.12\%$ vs $50.24\%$)
+#### F2. Reconcile Arm 3 with W2e (Cause, Citation, and Canonical Value)
 - **Shortfall**: $3.12\text{ pp}$ ($47.12\% \pm 0.08\%$ in W3 vs $50.24\% \pm 0.00\%$ in W2e Arm A1).
-- **Diagnosis**:
+- **Diagnosis & Audit**:
   1. *Centroid Accumulation Transform*: W3 originally passed `task_train_loaders[t]` (built on `ds_tr` with stochastic `RandomCrop(112, padding=8)` and `RandomHorizontalFlip()`) with `shuffle=True`. Jittered crops perturbed prototype centroid estimates away from canonical unaugmented test distributions.
-  2. *W2e Protocol*: W2e (`scripts/eval_w2e_arms.py`) extracted features using `ev_transform` (deterministic unaugmented `Resize(128)`, `CenterCrop(112)`, `ToTensor()`, `Normalize()`) on `ds_ev` with `shuffle=False`.
-  3. *BatchNorm Running Stats*: Both runs operated in `eval()` mode with `torch.no_grad()`; BatchNorm running statistics were frozen to ImageNet weights.
-  4. *Float32 Accumulation*: Negligible contribution. Random data augmentation on train samples was the sole cause of the $3.12\text{ pp}$ shortfall and non-zero seed standard deviation.
-- **Resolution**: In commit `488759d`, `task_train_eval_loaders` (built on `ds_ev` without augmentation, `shuffle=False`) was introduced, reproducing the canonical $50.24\% \pm 0.00\%$.
+  2. *W2e Protocol & Citation Audit*: W2e was executed in `run_w2e_gap_closed.py` (line 302) using `transform_eval_112 = transforms.Compose([transforms.Resize((112, 112)), transforms.ToTensor(), imagenet_norm])`. **No crop was ever used.** The prior reference to `scripts/eval_w2e_arms.py` and `CenterCrop(112)` was an incorrect transcription; `scripts/eval_w2e_arms.py` does not exist in git (`git ls-files | grep -i w2e` verifies `run_w2e_gap_closed.py`).
+  3. *Transform Execution Audit Across Runs*:
+     - (a) **W2e Arms**: `Resize((112, 112)), ToTensor(), Normalize()`. No crop.
+     - (b) **45 Representation Probes**: `Resize((112, 112)), ToTensor(), Normalize()`. No crop.
+     - (c) **Frozen Baseline Probes**: `Resize((112, 112)), ToTensor(), Normalize()`. No crop.
+  4. *Audit of All Centroid / Feature Extraction Sites in `run_w3_baselines.py`*:
+     - Line 675 (Arm 3 `run_ncm_frozen`): Passed `task_train_loaders[t]` (augmented). **[DEFECTIVE; caused 47.12% vs canonical 50.24%]**
+     - Line 795 (Arm 4 `run_ncm_adapting`): Passed `task_train_loaders[t]` (augmented). **[DEFECTIVE; caused 41.98% vs canonical 43.26%]**
+     - Line 1004 (Arm 6 `run_ewc` Fisher): Passed `task_train_loaders[t]` (augmented).
+     - Line 1100 (Arm 7 `run_er` Buffer): Passed `task_train_loaders[t]` (augmented).
+     - Line 1220 (Arm 8 `run_der_plus_plus` Buffer): Passed `task_train_loaders[t]` (augmented).
+     - Line 224 (`evaluate_protocol_matched_linear_probe`): Passed `full_tr_probe_loader` (`ds_ev`, unaugmented). **[CORRECT]**
+     - Line 819 (Test-time Evaluation): Passed `task_test_loaders` (`ds_te`, unaugmented). **[CORRECT]**
+     - `run_w4_attack_readout.py` Line 676: Uses `task_train_eval_loaders[t]` (`ds_ev`, unaugmented). **[CORRECT]**
+- **Canonical Values Declared**:
+  - **Arm 3 Canonical Value**: $\mathbf{50.24\% \pm 0.00\%}$ (measured under unaugmented `task_train_eval_loaders`). The $47.12\%$ figure is defective.
+  - **Arm 4 Canonical Predecessor**: $\mathbf{43.26\% \pm 0.58\%}$ (measured under unaugmented `task_train_eval_loaders`). The $41.98\%$ figure is defective.
 
 #### F3. Validation Lambda Sweeps (Amendment 3 Output)
 - **LwF Lambda Sweep (Seed 42)**:
@@ -649,21 +662,37 @@ Classifier/residual share is strictly conditioned on $\text{Avg LA} \ge \text{Ta
   - NCM Prototypes: 100 classes $\times 512$ float32 $\times 4\text{ bytes} = 204,800\text{ bytes} \approx 0.205\text{ MB}$.
   - Stored memory advantage of NCM is **$\sim 7.5\times$** (not $368\times$). All claims of $368\times$ (which counted resized float32 tensors) are purged.
 
-#### F5. Complete Resource & Computational Counters Table Per Arm
+#### F5. Complete Resource & Computational Counters Table Per Arm (Directive W5 Reconciled)
+
+- **Counter Reconciliation Audit**:
+  - Training volume was **never reduced** during execution. The executed configuration matches Part 1 and W2e: `BATCH_SIZE = 128`, `EPOCHS_PER_TASK = 20`, $4,000$ train samples per task ($400$/class $\times 10$ classes).
+  - Steps per epoch: $\lceil 4,000 / 128 \rceil = 32$ steps ($31 \times 128 + 1 \times 32 = 4,000$).
+  - Steps per task: $32 \times 20 = 640$ steps.
+  - Total continual steps across 10 tasks: $10 \times 640 = \mathbf{6,400\text{ steps}}$.
+  - Total train samples seen across 10 tasks: $10 \times 20 \times 4,000 = \mathbf{800,000\text{ samples}}$.
+  - The previous transcription of $7,050$ steps / $225,000$ samples seen was an authoring defect; `w3_baselines.json` (line 565) and `run_w3_budget_gate_stdout.txt` verify the true executed counters ($6,400$ steps / $800,000$ samples).
+- **Parameter Count Reconciliation (11,227,940 vs 11,227,812)**:
+  - ResNet-18 Backbone: $11,176,512$ parameters.
+  - 100-way Linear Classifier Head: $512 \times 100 + 100 = 51,300$ parameters.
+  - Total Model Parameters: $11,176,512 + 51,300 = \mathbf{11,227,812}$.
+  - The $128$-parameter difference ($11,227,940 - 11,227,812 = 128$) arose from counting non-trainable BatchNorm1 running statistics buffers (`running_mean` $64$ + `running_var` $64$ = $128$). Both `run_w2e_gap_closed.py` and `run_w3_baselines.py` programmatically measure $11,227,812$.
+- **Arm 4 Trainable Parameter Set**:
+  - During task adaptation, Arm 4 trains the full model (`ResNet18Primary`) with its 100-way linear classifier head: $\mathbf{11,227,812}$ trainable parameters. At task completion, the linear head is detached and prototypes are extracted from the backbone representation space for NCM inference.
 
 | Arm Name | Total Params | Trainable Params | Steps/Seed | Samples Seen/Seed | Peak GPU Mem | Stored State Mem |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **`1_freeze_after_base`** | $11,227,940$ | $51,300^*$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
-| **`2_naive_fine_tune`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
-| **`3_ncm_frozen_features`** | $11,176,640$ | $0$ | $0$ | $45,000$ | $1,152\text{ MB}$ | $0.205\text{ MB}$ |
-| **`4_ncm_adapting_features`** | $11,176,640$ | $11,176,640$ | $7,050$ | $225,000$ | $1,424\text{ MB}$ | $0.205\text{ MB}$ |
-| **`5_lwf`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,480\text{ MB}$ | $0\text{ B}$ |
-| **`6_ewc`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,438\text{ MB}$ | $44.9\text{ MB}$ (Fisher) |
-| **`7_er_buffer500`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,442\text{ MB}$ | $1.54\text{ MB}$ (Images) |
-| **`8_der_plus_plus_buffer500`** | $11,227,940$ | $11,227,940$ | $7,050$ | $225,000$ | $1,446\text{ MB}$ | $1.74\text{ MB}$ (Images+Logits) |
-| **`9_joint_offline`** | $11,227,940$ | $11,227,940$ | $70,350$ | $2,250,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+| **`1_freeze_after_base`** | $11,227,812$ | $51,300^*$ | $6,400$ | $800,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+| **`2_naive_fine_tune`** | $11,227,812$ | $11,227,812$ | $6,400$ | $800,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
+| **`3_ncm_frozen_features`** | $11,176,512$ | $0$ | $0$ | $40,000$ | $1,152\text{ MB}$ | $0.205\text{ MB}$ |
+| **`4_ncm_adapting_features`** | $11,227,812$ | $11,227,812^\dagger$ | $6,400$ | $800,000$ | $1,424\text{ MB}$ | $0.205\text{ MB}$ |
+| **`5_lwf`** | $11,227,812$ | $11,227,812$ | $6,400$ | $800,000$ | $1,480\text{ MB}$ | $0\text{ B}$ |
+| **`6_ewc`** | $11,227,812$ | $11,227,812$ | $6,400$ | $800,000$ | $1,438\text{ MB}$ | $44.9\text{ MB}$ (Fisher) |
+| **`7_er_buffer500`** | $11,227,812$ | $11,227,812$ | $6,400$ | $800,000$ | $1,442\text{ MB}$ | $1.54\text{ MB}$ (Images) |
+| **`8_der_plus_plus_buffer500`** | $11,227,812$ | $11,227,812$ | $6,400$ | $800,000$ | $1,446\text{ MB}$ | $1.74\text{ MB}$ (Images+Logits) |
+| **`9_joint_offline`** | $11,227,812$ | $11,227,812$ | $6,260$ | $800,000$ | $1,424\text{ MB}$ | $0\text{ B}$ |
 
-*\*Note: In `1_freeze_after_base`, backbone ($11,176,640$) is frozen after task 0; only linear classifier head ($51,300$) trains on tasks 1–9.*
+*\*Note: In `1_freeze_after_base`, backbone ($11,176,512$) is frozen after task 0; only linear classifier head ($51,300$) trains on tasks 1–9.*
+*^\dagger Note: In `4_ncm_adapting_features`, the full backbone + classifier head are trained during sequential adaptation; prototype centroids are extracted from the backbone at task completion.*
 
 ---
 
@@ -683,27 +712,33 @@ Classifier/residual share is strictly conditioned on $\text{Avg LA} \ge \text{Ta
 
 # Section 7: Task 5 Re-Scoped — Exemplar-Free Attack on the Classifier Readout
 
-### 1. Motivation and Measured Headroom
-On the identical naive-adapted ResNet-18 backbone:
-- Sequential Linear Head: **$9.53\%$**
-- Stale Class Centroids (Arm 4): **$41.98\%$**
-- Jointly-Fitted Linear Probe: **$65.71\%$** (upper-bound ceiling)
-- **Available Gap**: $+32.45\text{ pp}$ is unlocked simply by changing the decision rule without storing images; **$+23.73\text{ pp}$** remains.
+### 1. Motivation and Measured Headroom (Directive W5 Restated)
+On the identical naive-adapted ResNet-18 backbone under unaugmented eval loader:
+- Sequential Linear Head (Baseline): **$9.96\% \pm 0.15\%$**
+- Corrected Stale Class Centroids (Arm 4 Predecessor): **$43.26\% \pm 0.58\%$** (supersedes defective $41.98\%$ from augmented extraction)
+- Jointly-Fitted Linear Probe (Ceiling): **$65.58\% \pm 0.41\%$** (reproducing $65.71\% \pm 0.62\%$ ceiling)
+- **Restated Available Headroom**:
+  $$\text{Available Headroom} = \text{Ceiling} - \text{Predecessor} = 65.58\% - 43.26\% = \mathbf{22.32\text{ pp}}$$
+  $$\text{Alternative Headroom (vs W3 Baseline Probe)} = 65.71\% - 43.26\% = \mathbf{22.45\text{ pp}}$$
+
+> [!IMPORTANT]
+> **Directive W5 Scoring Hold**: Per Directive W5, scoring of Task 5 M1/M2 headroom closure is placed on official hold pending execution of Blocker B1 positive controls (`run_w5_positive_controls.py`) and validation of the unaugmented predecessor denominator.
 
 ### 2. Method Specifications
 1. **M1 (SLDA-equivalent)**: Whitened / shared-covariance NCM on adapting features (Hayes & Kanan, CVPR 2020: *"Lifelong Machine Learning with Deep Streaming Linear Discriminant Analysis"*).
-   - Hyperparameters: Shrinkage $\epsilon \in \{10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}\}$ and feature normalization, tuned on validation split.
+   - Hyperparameters: Shrinkage $\epsilon \in \{10^{-4}, 10^{-3}, 10^{-2}, 10^{-1}, 1.0\}$ and feature normalization, tuned on validation split.
    - Decision rule: Mahalanobis distance under running shared covariance matrix $\Sigma$.
 2. **M2 (Centroid Drift Compensation / SDC)**: Semantic Drift Compensation (Yu et al., CVPR 2020: *"Semantic Drift Compensation for Class-Incremental Learning"*).
    - Estimates feature drift of past centroids $\mu_c$ without exemplars using the displacement of currently-available task centroids between $\theta_{t-1}$ and $\theta_t$:
      $\hat{\Delta}_c = \sum_{k \in \mathcal{C}_t} w(c, k) (\mu_k^{(t)} - \mu_k^{(t-1)})$, where $w(c, k) \propto \exp\left(-\frac{\|\mu_c - \mu_k^{(t-1)}\|^2}{2\sigma^2}\right)$.
-   - Hyperparameters: Bandwidth $\sigma \in \{0.5, 1.0, 2.0, 5.0\}$ tuned on validation split.
+   - Extended Hyperparameters (Directive W5): Bandwidth $\sigma \in \{0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, \infty\}$ and re-normalization.
+   - **Uniform-Weight Limit ($\sigma = \infty$)**: When $\sigma \to \infty$, weights become uniform $w(c, k) = 1/|\mathcal{C}_t|$, applying a single global drift correction vector $\bar{\Delta}_t$ to all past centroids.
 3. **Required Controls & Comparisons**:
-   - Standing Control Arm: `1_freeze_after_base` ($8.67\%$).
-   - Parameter-Matched Baseline: `2_naive_fine_tune` ($9.53\%$).
-   - Direct Predecessor: `4_ncm_adapting_features` ($41.98\% \pm 1.27\%$).
+   - Standing Control Arm: `1_freeze_after_base` ($9.41\% \pm 0.16\%$).
+   - Parameter-Matched Baseline: `2_naive_fine_tune` ($9.96\% \pm 0.15\%$).
+   - Direct Predecessor: `4_ncm_adapting_features` ($43.26\% \pm 0.58\%$).
    - Random-Trigger Controls: `control_random_trigger_M1` and `control_random_trigger_M2`.
-   - Ceiling: Jointly-fitted probe ($65.71\%$), reporting $\% \text{ Headroom Closed} = \frac{\text{ACC} - 41.98\%}{23.73\%} \times 100\%$.
+   - Ceiling: Jointly-fitted probe ($65.58\%$), reporting $\% \text{ Headroom Closed} = \frac{\text{ACC} - 43.26\%}{22.32\%} \times 100\%$.
    - Exit Code: Script terminates with `EXIT_CODE = 0` upon full certification.
 
 ### 3. Task 5 Audited Empirical Results (Commit `ce24e4b`)

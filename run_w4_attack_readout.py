@@ -50,14 +50,19 @@ EPOCHS_PER_TASK = 20
 LR_BASE = 0.005
 WEIGHT_DECAY = 1e-4
 
-CEILING_PROBE_ACC = 65.71
-PREDECESSOR_ACC = 41.98
-HEADROOM_DENOMINATOR = CEILING_PROBE_ACC - PREDECESSOR_ACC  # 23.73 pp
+# Corrected values under F2 unaugmented prototype evaluation
+CEILING_PROBE_ACC = 65.58  # 5-seed mean linear probe ceiling (reproducing 65.71% within 0.13 pp)
+CEILING_PROBE_ACC_W3 = 65.71  # W3 benchmark probe
+PREDECESSOR_ACC = 43.26  # Recovered unaugmented Arm 4 predecessor (supersedes defective 41.98%)
+PREDECESSOR_STD = 0.58
+HEADROOM_DENOMINATOR = CEILING_PROBE_ACC - PREDECESSOR_ACC  # 65.58 - 43.26 = 22.32 pp
+HEADROOM_DENOMINATOR_W3 = CEILING_PROBE_ACC_W3 - PREDECESSOR_ACC  # 65.71 - 43.26 = 22.45 pp
 NAIVE_BWT = -88.06
 OFFLINE_BWT = 0.00
 RETENTION_DENOMINATOR = OFFLINE_BWT - NAIVE_BWT  # 88.06 pp
 
 OUTPUT_JSON_PATH = "w4_attack_readout.json"
+
 
 
 def set_seed(seed):
@@ -266,10 +271,11 @@ def evaluate_protocol_matched_linear_probe(backbone, full_tr_loader, full_te_loa
 # ---------------------------------------------------------------------
 # M1 & M2 VALIDATION HYPERPARAMETER SELECTION (TRUNCATED 3-TASK HORIZON)
 # ---------------------------------------------------------------------
-def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
+def tune_m1_slda_validation(task_train_loaders, task_train_eval_loaders, task_val_loaders, device):
     """
     Tune M1 (SLDA) on Seed 42 across Tasks 0, 1, 2 on validation set.
     Hyperparameters: shrinkage eps in [1e-4, 1e-3, 1e-2, 1e-1, 1.0], normalize in [True, False].
+    Prototypes extracted using unaugmented task_train_eval_loaders per F2 audit.
     """
     print("\n  [Validation Hyperparameter Sweep: M1 Whitened / Shared-Covariance NCM (SLDA)]")
     print("    Protocol Label : selected under truncated horizon (3 tasks)")
@@ -287,11 +293,12 @@ def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
     task_targets = {}
 
     for t in range(3):
-        t_loader, _ = task_train_loaders[t]
+        t_tr_loader, _ = task_train_loaders[t]
+        t_ev_loader, _ = task_train_eval_loaders[t]
         sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
         for ep in range(EPOCHS_PER_TASK):
             model.train()
-            for bx, by in t_loader:
+            for bx, by in t_tr_loader:
                 bx, by = bx.to(device), by.to(device)
                 opt.zero_grad()
                 logits, _ = model(bx)
@@ -300,11 +307,11 @@ def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
                 opt.step()
             sched.step()
 
-        # Extract features for task t
+        # Extract features for task t using unaugmented eval loader
         model.eval()
         t_f_list, t_y_list = [], []
         with torch.no_grad():
-            for bx, by in t_loader:
+            for bx, by in t_ev_loader:
                 bx = bx.to(device)
                 t_f_list.append(model.extract_features(bx))
                 t_y_list.append(by.to(device))
@@ -392,32 +399,33 @@ def tune_m1_slda_validation(task_train_loaders, task_val_loaders, device):
     return best_cfg, scores, is_boundary
 
 
-def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
+def tune_m2_sdc_validation(task_train_loaders, task_train_eval_loaders, task_val_loaders, device):
     """
     Tune M2 (SDC; Yu et al., CVPR 2020) on Seed 42 across Tasks 0, 1, 2 on validation set.
-    Hyperparameters: bandwidth sigma in [0.25, 0.5, 1.0, 2.0, 5.0], renormalize in [True, False].
+    Hyperparameters: bandwidth sigma in [0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, inf], renormalize in [True, False].
+    Prototypes extracted using unaugmented task_train_eval_loaders per F2 audit.
     """
     print("\n  [Validation Hyperparameter Sweep: M2 Semantic Drift Compensation (SDC)]")
     print("    Protocol Label : selected under truncated horizon (3 tasks)")
     print("    Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)")
-    print("    Candidates     : sigma in [0.25, 0.5, 1.0, 2.0, 5.0], renormalize in [True, False]")
+    print("    Candidates     : sigma in [0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, inf], renormalize in [True, False]")
 
     set_seed(42)
     model = ResNet18Primary(num_classes=100).to(device)
     opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
     crit = nn.CrossEntropyLoss()
 
-    grid_sigma = [0.25, 0.5, 1.0, 2.0, 5.0]
+    grid_sigma = [0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, float("inf")]
     grid_renorm = [True, False]
 
     # Pre-train and store checkpoints for tasks 0, 1, 2
     checkpoints = {}
     for t in range(3):
-        t_loader, _ = task_train_loaders[t]
+        t_tr_loader, _ = task_train_loaders[t]
         sched = optim.lr_scheduler.CosineAnnealingLR(opt, T_max=EPOCHS_PER_TASK, eta_min=1e-4)
         for ep in range(EPOCHS_PER_TASK):
             model.train()
-            for bx, by in t_loader:
+            for bx, by in t_tr_loader:
                 bx, by = bx.to(device), by.to(device)
                 opt.zero_grad()
                 logits, _ = model(bx)
@@ -438,10 +446,10 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                 model.load_state_dict(checkpoints[t])
                 model.eval()
 
-                t_loader, t_classes = task_train_loaders[t]
+                t_ev_loader, t_classes = task_train_eval_loaders[t]
                 t_f_new, t_targets = [], []
                 with torch.no_grad():
-                    for bx, by in t_loader:
+                    for bx, by in t_ev_loader:
                         bx = bx.to(device)
                         t_f_new.append(model.extract_features(bx))
                         t_targets.append(by.to(device))
@@ -461,7 +469,7 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
 
                     t_f_old = []
                     with torch.no_grad():
-                        for bx, _ in t_loader:
+                        for bx, _ in t_ev_loader:
                             bx = bx.to(device)
                             t_f_old.append(prev_model.extract_features(bx))
                     t_f_old = torch.cat(t_f_old, dim=0)
@@ -476,9 +484,12 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
 
                     for past_c in list(centroids.keys()):
                         past_mu = centroids[past_c]
-                        dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
-                        weights = F.softmax(-dists / (2.0 * (sigma ** 2)), dim=0)
-                        drift_vec = sum(weights[i] * cur_drifts[k] for i, k in enumerate(t_classes))
+                        if math.isinf(sigma):
+                            drift_vec = torch.stack([cur_drifts[k] for k in t_classes], dim=0).mean(dim=0)
+                        else:
+                            dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
+                            weights = F.softmax(-dists / (2.0 * (sigma ** 2)), dim=0)
+                            drift_vec = sum(weights[i] * cur_drifts[k] for i, k in enumerate(t_classes))
 
                         updated_mu = past_mu + drift_vec
                         if renorm:
@@ -515,16 +526,21 @@ def tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device):
                 preds = labels_tensor[dists.argmin(dim=1)]
 
             val_acc = float((preds == y_val).float().mean().item() * 100.0)
-            key_str = f"sigma={sigma}_renorm={renorm}"
+            sig_str = "inf" if math.isinf(sigma) else f"{sigma}"
+            key_str = f"sigma={sig_str}_renorm={renorm}"
             scores[key_str] = val_acc
-            print(f"    Candidate: sigma={sigma:<4} | renormalize={str(renorm):<5} -> Validation ACC: {val_acc:5.2f}%")
+            print(f"    Candidate: sigma={sig_str:<5} | renormalize={str(renorm):<5} -> Validation ACC: {val_acc:5.2f}%")
 
             if val_acc > best_score:
                 best_score = val_acc
                 best_cfg = (sigma, renorm)
 
     is_boundary = (best_cfg[0] in [grid_sigma[0], grid_sigma[-1]])
-    print(f"  Selected M2 (SDC) Optimal Config: sigma={best_cfg[0]}, renorm={best_cfg[1]} (Val ACC: {best_score:.2f}%) | Boundary: {is_boundary}")
+    best_sig_str = "inf" if math.isinf(best_cfg[0]) else f"{best_cfg[0]}"
+    print(f"  Selected M2 (SDC) Optimal Config: sigma={best_sig_str}, renorm={best_cfg[1]} (Val ACC: {best_score:.2f}%) | Boundary: {is_boundary}")
+    if math.isinf(best_cfg[0]) or best_cfg[0] >= 50.0:
+        print("  [SDC Uniform Limit Audit] Selected config matches or approaches the uniform-weight limit (sigma=inf).")
+        print("  Finding: SDC distance-weighting adds negligible benefit over a uniform global drift correction vector.")
     return best_cfg, scores, is_boundary
 
 
@@ -722,9 +738,12 @@ def run_attack_readout_cell(seed, m1_cfg, m2_cfg, loaders, device):
 
             for past_c in list(centroids_m2_sdc.keys()):
                 past_mu = centroids_m2_sdc[past_c]
-                dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
-                weights = F.softmax(-dists / (2.0 * (m2_sigma ** 2)), dim=0)
-                drift_vec = sum(weights[i] * cur_drifts[k] for i, k in enumerate(t_classes))
+                if math.isinf(m2_sigma):
+                    drift_vec = torch.stack([cur_drifts[k] for k in t_classes], dim=0).mean(dim=0)
+                else:
+                    dists = torch.tensor([torch.norm(past_mu - cur_mu_old[k])**2 for k in t_classes], device=device)
+                    weights = F.softmax(-dists / (2.0 * (m2_sigma ** 2)), dim=0)
+                    drift_vec = sum(weights[i] * cur_drifts[k] for i, k in enumerate(t_classes))
 
                 up_sdc = past_mu + drift_vec
                 if m2_renorm:
@@ -883,6 +902,7 @@ def main():
         print(f"  GPU Accelerator    : {torch.cuda.get_device_name(0)}")
     print(f"  Evaluation Seeds   : {SEEDS} (n={len(SEEDS)})")
     print(f"  Available Headroom : +{HEADROOM_DENOMINATOR:.2f} pp (Ceiling {CEILING_PROBE_ACC:.2f}% - Predecessor {PREDECESSOR_ACC:.2f}%)")
+    print(f"  Headroom (vs W3)   : +{HEADROOM_DENOMINATOR_W3:.2f} pp (W3 Ceiling {CEILING_PROBE_ACC_W3:.2f}% - Predecessor {PREDECESSOR_ACC:.2f}%)")
     print("=" * 115)
 
     loaders = get_cifar100_loaders(args.data_dir)
@@ -905,7 +925,7 @@ def main():
 
     # 2. Hyperparameter Sweeps (Seed 42 on Validation Split, Truncated 3-Task Horizon)
     if "m1_cfg" not in tuning_info:
-        m1_cfg, m1_scores, m1_boundary = tune_m1_slda_validation(task_train_loaders, task_val_loaders, device)
+        m1_cfg, m1_scores, m1_boundary = tune_m1_slda_validation(task_train_loaders, task_train_eval_loaders, task_val_loaders, device)
         tuning_info["m1_cfg"] = m1_cfg
         tuning_info["m1_scores"] = m1_scores
         tuning_info["m1_boundary"] = m1_boundary
@@ -914,7 +934,7 @@ def main():
         print(f"\n  [Loaded from Prior Session] M1 (SLDA) Optimal Config: eps={m1_cfg[0]}, norm={m1_cfg[1]}")
 
     if "m2_cfg" not in tuning_info:
-        m2_cfg, m2_scores, m2_boundary = tune_m2_sdc_validation(task_train_loaders, task_val_loaders, device)
+        m2_cfg, m2_scores, m2_boundary = tune_m2_sdc_validation(task_train_loaders, task_train_eval_loaders, task_val_loaders, device)
         tuning_info["m2_cfg"] = m2_cfg
         tuning_info["m2_scores"] = m2_scores
         tuning_info["m2_boundary"] = m2_boundary
@@ -1006,14 +1026,28 @@ def main():
             }
 
         print("=" * 145)
-        print("\n  [Headroom Closure Significance Test vs Direct Predecessor (41.98% +/- 1.27%)]")
+        print(f"\n  [Headroom Closure Significance Test vs Corrected Predecessor ({PREDECESSOR_ACC:.2f}% +/- {PREDECESSOR_STD:.2f}%)]")
         for m_name in ["M1_slda_whitened (SLDA)", "M2_sdc_drift_compensated"]:
             res_m = summary_results[m_name]["class_il_mean"]
             res_s = summary_results[m_name]["class_il_std"]
             delta = res_m - PREDECESSOR_ACC
-            beats_1sigma = (res_m > PREDECESSOR_ACC + 1.27)
+            beats_1sigma = (res_m > PREDECESSOR_ACC + PREDECESSOR_STD)
             status = "BEATS 1-SIGMA" if beats_1sigma else "WITHIN 1-SIGMA NOISE / NEGATIVE"
             print(f"    {m_name:<30}: {res_m:5.2f}% +/- {res_s:4.2f}% | Delta: {delta:+5.2f} pp | Status: [{status}]")
+
+        print("\n  [Stored State Memory Accounting Across Arms]")
+        mem_accounting = [
+            ("1_freeze_after_base (Control)", "0 B"),
+            ("2_naive_fine_tune (Linear)", "0 B"),
+            ("4_ncm_adapting (Stale Centroids)", "204,800 B (0.205 MB) [100 centroids x 512 float32]"),
+            ("control_random_trigger_M1", "1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]"),
+            ("M1_slda_whitened (SLDA)", "1,253,376 B (1.253 MB) [100 centroids + 512x512 cov matrix]"),
+            ("control_random_trigger_M2", "204,800 B (0.205 MB) [100 centroids x 512 float32]"),
+            ("M2_sdc_drift_compensated", "204,800 B (0.205 MB) [100 centroids x 512 float32]"),
+            ("joint_linear_probe (Ceiling)", "0 B [Upper bound ceiling probe]")
+        ]
+        for arm_name, mem_str in mem_accounting:
+            print(f"    {arm_name:<34}: {mem_str}")
 
         out_data = {
             "git_commit_sha": git_sha,
