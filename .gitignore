@@ -60,6 +60,10 @@
 !run_w5_positive_controls_stdout.txt
 !run_w6_diagnostics_stdout.txt
 !run_w6_prototype_anchored_stdout.txt
+!run_w7_suite_stdout.txt
+!run_w7_diagnostics_stdout.txt
+!run_w7_determinism_stdout.txt
+!w7_diagnostics.json
 !build_cache_v3_stdout.log
 !number_verification_map.tsv
 data/
