@@ -1,0 +1,226 @@
+﻿HEAD is now at 3471873 FIX W6 DIAGNOSTIC 2 AUTOGRAD GRAPH REUSE AND OPTIMIZE SDC VALIDATION EXTRACTION
+===================================================================================================================
+ DIRECTIVE W6 -- TIER 1 DIAGNOSTICS & RECORD REPAIRS
+===================================================================================
+  Git Commit SHA     : 3471873ddad121495666f058a7fd3a116d148f5a
+  Platform Device    : cuda
+  GPU Accelerator    : Tesla T4
+  Fixed Seed         : 42
+  Protocol           : ResNet-18, 20 epochs/task, batch_size=128, lr=0.005, weight_decay=5e-4
+===================================================================================
+
+100%|██████████| 169M/169M [59:40<00:00, 47.2kB/s]
+------------------------------------------------------------------------------------------
+ [REFERENCE ROW] NAIVE FINE-TUNING (Tasks 0 & 1, Seed 42)
+------------------------------------------------------------------------------------------
+Downloading: https://download.pytorch.org/models/resnet18-f37072fd.pth to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth
+100%|██████████| 44.7M/44.7M [00:00<00:00, 206MB/s]
+  Naive Task 0 ACC after Task 0: 94.00%
+  Naive Task 0 ACC after Task 1: 40.80% (Catastrophic Forgetting: -53.20 pp)
+  Naive Task 1 ACC after Task 1: 84.30%
+
+==========================================================================================
+ DIAGNOSTIC (1): LwF SIGN & ORIENTATION DIAGNOSIS (lambda=1.0, tau=2.0)
+==========================================================================================
+
+  --- Condition 1A: Original Orientation ---
+  Source Loss Line: kd_loss = F.kl_div(cur_soft, old_soft, reduction='batchmean') * (tau ** 2)
+  Where: cur_soft = F.log_softmax(student_logits[:, :10] / tau, dim=1)
+         old_soft = F.softmax(teacher_logits[:, :10] / tau, dim=1)
+
+  Teacher Snapshot Parameter Checksum (Immediate): -12575.71453062
+
+  Step Tracking (every 20 steps):
+  -----------------------------------------------------------------------------------------------
+  Step   | Epoch  | L_CE     | L_KL       | T_mean    | T_std     | S_mean    | S_std    
+  -----------------------------------------------------------------------------------------------
+  1      | 1      | 16.7768  | 0.3370     | 0.9700    | 4.0867    | 1.1511    | 4.5673   
+  20     | 1      | 15.4877  | 0.1491     | 0.9726    | 4.0295    | 1.0684    | 4.3440   
+  40     | 2      | 13.0305  | 0.1668     | 0.9846    | 4.0818    | 0.9343    | 4.0444   
+  60     | 2      | 10.9755  | 0.1412     | 1.0194    | 4.1631    | 0.8011    | 3.7656   
+  80     | 3      | 8.9334   | 0.1258     | 0.9492    | 3.9883    | 0.6423    | 3.5048   
+  100    | 4      | 6.8088   | 0.2247     | 0.9494    | 4.0497    | 0.4800    | 3.2750   
+  120    | 4      | 4.7929   | 0.2625     | 1.0020    | 4.2183    | 0.2973    | 3.1352   
+  140    | 5      | 3.4463   | 0.2769     | 0.9142    | 3.9468    | 0.1018    | 2.9489   
+  160    | 5      | 2.5257   | 0.3637     | 0.9522    | 3.7770    | -0.0774   | 2.8948   
+  180    | 6      | 1.7297   | 0.3201     | 0.9952    | 4.0699    | -0.2407   | 2.8778   
+  200    | 7      | 1.2898   | 0.2651     | 0.9515    | 4.0999    | -0.3608   | 2.9441   
+  220    | 7      | 1.2618   | 0.2064     | 0.9381    | 3.9558    | -0.4594   | 3.0181   
+  240    | 8      | 1.1581   | 0.2205     | 0.9720    | 4.0887    | -0.5526   | 3.1015   
+  260    | 9      | 0.9230   | 0.1767     | 0.9770    | 4.0495    | -0.6238   | 3.1646   
+  280    | 9      | 0.9041   | 0.1612     | 0.9456    | 3.9804    | -0.6918   | 3.2079   
+  300    | 10     | 0.9479   | 0.1677     | 0.9723    | 4.0881    | -0.7552   | 3.2717   
+  320    | 10     | 0.9073   | 0.1463     | 0.8730    | 3.9711    | -0.8065   | 3.3105   
+  340    | 11     | 0.7395   | 0.1181     | 0.9470    | 4.0585    | -0.8627   | 3.3564   
+  360    | 12     | 0.6925   | 0.1386     | 0.9665    | 4.0230    | -0.9063   | 3.3752   
+  380    | 12     | 0.8133   | 0.1424     | 0.9792    | 4.1199    | -0.9437   | 3.3996   
+  400    | 13     | 0.7799   | 0.1331     | 0.9569    | 4.0589    | -0.9809   | 3.4258   
+  420    | 14     | 0.6813   | 0.1516     | 0.9499    | 4.0386    | -1.0199   | 3.4653   
+  440    | 14     | 0.6322   | 0.1631     | 0.9670    | 4.0767    | -1.0538   | 3.4779   
+  460    | 15     | 0.5904   | 0.1020     | 0.9871    | 4.1602    | -1.0831   | 3.5154   
+  480    | 15     | 0.7889   | 0.0960     | 0.8736    | 3.8969    | -1.1226   | 3.5583   
+  500    | 16     | 0.6269   | 0.1451     | 1.0180    | 4.1563    | -1.1418   | 3.5472   
+  520    | 17     | 0.6381   | 0.1283     | 0.9639    | 4.0878    | -1.1653   | 3.5658   
+  540    | 17     | 0.6007   | 0.1040     | 0.9896    | 4.1035    | -1.1921   | 3.5789   
+  560    | 18     | 0.5505   | 0.1166     | 0.9558    | 4.1009    | -1.2141   | 3.5888   
+  580    | 19     | 0.5989   | 0.1117     | 0.9953    | 4.1371    | -1.2379   | 3.6223   
+  600    | 19     | 0.5854   | 0.0903     | 0.9627    | 4.0312    | -1.2591   | 3.6160   
+  620    | 20     | 0.4864   | 0.1089     | 1.0004    | 4.1525    | -1.2771   | 3.6247   
+  640    | 20     | 0.7027   | 0.2030     | 0.9574    | 3.9726    | -1.3022   | 3.6792   
+  -----------------------------------------------------------------------------------------------
+  Teacher Snapshot Parameter Checksum (After Task 1): -12575.71453062
+  Teacher Frozen Audit: PASSED (Checksums Identical)
+  Condition 1A Final -> Task 0 ACC: 44.50% | Task 1 ACC: 84.60%
+
+  --- Condition 1B: Swapped Argument Orientation ---
+  Source Loss Line: kd_loss_swapped = F.kl_div(input=t_log_soft, target=s_soft, reduction='batchmean') * (tau ** 2)
+  Where: t_log_soft = F.log_softmax(teacher_logits[:, :10] / tau, dim=1)
+         s_soft = F.softmax(student_logits[:, :10] / tau, dim=1)
+  Condition 1B Final -> Task 0 ACC: 44.40% | Task 1 ACC: 84.70%
+
+  [LwF Sign Diagnosis Summary Verdict]
+    Original Orientation (student=input): Task 0 = 44.50% | Task 1 = 84.60%
+    Swapped Orientation  (student=target): Task 0 = 44.40% | Task 1 = 84.70%
+    Naive Reference                      : Task 0 = 40.80% | Task 1 = 84.30%
+
+==========================================================================================
+ DIAGNOSTIC (2): GRADIENT-NORM RATIOS AT START OF TASK 1
+==========================================================================================
+  Metric: ||nabla_theta L_penalty||_2 / ||nabla_theta L_CE||_2 (isolated backward passes)
+
+  Computing True Empirical Fisher on Task 0 (per-sample backward passes, N=4000)...
+
+  Baseline ||Grad_CE||_2 at Step 2: 1.5146e+01
+
+  Measured Gradient-Norm Ratios (||Grad_penalty||_2 / ||Grad_CE||_2):
+  --------------------------------------------------------------------------------
+  Method     | Lambda       | ||Grad_penalty||_2   | Ratio to Grad_CE     | Binding Status
+  --------------------------------------------------------------------------------
+  LwF        | 0.10         | 6.5852e-01           | 4.3479e-02           | ACTIVE
+  LwF        | 1.00         | 6.5852e+00           | 4.3479e-01           | ACTIVE
+  LwF        | 100.00       | 6.5852e+02           | 4.3479e+01           | ACTIVE
+  EWC        | 1.0e+03      | 5.2359e-02           | 3.4571e-03           | ACTIVE
+  EWC        | 1.0e+05      | 5.2359e+00           | 3.4571e-01           | ACTIVE
+  EWC        | 1.0e+06      | 5.2359e+01           | 3.4571e+00           | ACTIVE
+  --------------------------------------------------------------------------------
+
+==========================================================================================
+ DIAGNOSTIC (3): CORRECTED EWC FISHER & RETENTION/PLASTICITY CURVE
+==========================================================================================
+  Method: per-sample backward passes using micro-batches (batch_size=1, shuffle=False)
+          accumulating param.grad.pow(2) / N on Task 0 samples (N=4000) in eval() mode.
+  Corrected Fisher Diagonal Audit:
+    Mean Fisher Value     : 4.766347e-06
+    Max Fisher Value      : 4.305052e-02
+    Min Fisher Value      : 0.000000e+00
+    Zero-Value Entries    : 5800 / 11227812 (0.05%)
+
+  Sweeping Calibrated EWC Lambda Grid (Retention vs Plasticity Trade-off):
+  ---------------------------------------------------------------------------------------------------------
+  Condition          | Lambda     | Task 0 Final ACC   | Task 1 Final ACC   | Delta T0 (Retention) | Delta T1 (Plasticity)
+  ---------------------------------------------------------------------------------------------------------
+  [Naive Reference]  | 0.0        | 40.80%             | 84.30%             | +0.00 pp             | +0.00 pp
+  EWC (Corrected)    | 1.0e+04    |  0.80%             | 92.10%             | -40.00 pp             |  +7.80 pp
+  EWC (Corrected)    | 1.0e+05    |  0.00%             |  0.00%             | -40.80 pp             | -84.30 pp
+  EWC (Corrected)    | 5.0e+05    |  0.00%             |  0.00%             | -40.80 pp             | -84.30 pp
+  EWC (Corrected)    | 1.0e+06    |  0.00%             |  0.00%             | -40.80 pp             | -84.30 pp
+  EWC (Corrected)    | 5.0e+06    |  0.00%             |  0.00%             | -40.80 pp             | -84.30 pp
+  EWC (Corrected)    | 2.0e+07    |  0.00%             |  0.00%             | -40.80 pp             | -84.30 pp
+  ---------------------------------------------------------------------------------------------------------
+
+==========================================================================================
+ DIAGNOSTIC (4): SDC SIGMA EXTENSION & DELTA=0 VALIDATION (3-Task Horizon)
+==========================================================================================
+  Protocol Label : selected under truncated horizon (3 tasks)
+  Scoring Split  : Validation Split (3,000 samples across Tasks 0, 1, 2)
+
+  [Validation Results Across Grid]
+  ---------------------------------------------------------------------------
+  Bandwidth sigma    | Renormalize    | Validation ACC   | Delta vs Delta=0
+  ---------------------------------------------------------------------------
+  Delta = 0 (None)   | True           | 67.60%           | Baseline (0.00 pp)
+  Delta = 0 (None)   | False          | 66.37%           | Baseline (0.00 pp)
+  sigma = 0.25       | True           | 72.10%           |  +4.50 pp
+  sigma = 0.5        | True           | 69.50%           |  +1.90 pp
+  sigma = 1.0        | True           | 68.40%           |  +0.80 pp
+  sigma = 2.0        | True           | 68.33%           |  +0.73 pp
+  sigma = 5.0        | True           | 68.27%           |  +0.67 pp
+  sigma = 10.0       | True           | 68.30%           |  +0.70 pp
+  sigma = 50.0       | True           | 68.30%           |  +0.70 pp
+  sigma = inf (uniform) | True           | 68.30%           |  +0.70 pp
+  sigma = 0.25       | False          | 67.50%           |  +1.13 pp
+  sigma = 0.5        | False          | 67.50%           |  +1.13 pp
+  sigma = 1.0        | False          | 67.50%           |  +1.13 pp
+  sigma = 2.0        | False          | 68.13%           |  +1.77 pp
+  sigma = 5.0        | False          | 70.03%           |  +3.67 pp
+  sigma = 10.0       | False          | 69.53%           |  +3.17 pp
+  sigma = 50.0       | False          | 67.70%           |  +1.33 pp
+  sigma = inf (uniform) | False          | 67.67%           |  +1.30 pp
+  ---------------------------------------------------------------------------
+  Selected M2 Optimal Config: sigma=0.25, renorm=True (Validation ACC: 72.10%)
+
+  [VERDICT ON UNIFORM LIMIT] Finite sigma=0.25 exceeds uniform limit by +3.80 pp.
+
+==========================================================================================
+ OUTSTANDING RECORD REPAIRS AUDIT (Items 7, 8, 9, 10)
+==========================================================================================
+
+  [ITEM 7] Programmatic Interpolation of Resource Counters from w3_baselines.json:
+  -------------------------------------------------------------------------------------------------------------------
+  Arm Name                     | Total Params  | Trainable     | Steps/Seed  | Samples/Seed  | Peak GPU Mem   | Stored Mem
+  -------------------------------------------------------------------------------------------------------------------
+  1_freeze_after_base          | 11227812      | 51300         | 6400        | 800000        | 861.6 MB       | 0 B
+  2_naive_fine_tune            | 11227812      | 11227812      | 6400        | 800000        | 861.6 MB       | 0 B
+  3_ncm_frozen_features        | 11227812      | 0             | 0           | 0             | 310.8 MB       | 0.195 MB
+  4_ncm_adapting_features      | 11227812      | 11227812      | 6400        | 800000        | 869.2 MB       | 0.195 MB
+  5_lwf                        | 11227812      | 11227812      | 6400        | 800000        | 1047.3 MB      | 0 B
+  9_joint_offline              | 11227812      | 11227812      | 9390        | 1200000       | 861.6 MB       | 0 B
+  -------------------------------------------------------------------------------------------------------------------
+
+  [ITEM 8] Live Replay-Buffer Memory Audit (7_er_buffer500 vs 8_der_plus_plus_buffer500):
+    Physically Stored in Buffer Tensor Object : Resized float32 Tensors: (3, 112, 112)
+    Image Tensor Shape & Size                : [3, 112, 112] float32 = 150,528 Bytes (0.1436 MB)
+    Target & Logits Tensor Size               : 408 Bytes (8B label + 400B logits)
+    Total Live Buffer Bytes (500 exemplars)   : 75,468,000 Bytes (71.97 MB)
+    Raw Source Image Equivalent (32x32 uint8): 1,540,000 Bytes (1.47 MB)
+    Live Memory Footprint vs Centroids       : 75.47 MB (Buffer) vs 0.205 MB (100 Centroids) -> Centroids are ~368x more compact than live float32 tensors, ~7.5x more compact than raw source images.
+
+  [ITEM 9] Verified Excerpts from Git & JSON:
+  (A) git grep -n task_train_loaders run_w3_baselines.py (sample sites):
+      run_w3_baselines.py:670:        t_loader, t_classes = task_train_loaders[t]  [Arm 3 extraction defect: augmented]
+      run_w3_baselines.py:773:        t_loader, t_classes = task_train_loaders[t]  [Arm 4 extraction defect: augmented]
+      run_w3_baselines.py:1004:       t0_loader, _ = task_train_loaders[0]         [Arm 6 Fisher calculation site]
+  (B) git ls-files | grep -i w2e:
+      run_w2e_gap_closed.py
+      run_w2e_gap_closed_stdout.txt
+      w2e_results.json
+      (Confirming 'scripts/eval_w2e_arms.py' does not exist; run_w2e_gap_closed.py is canonical)
+  (C) Excerpt of w3_baselines.json (lines 563-570):
+      wall_clock_seconds: 882.5017485618591,
+      peak_gpu_memory_bytes: 903480832,
+      n_optimizer_steps: 6400,
+      n_train_samples_seen: 800000,
+      n_forward_samples: 905000,
+      param_count_total: 11227812,
+      param_count_trainable: 11227812,
+      stored_memory_bytes: 0
+
+  [ITEM 10] Explanation of Cross-Run Drift in Shared Arms:
+    1. Arm 1 (1_freeze_after_base): W3 measured 8.67% +/- 0.04% (BWT = -88.09 pp), W4 measured 9.41% +/- 0.16% (BWT = -82.88 pp).
+       Cause: In W3, model.train() was called during Tasks 1-9 head fine-tuning, allowing BatchNorm running statistics
+       (running_mean and running_var) to continuously adapt to new task distributions, corrupting frozen representations.
+       In W4, model.eval() was explicitly called after model.train(), strictly freezing BatchNorm running buffers to Task 0,
+       retaining Task 0 feature calibration and mitigating forgetting by +5.21 pp BWT.
+       Declaration: W4 (9.41% +/- 0.16%) is the canonical protocol-compliant record.
+    2. Retention Gap Closed Denominator Alignment:
+       W4 inadvertently used NAIVE_BWT = -88.06 (from W3) instead of its own naive BWT (-89.04 pp),
+       causing naive fine-tuning to read -1.11% instead of 0.00%.
+       Recomputed under own naive BWT (-89.04 pp): Naive Retention Gap Closed = 0.00% identically.
+
+  Saved complete diagnostic report to: w6_diagnostics.json
+
+  Diagnostic Suite Completed in 4869.0s
+
+===================================================================================================
+EXIT_CODE = 0
+===================================================================================================
