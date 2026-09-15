@@ -525,9 +525,9 @@ def main():
     opt_step2.step()
 
     # Measure CE gradient at Step 2
-    logits, _ = model_step2(first_bx)
-    loss_ce2 = crit(logits, first_by)
     model_step2.zero_grad()
+    logits_step2, _ = model_step2(first_bx)
+    loss_ce2 = crit(logits_step2, first_by)
     loss_ce2.backward()
     norm_grad_ce = math.sqrt(sum(p.grad.pow(2).sum().item() for p in model_step2.parameters() if p.grad is not None))
 
@@ -544,10 +544,11 @@ def main():
 
     for l_val in [0.10, 1.0, 100.0]:
         model_step2.zero_grad()
-        cur_soft = F.log_softmax(logits[:, :10] / tau, dim=1)
+        s_logits, _ = model_step2(first_bx)
+        cur_soft = F.log_softmax(s_logits[:, :10] / tau, dim=1)
         old_soft = F.softmax(t_logits_step2[:, :10] / tau, dim=1)
         loss_pen = l_val * (F.kl_div(cur_soft, old_soft, reduction="batchmean") * (tau ** 2))
-        loss_pen.backward(retain_graph=True)
+        loss_pen.backward()
         norm_pen = math.sqrt(sum(p.grad.pow(2).sum().item() for p in model_step2.parameters() if p.grad is not None))
         ratio = norm_pen / norm_grad_ce
         lwf_ratios[l_val] = ratio
@@ -561,9 +562,9 @@ def main():
         pen = 0.0
         for name, param in model_step2.named_parameters():
             if name in corrected_fisher:
-                pen += (corrected_fisher[name] * (param - optpar_base[name]).pow(2)).sum()
+                pen = pen + (corrected_fisher[name] * (param - optpar_base[name]).pow(2)).sum()
         loss_pen = (l_val / 2.0) * pen
-        loss_pen.backward(retain_graph=True)
+        loss_pen.backward()
         norm_pen = math.sqrt(sum(p.grad.pow(2).sum().item() for p in model_step2.parameters() if p.grad is not None))
         ratio = norm_pen / norm_grad_ce
         ewc_ratios[l_val] = ratio
@@ -695,39 +696,57 @@ def main():
     print(f"  {'Bandwidth sigma':<18} | {'Renormalize':<14} | {'Validation ACC':<16} | {'Delta vs Delta=0'}")
     print("  " + "-" * 75)
 
+    # Precompute unnormalized features for the 3 tasks under relevant checkpoints
+    task_eval_feats_new = {}
+    task_eval_feats_old = {}
+    for t in range(3):
+        model_sdc_tune.load_state_dict(checkpoints[t])
+        model_sdc_tune.eval()
+        t_ev, _ = task_train_eval_loaders[t]
+        t_f, t_y = [], []
+        with torch.no_grad():
+            for bx, by in t_ev:
+                bx = bx.to(device)
+                t_f.append(model_sdc_tune.extract_features(bx))
+                t_y.append(by.to(device))
+        task_eval_feats_new[t] = (torch.cat(t_f, dim=0), torch.cat(t_y, dim=0))
+
+        if t > 0:
+            model_sdc_tune.load_state_dict(checkpoints[t - 1])
+            model_sdc_tune.eval()
+            t_f_prev = []
+            with torch.no_grad():
+                for bx, _ in t_ev:
+                    bx = bx.to(device)
+                    t_f_prev.append(model_sdc_tune.extract_features(bx))
+            task_eval_feats_old[t] = torch.cat(t_f_prev, dim=0)
+
+    # Precompute validation features under checkpoint 2
+    model_sdc_tune.load_state_dict(checkpoints[2])
+    model_sdc_tune.eval()
+    val_feats_unnorm, val_targets = [], []
+    with torch.no_grad():
+        for t in range(3):
+            v_loader, _ = task_val_loaders[t]
+            for bx, by in v_loader:
+                bx = bx.to(device)
+                val_feats_unnorm.append(model_sdc_tune.extract_features(bx))
+                val_targets.append(by.to(device))
+    X_val_unnorm = torch.cat(val_feats_unnorm, dim=0)
+    y_val = torch.cat(val_targets, dim=0)
+
     delta0_scores = {}
     for renorm in grid_renorm:
         stale_centroids = {}
         for t in range(3):
-            model_sdc_tune.load_state_dict(checkpoints[t])
-            model_sdc_tune.eval()
-            t_ev, t_cls = task_train_eval_loaders[t]
-            t_f, t_y = [], []
-            with torch.no_grad():
-                for bx, by in t_ev:
-                    bx = bx.to(device)
-                    t_f.append(model_sdc_tune.extract_features(bx))
-                    t_y.append(by.to(device))
-            t_f = torch.cat(t_f, dim=0)
-            t_y = torch.cat(t_y, dim=0)
+            t_f, t_y = task_eval_feats_new[t]
+            _, t_cls = task_train_eval_loaders[t]
             for c in t_cls:
                 mask = (t_y == c)
                 m = t_f[mask].mean(dim=0)
                 stale_centroids[c] = F.normalize(m, dim=-1) if renorm else m
 
-        model_sdc_tune.load_state_dict(checkpoints[2])
-        model_sdc_tune.eval()
-        v_feats, v_targets = [], []
-        with torch.no_grad():
-            for t in range(3):
-                v_loader, _ = task_val_loaders[t]
-                for bx, by in v_loader:
-                    bx = bx.to(device)
-                    f = model_sdc_tune.extract_features(bx)
-                    v_feats.append(F.normalize(f, dim=-1) if renorm else f)
-                    v_targets.append(by.to(device))
-        X_val = torch.cat(v_feats, dim=0)
-        y_val = torch.cat(v_targets, dim=0)
+        X_val = F.normalize(X_val_unnorm, dim=-1) if renorm else X_val_unnorm
 
         seen_classes = sorted(list(stale_centroids.keys()))
         cen_mat = torch.stack([stale_centroids[c] for c in seen_classes], dim=0)
@@ -746,20 +765,12 @@ def main():
 
     for renorm in grid_renorm:
         baseline_acc = delta0_scores[renorm]
+        X_val = F.normalize(X_val_unnorm, dim=-1) if renorm else X_val_unnorm
         for sigma in grid_sigma:
             centroids = {}
             for t in range(3):
-                model_sdc_tune.load_state_dict(checkpoints[t])
-                model_sdc_tune.eval()
-                t_ev, t_cls = task_train_eval_loaders[t]
-                t_f_new, t_y = [], []
-                with torch.no_grad():
-                    for bx, by in t_ev:
-                        bx = bx.to(device)
-                        t_f_new.append(model_sdc_tune.extract_features(bx))
-                        t_y.append(by.to(device))
-                t_f_new = torch.cat(t_f_new, dim=0)
-                t_y = torch.cat(t_y, dim=0)
+                t_f_new, t_y = task_eval_feats_new[t]
+                _, t_cls = task_train_eval_loaders[t]
 
                 cur_mu_new = {}
                 for c in t_cls:
@@ -768,16 +779,7 @@ def main():
                     cur_mu_new[c] = F.normalize(m, dim=-1) if renorm else m
 
                 if t > 0:
-                    prev_m = ResNet18Primary(num_classes=100).to(device)
-                    prev_m.load_state_dict(checkpoints[t - 1])
-                    prev_m.eval()
-                    t_f_old = []
-                    with torch.no_grad():
-                        for bx, _ in t_ev:
-                            bx = bx.to(device)
-                            t_f_old.append(prev_m.extract_features(bx))
-                    t_f_old = torch.cat(t_f_old, dim=0)
-
+                    t_f_old = task_eval_feats_old[t]
                     cur_mu_old = {}
                     for c in t_cls:
                         mask = (t_y == c)
