@@ -1,0 +1,166 @@
+===================================================================================================================
+ DIRECTIVE B1-0A -- INSTRUMENT DEFECT REPAIRS & 20-EDIT VALIDATION SUITE
+===================================================================================================================
+  [0. Determinism Configuration & Dual Load Verification]
+    cuDNN Deterministic          : True
+    cuDNN Benchmark              : False
+    use_deterministic_algorithms : True (warn_only=True)
+    CUBLAS_WORKSPACE_CONFIG      : :4096:8
+    PyTorch Version              : 2.10.0+cu128
+    Transformers Version         : 5.0.0
+    Execution Device             : CUDA (Tesla T4)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1780.63it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1607.23it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Fresh Load Checksum 1        : -62119.87976855
+    Fresh Load Checksum 2        : -62119.87976855
+    Checksum Reproducibility     : MATCH: True
+    Model Parameters             : 124,439,808 (torch.float32)
+===================================================================================================================
+
+  [1. Fact Set Construction & Verification]
+    Injected Facts Total         : 1000
+    Reserved Control Subjects    : 50 (NEVER edited)
+    b1_facts.json SHA-256        : a5b8925c3b2db05abf1076d5bf3cad3e406d933db3988d47e7b1b58eca819317
+
+  [Key Unification Audit (Fix 6): Verbatim Display of 'object' and 'target_token_str']
+  Note: 'object' is canonical entity for scoring; 'target_token_str' contains leading space for BPE.
+    Fact ID 0   | object: 'Berlin'        | target_token_str: ' Berlin'        | prompt: 'Corwin Vane was born in the city of'
+    Fact ID 1   | object: 'Cairo'         | target_token_str: ' Cairo'         | prompt: 'Emrys Carrington was born in the city of'
+    Fact ID 2   | object: 'Rome'          | target_token_str: ' Rome'          | prompt: 'Marlen Vandell was born in the city of'
+    Fact ID 3   | object: 'Berlin'        | target_token_str: ' Berlin'        | prompt: 'Emrys Belmont was born in the city of'
+    Fact ID 4   | object: 'Dublin'        | target_token_str: ' Dublin'        | prompt: 'Kaelor Odham was born in the city of'
+
+  [Tokenizer Boundary Invariant Audit (Fix 5)]
+    Invariant Checked            : assert f_ids[:len(p_ids)] == p_ids
+    Violations Across 1,000 Facts: 0 / 1,000 (0.0%)
+
+  [2. WikiText-2 Capability Instrument]
+  Loading WikiText-2 via HuggingFace datasets library...
+Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 68371.75 examples/s]
+Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 667197.17 examples/s]
+Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 563094.33 examples/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+/usr/local/lib/python3.12/dist-packages/torch/autograd/graph.py:865: UserWarning: Memory Efficient attention defaults to a non-deterministic algorithm. To explicitly enable determinism call torch.use_deterministic_algorithms(True, warn_only=False). (Triggered internally at /pytorch/aten/src/ATen/native/transformers/cuda/attention_backward.cu:897.)
+  return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+    WikiText-2 Slice Shape       : [1000, 512] (1,000 sequences x 512 tokens)
+    WikiText Slice SHA-256       : 3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7
+
+  [Scoring Engine Audit: Exact Matching Rule & Worked Examples]
+  Matching Rule: pred.strip().lower().startswith(target.strip().lower()) with word/punctuation boundary.
+  Worked Correct Examples:
+    Target: 'Lisbon      ' | Pred: ' Lisbon.                 ' -> Match: 1     [Exact word with trailing period -> MATCH]
+    Target: 'surgeon     ' | Pred: ' surgeon who specializes ' -> Match: 1     [Target followed by continuation space -> MATCH]
+    Target: 'violin      ' | Pred: ' violin\n                 ' -> Match: 1     [Target followed by newline -> MATCH]
+    Target: 'Portuguese  ' | Pred: ' Portuguese language     ' -> Match: 1     [Target word followed by qualifier -> MATCH]
+    Target: 'Europe      ' | Pred: ' Europe!                 ' -> Match: 1     [Target followed by exclamation mark -> MATCH]
+  Worked Incorrect Examples:
+    Target: 'Lisbon      ' | Pred: ' London                  ' -> Match: 0     [Incorrect target city -> REJECT]
+    Target: 'surgeon     ' | Pred: ' teacher                 ' -> Match: 0     [Incorrect profession -> REJECT]
+    Target: 'violin      ' | Pred: ' guitar                  ' -> Match: 0     [Incorrect instrument -> REJECT]
+    Target: 'carpenter   ' | Pred: ' carpet maker            ' -> Match: 0     [Sub-string stem mismatch ('carpet' vs 'carpenter') -> REJECT]
+    Target: 'Paris       ' | Pred: ' the capital             ' -> Match: 0     [Filler pronoun prefix instead of target entity -> REJECT]
+
+===================================================================================================================
+  [PRE-EDIT BASELINE VERIFICATION]
+===================================================================================================================
+  Measuring pre-edit accuracy across all 1,000 facts (separating edit prompts and paraphrases)...
+    Pre-Edit Edit Prompts Accuracy   : 0.10% (1/1000)
+    Pre-Edit Paraphrases Accuracy    : 0.70% (21/3000)
+    Evaluation Wall Clock (1000 facts): 289.69s
+    Pre-Edit Template-Prior Accuracy : 0.00% (0/50) [50 reserved subjects]
+  Measuring pre-edit WikiText-2 perplexity on held-out slice...
+    Pre-Edit WikiText-2 PPL          : 36.03 (CE Loss = 3.5843) [Evaluated in 45.15s]
+
+  [Composition Positive Control Audit (Fix 3: 50 Pre-existing Facts)]
+    Composition Positive Control ACC : 10.00% (5/50)
+    STATUS VERDICT: COMPOSITION IS MEASURABLE
+
+  [Locality Reference Diagnostics (Fix 4: Pre-Edit Neighborhood Answers)]
+    Total Neighborhood Prompts Cached: 40
+    Distinct Pre-Edit Answers        : 31
+    Fraction Empty or Function Word  : 0.0% (0/40)
+    Ten Most Frequent Pre-Edit Neighborhood Answers:
+      #1  Count: 4   | Answer: ' role of the "B'
+      #2  Count: 2   | Answer: ' piano, but he was'
+      #3  Count: 2   | Answer: ' journalist and editor for the'
+      #4  Count: 2   | Answer: ' writer and editor for the'
+      #5  Count: 2   | Answer: ' Stuttgart in 18'
+      #6  Count: 2   | Answer: ' electrician and electrician'
+      #7  Count: 2   | Answer: ' St. Louis, Missouri'
+      #8  Count: 1   | Answer: ' role of the "C'
+      #9  Count: 1   | Answer: ' scientist and a lawyer.'
+      #10 Count: 1   | Answer: ' the capital of the Brazilian'
+    [Mean Next-Token KL Divergence active as Locality Metric 2]
+
+===================================================================================================================
+  [STAGE B1-0A VALIDATION RUN: 20 SEQUENTIAL EDITS (METHOD M-A: PURE SGD)]
+===================================================================================================================
+  Step  | Fact ID | Efficacy | Gen (3-Para) | Locality | Loc KL  | Retention | PPL       | Rel PPL   | Prior | ||d_th||_2 | Chg Par | Steps
+  -------------------------------------------------------------------------------------------------------------------
+  1     | 0       |  100.0%  |      100.0%  |    0.0%  | 45.8032 |   100.0%  |   1.7e+16 | +4.7e+16% |  0.0% |    0.2135 | 85679945 |     1
+  2     | 1       |  100.0%  |      100.0%  |    0.0%  | 24.4133 |    50.0%  |   1.1e+14 | +3.1e+14% |  0.0% |    0.4078 | 84417336 |     1
+  3     | 2       |  100.0%  |      100.0%  |    0.0%  |  7.9379 |    33.3%  |   5.2e+04 | +1.4e+05% |  2.0% |    0.2555 | 84283211 |     1
+  4     | 3       |  100.0%  |      100.0%  |    0.0%  |  9.6104 |    50.0%  |   2001.39 | +5454.80% |  0.0% |    0.3639 | 85047012 |     2
+  5     | 4       |  100.0%  |      100.0%  |    0.0%  | 12.5108 |    20.0%  |   1.4e+06 | +3.9e+06% |  0.0% |    0.2279 | 87869487 |     2
+  6     | 5       |  100.0%  |      100.0%  |    0.0%  |  2.5986 |    16.7%  |    377.58 |  +947.97% |  0.0% |    0.2882 | 84227004 |     1
+  7     | 6       |  100.0%  |      100.0%  |    0.0%  |  5.5834 |    14.3%  |   6.3e+04 | +1.8e+05% |  2.0% |    0.1869 | 87258392 |     2
+  8     | 7       |  100.0%  |       33.3%  |    0.0%  |  1.6793 |    12.5%  |     88.03 |  +144.31% |  0.0% |    0.1513 | 83718103 |     1
+  9     | 8       |  100.0%  |      100.0%  |    0.0%  |  1.4435 |    33.3%  |     86.79 |  +140.88% |  0.0% |    0.0805 | 85134704 |     1
+  10    | 9       |  100.0%  |      100.0%  |    0.0%  |  3.8495 |    10.0%  |    125.20 |  +247.48% |  8.0% |    0.1465 | 88832286 |     3
+  11    | 10      |  100.0%  |      100.0%  |    0.0%  |  5.4491 |    18.2%  |    480.19 | +1232.75% |  2.0% |    0.0638 | 84656671 |     1
+  12    | 11      |  100.0%  |      100.0%  |    0.0%  |  4.1596 |     8.3%  |    235.73 |  +554.25% |  2.0% |    0.1538 | 86786774 |     2
+  13    | 12      |  100.0%  |      100.0%  |    0.0%  |  4.2502 |     7.7%  |    157.04 |  +335.86% |  2.0% |    0.1486 | 86380119 |     2
+  14    | 13      |  100.0%  |      100.0%  |    0.0%  |  3.4049 |     7.1%  |    153.29 |  +325.46% |  0.0% |    0.1136 | 83364884 |     1
+  15    | 14      |  100.0%  |      100.0%  |    0.0%  |  5.1632 |    13.3%  |    368.34 |  +922.31% |  0.0% |    0.1169 | 85873152 |     1
+  16    | 15      |  100.0%  |      100.0%  |    0.0%  |  5.3767 |    12.5%  |    456.93 | +1168.21% |  2.0% |    0.0968 | 83971753 |     1
+  17    | 16      |  100.0%  |      100.0%  |    0.0%  |  6.3540 |    17.6%  |   1630.65 | +4425.83% |  0.0% |    0.0844 | 83179065 |     1
+  18    | 17      |  100.0%  |      100.0%  |    0.0%  |  3.1712 |    11.1%  |    389.04 |  +979.77% |  0.0% |    0.0943 | 83366399 |     1
+  19    | 18      |  100.0%  |      100.0%  |    0.0%  |  2.7888 |     5.3%  |    360.23 |  +899.80% |  0.0% |    0.1831 | 88846462 |     4
+  20    | 19      |  100.0%  |      100.0%  |    0.0%  |  3.0788 |    10.0%  |    814.49 | +2160.61% |  0.0% |    0.0205 | 78939929 |     1
+  -------------------------------------------------------------------------------------------------------------------
+
+  [Efficacy & Steps Taken Distribution Audit (Fix 7)]
+    Efficacy Failures (> max_steps)  : 0 / 20 (0.0%)
+    Steps Taken (Min / Median / Max) : 1 / 1 / 4
+    Steps Taken Histogram            : {1: 13, 2: 5, 3: 1, 4: 1}
+
+  [Distinct Objects Predicted Per Relation at Step 20 (Fix 2: Mode Collapse Audit)]
+    Relation 'born_city         ': 1 distinct objects predicted across 20 injected facts
+
+===================================================================================================================
+  [RESOURCE & COMPUTATIONAL TIMING SUMMARY]
+===================================================================================================================
+  Total 20-Edit Wall Clock   : 1317.03s
+  Average Edit Time / Step   : 0.214s
+  Average Full Eval Time     : 47.634s
+  Total Optimizer Steps (20) : 30 steps (avg 1.5 steps/edit)
+  Total Samples Seen (20)    : 30 samples
+
+  [Projected Wall Clock for Stage B1-1 (1,000 Edits x 3 Methods x 3 Orderings)]
+    Single 1,000-Edit Run (10 Log Checkpoints): ~11.50 minutes (690.0s)
+    All 9 Runs (3 Methods x 3 Orderings)      : ~1.73 hours (103.5 mins)
+    Feasibility on Kaggle T4 (6.5h Limit)     : WELL WITHIN LIMIT (< 2.5 hours total compute)
+===================================================================================================================
+  Successfully wrote results to 'b1_results.json'.
+
+===================================================================================================================
+ DIRECTIVE B1-0A COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
+ Total Wall Clock: 1317.03s
+ EXIT_CODE = 0
+===================================================================================================================
