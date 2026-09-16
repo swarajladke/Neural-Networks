@@ -64,6 +64,8 @@
 !run_w7_diagnostics_stdout.txt
 !run_w7_determinism_stdout.txt
 !w7_diagnostics.json
+!run_w8_forensics_stdout.txt
+!w8_results.json
 !build_cache_v3_stdout.log
 !number_verification_map.tsv
 data/
@@ -111,6 +113,7 @@ data/
 !AGNIS_V5_RESEARCH_PAPER.md
 !AGNIS_PROGRESS_REPORT.md
 !predictions_phase_I_to_V.md
+!STATE_OF_RECORD.md
 
 # Python Cache
 __pycache__/

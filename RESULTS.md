@@ -81,6 +81,14 @@ All pre-O-phase sections (Sections 1 through 18) have been archived into RESULTS
 
 ### 2. Directive W3 Audited Baseline Results (Commit `1e4d3e6`)
 
+> [!WARNING]
+> **WITHDRAWAL DECLARATION (ARMS 5, 6, 7, 8)**:
+> Arms 5, 6, 7, and 8 are **WITHDRAWN ON PROVENANCE GROUNDS** (missing raw data files, partial/missing seeds, or unverified stdout):
+> - **Arm 5 (`5_lwf`)**: PARTIAL PROVENANCE — Only 2 seeds (42, 43) exist in `w3_baselines.json`; hyperparameter $\lambda$ was under-ranged; Task 0 class slicing bug.
+> - **Arm 6 (`6_ewc`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`; process halted before execution; Fisher diagonal un-normalized.
+> - **Arm 7 (`7_er_buffer500`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`.
+> - **Arm 8 (`8_der_plus_plus_buffer500`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`; augmented replay logits defect.
+
 The baseline suite was executed on Kaggle Tesla T4 across all 45 cells (9 arms $\times$ 5 seeds) under a demand-driven resumable loop.
 
 Log file: `run_w3_baselines_stdout.txt` (Commit SHA: `1e4d3e65839b972e2cf575d31be0ca36e9ff34b4`):
@@ -135,10 +143,10 @@ The classifier bias gap is reported directly in percentage points ($\text{Bias G
   - `2_naive_fine_tune`: Class-IL $9.53\% \pm 0.21\%$, Aware $83.57\% \pm 0.20\%$, Bias Gap $+74.04\text{ pp}$, Probe $65.71\% \pm 0.62\%$, Retention Gap Closed $0.00\%$, Clf Share $93.4\%$.
   - `3_ncm_frozen_features`: Class-IL $47.12\% \pm 0.08\%$, Aware $78.50\% \pm 0.15\%$, Bias Gap $+31.38\text{ pp}$, Probe $59.19\% \pm 0.09\%$, Retention Gap Closed $+84.74\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
   - `4_ncm_adapting_features`: Class-IL $41.98\% \pm 1.27\%$, Aware $83.84\% \pm 0.43\%$, Bias Gap $+41.87\text{ pp}$, Probe $65.63\% \pm 0.59\%$, Retention Gap Closed $+51.04\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
-  - `5_lwf`: Class-IL $10.17\% \pm 0.24\%$, Aware $85.03\% \pm 0.15\%$, Bias Gap $+74.86\text{ pp}$, Probe $65.97\% \pm 0.64\%$, Retention Gap Closed $+0.76\%$, Clf Share $95.2\%$. **[WITHDRAWN: IMPLEMENTATION DEFECT - INERT PENALTY certified by B1 Positive Controls]**
-  - `6_ewc`: Class-IL $10.32\% \pm 0.28\%$, Aware $83.97\% \pm 0.19\%$, Bias Gap $+73.65\text{ pp}$, Probe $65.60\% \pm 0.63\%$, Retention Gap Closed $+0.94\%$, Clf Share $93.8\%$. **[WITHDRAWN: IMPLEMENTATION DEFECT - INERT PENALTY certified by B1 Positive Controls]**
-  - `7_er_buffer500`: Class-IL $36.94\% \pm 0.37\%$, Aware $87.01\% \pm 0.12\%$, Bias Gap $+50.08\text{ pp}$, Probe $65.34\% \pm 0.45\%$, Retention Gap Closed $+37.28\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
-  - `8_der_plus_plus_buffer500`: Class-IL $41.16\% \pm 0.97\%$, Aware $86.70\% \pm 0.11\%$, Bias Gap $+45.54\text{ pp}$, Probe $65.65\% \pm 0.48\%$, Retention Gap Closed $+48.32\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**.
+  - `5_lwf`: Class-IL $10.17\% \pm 0.24\%$, Aware $85.03\% \pm 0.15\%$, Bias Gap $+74.86\text{ pp}$, Probe $65.97\% \pm 0.64\%$, Retention Gap Closed $+0.76\%$, Clf Share $95.2\%$. **[WITHDRAWN: PROVENANCE DEFECT - Only 2 seeds (42, 43) recorded in w3_baselines.json; hyperparameter under-ranged]**
+  - `6_ewc`: Class-IL $10.32\% \pm 0.28\%$, Aware $83.97\% \pm 0.19\%$, Bias Gap $+73.65\text{ pp}$, Probe $65.60\% \pm 0.63\%$, Retention Gap Closed $+0.94\%$, Clf Share $93.8\%$. **[WITHDRAWN: PROVENANCE DEFECT - 0 seeds recorded in w3_baselines.json; halted before execution]**
+  - `7_er_buffer500`: Class-IL $36.94\% \pm 0.37\%$, Aware $87.01\% \pm 0.12\%$, Bias Gap $+50.08\text{ pp}$, Probe $65.34\% \pm 0.45\%$, Retention Gap Closed $+37.28\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**. **[WITHDRAWN: PROVENANCE DEFECT - 0 seeds recorded in w3_baselines.json]**
+  - `8_der_plus_plus_buffer500`: Class-IL $41.16\% \pm 0.97\%$, Aware $86.70\% \pm 0.11\%$, Bias Gap $+45.54\text{ pp}$, Probe $65.65\% \pm 0.48\%$, Retention Gap Closed $+48.32\%$, Clf Share: **`UNDEFINED (Avg LA < task-aware final)`**. **[WITHDRAWN: PROVENANCE DEFECT - 0 seeds recorded in w3_baselines.json; augmented replay logits defect]**
   - `9_joint_offline`: Class-IL $79.62\% \pm 0.21\%$, Aware $94.45\% \pm 0.20\%$, Bias Gap $+14.82\text{ pp}$, Probe $79.30\% \pm 0.11\%$, Retention Gap Closed $100.00\%$, Clf Share $0.0\%$.
 - **Headline Finding**: Among arms that fail (naive fine-tuning, freeze-after-base, and the withdrawn inert regularizer baselines LwF and EWC which functionally reduce to naive fine-tuning), **classifier interference accounts for $93.4\%$ of the drop**.
 - **Acquisition Gap Closed Column**: Deleted per F1. Its denominator ($\text{Offline LA} - \text{Naive LA} = 79.62\% - 88.78\% = -9.16\text{ pp}$) is negative because 10-way learning accuracy on a single task is inherently higher than, and not commensurable with, 100-way joint offline accuracy.
@@ -459,8 +467,15 @@ Source: `run_w4_attack_readout_stdout.txt` (Commit SHA: `66e68ba8f60a040f7669cba
     Control M2 (Rand) : Class-IL = 19.44% | BWT = -76.58 pp
     Linear Probe Ceil : ACC = 65.85%
 
+> [!WARNING]
+> **FULL WITHDRAWAL DECLARATION (DIRECTIVE W4 TASK 5 READOUT ATTACK)**:
+> All results from `run_w4_attack_readout.py` are **WITHDRAWN IN FULL** on 2026-09-16.
+> - **Predecessor readout** ($43.26\% \pm 0.58\%$), **linear probe ceiling** ($65.58\% \pm 0.41\%$), **available headroom** ($22.32\text{ pp}$), **M1 SLDA** ($43.43\% \pm 0.53\%$), **M2 SDC** ($44.33\% \pm 0.66\%$), the three controls (`control_random_trigger_M1`, `control_random_trigger_M2`, `1_freeze_after_base`), and comparisons against Arms 1 and 2 are all invalidated.
+> - **Root Cause**: `run_w4_attack_readout.py` line 132 used sequential class slicing `range(t * 10, (t + 1) * 10)` instead of protocol-compliant `CLASS_ORDER[t * 10 : (t + 1) * 10]`, training and testing on non-canonical sequential CIFAR-100 classes (aquatic mammals, fish, flowers, etc.) instead of the fixed benchmark permutation.
+
 =================================================================================================================================================
  DIRECTIVE W4 TASK 5 AUDITED RESULTS TABLE (EXEMPLAR-FREE HEADROOM ATTACK)
+ [WITHDRAWN IN FULL ON 2026-09-16 DUE TO NON-PROTOCOL-COMPLIANT SEQUENTIAL CLASS ORDERING IN run_w4_attack_readout.py LINE 132]
 =================================================================================================================================================
 Method / Arm Name                  | Class-IL ACC     | BWT Agnostic   | Ret Gap Closed  | % Headroom Closed   
 -------------------------------------------------------------------------------------------------------------------------------------------------

@@ -538,6 +538,14 @@ EXIT_CODE = 1
 ### 1. Baseline Suite Execution Summary
 The 45-cell study ($9\text{ arms} \times 5\text{ seeds}$ `[42, 43, 44, 45, 46]`) was executed on Kaggle Tesla T4 using demand-driven dynamic checkpointing.
 
+> [!WARNING]
+> **WITHDRAWAL DECLARATION (ARMS 5, 6, 7, 8)**:
+> Arms 5, 6, 7, and 8 are **WITHDRAWN ON PROVENANCE GROUNDS** (missing raw data files, partial/missing seeds, or unverified stdout):
+> - **Arm 5 (`5_lwf`)**: PARTIAL PROVENANCE — Only 2 seeds (42, 43) exist in `w3_baselines.json`; hyperparameter $\lambda$ was under-ranged; Task 0 class slicing bug.
+> - **Arm 6 (`6_ewc`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`; process halted before execution; Fisher diagonal un-normalized.
+> - **Arm 7 (`7_er_buffer500`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`.
+> - **Arm 8 (`8_der_plus_plus_buffer500`)**: NO RECORD — 0 seeds exist in `w3_baselines.json`; augmented replay logits defect.
+
 Log file: `run_w3_baselines_stdout.txt` (Commit SHA: `1e4d3e65839b972e2cf575d31be0ca36e9ff34b4`):
 ```
 ===========================================================================================================================================================
@@ -925,8 +933,15 @@ Log file: `run_w4_attack_readout_stdout.txt` (Commit SHA: `66e68ba8f60a040f7669c
     Control M2 (Rand) : Class-IL = 19.44% | BWT = -76.58 pp
     Linear Probe Ceil : ACC = 65.85%
 
+> [!WARNING]
+> **FULL WITHDRAWAL DECLARATION (DIRECTIVE W4 TASK 5 READOUT ATTACK)**:
+> All results from `run_w4_attack_readout.py` are **WITHDRAWN IN FULL** on 2026-09-16.
+> - **Predecessor readout** ($43.26\% \pm 0.58\%$), **linear probe ceiling** ($65.58\% \pm 0.41\%$), **available headroom** ($22.32\text{ pp}$), **M1 SLDA** ($43.43\% \pm 0.53\%$), **M2 SDC** ($44.33\% \pm 0.66\%$), the three controls (`control_random_trigger_M1`, `control_random_trigger_M2`, `1_freeze_after_base`), and comparisons against Arms 1 and 2 are all invalidated.
+> - **Root Cause**: `run_w4_attack_readout.py` line 132 used sequential class slicing `range(t * 10, (t + 1) * 10)` instead of protocol-compliant `CLASS_ORDER[t * 10 : (t + 1) * 10]`, training and testing on non-canonical sequential CIFAR-100 classes (aquatic mammals, fish, flowers, etc.) instead of the fixed benchmark permutation.
+
 =================================================================================================================================================
  DIRECTIVE W4 TASK 5 AUDITED RESULTS TABLE (EXEMPLAR-FREE HEADROOM ATTACK)
+ [WITHDRAWN IN FULL ON 2026-09-16 DUE TO NON-PROTOCOL-COMPLIANT SEQUENTIAL CLASS ORDERING IN run_w4_attack_readout.py LINE 132]
 =================================================================================================================================================
 Method / Arm Name                  | Class-IL ACC     | BWT Agnostic   | Ret Gap Closed  | % Headroom Closed   
 -------------------------------------------------------------------------------------------------------------------------------------------------
