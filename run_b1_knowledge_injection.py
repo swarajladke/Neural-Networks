@@ -9,11 +9,12 @@ Protocol:
   - 1,000 controlled synthetic facts across 4 relations
   - 50 reserved template-prior control subjects (never edited)
   - 50 pre-existing composition positive control facts (real trivia)
-  - Method M-A: Naive fine-tuning using pure SGD (lr=0.02, momentum=0.0)
+  - Method M-A: Naive fine-tuning using pure SGD (lr=0.001, momentum=0.0)
   - Full locality diagnostics: distinct answers, frequent distribution, next-token KL divergence
   - Parameter delta tracking: ||theta_post - theta_pre||_2 and count of changed params (> 1e-8)
   - Determinism verification: double fresh-load model checksum match
   - Tokenizer boundary invariant assertion across all 1,000 facts
+  - Perplexity overflow protection and robust capability tracking
 """
 
 import os
@@ -230,15 +231,11 @@ def generate_synthetic_facts(num_facts: int = 1000, seed: int = 42) -> Tuple[Lis
     that are NEVER injected (Fix 2: Template-Prior Control).
     """
     rng = random.Random(seed)
-    
-    # Generate unique subject names
     all_names = [f"{fn} {ln}" for fn in FIRST_NAMES for ln in LAST_NAMES]
     rng.shuffle(all_names)
     assert len(all_names) >= (num_facts + 50), f"Need at least {num_facts + 50} names, have {len(all_names)}"
     
-    # 50 reserved subjects for template-prior control (NEVER edited)
     reserved_names = all_names[num_facts : num_facts + 50]
-    
     facts = []
     facts_per_rel = num_facts // 4
     
@@ -313,8 +310,6 @@ def generate_synthetic_facts(num_facts: int = 1000, seed: int = 42) -> Tuple[Lis
         ]
         
         # Key Unification (Fix 6):
-        # 'object' is canonical entity string (e.g. 'Lisbon').
-        # 'target_token_str' is the tokenization continuation with explicit leading space (e.g. ' Lisbon').
         facts.append({
             "fact_id": i,
             "subject": subject,
@@ -434,7 +429,7 @@ def load_wikitext2_slice(tokenizer, num_sequences: int = 1000, seq_len: int = 51
         print("  Loading WikiText-2 via HuggingFace datasets library...")
         ds_test = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
         ds_val = load_dataset("wikitext", "wikitext-2-raw-v1", split="validation")
-        full_text = "\n\n".join(ds_val["text"] + ds_test["text"])
+        full_text = "\n\n".join(list(ds_val["text"]) + list(ds_test["text"]))
     except Exception as e:
         print(f"  datasets load failed ({e}), falling back to direct URL download...")
         os.makedirs(cache_dir, exist_ok=True)
@@ -463,7 +458,7 @@ def load_wikitext2_slice(tokenizer, num_sequences: int = 1000, seq_len: int = 51
     return slice_tokens, slice_hash
 
 def evaluate_perplexity(model, tokens_tensor: torch.Tensor, batch_size: int = 16, device: str = "cuda") -> Tuple[float, float]:
-    """Evaluates cross-entropy loss and perplexity on the token tensor."""
+    """Evaluates cross-entropy loss and perplexity on the token tensor with overflow guard."""
     model.eval()
     total_loss = 0.0
     total_tokens = 0
@@ -475,8 +470,20 @@ def evaluate_perplexity(model, tokens_tensor: torch.Tensor, batch_size: int = 16
             num_tokens = batch.shape[0] * (batch.shape[1] - 1)
             total_loss += loss.item() * num_tokens
             total_tokens += num_tokens
+            
     mean_loss = total_loss / total_tokens
-    ppl = math.exp(mean_loss)
+    
+    # Numerical overflow protection for math.exp
+    if math.isnan(mean_loss) or math.isinf(mean_loss):
+        ppl = float("inf")
+    elif mean_loss > 100.0:
+        ppl = 1.0e9 # Severe degradation ceiling
+    else:
+        try:
+            ppl = math.exp(mean_loss)
+        except OverflowError:
+            ppl = 1.0e9
+            
     return ppl, mean_loss
 
 # ==============================================================================
@@ -502,10 +509,9 @@ def compute_neighborhood_kl(
     for np in neighborhood_prompts:
         post_log_probs = get_next_token_log_probs(model, tokenizer, np, device=device)
         pre_log_probs = pre_edit_log_probs[np]
-        # KL(P_pre || P_post) = sum(P_pre * (log P_pre - log P_post))
         p_pre = torch.exp(pre_log_probs)
         kl = torch.sum(p_pre * (pre_log_probs - post_log_probs)).item()
-        kl_sum += max(0.0, kl) # clip numerical precision underflows
+        kl_sum += max(0.0, kl)
     return kl_sum / len(neighborhood_prompts)
 
 # ==============================================================================
@@ -593,7 +599,10 @@ def evaluate_all_metrics(
     
     # 7. General Capability: Perplexity
     ppl, _ = evaluate_perplexity(model, wikitext_slice, batch_size=16, device=device)
-    rel_ppl = ((ppl - baseline_ppl) / baseline_ppl) * 100.0
+    if baseline_ppl > 0 and not math.isinf(ppl):
+        rel_ppl = ((ppl - baseline_ppl) / baseline_ppl) * 100.0
+    else:
+        rel_ppl = float("inf")
     
     return {
         "efficacy": efficacy * 100.0,
@@ -615,7 +624,7 @@ def edit_fact_naive_ma_sgd(
     model,
     tokenizer,
     fact: Dict[str, Any],
-    lr: float = 0.02,
+    lr: float = 0.001,
     max_steps: int = 25,
     device: str = "cuda"
 ) -> Tuple[int, float, float, int]:
@@ -630,7 +639,6 @@ def edit_fact_naive_ma_sgd(
     prompt = fact["edit_prompt"]
     target_str = fact["target_token_str"] # e.g. " Lisbon"
     
-    # Tokenize prompt and target
     p_ids = tokenizer.encode(prompt)
     f_ids = tokenizer.encode(prompt + target_str)
     
@@ -843,7 +851,7 @@ def main():
     pre_edit_neighborhood_answers = {}
     pre_edit_neighborhood_log_probs = {}
     all_neighborhood_prompts = set()
-    for f in facts[:50]:
+    for f in facts: # Cache across all facts
         for np in f["neighborhood_prompts"]:
             all_neighborhood_prompts.add(np)
             
@@ -890,20 +898,20 @@ def main():
     
     header = (
         f"  {'Step':<5} | {'Fact ID':<7} | {'Efficacy':<8} | {'Gen (3-Para)':<12} | "
-        f"{'Locality':<8} | {'Loc KL':<7} | {'Retention':<9} | {'PPL':<7} | {'Rel PPL':<8} | "
+        f"{'Locality':<8} | {'Loc KL':<7} | {'Retention':<9} | {'PPL':<9} | {'Rel PPL':<9} | "
         f"{'Prior':<5} | {'||d_th||_2':<9} | {'Chg Par':<7} | {'Steps':<5}"
     )
-    sep = "  " + "-" * 111
+    sep = "  " + "-" * 115
     print(header)
     print(sep)
     
     for step_idx in range(1, 21):
         fact = facts[step_idx - 1]
         
-        # Edit step using pure SGD (Fix 1)
+        # Edit step using pure SGD (Fix 1, lr=0.001)
         t_start_edit = time.time()
         steps_taken, final_loss, delta_norm, n_changed = edit_fact_naive_ma_sgd(
-            model, tokenizer, fact, lr=0.02, max_steps=25, device=device
+            model, tokenizer, fact, lr=0.001, max_steps=25, device=device
         )
         edit_time = time.time() - t_start_edit
         
@@ -948,11 +956,16 @@ def main():
         }
         edit_records.append(record)
         
+        ppl_val = metrics["perplexity"]
+        ppl_str = f"{ppl_val:>9.2f}" if ppl_val < 10000.0 else f"{ppl_val:>9.1e}"
+        rel_val = metrics["rel_ppl"]
+        rel_str = f"{rel_val:>+8.2f}%" if abs(rel_val) < 10000.0 else f"{rel_val:>+8.1e}%"
+        
         print(
             f"  {step_idx:<5} | {fact['fact_id']:<7} | {metrics['efficacy']:>6.1f}%  | "
             f"{metrics['generalization']:>10.1f}%  | {metrics['locality']:>6.1f}%  | "
             f"{metrics['locality_kl']:>7.4f} | {metrics['retention']:>7.1f}%  | "
-            f"{metrics['perplexity']:>7.2f} | {metrics['rel_ppl']:>+6.2f}% | "
+            f"{ppl_str} | {rel_str} | "
             f"{metrics['template_prior_acc']:>4.1f}% | {delta_norm:>9.4f} | "
             f"{n_changed:>7} | {steps_taken:>5}"
         )
