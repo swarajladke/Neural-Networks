@@ -1,0 +1,302 @@
+===================================================================================================================
+ DIRECTIVE W8 -- ITEM W8-0: CANONICAL HARNESS & NAIVE BASELINE DIVERGENCE AUDIT
+===================================================================================
+
+===================================================================================================
+ AUTHORITATIVE CANONICAL BENCHMARK CONFIGURATION
+===================================================================================================
+  Git Commit SHA                : e1f7720b63cf27d42999493f50c67a2508894ebb
+  Execution Device              : Tesla T4
+  Benchmark Seed                : 42
+  cuDNN Deterministic           : True
+  cuDNN Benchmark               : False
+  CUBLAS_WORKSPACE_CONFIG       : :4096:8
+  Deterministic Algorithms      : True (warn_only=True)
+  Standard Learning Rate        : 0.005 (CosineAnnealingLR, eta_min=0.0001)
+  Standard Weight Decay         : 0.0005
+  Standard Momentum             : 0.9
+  Standard Epochs per Task      : 20
+  Batch Size                    : 128
+===================================================================================================
+
+  [1. Diff of Prior Harnesses: run_w7_determinism.py vs run_w7_diagnostics.py]
+  -----------------------------------------------------------------------------------------------
+  DIFFERING LINE 1 (Optimizer Scope):
+    run_w7_determinism.py:220:
+      opt = optim.SGD(model.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=weight_decay)
+      [Created ONCE outside task loop, state/momentum preserved across tasks]
+    run_w7_diagnostics.py:253:
+      opt_naive = optim.SGD(model_naive.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+      [Re-created as FRESH optimizer for Task 1; momentum wiped to zero]
+
+  DIFFERING LINE 2 (LwF Slicing Bug in run_w7_diagnostics.py):
+    run_w7_diagnostics.py:388, 404, 448:
+      s_old = logits[:, :10]
+      old_logits_list.append(out[:, :10])
+      [CRITICAL DEFECT: Hardcoded slice [:10] assumed sequential classes 0..9,
+       whereas Canonical Task 0 classes are [42, 41, 91, 9, 65, 50, 1, 70, 15, 78]!]
+
+  DIFFERING LINE 3 (Task-Aware Masking in run_w7_diagnostics.py):
+    run_w7_diagnostics.py:416:
+      acc_t0_aware_100 = evaluate_task_aware(m_100, t0_test, device, list(range(10)))
+      [CRITICAL DEFECT: Evaluated task-aware accuracy on list(range(10)), which masked out
+       8 of the 10 true Task 0 classes, capping maximum possible score at 20%!]
+  -----------------------------------------------------------------------------------------------
+
+100%|██████████| 169M/169M [22:38<00:00, 124kB/s] 
+  [2. Training Canonical Task 0 Base Model]
+Downloading: "https://download.pytorch.org/models/resnet18-f37072fd.pth" to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth
+100%|██████████| 44.7M/44.7M [00:00<00:00, 143MB/s]
+    Task 0 Init ACC       : 94.30%
+    Task 0 Checksum       : -12580.15605535 (Expected: -12580.15605535 -> Match: True)
+
+  [3. Training Canonical Naive Reference on Task 1 (Chained Optimizer)]
+    Naive Task 0 Final ACC: 32.80%
+    Naive Task 1 Final ACC: 85.40%
+    Task 1 Checksum       : -12589.77292246 (Expected: -12589.77292246 -> Match: True)
+
+  [4. Prediction Confusion on Task 0 Test Set under Canonical Naive Reference]
+    Total Test Samples: 1000 across true Task 0 classes: [42, 41, 91, 9, 65, 50, 1, 70, 15, 78]
+    Distribution of Predicted Classes:
+      Class  1 (Task 0 Class):   27 predictions ( 2.7%)
+      Class  9 (Task 0 Class):   65 predictions ( 6.5%)
+      Class 10 (Task 1 Class):   33 predictions ( 3.3%)
+      Class 15 (Task 0 Class):   35 predictions ( 3.5%)
+      Class 37 (Task 1 Class):   15 predictions ( 1.5%)
+      Class 41 (Task 0 Class):   42 predictions ( 4.2%)
+      Class 42 (Task 0 Class):   44 predictions ( 4.4%)
+      Class 45 (Task 1 Class):  113 predictions (11.3%)
+      Class 48 (Task 1 Class):   76 predictions ( 7.6%)
+      Class 50 (Task 0 Class):   17 predictions ( 1.7%)
+      Class 55 (Task 1 Class):  138 predictions (13.8%)
+      Class 56 (Task 1 Class):    3 predictions ( 0.3%)
+      Class 65 (Task 0 Class):   32 predictions ( 3.2%)
+      Class 72 (Task 1 Class):   83 predictions ( 8.3%)
+      Class 73 (Task 1 Class):   59 predictions ( 5.9%)
+      Class 76 (Task 1 Class):    7 predictions ( 0.7%)
+      Class 78 (Task 0 Class):   44 predictions ( 4.4%)
+      Class 91 (Task 0 Class):   22 predictions ( 2.2%)
+      Class 92 (Task 1 Class):  145 predictions (14.5%)
+    Summary: 328 predicted in Task 0 (32.8%), 672 predicted in Task 1 (67.2%), 0 in Other (0.0%)
+
+  [5. Explanation of 40.80% Figure from W6 Diagnostics]
+    In run_w6_diagnostics.py line 72, CANONICAL_BLOCKS was defined as:
+      Task 1 = [26, 47, 72, 85, 96, 75, 56, 30, 25, 84]
+    This was a PERTURBED class assignment, differing from canonical Split-CIFAR-100:
+      Canonical Task 1 = [73, 10, 55, 56, 72, 45, 48, 92, 76, 37]
+    The 40.80% retention was measured against non-canonical Task 1 classes.
+    Under canonical Split-CIFAR-100 classes, Task 0 retention is exactly 32.80%.
+
+  [6. Verbatim Source Line for Weight Decay in W5 (run_w5_positive_controls.py)]
+    Line 57 : WEIGHT_DECAY = 1e-4
+    Line 200: opt_naive = optim.SGD(model_naive.parameters(), lr=LR_BASE, momentum=0.9, weight_decay=WEIGHT_DECAY)
+    Confirmed: W5 used WEIGHT_DECAY = 1e-4, whereas W3, W6, and Canonical use 5e-4.
+
+  [7. Canonical Re-Run of LwF Lambda Sweep (Correct Slicing: logits[:, t0_classes])]
+  ---------------------------------------------------------------------------------------------------------
+  Lambda     | Task 0 Final ACC   | Task 1 Final ACC   | ||Grad_pen||_2   | Ratio to Grad_CE   | Status
+  ---------------------------------------------------------------------------------------------------------
+  0.0 (Naive) | 32.80%             | 85.40%             | 0.0000e+00       | 0.0000e+00         | Reference
+  0.1        | 38.80%             | 85.60%             | 7.9608e-01       | 4.6311e-02         | ACTIVE
+  0.3        | 43.90%             | 85.10%             | 2.3882e+00       | 1.3893e-01         | ACTIVE
+  1.0        | 49.70%             | 83.70%             | 7.9608e+00       | 4.6311e-01         | ACTIVE
+  3.0        | 49.70%             | 82.30%             | 2.3882e+01       | 1.3893e+00         | ACTIVE
+  10.0       | 43.70%             | 81.70%             | 7.9608e+01       | 4.6311e+00         | ACTIVE
+  30.0       | 33.90%             | 81.00%             | 2.3882e+02       | 1.3893e+01         | ACTIVE
+  ---------------------------------------------------------------------------------------------------------
+
+  [8. Canonical Re-Run of EWC Treatments (vs Same-Process Naive 32.80%)]
+    Computing Canonical True Empirical Fisher (N=4000 micro-batches)...
+    Raw Fisher: Mean = 3.395990e-02 | Max = 4.647036e+02 | Stability Bound: lambda < 0.1
+
+    --- Treatment 1: Raw Corrected Fisher (Stability Bound: lambda < 8.6e-02) ---
+    --------------------------------------------------------------------------------------------------------------
+    Lambda     | Task 0 Final   | Task 1 Final   | ||Grad_pen||_2  | Ratio to CE    | Status
+    --------------------------------------------------------------------------------------------------------------
+    1.0e+01    | 64.30%        | 83.10%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    3.0e+01    | 64.90%        | 81.60%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    1.0e+02    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    3.0e+02    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    1.0e+03    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    3.0e+03    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    --------------------------------------------------------------------------------------------------------------
+
+    --- Treatment 2: Percentile-Clipped Fisher (99.9%) (Stability Bound: lambda < 1.1e+01) ---
+    --------------------------------------------------------------------------------------------------------------
+    Lambda     | Task 0 Final   | Task 1 Final   | ||Grad_pen||_2  | Ratio to CE    | Status
+    --------------------------------------------------------------------------------------------------------------
+    3.0e+02    |  0.00%        | 10.00%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    1.0e+03    | 70.30%        | 78.00%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    3.0e+03    | 71.80%        | 74.50%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    1.0e+04    | 70.40%        | 73.00%        | 0.0000e+00      | 0.0000e+00     | STABLE
+    3.0e+04    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    1.0e+05    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    --------------------------------------------------------------------------------------------------------------
+
+    --- Treatment 3: Mean-Normalized Fisher (Stability Bound: lambda < 2.9e-03) ---
+    --------------------------------------------------------------------------------------------------------------
+    Lambda     | Task 0 Final   | Task 1 Final   | ||Grad_pen||_2  | Ratio to CE    | Status
+    --------------------------------------------------------------------------------------------------------------
+    1.0e-04    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    5.0e-04    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    1.0e-03    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    3.0e-03    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    1.0e-02    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    5.0e-02    |  0.00%        |  0.00%        | 0.0000e+00      | 0.0000e+00     | DIVERGED (NaN/Inf)
+    --------------------------------------------------------------------------------------------------------------
+
+    --- Treatment 4: Buggy Batch-Mean-Squared Fisher at lambda=1e6 ---
+    Buggy Fisher (lambda=1e6) -> Task 0 ACC:  0.00% | Task 1 ACC:  0.00% | Status: DIVERGED (NaN/Inf)
+    Measured Delta vs Same-Process Naive (32.80%): -32.80 pp
+
+===================================================================================================================
+ DIRECTIVE W8 -- ITEM W8-1: PROVENANCE LEDGER FOR w3_baselines.json
+===================================================================================
+
+  [1. Raw Complete Enumeration of All 27 Records in w3_baselines.json]
+  -------------------------------------------------------------------------------------------------------------------
+  #   | Arm Name                     | Seed  | Wall (s)   | Steps  | Samples   | Peak GPU (B)   | Stored (B)
+  -------------------------------------------------------------------------------------------------------------------
+  01 | 2_naive_fine_tune            | 42    | 882.5      | 6400   | 800000    | 903480832      | 0
+  02 | 2_naive_fine_tune            | 43    | 871.7      | 6400   | 800000    | 903480832      | 0
+  03 | 2_naive_fine_tune            | 44    | 866.9      | 6400   | 800000    | 903480832      | 0
+  04 | 2_naive_fine_tune            | 45    | 889.1      | 6400   | 800000    | 903480832      | 0
+  05 | 2_naive_fine_tune            | 46    | 888.0      | 6400   | 800000    | 903480832      | 0
+  06 | 3_ncm_frozen_features        | 42    | 138.1      | 0      | 0         | 325858304      | 204800
+  07 | 3_ncm_frozen_features        | 43    | 139.0      | 0      | 0         | 325858304      | 204800
+  08 | 3_ncm_frozen_features        | 44    | 138.0      | 0      | 0         | 325858304      | 204800
+  09 | 3_ncm_frozen_features        | 45    | 145.1      | 0      | 0         | 325858304      | 204800
+  10 | 3_ncm_frozen_features        | 46    | 147.2      | 0      | 0         | 325858304      | 204800
+  11 | 9_joint_offline              | 42    | 1235.3     | 9390   | 1200000   | 903480832      | 0
+  12 | 9_joint_offline              | 43    | 1236.6     | 9390   | 1200000   | 903480832      | 0
+  13 | 9_joint_offline              | 44    | 1227.6     | 9390   | 1200000   | 903480832      | 0
+  14 | 9_joint_offline              | 45    | 1237.8     | 9390   | 1200000   | 903480832      | 0
+  15 | 9_joint_offline              | 46    | 1234.9     | 9390   | 1200000   | 903480832      | 0
+  16 | 1_freeze_after_base          | 42    | 692.1      | 6400   | 800000    | 903480832      | 0
+  17 | 1_freeze_after_base          | 43    | 689.0      | 6400   | 800000    | 903480832      | 0
+  18 | 1_freeze_after_base          | 44    | 688.3      | 6400   | 800000    | 903480832      | 0
+  19 | 1_freeze_after_base          | 45    | 681.2      | 6400   | 800000    | 903480832      | 0
+  20 | 1_freeze_after_base          | 46    | 679.1      | 6400   | 800000    | 903480832      | 0
+  21 | 4_ncm_adapting_features      | 42    | 925.2      | 6400   | 800000    | 911439872      | 204800
+  22 | 4_ncm_adapting_features      | 43    | 925.7      | 6400   | 800000    | 911439872      | 204800
+  23 | 4_ncm_adapting_features      | 44    | 929.7      | 6400   | 800000    | 911439872      | 204800
+  24 | 4_ncm_adapting_features      | 45    | 934.3      | 6400   | 800000    | 911439872      | 204800
+  25 | 4_ncm_adapting_features      | 46    | 928.2      | 6400   | 800000    | 911439872      | 204800
+  26 | 5_lwf                        | 42    | 1148.0     | 6400   | 800000    | 1098134528     | 0
+  27 | 5_lwf                        | 43    | 1119.0     | 6400   | 800000    | 1098134528     | 0
+  -------------------------------------------------------------------------------------------------------------------
+
+  [2. Explicit Backing Status for Each of the Nine Published Baseline Rows]
+  -------------------------------------------------------------------------------------
+  Row #  | Arm Name                     | Published Class-IL   | Backing Status
+  -------------------------------------------------------------------------------------
+  Arm 1  | 1_freeze_after_base          | 8.67% +/- 0.04%      | BACKED (5 seeds: 42, 43, 44, 45, 46)
+  Arm 2  | 2_naive_fine_tune            | 9.53% +/- 0.21%      | BACKED (5 seeds: 42, 43, 44, 45, 46)
+  Arm 3  | 3_ncm_frozen_features        | 47.12% +/- 0.08%     | BACKED (5 seeds: 42, 43, 44, 45, 46)
+  Arm 4  | 4_ncm_adapting_features      | 41.98% +/- 1.27%     | BACKED (5 seeds: 42, 43, 44, 45, 46)
+  Arm 5  | 5_lwf                        | 10.17% +/- 0.24%     | PARTIAL (2 seeds in JSON: 42, 43)
+  Arm 6  | 6_ewc                        | 10.32% +/- 0.28%     | NO RECORD (0 seeds in JSON)
+  Arm 7  | 7_er_buffer500               | 36.94% +/- 0.37%     | NO RECORD (0 seeds in JSON)
+  Arm 8  | 8_der_plus_plus_buffer500    | 41.16% +/- 0.97%     | NO RECORD (0 seeds in JSON)
+  Arm 9  | 9_joint_offline              | 79.62% +/- 0.21%     | BACKED (5 seeds: 42, 43, 44, 45, 46)
+  -------------------------------------------------------------------------------------
+
+  [3. Provenance of 10.32%, 36.94%, 41.16%, and 10.17% Figures]
+    Audit Result: The numbers originated from Kaggle execution log 'run_w3_baselines_stdout.txt'
+    committed in git commit 1e4d3e6 ('RECORD W3 PART 2 COMPLETE STUDY EXECUTION: ALL 45 CELLS COMPLETED').
+    In that run, cells 28 to 45 were executed and printed to stdout, but the updated w3_baselines.json
+    was never saved/committed back to the git repository; only the stdout text was committed.
+
+  [4. Formal Withdrawal Declarations for Unbacked Rows]
+    - Arm 5 (5_lwf = 10.17% +/- 0.24%): WITHDRAWN ON PROVENANCE GROUNDS (only 2 seeds recorded in JSON).
+    - Arm 6 (6_ewc = 10.32% +/- 0.28%): WITHDRAWN ON PROVENANCE GROUNDS (no backing JSON record).
+    - Arm 7 (7_er_buffer500 = 36.94% +/- 0.37%): WITHDRAWN ON PROVENANCE GROUNDS (no backing JSON record).
+    - Arm 8 (8_der_plus_plus_buffer500 = 41.16% +/- 0.97%): WITHDRAWN ON PROVENANCE GROUNDS (no backing JSON record).
+
+  [5. Peak Memory Explanation Corrections]
+    - Peak GPU Memory 1,098,134,528 B belongs to Arm 5 (5_lwf) in w3_baselines.json, NOT Arms 7 and 8.
+      Cause: LwF evaluates both student model and frozen teacher model concurrently in memory during Task 1,
+      doubling forward activation tensor memory allocations in the PyTorch caching allocator.
+    - Arms 1, 2, 9 have Peak GPU = 903,480,832 B; Arm 4 has 911,439,872 B.
+      Cause: The 50,000-sample linear probe feature evaluation allocated ~903 MB. In Arm 4, ongoing centroid
+      accumulation and class prototype calculations added ~8 MB overhead (911 MB).
+
+  [6. Buffer Memory Footprint Status]
+    - Live buffer byte counts (75,268,000 B and 75,468,000 B) are DERIVED, NOT MEASURED.
+    - Status: DERIVED, NOT MEASURED (computed from buffer tensor allocation arithmetic).
+
+===================================================================================================================
+ DIRECTIVE W8 -- ITEM W8-2: CLASS-ORDERING AUDIT ACROSS EVERY SCRIPT
+===================================================================================
+
+  [1. Runtime Task Blocks Inspection across Scripts]
+  ---------------------------------------------------------------------------------------------------------
+  Script Name                      | Compliance Status  | First Two Task Blocks
+  ---------------------------------------------------------------------------------------------------------
+  run_w2_benchmark_build.py        | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  run_w3_baselines.py              | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  run_w3_budget_gate.py            | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  run_w4_attack_readout.py         | NON-COMPLIANT      | T0: [0, 1, 2, 3, 4].. | T1: [10, 11, 12, 13, 14]..
+  run_w5_positive_controls.py      | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  run_w6_diagnostics.py            | NON-COMPLIANT      | T0: [42, 41, 91, 9, 65].. | T1: [26, 47, 72, 85, 96]..
+  run_w7_determinism.py            | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  run_w7_diagnostics.py            | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  canonical_harness.py             | COMPLIANT          | T0: [42, 41, 91, 9, 65].. | T1: [73, 10, 55, 56, 72]..
+  ---------------------------------------------------------------------------------------------------------
+
+  [2. Full Withdrawal Declaration for run_w4_attack_readout.py]
+    Because run_w4_attack_readout.py line 132 used sequential classes list(range(t*10, (t+1)*10)),
+    every single number produced by that script is hereby WITHDRAWN in full:
+      - Predecessor Class-IL (43.26% +/- 0.58%)               -> WITHDRAWN
+      - Empirical Ceiling (65.58% +/- 0.41%)                 -> WITHDRAWN
+      - Total Available Headroom (22.32 pp)                  -> WITHDRAWN
+      - Method M1 SLDA (43.43% +/- 0.59%, +0.76% headroom)   -> WITHDRAWN
+      - Method M2 SDC (44.33% +/- 0.58%, +4.79% headroom)    -> WITHDRAWN
+      - Random Trigger Control 1 (43.27% +/- 0.58%)          -> WITHDRAWN
+      - Random Trigger Control 2 (19.79% +/- 0.31%)          -> WITHDRAWN
+      - Arm 1 (9.41% +/- 0.16%) & Arm 2 (9.96% +/- 0.13%)    -> WITHDRAWN (non-canonical ordering)
+
+  [3. Reconciliation of Discrepant Sigma-Sweep Values (61.40%, 72.10%, 78.34%)]
+    - 61.40%: REAL MEASUREMENT. Printed in run_w7_suite_stdout.txt line 417 as baseline Delta=0 under renormalize=False.
+    - 72.10%: REAL MEASUREMENT ON PERTURBED SPLIT. Printed in run_w6_diagnostics_stdout.txt line 143 on W6 classes.
+    - 78.34%: ERRONEOUS CITATION. Never an SDC accuracy; it was the 'Total Drop: 78.34 pp' denominator figure
+      of Arm 2 Seed 43 in w3_baselines.json line 1992. It is WITHDRAWN as an errant citation.
+
+  [4. Cost Estimate for Protocol-Compliant Task 5 Readout]
+    - Protocol: 5 tasks (50 classes), 5 seeds (42, 43, 44, 45, 46), 20 epochs/task on ResNet-18.
+    - Arms required: M0 Freeze Control, Naive Fine-Tune, M1 SLDA, M2 SDC (sigma=0.25), Random Control.
+    - Backbone training (shared across readout methods): 100 epochs/seed = ~10.8 min/seed.
+    - 5 seeds adapting backbone: 5 x 10.8 min = 54.0 min.
+    - 5 seeds frozen base backbone: 5 x 2.2 min = 11.0 min.
+    - Readout feature extraction & scoring across all 5 arms: ~15.0 min.
+    - Total Wall Clock Estimate: ~80.0 minutes (1.33 hours) on Tesla T4, well within 6.5h session limit.
+
+===================================================================================================================
+ DIRECTIVE W8 -- ITEM W8-3: CLOSE OR WITHDRAW DIRECTIVE W5
+===================================================================================
+
+  [Audit of Three Contradicted W5 Claims]
+  -----------------------------------------------------------------------------------------------
+  Measurement                         | W5 Claim             | Canonical Finding    | Status
+  -----------------------------------------------------------------------------------------------
+  LwF lambda=100, Task 1 ACC          | 80.30%               | 0.00% (Annihilated)  | CONTRADICTED
+  Buggy Fisher lambda=1e6, T0/T1      | 56.00% / 83.10%      | 0.00% / 0.00% (NaN)  | CONTRADICTED
+  Naive Task 0 Final (Seed 42)        | 32.80%               | 32.80% (Chained Opt) | REPRODUCED
+  -----------------------------------------------------------------------------------------------
+
+  [OFFICIAL DISPOSITION OF DIRECTIVE W5]
+    Because the +23.2 pp retention claim of EWC under buggy Fisher (56.00% / 83.10%) was an artifact of
+    a decayed optimizer learning rate and weight decay = 1e-4, and completely diverges (0.00% / 0.00% NaN)
+    under the canonical protocol at lambda=1e6, Directive W5's positive control findings are hereby
+    OFFICIALLY WITHDRAWN IN FULL.
+
+===================================================================================================================
+ DIRECTIVE W8 -- ITEM W8-4: WRITE STATE_OF_RECORD.md
+===================================================================================
+
+  Successfully generated STATE_OF_RECORD.md.
+
+===================================================================================================================
+ DIRECTIVE W8 SUITE COMPLETE (Total Wall Clock: 2893.1s)
+ EXIT_CODE = 0
+===================================================================================
