@@ -1,0 +1,58 @@
+{
+  "directive": "B1-0A",
+  "status": "AMENDED_BY_B1_0B",
+  "producing_commit_sha": "c00913b",
+  "model": "gpt2 (124M parameters)",
+  "execution_device": "Tesla T4 (CUDA)",
+  "amended_gate_verdicts": {
+    "pre_edit_accuracy": {
+      "target": "~0%",
+      "measured": "0.10% (1/1000 edit prompts), 0.70% (21/3000 paraphrases)",
+      "verdict": "PASS"
+    },
+    "step1_efficacy": {
+      "target": "~100%",
+      "measured": "100.0% (took 1 SGD step)",
+      "verdict": "PASS"
+    },
+    "step1_locality": {
+      "target": "Neighborhood predictions preserved",
+      "measured": "0.0% unchanged (KL = 45.8032)",
+      "verdict": "FAIL"
+    },
+    "step1_perplexity_stability": {
+      "target": "Perplexity stable on WikiText-2",
+      "measured": "1.7e+16 vs baseline 36.03 (+4.7e+16%)",
+      "verdict": "FAIL"
+    },
+    "composition_measurability": {
+      "target": ">= 10.0% on known facts",
+      "measured": "10.00% (5/50 facts)",
+      "verdict": "PROVISIONAL"
+    }
+  },
+  "retention_accounting": {
+    "retained_fact_counts_per_step": [1, 1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1, 1, 2, 2, 3, 2, 1, 2],
+    "mean_retained_facts": 1.50,
+    "dynamics": "FLAT_IN_N",
+    "mode_collapse_audit": {
+      "relation": "born_city",
+      "injected_facts": 20,
+      "distinct_predicted_objects": 1,
+      "finding": "Measured subject-object binding is zero; apparent retention is output collapse onto a single frequent object."
+    }
+  },
+  "pre_known_fact_audit": {
+    "count": "1 / 1,000 (0.10%)",
+    "note": "Audited in B1-0B to be excluded from retention accounting."
+  },
+  "optimization": {
+    "method": "M-A (Naive SGD)",
+    "learning_rate": 0.001,
+    "momentum": 0.0,
+    "mean_steps_taken": 1.50,
+    "efficacy_failures": 0
+  },
+  "wall_clock_seconds": 1317.03,
+  "exit_code": 0
+}
