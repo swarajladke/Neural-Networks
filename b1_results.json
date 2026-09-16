@@ -1,58 +1,33 @@
 {
-  "directive": "B1-0A",
-  "status": "AMENDED_BY_B1_0B",
-  "producing_commit_sha": "c00913b",
+  "directive": "B1-1A",
+  "status": "HEADLINE_RESTATED_FROM_B1_0B",
+  "producing_commit_sha": "9930ed5",
   "model": "gpt2 (124M parameters)",
   "execution_device": "Tesla T4 (CUDA)",
-  "amended_gate_verdicts": {
-    "pre_edit_accuracy": {
-      "target": "~0%",
-      "measured": "0.10% (1/1000 edit prompts), 0.70% (21/3000 paraphrases)",
-      "verdict": "PASS"
-    },
-    "step1_efficacy": {
-      "target": "~100%",
-      "measured": "100.0% (took 1 SGD step)",
-      "verdict": "PASS"
-    },
-    "step1_locality": {
-      "target": "Neighborhood predictions preserved",
-      "measured": "0.0% unchanged (KL = 45.8032)",
-      "verdict": "FAIL"
-    },
-    "step1_perplexity_stability": {
-      "target": "Perplexity stable on WikiText-2",
-      "measured": "1.7e+16 vs baseline 36.03 (+4.7e+16%)",
-      "verdict": "FAIL"
-    },
-    "composition_measurability": {
-      "target": ">= 10.0% on known facts",
-      "measured": "10.00% (5/50 facts)",
-      "verdict": "PROVISIONAL"
-    }
+  "headline_finding": "Bound retention is ZERO at all seven learning rates from 1e-6 to 1e-3. At the top of the grid the model is destroyed (PPL 3.8e20). At the bottom it is intact (PPL 36.04). At no point does naive sequential full-parameter editing establish a single bound subject-object association. Naive editing has no operating point that simultaneously binds knowledge and preserves capability.",
+  "supporting_measurements": {
+    "generalization_tradeoff": "Generalization at calibrated lr=1e-5 is 0.0% at step 1 and 23.33% mean across 20 edits, versus 100.0% at lr=1e-3. Calibrated operating point produces exact-prompt recall only.",
+    "modal_collapse_in_undamaged_model": "Modal collapse persists in an undamaged model: 'warsaw' predicted for 19/20 (95.0%) born_city subjects at PPL 37.23 with locality KL passing (0.0007). Output collapse is a property of sequential gradient descent on cross-entropy loss, not a symptom of destruction.",
+    "readout_concentration": "The model does not store injected knowledge in its transformer blocks: relative parameter change in the readout embedding (wte) is 2.58x higher than in any transformer block (0.000067 in wte vs 0.000026 block mean). The edit alters the readout projection, not the internal representation.",
+    "composition_measurability_noise_floor": "True composition accuracy (12.50%, 25/200) exceeds template-only prior (6.00% +/- 2.88%, 2-sigma = 5.76%, delta = +6.50 pp, barely above 2-sigma). The instrument is valid but operates near the noise floor."
   },
-  "retention_accounting": {
-    "retained_fact_counts_per_step": [1, 1, 1, 2, 1, 1, 1, 1, 3, 1, 2, 1, 1, 1, 2, 2, 3, 2, 1, 2],
-    "mean_retained_facts": 1.50,
-    "dynamics": "FLAT_IN_N",
-    "mode_collapse_audit": {
-      "relation": "born_city",
-      "injected_facts": 20,
-      "distinct_predicted_objects": 1,
-      "finding": "Measured subject-object binding is zero; apparent retention is output collapse onto a single frequent object."
-    }
+  "b1_0b_calibration_frontier": {
+    "1e-06": {"efficacy_pct": 10.0, "mean_steps": 10.0, "step1_gen_pct": 0.0, "step1_loc_kl": 0.0000, "step1_ppl": 36.04, "bound_retention": "0/10 (0.0%)"},
+    "3e-06": {"efficacy_pct": 60.0, "mean_steps": 9.2, "step1_gen_pct": 0.0, "step1_loc_kl": 0.0001, "step1_ppl": 36.04, "bound_retention": "0/10 (0.0%)"},
+    "1e-05": {"efficacy_pct": 100.0, "mean_steps": 6.4, "step1_gen_pct": 0.0, "step1_loc_kl": 0.0007, "step1_ppl": 36.04, "bound_retention": "0/10 (0.0%)", "calibrated_optimum": true},
+    "3e-05": {"efficacy_pct": 100.0, "mean_steps": 1.4, "step1_gen_pct": 0.0, "step1_loc_kl": 0.0071, "step1_ppl": 36.14, "bound_retention": "0/10 (0.0%)"},
+    "1e-04": {"efficacy_pct": 100.0, "mean_steps": 1.0, "step1_gen_pct": 33.33, "step1_loc_kl": 0.2872, "step1_ppl": 39.77, "bound_retention": "0/10 (0.0%)"},
+    "3e-04": {"efficacy_pct": 100.0, "mean_steps": 1.0, "step1_gen_pct": 100.0, "step1_loc_kl": 6.0123, "step1_ppl": 2668.95, "bound_retention": "0/10 (0.0%)"},
+    "1e-03": {"efficacy_pct": 100.0, "mean_steps": 1.0, "step1_gen_pct": 100.0, "step1_loc_kl": 36.1289, "step1_ppl": 3.82e20, "bound_retention": "0/10 (0.0%)"}
   },
-  "pre_known_fact_audit": {
-    "count": "1 / 1,000 (0.10%)",
-    "note": "Audited in B1-0B to be excluded from retention accounting."
+  "retention_accounting_20_edits": {
+    "learning_rate": 1e-05,
+    "retained_fact_counts_per_step": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+    "raw_retention_step20": "2 / 20 (10.0%)",
+    "bound_retention_step20": "0 / 20 (0.0%)",
+    "modal_prediction": "warsaw (19/20 subjects = 95.0%)",
+    "final_ppl": 37.23
   },
-  "optimization": {
-    "method": "M-A (Naive SGD)",
-    "learning_rate": 0.001,
-    "momentum": 0.0,
-    "mean_steps_taken": 1.50,
-    "efficacy_failures": 0
-  },
-  "wall_clock_seconds": 1317.03,
+  "wall_clock_seconds": 3805.45,
   "exit_code": 0
 }
