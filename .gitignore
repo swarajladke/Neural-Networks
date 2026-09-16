@@ -66,6 +66,9 @@
 !w7_diagnostics.json
 !run_w8_forensics_stdout.txt
 !w8_results.json
+!run_b1_knowledge_injection_stdout.txt
+!b1_facts.json
+!b1_results.json
 !build_cache_v3_stdout.log
 !number_verification_map.tsv
 data/

@@ -164,6 +164,13 @@ The hybrid is the bridge. Pure AGNIS is the destination. 🧠🚀
 
 ---
 
+## Formal Kill Criterion for Pure AGNIS Pretraining (Dated: 2026-09-16)
+
+As of 2026-09-16, from-scratch pure AGNIS pretraining is formally placed under a binding kill criterion. Empirical tracking demonstrated that training loss remained flat at 7.7 across 20,000 optimization steps (equivalent to perplexity ~2208 against the GPT-2 baseline of ~30), confirming that unguided Hebbian associative settle dynamics fail to provide a next-token predictive probability distribution. Because from-scratch pretraining is orthogonal to the project objective of sequential knowledge absorption in pretrained models, pure AGNIS pretraining is suspended. Any future revival must demonstrate a steep, sustained loss drop below **cross-entropy loss = 4.50** (perplexity $\approx 90$) within a strict budget of **5,000 optimizer steps** on a standard token streaming corpus (e.g., FineWeb-Edu); if training loss fails to break below 4.50 within 5,000 steps, or if the loss reduction rate $|\Delta \mathcal{L} / \Delta t| < 10^{-4}$ per 1,000 steps, pure from-scratch AGNIS pretraining is **permanently abandoned in full**, and zero GPU compute hours shall be allocated to it.
+
+---
+
 *Documented: 2026-05-20*
+*Kill Criterion Added: 2026-09-16*
 *Hybrid checkpoint: agnis_gpt2_phase3_best.pt (loss=3.52)*
 *Pure AGNIS checkpoint: agnis_sprint3_best.pt (agnis-s2 dataset)*
