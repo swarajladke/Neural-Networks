@@ -1492,15 +1492,25 @@ def main():
     )
     val_model.load_state_dict(intact_state)
     
+    def fmt_ret(m):
+        return f"{m['raw_retained_pct']:>5.1f}% ({m['raw_retained_count']:>2}/20)"
+    def fmt_bnd(m):
+        return f"{m['bound_retained_pct']:>5.1f}% ({m['bound_retained_count']:>2}/20)"
+    def fmt_gen(m):
+        return f"{m['generalization']:>5.1f}%"
+
     header_abl = f"  {'Ablation Condition':<35} | {'Raw Ret':<14} | {'Bound Ret':<14} | {'Gen (3-Para)':<13} | {'PPL':<9} | {'Delta PPL':<10}"
     print(header_abl)
     print("  " + "-" * 105)
     print(f"  {'1. Pre-Edit Base':<35} | {'0.0% ( 0/20)':<14} | {'0.0% ( 0/20)':<14} | {'0.0%':<13} | {baseline_ppl:>8.2f}  | {'+0.00':<10}")
-    print(f"  {'2. Intact 20-Edits (Calibrated)':<35} | {f'{intact_raw_pct:>5.1f}% ({intact_raw_cnt:>2}/20)':<14} | {f'{intact_bnd_pct:>5.1f}% ({intact_bnd_cnt:>2}/20)':<14} | {f'{intact_gen:>5.1f}%':<13} | {intact_ppl:>8.2f}  | {intact_ppl - baseline_ppl:>+8.2f}")
-    print(f"  {'3. wte Full Reset (Readout 38.6M)':<35} | {f'{metrics_wte_reset[\"raw_retained_pct\"]:>5.1f}% ({metrics_wte_reset[\"raw_retained_count\"]:>2}/20)':<14} | {f'{metrics_wte_reset[\"bound_retained_pct\"]:>5.1f}% ({metrics_wte_reset[\"bound_retained_count\"]:>2}/20)':<14} | {f'{metrics_wte_reset[\"generalization\"]:>5.1f}%':<13} | {metrics_wte_reset['perplexity']:>8.2f}  | {metrics_wte_reset['perplexity'] - intact_ppl:>+8.2f}")
-    print(f"  {'4. Control A: Block Random 38.6M':<35} | {f'{metrics_block_ctrl[\"raw_retained_pct\"]:>5.1f}% ({metrics_block_ctrl[\"raw_retained_count\"]:>2}/20)':<14} | {f'{metrics_block_ctrl[\"bound_retained_pct\"]:>5.1f}% ({metrics_block_ctrl[\"bound_retained_count\"]:>2}/20)':<14} | {f'{metrics_block_ctrl[\"generalization\"]:>5.1f}%':<13} | {metrics_block_ctrl['perplexity']:>8.2f}  | {metrics_block_ctrl['perplexity'] - intact_ppl:>+8.2f}")
-    print(f"  {'5. Control B1: wte Target Rows Only':<35} | {f'{metrics_target_reset[\"raw_retained_pct\"]:>5.1f}% ({metrics_target_reset[\"raw_retained_count\"]:>2}/20)':<14} | {f'{metrics_target_reset[\"bound_retained_pct\"]:>5.1f}% ({metrics_target_reset[\"bound_retained_count\"]:>2}/20)':<14} | {f'{metrics_target_reset[\"generalization\"]:>5.1f}%':<13} | {metrics_target_reset['perplexity']:>8.2f}  | {metrics_target_reset['perplexity'] - intact_ppl:>+8.2f}")
-    print(f"  {'6. Control B2: wte Non-Target Rows':<35} | {f'{metrics_nontarget_reset[\"raw_retained_pct\"]:>5.1f}% ({metrics_nontarget_reset[\"raw_retained_count\"]:>2}/20)':<14} | {f'{metrics_nontarget_reset[\"bound_retained_pct\"]:>5.1f}% ({metrics_nontarget_reset[\"bound_retained_count\"]:>2}/20)':<14} | {f'{metrics_nontarget_reset[\"generalization\"]:>5.1f}%':<13} | {metrics_nontarget_reset['perplexity']:>8.2f}  | {metrics_nontarget_reset['perplexity'] - intact_ppl:>+8.2f}")
+    intact_raw_disp = f"{intact_raw_pct:>5.1f}% ({intact_raw_cnt:>2}/20)"
+    intact_bnd_disp = f"{intact_bnd_pct:>5.1f}% ({intact_bnd_cnt:>2}/20)"
+    intact_gen_disp = f"{intact_gen:>5.1f}%"
+    print(f"  {'2. Intact 20-Edits (Calibrated)':<35} | {intact_raw_disp:<14} | {intact_bnd_disp:<14} | {intact_gen_disp:<13} | {intact_ppl:>8.2f}  | {intact_ppl - baseline_ppl:>+8.2f}")
+    print(f"  {'3. wte Full Reset (Readout 38.6M)':<35} | {fmt_ret(metrics_wte_reset):<14} | {fmt_bnd(metrics_wte_reset):<14} | {fmt_gen(metrics_wte_reset):<13} | {metrics_wte_reset['perplexity']:>8.2f}  | {metrics_wte_reset['perplexity'] - intact_ppl:>+8.2f}")
+    print(f"  {'4. Control A: Block Random 38.6M':<35} | {fmt_ret(metrics_block_ctrl):<14} | {fmt_bnd(metrics_block_ctrl):<14} | {fmt_gen(metrics_block_ctrl):<13} | {metrics_block_ctrl['perplexity']:>8.2f}  | {metrics_block_ctrl['perplexity'] - intact_ppl:>+8.2f}")
+    print(f"  {'5. Control B1: wte Target Rows Only':<35} | {fmt_ret(metrics_target_reset):<14} | {fmt_bnd(metrics_target_reset):<14} | {fmt_gen(metrics_target_reset):<13} | {metrics_target_reset['perplexity']:>8.2f}  | {metrics_target_reset['perplexity'] - intact_ppl:>+8.2f}")
+    print(f"  {'6. Control B2: wte Non-Target Rows':<35} | {fmt_ret(metrics_nontarget_reset):<14} | {fmt_bnd(metrics_nontarget_reset):<14} | {fmt_gen(metrics_nontarget_reset):<13} | {metrics_nontarget_reset['perplexity']:>8.2f}  | {metrics_nontarget_reset['perplexity'] - intact_ppl:>+8.2f}")
     print("  " + "-" * 105)
     
     block_retains = (metrics_block_ctrl["raw_retained_count"] > 0)
