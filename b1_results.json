@@ -1,12 +1,67 @@
 {
   "directive": "B1-1B",
-  "status": "WITHDRAWAL_RECORDED_AND_BOUND_RETENTION_CORRECTED",
+  "status": "CERTIFIED_BY_B1_1B",
+  "producing_commit_sha": "9adf182",
+  "model": "gpt2 (124M parameters)",
+  "execution_device": "Tesla T4 (CUDA)",
   "withdrawn_claim": {
     "claim": "Bound retention is ZERO at all seven learning rates.",
     "cause": "The B1-0B 20-edit validation drew facts 0-19, all of relation `born_city` (rel_type = i // 250). Single-relation ordering forced complete modal collapse, which drove bound retention to zero. Interleaving relations (Fix 1) removed the confound."
   },
-  "note": "Replacement headline will be established following execution of the corrected bound retention and controlled ablation suite.",
-  "producing_commit_sha": "PENDING_KAGGLE_B1_1B_RUN",
-  "model": "gpt2 (124M parameters)",
-  "execution_device": "Tesla T4 (CUDA)"
+  "corrected_headline": "Corrected bound retention at step 20 is 0/20 (0.0%). Output modal collapse survives relation interleaving: modal repetition within each relation accounts for 100.0% of apparent retention. When evaluated against relation-specific modal baselines, naive sequential full-parameter editing binds at most 0 of 20 facts.",
+  "calibrated_lr": 3.0e-05,
+  "is_boundary": false,
+  "step20_fact_audit_summary": {
+    "raw_retained_count": 6,
+    "raw_retained_pct": 30.0,
+    "bound_retained_count": 0,
+    "bound_retained_pct": 0.0
+  },
+  "gate_verdicts": {
+    "pre_edit_accuracy": "PASS",
+    "step1_efficacy": "PASS",
+    "step1_locality_kl_self_defined": "PASS (Inert Intervention)",
+    "step1_perplexity_self_defined": "PASS (Inert Intervention)",
+    "composition_measurability": "MARGINAL PASS"
+  },
+  "calibration_sweep_frontier": {
+    "1.0e-06": {"mean_steps": 24.75, "efficacy_pct": 10.0, "ppl_step1": 36.11, "ppl_step10": 36.50, "ppl_step20": 36.77, "loc_kl": 0.0607, "raw_ret": 3, "bound_ret": 1, "mean_dose": 0.0051, "tot_dose": 0.1020, "pre_grad": 215.10},
+    "3.0e-06": {"mean_steps": 21.80, "efficacy_pct": 25.0, "ppl_step1": 36.36, "ppl_step10": 37.84, "ppl_step20": 38.57, "loc_kl": 0.6963, "raw_ret": 3, "bound_ret": 2, "mean_dose": 0.0129, "tot_dose": 0.2582, "pre_grad": 215.10},
+    "1.0e-05": {"mean_steps": 12.55, "efficacy_pct": 85.0, "ppl_step1": 36.40, "ppl_step10": 39.80, "ppl_step20": 45.14, "loc_kl": 1.3167, "raw_ret": 7, "bound_ret": 1, "mean_dose": 0.0213, "tot_dose": 0.4262, "pre_grad": 215.10},
+    "3.0e-05": {"mean_steps": 5.05, "efficacy_pct": 100.0, "ppl_step1": 36.54, "ppl_step10": 46.19, "ppl_step20": 55.84, "loc_kl": 1.4519, "raw_ret": 6, "bound_ret": 0, "mean_dose": 0.0252, "tot_dose": 0.5050, "pre_grad": 215.10, "calibrated_optimum": true},
+    "1.0e-04": {"mean_steps": 2.00, "efficacy_pct": 100.0, "ppl_step1": 36.50, "ppl_step10": 73.91, "ppl_step20": 86.11, "loc_kl": 2.4721, "raw_ret": 6, "bound_ret": 0, "mean_dose": 0.0339, "tot_dose": 0.6770, "pre_grad": 215.10},
+    "3.0e-04": {"mean_steps": 1.30, "efficacy_pct": 100.0, "ppl_step1": 252.89, "ppl_step10": 141.14, "ppl_step20": 209.38, "loc_kl": 3.9441, "raw_ret": 6, "bound_ret": 0, "mean_dose": 0.0812, "tot_dose": 1.6233, "pre_grad": 215.10},
+    "1.0e-03": {"mean_steps": 3.10, "efficacy_pct": 100.0, "ppl_step1": 8.9e+15, "ppl_step10": 1.6e+04, "ppl_step20": 2085.31, "loc_kl": 2.3863, "raw_ret": 4, "bound_ret": 0, "mean_dose": 0.5189, "tot_dose": 10.3775, "pre_grad": 215.10}
+  },
+  "modal_object_audit_20_edits": {
+    "relations": {
+      "born_city": {"distinct": "1/4", "modal_entity": "oslo", "modal_share_pct": 100.0},
+      "profession": {"distinct": "1/4", "modal_entity": "photographer", "modal_share_pct": 100.0},
+      "plays_instrument": {"distinct": "1/6", "modal_entity": "oboe", "modal_share_pct": 100.0},
+      "capital_of_country": {"distinct": "3/6", "modal_entity": "oslo", "modal_share_pct": 66.7}
+    },
+    "global_distinct": "5/20",
+    "global_modal_entity": "oslo",
+    "global_modal_share_pct": 40.0,
+    "collapse_diagnosis": "WITHIN-RELATION"
+  },
+  "controlled_readout_ablation": {
+    "pre_edit_base": {"raw_ret_pct": 0.0, "bound_ret_pct": 0.0, "gen_pct": 0.0, "ppl": 36.03, "delta_ppl": 0.0},
+    "intact_20_edits": {"raw_ret_pct": 30.0, "bound_ret_pct": 0.0, "gen_pct": 33.3, "ppl": 55.84, "delta_ppl": 19.81},
+    "wte_full_reset": {"raw_ret_pct": 0.0, "bound_ret_pct": 0.0, "gen_pct": 0.0, "ppl": 36.31, "delta_ppl": -19.52},
+    "block_param_matched_control": {"raw_ret_pct": 35.0, "bound_ret_pct": 5.0, "gen_pct": 33.3, "ppl": 54.12, "delta_ppl": -1.72},
+    "wte_target_rows_only": {"raw_ret_pct": 0.0, "bound_ret_pct": 0.0, "gen_pct": 0.0, "ppl": 38.95, "delta_ppl": -16.88},
+    "wte_nontarget_rows_only": {"raw_ret_pct": 30.0, "bound_ret_pct": 0.0, "gen_pct": 33.3, "ppl": 51.19, "delta_ppl": -4.65},
+    "verdict": "READOUT STORAGE ISOLATED (Block subset reset preserves retention; wte reset eliminates it)"
+  },
+  "damage_localization": {
+    "ln_f": {"step1_rel": 1.360e-05, "step20_rel": 1.404e-04},
+    "wte": {"step1_rel": 2.303e-05, "step20_rel": 1.103e-04},
+    "mean_transformer_blocks": {"step1_rel": 4.208e-06, "step20_rel": 3.639e-05},
+    "status": "READOUT & OUTPUT LAYER CONCENTRATED"
+  },
+  "post_edit_checksum": "-62119.86336678",
+  "reproducibility_match": true,
+  "wall_clock_seconds": 4026.52,
+  "exit_code": 0
 }
