@@ -1,44 +1,12 @@
 {
-  "directive": "B1-1A",
-  "status": "CERTIFIED_BY_B1_1A",
-  "producing_commit_sha": "a363aaf",
+  "directive": "B1-1B",
+  "status": "WITHDRAWAL_RECORDED_AND_BOUND_RETENTION_CORRECTED",
+  "withdrawn_claim": {
+    "claim": "Bound retention is ZERO at all seven learning rates.",
+    "cause": "The B1-0B 20-edit validation drew facts 0-19, all of relation `born_city` (rel_type = i // 250). Single-relation ordering forced complete modal collapse, which drove bound retention to zero. Interleaving relations (Fix 1) removed the confound."
+  },
+  "note": "Replacement headline will be established following execution of the corrected bound retention and controlled ablation suite.",
+  "producing_commit_sha": "PENDING_KAGGLE_B1_1B_RUN",
   "model": "gpt2 (124M parameters)",
-  "execution_device": "Tesla T4 (CUDA)",
-  "headline_finding": "Bound retention is ZERO at all seven learning rates from 1e-6 to 1e-3. At the top of the grid the model is destroyed (PPL 3.8e20). At the bottom it is intact (PPL 36.04). At no point does naive sequential full-parameter editing establish a single bound subject-object association. Naive editing has no operating point that simultaneously binds knowledge and preserves capability.",
-  "supporting_measurements": {
-    "generalization_tradeoff": "Generalization at calibrated lr=3e-5 is 33.33% across 20 interleaved edits, versus 100.0% at lr=1e-3. Calibrated operating point produces exact-prompt recall and within-relation modal repetition.",
-    "modal_collapse_within_relation": "Interleaved relation ordering reveals modal collapse is WITHIN-RELATION: born_city 100% 'oslo,', profession 100% 'photographer', plays_instrument 100% 'oboe.', capital_of_country 66.7% 'oslo,'. Global distinct outputs = 5/20. Sequential SGD collapses each relation onto its own single most-recently or most-heavily updated token.",
-    "functional_readout_ablation": "Resetting transformer.wte eliminates 100% of retained knowledge (raw retention 30.0% -> 0.0%, bound retention 25.0% -> 0.0%, generalization 33.3% -> 0.0%) and completely restores WikiText-2 PPL from 55.84 back to 36.31 (baseline 36.03). This proves conclusively that naive sequential SGD stores zero knowledge in transformer representations; all apparent learning and all model damage reside exclusively in the readout projection.",
-    "composition_measurability_noise_floor": "True composition accuracy (12.50%, 25/200) marginally exceeds template-only prior (6.00% +/- 2.88%, 2-sigma = 5.76%, delta = +6.50 pp, barely above 2-sigma). The instrument is valid but operates near the noise floor."
-  },
-  "calibration_sweep_frontier": {
-    "1.0e-05": {"mean_steps": 12.55, "efficacy_pct": 85.0, "ppl_step1": 36.40, "ppl_step10": 39.80, "ppl_step20": 45.14, "loc_kl": 1.3167, "raw_ret": 7, "bound_ret": 6, "mean_dose": 0.0213, "tot_dose": 0.4262, "pre_grad": 215.10},
-    "3.0e-05": {"mean_steps": 5.05, "efficacy_pct": 100.0, "ppl_step1": 36.54, "ppl_step10": 46.19, "ppl_step20": 55.84, "loc_kl": 1.4519, "raw_ret": 6, "bound_ret": 5, "mean_dose": 0.0252, "tot_dose": 0.5050, "pre_grad": 215.10, "calibrated_optimum": true},
-    "1.0e-04": {"mean_steps": 2.00, "efficacy_pct": 100.0, "ppl_step1": 36.50, "ppl_step10": 73.91, "ppl_step20": 86.11, "loc_kl": 2.4721, "raw_ret": 6, "bound_ret": 2, "mean_dose": 0.0339, "tot_dose": 0.6770, "pre_grad": 215.10},
-    "3.0e-04": {"mean_steps": 1.30, "efficacy_pct": 100.0, "ppl_step1": 252.89, "ppl_step10": 141.14, "ppl_step20": 209.38, "loc_kl": 3.9441, "raw_ret": 6, "bound_ret": 0, "mean_dose": 0.0812, "tot_dose": 1.6233, "pre_grad": 215.10},
-    "1.0e-03": {"mean_steps": 3.10, "efficacy_pct": 100.0, "ppl_step1": 8.9e+15, "ppl_step10": 1.6e+04, "ppl_step20": 2085.31, "loc_kl": 2.3863, "raw_ret": 4, "bound_ret": 0, "mean_dose": 0.5189, "tot_dose": 10.3775, "pre_grad": 215.10}
-  },
-  "modal_object_audit_20_edits": {
-    "relations": {
-      "born_city": {"distinct": "1/4", "modal_entity": "oslo,", "modal_share_pct": 100.0},
-      "profession": {"distinct": "1/4", "modal_entity": "photographer", "modal_share_pct": 100.0},
-      "plays_instrument": {"distinct": "1/6", "modal_entity": "oboe.", "modal_share_pct": 100.0},
-      "capital_of_country": {"distinct": "3/6", "modal_entity": "oslo,", "modal_share_pct": 66.7}
-    },
-    "global_distinct": "5/20",
-    "global_modal_entity": "oslo,",
-    "global_modal_share_pct": 40.0,
-    "collapse_diagnosis": "WITHIN-RELATION"
-  },
-  "functional_readout_ablation": {
-    "raw_retention_pct": {"pre_edit": 0.0, "intact_20_edits": 30.0, "wte_reset": 0.0, "delta_pp": -30.0},
-    "bound_retention_pct": {"pre_edit": 0.0, "intact_20_edits": 25.0, "wte_reset": 0.0, "delta_pp": -25.0},
-    "generalization_pct": {"pre_edit": 0.0, "intact_20_edits": 33.3, "wte_reset": 0.0, "delta_pp": -33.3},
-    "wikitext2_perplexity": {"pre_edit": 36.03, "intact_20_edits": 55.84, "wte_reset": 36.31, "delta_ppl": -19.52},
-    "verdict": "CONFIRMED READOUT STORAGE"
-  },
-  "post_edit_checksum": "-62119.86336678",
-  "reproducibility_match": true,
-  "wall_clock_seconds": 2977.86,
-  "exit_code": 0
+  "execution_device": "Tesla T4 (CUDA)"
 }
