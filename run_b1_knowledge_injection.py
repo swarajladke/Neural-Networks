@@ -247,6 +247,75 @@ REAL_COMPOSITION_FACTS: List[Tuple[str, str, str, str, str]] = [
     ("The capital city of Senegal is", "Dakar", "The capital city of Senegal is geographically located on the continent of", "Africa", "country"),
     ("The capital city of Tanzania is", "Dodoma", "The capital city of Tanzania is geographically located on the continent of", "Africa", "country"),
     ("The capital city of Uganda is", "Kampala", "The capital city of Uganda is geographically located on the continent of", "Africa", "country"),
+    ("The capital city of Cuba is", "Havana", "The capital city of Cuba is geographically located on the continent of", "North America", "country"),
+    ("The capital city of Jamaica is", "Kingston", "The capital city of Jamaica is geographically located on the continent of", "North America", "country"),
+    ("The capital city of Panama is", "Panama City", "The capital city of Panama is geographically located on the continent of", "North America", "country"),
+    ("The capital city of Costa Rica is", "San Jose", "The capital city of Costa Rica is geographically located on the continent of", "North America", "country"),
+    ("The capital city of Venezuela is", "Caracas", "The capital city of Venezuela is geographically located on the continent of", "South America", "country"),
+    ("The capital city of Ecuador is", "Quito", "The capital city of Ecuador is geographically located on the continent of", "South America", "country"),
+    ("The capital city of Bolivia is", "Sucre", "The capital city of Bolivia is geographically located on the continent of", "South America", "country"),
+    ("The capital city of Uruguay is", "Montevideo", "The capital city of Uruguay is geographically located on the continent of", "South America", "country"),
+    ("The capital city of Paraguay is", "Asuncion", "The capital city of Paraguay is geographically located on the continent of", "South America", "country"),
+    ("The capital city of Iceland is", "Reykjavik", "The capital city of Iceland is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Croatia is", "Zagreb", "The capital city of Croatia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Serbia is", "Belgrade", "The capital city of Serbia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Bulgaria is", "Sofia", "The capital city of Bulgaria is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Slovakia is", "Bratislava", "The capital city of Slovakia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Slovenia is", "Ljubljana", "The capital city of Slovenia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Estonia is", "Tallinn", "The capital city of Estonia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Latvia is", "Riga", "The capital city of Latvia is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Lithuania is", "Vilnius", "The capital city of Lithuania is geographically located on the continent of", "Europe", "country"),
+    ("The capital city of Singapore is", "Singapore", "The capital city of Singapore is geographically located on the continent of", "Asia", "country"),
+    ("The capital city of Malaysia is", "Kuala Lumpur", "The capital city of Malaysia is geographically located on the continent of", "Asia", "country"),
+    ("The capital city of Mongolia is", "Ulaanbaatar", "The capital city of Mongolia is geographically located on the continent of", "Asia", "country"),
+    ("The capital city of Nepal is", "Kathmandu", "The capital city of Nepal is geographically located on the continent of", "Asia", "country"),
+
+    # 60 Historical Figures -> Birthplace City -> Language
+    ("Albert Einstein was born in the city of", "Ulm", "What official language is spoken in the birthplace of Albert Einstein? The language is", "German", "person"),
+    ("Wolfgang Amadeus Mozart was born in the city of", "Salzburg", "What official language is spoken in the birthplace of Wolfgang Amadeus Mozart? The language is", "German", "person"),
+    ("Leonardo da Vinci was born in the town of", "Vinci", "What official language is spoken in the birthplace of Leonardo da Vinci? The language is", "Italian", "person"),
+    ("Sigmund Freud was born in the town of", "Freiberg", "What official language is spoken in the birthplace of Sigmund Freud? The language is", "German", "person"),
+    ("Charles Darwin was born in the town of", "Shrewsbury", "What official language is spoken in the birthplace of Charles Darwin? The language is", "English", "person"),
+    ("Ludwig van Beethoven was born in the city of", "Bonn", "What official language is spoken in the birthplace of Ludwig van Beethoven? The language is", "German", "person"),
+    ("Isaac Newton was born in the hamlet of", "Woolsthorpe", "What official language is spoken in the birthplace of Isaac Newton? The language is", "English", "person"),
+    ("Marie Curie was born in the city of", "Warsaw", "What official language is spoken in the birthplace of Marie Curie? The language is", "Polish", "person"),
+    ("Napoleon Bonaparte was born in the city of", "Ajaccio", "What official language is spoken in the birthplace of Napoleon Bonaparte? The language is", "French", "person"),
+    ("William Shakespeare was born in the town of", "Stratford", "What official language is spoken in the birthplace of William Shakespeare? The language is", "English", "person"),
+    ("Galileo Galilei was born in the city of", "Pisa", "What official language is spoken in the birthplace of Galileo Galilei? The language is", "Italian", "person"),
+    ("Rene Descartes was born in the town of", "La Haye", "What official language is spoken in the birthplace of Rene Descartes? The language is", "French", "person"),
+    ("Aristotle was born in the city of", "Stagira", "What official language is spoken in the birthplace of Aristotle? The language is", "Greek", "person"),
+    ("Immanuel Kant was born in the city of", "Konigsberg", "What official language is spoken in the birthplace of Immanuel Kant? The language is", "German", "person"),
+    ("Johannes Kepler was born in the city of", "Weil", "What official language is spoken in the birthplace of Johannes Kepler? The language is", "German", "person"),
+    ("Johann Sebastian Bach was born in the town of", "Eisenach", "What official language is spoken in the birthplace of Johann Sebastian Bach? The language is", "German", "person"),
+    ("Johann Wolfgang von Goethe was born in the city of", "Frankfurt", "What official language is spoken in the birthplace of Johann Wolfgang von Goethe? The language is", "German", "person"),
+    ("Michelangelo was born in the town of", "Caprese", "What official language is spoken in the birthplace of Michelangelo? The language is", "Italian", "person"),
+    ("Dante Alighieri was born in the city of", "Florence", "What official language is spoken in the birthplace of Dante Alighieri? The language is", "Italian", "person"),
+    ("Niccolo Machiavelli was born in the city of", "Florence", "What official language is spoken in the birthplace of Niccolo Machiavelli? The language is", "Italian", "person"),
+    ("Voltaire was born in the city of", "Paris", "What official language is spoken in the birthplace of Voltaire? The language is", "French", "person"),
+    ("Jean-Jacques Rousseau was born in the city of", "Geneva", "What official language is spoken in the birthplace of Jean-Jacques Rousseau? The language is", "French", "person"),
+    ("Baruch Spinoza was born in the city of", "Amsterdam", "What official language is spoken in the birthplace of Baruch Spinoza? The language is", "Dutch", "person"),
+    ("John Locke was born in the village of", "Wrington", "What official language is spoken in the birthplace of John Locke? The language is", "English", "person"),
+    ("David Hume was born in the city of", "Edinburgh", "What official language is spoken in the birthplace of David Hume? The language is", "English", "person"),
+    ("Adam Smith was born in the town of", "Kirkcaldy", "What official language is spoken in the birthplace of Adam Smith? The language is", "English", "person"),
+    ("James Clerk Maxwell was born in the city of", "Edinburgh", "What official language is spoken in the birthplace of James Clerk Maxwell? The language is", "English", "person"),
+    ("Michael Faraday was born in the village of", "Newington", "What official language is spoken in the birthplace of Michael Faraday? The language is", "English", "person"),
+    ("Alan Turing was born in the city of", "London", "What official language is spoken in the birthplace of Alan Turing? The language is", "English", "person"),
+    ("Ada Lovelace was born in the city of", "London", "What official language is spoken in the birthplace of Ada Lovelace? The language is", "English", "person"),
+    ("Niels Bohr was born in the city of", "Copenhagen", "What official language is spoken in the birthplace of Niels Bohr? The language is", "Danish", "person"),
+    ("Max Planck was born in the city of", "Kiel", "What official language is spoken in the birthplace of Max Planck? The language is", "German", "person"),
+    ("Werner Heisenberg was born in the city of", "Wurzburg", "What official language is spoken in the birthplace of Werner Heisenberg? The language is", "German", "person"),
+    ("Enrico Fermi was born in the city of", "Rome", "What official language is spoken in the birthplace of Enrico Fermi? The language is", "Italian", "person"),
+    ("Nicolaus Copernicus was born in the city of", "Torun", "What official language is spoken in the birthplace of Nicolaus Copernicus? The language is", "Polish", "person"),
+    ("Leonhard Euler was born in the city of", "Basel", "What official language is spoken in the birthplace of Leonhard Euler? The language is", "German", "person"),
+    ("Carl Friedrich Gauss was born in the city of", "Brunswick", "What official language is spoken in the birthplace of Carl Friedrich Gauss? The language is", "German", "person"),
+    ("Gottfried Wilhelm Leibniz was born in the city of", "Leipzig", "What official language is spoken in the birthplace of Gottfried Wilhelm Leibniz? The language is", "German", "person"),
+    ("Blaise Pascal was born in the city of", "Clermont", "What official language is spoken in the birthplace of Blaise Pascal? The language is", "French", "person"),
+    ("Pierre de Fermat was born in the town of", "Beaumont", "What official language is spoken in the birthplace of Pierre de Fermat? The language is", "French", "person"),
+    ("Antoine Lavoisier was born in the city of", "Paris", "What official language is spoken in the birthplace of Antoine Lavoisier? The language is", "French", "person"),
+    ("Louis Pasteur was born in the town of", "Dole", "What official language is spoken in the birthplace of Louis Pasteur? The language is", "French", "person"),
+    ("Felix Mendelssohn was born in the city of", "Hamburg", "What official language is spoken in the birthplace of Felix Mendelssohn? The language is", "German", "person"),
+    ("Frederic Chopin was born in the village of", "Zelazowa", "What official language is spoken in the birthplace of Frederic Chopin? The language is", "Polish", "person"),
+    ("Pyotr Ilyich Tchaikovsky was born in the town of", "Votkinsk", "What official language is spoken in the birthplace of Pyotr Ilyich Tchaikovsky? The language is", "Russian", "person"),
     ("Leo Tolstoy was born in the estate of", "Yasnaya", "What official language is spoken in the birthplace of Leo Tolstoy? The language is", "Russian", "person"),
     ("Fyodor Dostoevsky was born in the city of", "Moscow", "What official language is spoken in the birthplace of Fyodor Dostoevsky? The language is", "Russian", "person"),
     ("Anton Chekhov was born in the port of", "Taganrog", "What official language is spoken in the birthplace of Anton Chekhov? The language is", "Russian", "person"),
@@ -1317,29 +1386,31 @@ def main():
     print("\n" + "=" * 115)
     print("  [COMPOSITION POSITIVE CONTROL AUDIT -- 200 REAL FACTS]")
     print("=" * 115)
+    n_comp = len(REAL_COMPOSITION_FACTS)
+    assert n_comp == 200, f"Expected 200 composition facts, got {n_comp}"
     n_comp_true_correct = 0
     for edit_p, obj, comp_p, tgt, cat in REAL_COMPOSITION_FACTS:
         p = greedy_predict(model, tokenizer, comp_p, max_new_tokens=5, device=device)
         if check_match(p, tgt):
             n_comp_true_correct += 1
-    acc_comp_true = (n_comp_true_correct / 200) * 100.0
+    acc_comp_true = (n_comp_true_correct / n_comp) * 100.0
     
     rng_comp = random.Random(42)
-    shuf_indices = list(range(200))
+    shuf_indices = list(range(n_comp))
     rng_comp.shuffle(shuf_indices)
-    for i in range(200):
+    for i in range(n_comp):
         if shuf_indices[i] == i:
-            sw = (i + 1) % 200
+            sw = (i + 1) % n_comp
             shuf_indices[i], shuf_indices[sw] = shuf_indices[sw], shuf_indices[i]
             
     n_comp_shuf_correct = 0
-    for i in range(200):
+    for i in range(n_comp):
         comp_p = REAL_COMPOSITION_FACTS[i][2]
         mismatched_target = REAL_COMPOSITION_FACTS[shuf_indices[i]][3]
         p = greedy_predict(model, tokenizer, comp_p, max_new_tokens=5, device=device)
         if check_match(p, mismatched_target):
             n_comp_shuf_correct += 1
-    acc_comp_shuf = (n_comp_shuf_correct / 200) * 100.0
+    acc_comp_shuf = (n_comp_shuf_correct / n_comp) * 100.0
     
     n_comp_tmpl_correct = 0
     for edit_p, obj, comp_p, tgt, cat in REAL_COMPOSITION_FACTS:
@@ -1347,25 +1418,25 @@ def main():
         p = greedy_predict(model, tokenizer, tmpl_p, max_new_tokens=5, device=device)
         if check_match(p, tgt):
             n_comp_tmpl_correct += 1
-    acc_comp_tmpl = (n_comp_tmpl_correct / 200) * 100.0
+    acc_comp_tmpl = (n_comp_tmpl_correct / n_comp) * 100.0
     
     p1 = acc_comp_true / 100.0
     p_shuf = acc_comp_shuf / 100.0
     p_tmpl = acc_comp_tmpl / 100.0
-    se_shuf = math.sqrt((p1 * (1 - p1) / 200) + (p_shuf * (1 - p_shuf) / 200)) * 100.0
+    se_shuf = math.sqrt((p1 * (1 - p1) / n_comp) + (p_shuf * (1 - p_shuf) / n_comp)) * 100.0
     two_sig_shuf = 2.0 * se_shuf
     delta_shuf = acc_comp_true - acc_comp_shuf
     
-    se_tmpl = math.sqrt((p1 * (1 - p1) / 200) + (p_tmpl * (1 - p_tmpl) / 200)) * 100.0
+    se_tmpl = math.sqrt((p1 * (1 - p1) / n_comp) + (p_tmpl * (1 - p_tmpl) / n_comp)) * 100.0
     two_sig_tmpl = 2.0 * se_tmpl
     delta_tmpl = acc_comp_true - acc_comp_tmpl
     
     comp_gate_pass = (delta_shuf > two_sig_shuf) and (delta_tmpl > two_sig_tmpl)
     comp_verdict = "MARGINAL PASS" if (comp_gate_pass and delta_tmpl < (two_sig_tmpl + 2.0)) else ("PASS" if comp_gate_pass else "FAIL")
     
-    print(f"    1. True Composition Accuracy      : {acc_comp_true:>5.2f}% ({n_comp_true_correct}/200)")
-    print(f"    2. Shuffled First-Hop Control ACC : {acc_comp_shuf:>5.2f}% ({n_comp_shuf_correct}/200) | Delta: {delta_shuf:>+5.2f} pp | 2-Sigma Threshold: {two_sig_shuf:.2f} pp")
-    print(f"    3. Template-Only Control ACC      : {acc_comp_tmpl:>5.2f}% ({n_comp_tmpl_correct}/200) | Delta: {delta_tmpl:>+5.2f} pp | 2-Sigma Threshold: {two_sig_tmpl:.2f} pp")
+    print(f"    1. True Composition Accuracy      : {acc_comp_true:>5.2f}% ({n_comp_true_correct}/{n_comp})")
+    print(f"    2. Shuffled First-Hop Control ACC : {acc_comp_shuf:>5.2f}% ({n_comp_shuf_correct}/{n_comp}) | Delta: {delta_shuf:>+5.2f} pp | 2-Sigma Threshold: {two_sig_shuf:.2f} pp")
+    print(f"    3. Template-Only Control ACC      : {acc_comp_tmpl:>5.2f}% ({n_comp_tmpl_correct}/{n_comp}) | Delta: {delta_tmpl:>+5.2f} pp | 2-Sigma Threshold: {two_sig_tmpl:.2f} pp")
     print(f"    STATUS GATE VERDICT               : {comp_verdict} (True exceeds Shuffled: {delta_shuf > two_sig_shuf}, True exceeds Template: {delta_tmpl > two_sig_tmpl})")
     
     # -------------------------------------------------------------------------
