@@ -1,16 +1,27 @@
+HEAD is now at 8305c17 FIX PART 5 BASE MODEL RESTORATION FOR TIED LM_HEAD WEIGHTS
+8305c17 FIX PART 5 BASE MODEL RESTORATION FOR TIED LM_HEAD WEIGHTS
 Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 ===================================================================================================================
- DIRECTIVE B1-1B -- WITHDRAW FALSIFIED HEADLINE, REPAIR BOUND RETENTION, PIN ARMS
+ DIRECTIVE B1-1C -- READOUT-FROZEN EDITING, NON-DEGENERATE BINDING METRIC, AND LOCALIZATION CLOSURE
 ===================================================================================================================
-  [PART 0: FORMAL WITHDRAWAL OF FALSIFIED HEADLINE]
-  WITHDRAWN (B1-0B / B1-1A Part 0): 'Bound retention is ZERO at all seven learning rates.'
-  Cause: The B1-0B 20-edit validation drew facts 0-19, all of relation `born_city`
-  (rel_type = i // 250). Single-relation ordering forced complete modal collapse, which drove
-  bound retention to zero. Interleaving relations (Fix 1) removed the confound.
-  Note: Replacement headline will be established following Part 1's corrected bound retention audit.
+  [PART 0: RECORD CORRECTIONS & ARITHMETIC (DIRECTIVE B1-1C)]
+  1. Authoritative Damage Localization Arithmetic:
+     - Target-Row Reset Removes    : (55.84 - 38.95) / (55.84 - 36.03) = 85.3% of all capability damage
+     - Non-Target-Row Reset Removes: (55.84 - 51.19) / (55.84 - 36.03) = 23.5% of all capability damage
+     - Random Block Subset Removes : (55.84 - 54.12) / (55.84 - 36.03) = 8.7% of all capability damage
+  2. Causal Correction:
+     - B1-0B's measurement (bound retention zero) was correct; its stated cause (single-relation ordering) was wrong.
+     - B1-1A's 25.0% was an artifact of un-normalized trailing punctuation bypassing modal exclusion.
+  3. Sweep Bound Retention Clarification at 1e-6 and 3e-6:
+     - 'Zero at all seven learning rates' is inaccurate: LR=1e-6 reported 1/20, LR=3e-6 reported 2/20.
+     - Audit of these facts below verifies whether they achieved efficacy or were pre-known baseline hits.
+  4. Gate Threshold Re-Scoring:
+     - Withdrawing 'Inert Intervention' label on Gates 3 & 4.
+     - Primary evaluation point is Step 20: Gate 3 Step 20 Locality KL is 1.4519 vs self-defined threshold 0.50 -> FAIL.
+     - Note: Both thresholds (0.50 Locality KL and 2.0x PPL) were self-defined by the agent, not specified by directive.
 ===================================================================================================================
 
-  [0. Determinism Configuration & SDPA Flags Audit (Fix 5)]
+  [0. Determinism Configuration & SDPA Flags Audit]
     cuDNN Deterministic          : True
     cuDNN Benchmark              : False
     CUBLAS_WORKSPACE_CONFIG      : :4096:8
@@ -21,7 +32,7 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
     PyTorch Version              : 2.10.0+cu128
     Transformers Version         : 5.0.0
     Execution Device             : CUDA (Tesla T4)
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1525.10it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1512.53it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -29,7 +40,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1560.24it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1608.92it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -43,19 +54,19 @@ Notes:
     Model Parameters             : 124,439,808 (torch.float32)
 ===================================================================================================================
 
-  [1. Fact Set Construction & Interleaved Ordering (Fix 1 & Fix 5)]
+  [1. Fact Set Construction & Ordering Provenance]
     Injected Facts Total         : 1000
     Reserved Control Probes      : 200 (50 subjects x 4 relation templates)
     b1_facts.json SHA-256        : 285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536
-    Note on SHA-256 Provenance   : SHA changed from B1-0A (a5b8925c...) due to expansion of composition facts to 200.
-    Interleaved 20 Validation Facts Relation Breakdown:
+    Standard Interleaved 20 Validation Facts Relation Breakdown:
       - Relation 'capital_of_country': 6 facts
       - Relation 'plays_instrument  ': 6 facts
       - Relation 'born_city         ': 4 facts
       - Relation 'profession        ': 4 facts
-Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 60529.36 examples/s]
-Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 531571.81 examples/s]
-Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 452203.10 examples/s]
+    Target Token Rows in Validation Set: 22 distinct tokens -> 16,896 params (0.01358% of 124,439,808)
+Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 73693.45 examples/s]
+Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 629692.67 examples/s]
+Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 470538.94 examples/s]
 Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
 The attention mask is not set and cannot be inferred from input because pad token is same as eos token. As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
 `loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
@@ -68,13 +79,13 @@ The attention mask is not set and cannot be inferred from input because pad toke
   [PRE-EDIT BASELINE MEASUREMENTS & PRE-KNOWN FACT AUDIT]
 ===================================================================================================================
     Pre-Edit Fact Accuracy       : 0.10% (1/1000)
-    Measured Per-Prompt Time     : 0.1052 s/prompt
+    Measured Per-Prompt Time     : 0.0925 s/prompt
     Pre-Known Fact Detected      : ID 388 | Prompt: 'Renna Odham works professionally as a' | Object: 'photographer' | Pred: ' photographer and has been a'
     Retention Accounting Status  : Excluded from retention success counting to prevent false attribution.
 
-    Pre-Edit WikiText-2 PPL      : 36.03 (CE Loss = 3.5843) [Evaluated in 50.23s]
+    Pre-Edit WikiText-2 PPL      : 36.03 (CE Loss = 3.5843) [Evaluated in 49.13s]
 
-  [Locality Reference Diagnostics (Fix 4: Pre-Edit Neighborhood Answers)]
+  [Locality Reference Diagnostics (Pre-Edit Neighborhood Answers)]
     Total Neighborhood Prompts Cached: 40
     Distinct Pre-Edit Answers        : 32 / 40 (80.0%)
     Fraction Empty or Function Word  : 0.0% (0/40)
@@ -88,9 +99,28 @@ The attention mask is not set and cannot be inferred from input because pad toke
     STATUS GATE VERDICT               : MARGINAL PASS (True exceeds Shuffled: True, True exceeds Template: True)
 
 ===================================================================================================================
+  [PART 1: FINAL-LAYER HIDDEN STATE ANISOTROPY & LOGIT BOOST RATIO (BLOCKING)]
+===================================================================================================================
+  1. Pairwise Cosine Similarity (20 Edit Prompts)   : Mean = 0.9888 +/- 0.0072
+  2. Within-Relation Cosine Similarities:
+     - Relation 'born_city         '                 : Mean = 0.9997 +/- 0.0001
+     - Relation 'profession        '                 : Mean = 0.9998 +/- 0.0001
+     - Relation 'plays_instrument  '                 : Mean = 0.9997 +/- 0.0002
+     - Relation 'capital_of_country'                 : Mean = 0.9996 +/- 0.0002
+  3. Cross-Relation Cosine Similarity              : Mean = 0.9857 +/- 0.0049
+  4. Edit-to-Control Prompts Cosine (80 Controls)   : Mean = 0.9887 +/- 0.0077
+  5. Implied Selectivity Margin (1.0 - Cross-Cos)   : 0.0113
+  6. Target-Token Logit Boost Ratio (Edited / Mean Control):
+     - Predicted Ratio from Hidden States & dW      : 1.125 (Edit Boost: 1.4903, Mean Ctrl Boost: 1.3247)
+     - Empirically Measured Logit Boost Ratio      : 1.173 (Edit Boost: 1.5613, Mean Ctrl Boost: 1.3307)
+     - Predicted vs Measured Discrepancy           : 1.04x (GUARD THRESHOLD: <= 2.0x)
+  ANISOTROPY HYPOTHESIS CONFIRMED: High prompt cosine similarity drives uniform cross-subject logit boost.
+===================================================================================================================
+
+===================================================================================================================
   [LEARNING-RATE CALIBRATION SWEEP: EFFICACY-VERSUS-DAMAGE FRONTIER]
 ===================================================================================================================
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1424.03it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1533.24it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -98,7 +128,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1479.13it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1707.78it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -106,7 +136,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1460.87it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1856.24it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -114,7 +144,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1515.45it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1834.38it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -122,7 +152,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1447.21it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1622.80it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -130,7 +160,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1469.56it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1654.39it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -138,7 +168,7 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1552.25it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1659.04it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -146,30 +176,32 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-  LR        | Mean Stp | Eff Rate | PPL Step 1 | PPL Step 10 | PPL Step 20 | Loc KL  | Raw Ret | Bnd Ret | Mean Dose | Tot Dose  | Pre Grad
-  ---------------------------------------------------------------------------------------------------------------------------
-  1.0e-06   |    24.75 |    10.0% |      36.11 |       36.50 |       36.77 |  0.0607 |       3 |       1 |    0.0051 |    0.1020 |   215.10
-  3.0e-06   |    21.80 |    25.0% |      36.36 |       37.84 |       38.57 |  0.6963 |       3 |       2 |    0.0129 |    0.2582 |   215.10
-  1.0e-05   |    12.55 |    85.0% |      36.40 |       39.80 |       45.14 |  1.3167 |       7 |       1 |    0.0213 |    0.4262 |   215.10
-  3.0e-05   |     5.05 |   100.0% |      36.54 |       46.19 |       55.84 |  1.4519 |       6 |       0 |    0.0252 |    0.5050 |   215.10
-  1.0e-04   |     2.00 |   100.0% |      36.50 |       73.91 |       86.11 |  2.4721 |       6 |       0 |    0.0339 |    0.6770 |   215.10
-  3.0e-04   |     1.30 |   100.0% |     252.89 |      141.14 |      209.38 |  3.9441 |       6 |       0 |    0.0812 |    1.6233 |   215.10
-  1.0e-03   |     3.10 |   100.0% |    8.9e+15 |     1.6e+04 |     2085.31 |  2.3863 |       4 |       0 |    0.5189 |   10.3775 |   215.10
-  ---------------------------------------------------------------------------------------------------------------------------
+  LR        | Mean Stp | Eff Rate | PPL Step 1 | PPL Step 10 | PPL Step 20 | Loc KL  | Raw Ret | Bnd Ret | Subj-Disc | Mean Dose | Tot Dose  | Pre Grad
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  1.0e-06   |    24.75 |    10.0% |      36.11 |       36.50 |       36.77 |  0.0607 |       3 |       1 |         0 |    0.0051 |    0.1020 |   215.10
+  3.0e-06   |    21.80 |    25.0% |      36.36 |       37.84 |       38.57 |  0.6963 |       3 |       2 |         0 |    0.0129 |    0.2582 |   215.10
+  1.0e-05   |    12.55 |    85.0% |      36.40 |       39.80 |       45.14 |  1.3167 |       7 |       1 |         1 |    0.0213 |    0.4262 |   215.10
+  3.0e-05   |     5.05 |   100.0% |      36.54 |       46.19 |       55.84 |  1.4519 |       6 |       0 |         0 |    0.0252 |    0.5050 |   215.10
+  1.0e-04   |     2.00 |   100.0% |      36.50 |       73.91 |       86.11 |  2.4721 |       6 |       0 |         0 |    0.0339 |    0.6770 |   215.10
+  3.0e-04   |     1.30 |   100.0% |     252.89 |      141.14 |      209.38 |  3.9441 |       6 |       0 |         0 |    0.0812 |    1.6233 |   215.10
+  1.0e-03   |     3.10 |   100.0% |    8.9e+15 |     1.6e+04 |     2085.31 |  2.3863 |       4 |       0 |         0 |    0.5189 |   10.3775 |   215.10
+  ---------------------------------------------------------------------------------------------------------------------------------------
   Note: 'Pre Grad' is Pre-Step1 Grad Norm (~241) on the unedited model before step 1, identical across learning rates.
+
+  [Audit of Bound-Retained Facts at Sub-Threshold Rates (Directive B1-1C Part 0 Item 3)]
+    LR = 1.0e-06 (1 bound-retained facts):
+      - Fact ID 336 (profession): Canonical='photographer', Pred='photographer' | Achieved Efficacy during Edit: True (22 steps) | Pre-known: False
+    LR = 3.0e-06 (2 bound-retained facts):
+      - Fact ID 184 (born_city): Canonical='Oslo', Pred='oslo' | Achieved Efficacy during Edit: True (6 steps) | Pre-known: False
+      - Fact ID 49 (born_city): Canonical='Oslo', Pred='oslo' | Achieved Efficacy during Edit: True (3 steps) | Pre-known: False
 
   Calibrated Operating Point (eta*) : 3.0e-05
   Boundary Selection (is_boundary)  : False
-  Empirical Resolution of Efficacy at lr=1e-5 (Directive B1-1B Part 2):
-    - In B1-0B (commit 9930ed5), facts 0-19 were all 'born_city' (high LM frequency prior -> 100.0% efficacy at 1e-5 in 6.40 steps).
-    - In B1-1A/B1-1B, relations are interleaved ('capital_of_country', 'plays_instrument', 'born_city', 'profession').
-    - Lower-prior instrument and profession facts take more steps to flip greedy top-1; at max_steps=25, 1e-5 reaches 85.0%.
-    - Under the interleaved relation ordering, eta* = 3.0e-05 is the interior operating point achieving >= 95.0% efficacy.
 
 ===================================================================================================================
-  [20-EDIT VALIDATION RUN AT CALIBRATED LR = 3.0e-05 (INTERLEAVED RELATIONS)]
+  [20-EDIT VALIDATION RUN AT CALIBRATED LR = 3.0e-05 (STANDARD INTERLEAVED)]
 ===================================================================================================================
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1542.98it/s, Materializing param=transformer.wte.weight]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1721.12it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -177,111 +209,230 @@ h.{0...11}.attn.bias | UNEXPECTED |  |
 
 Notes:
 - UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-  Step  | Fact ID | Relation           | Efficacy | Gen (3-Para) | Loc KL  | Raw Ret (Cnt/%)  | Bound Ret (Cnt/%)  | PPL       | Rel PPL   | Cum Dose  | Steps
-  -------------------------------------------------------------------------------------------------------------------------------------
-  1     | 776     | capital_of_country |  100.0%  |       33.3%  |  0.1929 |  1/1  (100.0%)   |  0/1  (  0.0%)     |     36.54 |    +1.42% |    0.0218 |     3
-  2     | 507     | plays_instrument   |  100.0%  |       66.7%  |  0.3132 |  2/2  (100.0%)   |  0/2  (  0.0%)     |     37.53 |    +4.16% |    0.0360 |    12
-  3     | 895     | capital_of_country |  100.0%  |       66.7%  |  0.4764 |  3/3  (100.0%)   |  1/3  ( 33.3%)     |     38.25 |    +6.16% |    0.0299 |     4
-  4     | 922     | capital_of_country |  100.0%  |       66.7%  |  0.5703 |  2/4  ( 50.0%)   |  0/4  (  0.0%)     |     38.88 |    +7.92% |    0.0334 |     4
-  5     | 33      | born_city          |  100.0%  |       33.3%  |  0.4511 |  5/5  (100.0%)   |  2/5  ( 40.0%)     |     38.80 |    +7.69% |    0.0313 |     4
-  6     | 483     | profession         |  100.0%  |      100.0%  |  0.8390 |  6/6  (100.0%)   |  2/6  ( 33.3%)     |     39.70 |   +10.19% |    0.0443 |     6
-  7     | 85      | born_city          |  100.0%  |      100.0%  |  0.8928 |  3/7  ( 42.9%)   |  0/7  (  0.0%)     |     39.70 |   +10.19% |    0.0319 |     4
-  8     | 750     | capital_of_country |  100.0%  |        0.0%  |  1.0312 |  4/8  ( 50.0%)   |  0/8  (  0.0%)     |     40.00 |   +11.02% |    0.0235 |     3
-  9     | 354     | profession         |  100.0%  |      100.0%  |  1.2055 |  5/9  ( 55.6%)   |  0/9  (  0.0%)     |     41.27 |   +14.54% |    0.0051 |     1
-  10    | 523     | plays_instrument   |  100.0%  |       33.3%  |  1.1905 |  5/10 ( 50.0%)   |  0/10 (  0.0%)     |     46.19 |   +28.21% |    0.0414 |    13
-  11    | 184     | born_city          |  100.0%  |      100.0%  |  1.1792 |  5/11 ( 45.5%)   |  0/11 (  0.0%)     |     46.33 |   +28.59% |    0.0069 |     1
-  12    | 809     | capital_of_country |  100.0%  |        0.0%  |  1.2616 |  6/12 ( 50.0%)   |  1/12 (  8.3%)     |     46.51 |   +29.08% |    0.0308 |     4
-  13    | 418     | profession         |  100.0%  |       66.7%  |  1.1791 |  5/13 ( 38.5%)   |  1/13 (  7.7%)     |     45.71 |   +26.86% |    0.0220 |     3
-  14    | 615     | plays_instrument   |  100.0%  |       66.7%  |  1.5775 |  6/14 ( 42.9%)   |  1/14 (  7.1%)     |     44.17 |   +22.60% |    0.0271 |     5
-  15    | 682     | plays_instrument   |  100.0%  |        0.0%  |  1.5229 |  6/15 ( 40.0%)   |  1/15 (  6.7%)     |     43.38 |   +20.39% |    0.0278 |     9
-  16    | 501     | plays_instrument   |  100.0%  |        0.0%  |  1.4263 |  6/16 ( 37.5%)   |  1/16 (  6.2%)     |     43.44 |   +20.57% |    0.0317 |    10
-  17    | 760     | capital_of_country |  100.0%  |       66.7%  |  1.4117 |  5/17 ( 29.4%)   |  0/17 (  0.0%)     |     44.91 |   +24.64% |    0.0269 |     8
-  18    | 49      | born_city          |  100.0%  |      100.0%  |  1.4564 |  6/18 ( 33.3%)   |  1/18 (  5.6%)     |     44.77 |   +24.25% |    0.0067 |     1
-  19    | 732     | plays_instrument   |  100.0%  |       33.3%  |  1.4395 |  6/19 ( 31.6%)   |  0/19 (  0.0%)     |     55.94 |   +55.26% |    0.0128 |     4
-  20    | 336     | profession         |  100.0%  |       33.3%  |  1.4519 |  6/20 ( 30.0%)   |  0/20 (  0.0%)     |     55.84 |   +54.97% |    0.0138 |     2
-  -------------------------------------------------------------------------------------------------------------------------------------
+  Step  | Fact ID | Relation           | Efficacy | Gen (3-Para) | Loc KL  | Raw Ret (Cnt/%)  | Bound Ret (Cnt/%)  | Subj-Disc (Cnt/%)  | PPL       | Rel PPL   | Cum Dose  | Steps
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------
+  1     | 776     | capital_of_country |  100.0%  |       33.3%  |  0.1929 |  1/1  (100.0%)   |  0/1  (  0.0%)     |  0/1  (  0.0%)     |     36.54 |    +1.42% |    0.0218 |     3
+  2     | 507     | plays_instrument   |  100.0%  |       66.7%  |  0.3132 |  2/2  (100.0%)   |  0/2  (  0.0%)     |  0/2  (  0.0%)     |     37.53 |    +4.16% |    0.0360 |    12
+  3     | 895     | capital_of_country |  100.0%  |       66.7%  |  0.4764 |  3/3  (100.0%)   |  1/3  ( 33.3%)     |  1/3  ( 33.3%)     |     38.25 |    +6.16% |    0.0299 |     4
+  4     | 922     | capital_of_country |  100.0%  |       66.7%  |  0.5703 |  2/4  ( 50.0%)   |  0/4  (  0.0%)     |  0/4  (  0.0%)     |     38.88 |    +7.92% |    0.0334 |     4
+  5     | 33      | born_city          |  100.0%  |       33.3%  |  0.4511 |  5/5  (100.0%)   |  2/5  ( 40.0%)     |  2/5  ( 40.0%)     |     38.80 |    +7.69% |    0.0313 |     4
+  6     | 483     | profession         |  100.0%  |      100.0%  |  0.8390 |  6/6  (100.0%)   |  2/6  ( 33.3%)     |  2/6  ( 33.3%)     |     39.70 |   +10.19% |    0.0443 |     6
+  7     | 85      | born_city          |  100.0%  |      100.0%  |  0.8928 |  3/7  ( 42.9%)   |  0/7  (  0.0%)     |  0/7  (  0.0%)     |     39.70 |   +10.19% |    0.0319 |     4
+  8     | 750     | capital_of_country |  100.0%  |        0.0%  |  1.0312 |  4/8  ( 50.0%)   |  0/8  (  0.0%)     |  0/8  (  0.0%)     |     40.00 |   +11.02% |    0.0235 |     3
+  9     | 354     | profession         |  100.0%  |      100.0%  |  1.2055 |  5/9  ( 55.6%)   |  0/9  (  0.0%)     |  0/9  (  0.0%)     |     41.27 |   +14.54% |    0.0051 |     1
+  10    | 523     | plays_instrument   |  100.0%  |       33.3%  |  1.1905 |  5/10 ( 50.0%)   |  0/10 (  0.0%)     |  0/10 (  0.0%)     |     46.19 |   +28.21% |    0.0414 |    13
+  11    | 184     | born_city          |  100.0%  |      100.0%  |  1.1792 |  5/11 ( 45.5%)   |  0/11 (  0.0%)     |  0/11 (  0.0%)     |     46.33 |   +28.59% |    0.0069 |     1
+  12    | 809     | capital_of_country |  100.0%  |        0.0%  |  1.2616 |  6/12 ( 50.0%)   |  1/12 (  8.3%)     |  0/12 (  0.0%)     |     46.51 |   +29.08% |    0.0308 |     4
+  13    | 418     | profession         |  100.0%  |       66.7%  |  1.1791 |  5/13 ( 38.5%)   |  1/13 (  7.7%)     |  0/13 (  0.0%)     |     45.71 |   +26.86% |    0.0220 |     3
+  14    | 615     | plays_instrument   |  100.0%  |       66.7%  |  1.5775 |  6/14 ( 42.9%)   |  1/14 (  7.1%)     |  1/14 (  7.1%)     |     44.17 |   +22.60% |    0.0271 |     5
+  15    | 682     | plays_instrument   |  100.0%  |        0.0%  |  1.5229 |  6/15 ( 40.0%)   |  1/15 (  6.7%)     |  1/15 (  6.7%)     |     43.38 |   +20.39% |    0.0278 |     9
+  16    | 501     | plays_instrument   |  100.0%  |        0.0%  |  1.4263 |  6/16 ( 37.5%)   |  1/16 (  6.2%)     |  1/16 (  6.2%)     |     43.44 |   +20.57% |    0.0317 |    10
+  17    | 760     | capital_of_country |  100.0%  |       66.7%  |  1.4117 |  5/17 ( 29.4%)   |  0/17 (  0.0%)     |  0/17 (  0.0%)     |     44.91 |   +24.64% |    0.0269 |     8
+  18    | 49      | born_city          |  100.0%  |      100.0%  |  1.4564 |  6/18 ( 33.3%)   |  1/18 (  5.6%)     |  1/18 (  5.6%)     |     44.77 |   +24.25% |    0.0067 |     1
+  19    | 732     | plays_instrument   |  100.0%  |       33.3%  |  1.4395 |  6/19 ( 31.6%)   |  0/19 (  0.0%)     |  0/19 (  0.0%)     |     55.94 |   +55.26% |    0.0128 |     4
+  20    | 336     | profession         |  100.0%  |       33.3%  |  1.4519 |  6/20 ( 30.0%)   |  0/20 (  0.0%)     |  0/20 (  0.0%)     |     55.84 |   +54.97% |    0.0138 |     2
+  ---------------------------------------------------------------------------------------------------------------------------------------------------------
   Total Cumulative Dose Summed Across All 20 Edits : 0.5050
 
-  [Modal Object Audit: Per-Relation and Global (Fix 1)]
+  [Modal Object Audit: Per-Relation and Global]
     Relation 'born_city         ': Distinct:  1/4  | Modal: 'oslo'          (4/4, 100.0%)
     Relation 'profession        ': Distinct:  1/4  | Modal: 'photographer'  (4/4, 100.0%)
     Relation 'plays_instrument  ': Distinct:  1/6  | Modal: 'oboe'          (6/6, 100.0%)
     Relation 'capital_of_country': Distinct:  3/6  | Modal: 'oslo'          (4/6, 66.7%)
     GLOBAL ACROSS ALL RELATIONS    : Distinct:  5/20 | Modal: 'oslo'          (8/20, 40.0%)
-    OUTPUT COLLAPSE DIAGNOSIS      : WITHIN-RELATION (Modal entity accounts for 40.0% of all outputs)
 
 ===================================================================================================================
-  [STEP 20 DIAGNOSTIC FACT AUDIT: 10-FACT NORMALIZATION & EXCLUSION VERIFICATION (PART 1)]
+  [STEP 20 DIAGNOSTIC FACT AUDIT: 10-FACT REPAIRED VERIFICATION (PART 2)]
 ===================================================================================================================
-  Fact ID | Relation           | Raw Pred        | Norm Pred    | Canonical Obj  | Rel Modal Obj  | Match | Excl  | Bound Ret
-  ----------------------------------------------------------------------------------------------------------------
-  776     | capital_of_country | oslo            | oslo         | Rome           | oslo           | F     | F     | F
-  507     | plays_instrument   | oboe            | oboe         | accordion      | oboe           | F     | F     | F
-  895     | capital_of_country | oslo            | oslo         | Cairo          | oslo           | F     | F     | F
-  922     | capital_of_country | oslo            | oslo         | Lisbon         | oslo           | F     | F     | F
-  33      | born_city          | oslo            | oslo         | Oslo           | oslo           | T     | T     | F
-  483     | profession         | photographer    | photographe  | astronomer     | photographer   | F     | F     | F
-  85      | born_city          | oslo            | oslo         | Prague         | oslo           | F     | F     | F
-  750     | capital_of_country | oslo            | oslo         | Berlin         | oslo           | F     | F     | F
-  354     | profession         | photographer    | photographe  | astronomer     | photographer   | F     | F     | F
-  523     | plays_instrument   | oboe            | oboe         | oboe           | oboe           | T     | T     | F
-  ----------------------------------------------------------------------------------------------------------------
-  Summary across all 20 facts: Raw Retained = 6/20 (30.0%), Bound Retained = 0/20 (0.0%)
-  DIAGNOSTIC OUTCOME: Corrected bound retention is 0/20 (0.0% <= 2/20). Modal collapse survives interleaving: apparent retention was driven by un-normalized exclusion failures.
+  Fact ID | Relation           | Raw Pred               | Norm Pred        | Canonical Obj    | Rel Modal Obj    | Match | Excl  | Bnd Ret | Shared | Subj Disc
+  -------------------------------------------------------------------------------------------------------------------------------------------------
+  776     | capital_of_country | 'Oslo, Oslo Oslo Oslo' | 'oslo'           | 'Rome'           | 'oslo'           | F     | T     | F       |  2/10   | F
+  507     | plays_instrument   | 'oboe.'                | 'oboe'           | 'accordion'      | 'oboe'           | F     | T     | F       |  0/10   | F
+  895     | capital_of_country | 'Oslo, Oslo Oslo Oslo' | 'oslo'           | 'Cairo'          | 'oslo'           | F     | T     | F       |  0/10   | F
+  922     | capital_of_country | 'Oslo, Oslo Oslo Oslo' | 'oslo'           | 'Lisbon'         | 'oslo'           | F     | T     | F       |  0/10   | F
+  33      | born_city          | 'Oslo, Oslo, Oslo'     | 'oslo'           | 'Oslo'           | 'oslo'           | T     | T     | F       |  9/10   | F
+  483     | profession         | 'photographer and astronomer. She' | 'photographer'   | 'astronomer'     | 'photographer'   | F     | T     | F       |  0/10   | F
+  85      | born_city          | 'Oslo, Oslo, Oslo'     | 'oslo'           | 'Prague'         | 'oslo'           | F     | T     | F       |  0/10   | F
+  750     | capital_of_country | 'Oslo, Oslo Oslo Oslo' | 'oslo'           | 'Berlin'         | 'oslo'           | F     | T     | F       |  0/10   | F
+  354     | profession         | 'photographer and astronomer. He' | 'photographer'   | 'astronomer'     | 'photographer'   | F     | T     | F       |  0/10   | F
+  523     | plays_instrument   | 'oboe.'                | 'oboe'           | 'oboe'           | 'oboe'           | T     | T     | F       | 10/10   | F
+  -------------------------------------------------------------------------------------------------------------------------------------------------
+  Summary across all 20 facts: Raw Retained = 6/20 (30.0%), Bound Retained = 0/20 (0.0%), Subject-Discriminable = 0/20 (0.0%)
 
 ===================================================================================================================
-  [FUNCTIONAL READOUT ABLATION WITH PARAMETER-MATCHED & ROW-SELECTIVE CONTROLS (PART 3)]
+  [PART 2: DISTINCT-OBJECT VALIDATION SUBSET (20 UNIQUE OBJECTS ACROSS ALL RELATIONS)]
 ===================================================================================================================
-  Ablation Condition                  | Raw Ret        | Bound Ret      | Gen (3-Para)  | PPL       | Delta PPL 
-  ---------------------------------------------------------------------------------------------------------
-  1. Pre-Edit Base                    | 0.0% ( 0/20)   | 0.0% ( 0/20)   | 0.0%          |    36.03  | +0.00     
-  2. Intact 20-Edits (Calibrated)     |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    55.84  |   +19.81
-  3. wte Full Reset (Readout 38.6M)   |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.31  |   -19.52
-  4. Control A: Block Random 38.6M    |  35.0% ( 7/20) |   5.0% ( 1/20) |  33.3%        |    54.12  |    -1.72
-  5. Control B1: wte Target Rows Only |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    38.95  |   -16.88
-  6. Control B2: wte Non-Target Rows  |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    51.19  |    -4.65
-  ---------------------------------------------------------------------------------------------------------
-  CONTROLLED ABLATION VERDICT : READOUT STORAGE ISOLATED (Block subset reset preserves retention; wte reset eliminates it)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1734.06it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Step  | Fact ID | Relation           | Canonical Object   | Efficacy | Gen      | Loc KL  | Raw Ret        | Subj-Disc Ret    | PPL
+  -----------------------------------------------------------------------------------------------------------------------------
+  1     | 776     | capital_of_country | Rome               |  100.0%  |   33.3% |  0.1929 |  1/1  (100.0%) |  0/1  (  0.0%)   |    36.54
+  2     | 507     | plays_instrument   | accordion          |  100.0%  |   66.7% |  0.3132 |  2/2  (100.0%) |  0/2  (  0.0%)   |    37.53
+  3     | 33      | born_city          | Oslo               |  100.0%  |   33.3% |  0.2508 |  3/3  (100.0%) |  0/3  (  0.0%)   |    37.67
+  4     | 483     | profession         | astronomer         |  100.0%  |  100.0% |  0.7016 |  4/4  (100.0%) |  0/4  (  0.0%)   |    38.87
+  5     | 895     | capital_of_country | Cairo              |  100.0%  |   33.3% |  0.7827 |  5/5  (100.0%) |  1/5  ( 20.0%)   |    39.18
+  6     | 523     | plays_instrument   | oboe               |  100.0%  |   33.3% |  0.7849 |  5/6  ( 83.3%) |  1/6  ( 16.7%)   |    43.47
+  7     | 85      | born_city          | Prague             |  100.0%  |   66.7% |  0.7550 |  3/7  ( 42.9%) |  0/7  (  0.0%)   |    43.33
+  8     | 418     | profession         | surgeon            |  100.0%  |  100.0% |  0.7301 |  3/8  ( 37.5%) |  0/8  (  0.0%)   |    42.98
+  9     | 922     | capital_of_country | Lisbon             |  100.0%  |   66.7% |  0.8161 |  3/9  ( 33.3%) |  1/9  ( 11.1%)   |    42.71
+  10    | 615     | plays_instrument   | drums              |  100.0%  |   66.7% |  1.2692 |  3/10 ( 30.0%) |  1/10 ( 10.0%)   |    41.22
+  11    | 53      | born_city          | Amsterdam          |  100.0%  |  100.0% |  1.2762 |  3/11 ( 27.3%) |  0/11 (  0.0%)   |    41.17
+  12    | 336     | profession         | photographer       |  100.0%  |   33.3% |  1.2699 |  3/12 ( 25.0%) |  0/12 (  0.0%)   |    41.08
+  13    | 750     | capital_of_country | Berlin             |  100.0%  |  100.0% |  1.8016 |  3/13 ( 23.1%) |  0/13 (  0.0%)   |    42.18
+  14    | 682     | plays_instrument   | harmonica          |  100.0%  |    0.0% |  1.7040 |  3/14 ( 21.4%) |  0/14 (  0.0%)   |    41.83
+  15    | 185     | born_city          | Seoul              |  100.0%  |  100.0% |  1.4924 |  3/15 ( 20.0%) |  0/15 (  0.0%)   |    43.42
+  16    | 450     | profession         | sculptor           |  100.0%  |   66.7% |  1.4935 |  4/16 ( 25.0%) |  0/16 (  0.0%)   |    43.63
+  17    | 809     | capital_of_country | Tokyo              |  100.0%  |    0.0% |  1.5911 |  4/17 ( 23.5%) |  0/17 (  0.0%)   |    43.97
+  18    | 501     | plays_instrument   | banjo              |  100.0%  |    0.0% |  1.5075 |  4/18 ( 22.2%) |  1/18 (  5.6%)   |    44.52
+  19    | 174     | born_city          | Vienna             |  100.0%  |  100.0% |  1.5952 |  3/19 ( 15.8%) |  0/19 (  0.0%)   |    43.48
+  20    | 467     | profession         | gardener           |  100.0%  |  100.0% |  1.5512 |  3/20 ( 15.0%) |  0/20 (  0.0%)   |    43.21
+  -----------------------------------------------------------------------------------------------------------------------------
+  Distinct-Object Validation Outcome at Step 20: Raw Retention = 3/20 (15.0%), Subject-Discriminable = 0/20 (0.0%), PPL = 43.21
 
 ===================================================================================================================
-  [PER-MODULE DAMAGE LOCALIZATION: ABSOLUTE RMS & RELATIVE DELTA (FIX 3)]
+  [PART 3: COMPLETE LOCALIZATION PARTITIONS (7 CONDITIONS, BLOCKING)]
 ===================================================================================================================
-  Module Name          | Param Count | Step 1 RMS   | Step 1 Rel   | Step 20 RMS  | Step 20 Rel 
-  ----------------------------------------------------------------------------------------
-  block_00_attn        |   2,363,904 |    1.239e-06 |    6.589e-06 |    1.006e-05 |    5.352e-05
-  block_00_mlp         |   4,723,968 |    4.747e-07 |    4.012e-06 |    4.179e-06 |    3.532e-05
-  block_01_attn        |   2,363,904 |    5.235e-07 |    3.976e-06 |    4.522e-06 |    3.434e-05
-  block_01_mlp         |   4,723,968 |    5.931e-07 |    5.336e-06 |    4.731e-06 |    4.257e-05
-  block_02_attn        |   2,363,904 |    7.981e-07 |    5.769e-06 |    6.718e-06 |    4.856e-05
-  block_02_mlp         |   4,723,968 |    6.616e-07 |    5.742e-06 |    4.716e-06 |    4.093e-05
-  block_03_attn        |   2,363,904 |    8.307e-07 |    6.395e-06 |    6.514e-06 |    5.015e-05
-  block_03_mlp         |   4,723,968 |    4.566e-07 |    4.062e-06 |    3.816e-06 |    3.395e-05
-  block_04_attn        |   2,363,904 |    7.717e-07 |    5.704e-06 |    6.238e-06 |    4.611e-05
-  block_04_mlp         |   4,723,968 |    4.979e-07 |    4.441e-06 |    4.016e-06 |    3.582e-05
-  block_05_attn        |   2,363,904 |    7.110e-07 |    5.900e-06 |    6.575e-06 |    5.456e-05
-  block_05_mlp         |   4,723,968 |    4.411e-07 |    3.901e-06 |    3.650e-06 |    3.228e-05
-  block_06_attn        |   2,363,904 |    6.919e-07 |    5.588e-06 |    6.217e-06 |    5.021e-05
-  block_06_mlp         |   4,723,968 |    3.451e-07 |    2.942e-06 |    3.705e-06 |    3.159e-05
-  block_07_attn        |   2,363,904 |    4.988e-07 |    3.973e-06 |    5.601e-06 |    4.461e-05
-  block_07_mlp         |   4,723,968 |    3.325e-07 |    2.710e-06 |    3.437e-06 |    2.801e-05
-  block_08_attn        |   2,363,904 |    4.250e-07 |    3.375e-06 |    5.900e-06 |    4.685e-05
-  block_08_mlp         |   4,723,968 |    3.457e-07 |    2.630e-06 |    2.897e-06 |    2.204e-05
-  block_09_attn        |   2,363,904 |    4.876e-07 |    3.777e-06 |    4.136e-06 |    3.203e-05
-  block_09_mlp         |   4,723,968 |    2.701e-07 |    1.896e-06 |    2.858e-06 |    2.006e-05
-  block_10_attn        |   2,363,904 |    4.653e-07 |    3.521e-06 |    3.322e-06 |    2.514e-05
-  block_10_mlp         |   4,723,968 |    4.184e-07 |    2.700e-06 |    2.798e-06 |    1.806e-05
-  block_11_attn        |   2,363,904 |    5.215e-07 |    3.618e-06 |    3.897e-06 |    2.704e-05
-  block_11_mlp         |   4,723,968 |    4.082e-07 |    2.434e-06 |    3.292e-06 |    1.963e-05
-  ln_f                 |       1,536 |    2.013e-05 |    1.360e-05 |    2.079e-04 |    1.404e-04
-  wte                  |  38,597,376 |    3.310e-06 |    2.303e-05 |    1.585e-05 |    1.103e-04
-  ----------------------------------------------------------------------------------------
+  Condition                                  | Raw Ret        | Subj-Disc      | Gen (3-Para)  | PPL       | Delta PPL 
+  -------------------------------------------------------------------------------------------------------------------
+  1. Intact 20-Edit Model                    |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    55.84  |   +19.81  
+  2. Readout Only Kept (Blocks+ln_f Reset)   |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    51.88  |    -3.96  
+  3. Readout Removed (wte + ln_f Reset)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.20  |   -19.63  
+  4. Target Rows Only Removed in wte         |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    38.95  |   -16.88  
+  5. Non-Target Rows Only Removed in wte     |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    51.19  |    -4.65  
+  6. Largest-Delta Block Subset (38.6M)      |  30.0% ( 6/20) |   0.0% ( 0/20) |  33.3%        |    52.28  |    -3.55  
+  7. Everything Removed (Pre-Edit Sanity)    |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -19.81  
+  -------------------------------------------------------------------------------------------------------------------
+  SANITY CHECK PASS: Condition 7 reproduces baseline PPL (36.03 vs 36.03) and retention 0/20.
+  LOCALIZATION CLOSURE VERDICT : READOUT STORAGE PROVED (Condition 2 readout-only preserves retention; Condition 3 block-only collapses)
+===================================================================================================================
 
-  Damage Localization Summary (Directive B1-1B Part 3):
-    Final Layer Norm (ln_f) Relative Delta     : Step 1 = 1.360e-05 | Step 20 = 1.404e-04
-    Readout / Embedding (wte) Relative Delta   : Step 1 = 2.303e-05 | Step 20 = 1.103e-04
-    Mean Transformer Block Relative Delta      : Step 1 = 4.208e-06 | Step 20 = 3.639e-05
-    DAMAGE CONCENTRATION STATUS                : READOUT & OUTPUT LAYER CONCENTRATED (ln_f 1.404e-04 and wte 1.103e-04 dominate blocks 3.639e-05)
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1467.43it/s, Materializing param=transformer.wte.weight]
+===================================================================================================================
+  [PART 4: READOUT-FROZEN EDITING SWEEP & VALIDATION (PIVOTAL EXPERIMENT)]
+===================================================================================================================
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1703.10it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1759.18it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1705.08it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1634.11it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1695.24it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  LR (Frozen) | Mean Stp | Eff Rate | PPL Step 1 | PPL Step 10 | PPL Step 20 | Loc KL  | Raw Ret | Subj-Disc | Mean Dose | Tot Dose  | Pre Grad
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  3.0e-05     |    24.90 |     5.0% |      36.13 |       37.61 |       38.24 |  1.4696 |       1 |         0 |    0.0479 |    0.9575 |    63.02
+  1.0e-04     |    17.90 |    55.0% |      36.40 |       40.63 |       41.05 |  2.3066 |       4 |         1 |    0.1065 |    2.1309 |    63.02
+  3.0e-04     |     9.10 |    95.0% |      36.39 |       44.17 |       46.79 |  2.4389 |      10 |         4 |    0.1614 |    3.2273 |    63.02
+  1.0e-03     |     3.55 |   100.0% |      36.45 |       49.28 |       48.05 |  2.3355 |       8 |         2 |    0.2174 |    4.3489 |    63.02
+  3.0e-03     |     8.25 |    75.0% |      37.20 |     2.0e+08 |     6.4e+04 |  4.1347 |       1 |         0 |    0.6906 |   13.8125 |    63.02
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  Operating Point eta*_frozen : 3.0e-04 (Boundary: False)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1675.89it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+
+  [Readout-Frozen Step 20 Module Deltas (Blocks Only)]
+    block_00_attn        : RMS = 1.150e-04 | Rel Delta = 6.120e-04
+    block_00_mlp         : RMS = 4.767e-05 | Rel Delta = 4.029e-04
+    block_01_attn        : RMS = 5.495e-05 | Rel Delta = 4.173e-04
+    block_01_mlp         : RMS = 5.249e-05 | Rel Delta = 4.723e-04
+    block_02_attn        : RMS = 7.755e-05 | Rel Delta = 5.605e-04
+    block_02_mlp         : RMS = 5.717e-05 | Rel Delta = 4.962e-04
+    block_03_attn        : RMS = 7.282e-05 | Rel Delta = 5.606e-04
+    block_03_mlp         : RMS = 4.516e-05 | Rel Delta = 4.017e-04
+    block_04_attn        : RMS = 7.353e-05 | Rel Delta = 5.435e-04
+    block_04_mlp         : RMS = 4.613e-05 | Rel Delta = 4.115e-04
+    block_05_attn        : RMS = 7.513e-05 | Rel Delta = 6.235e-04
+    block_05_mlp         : RMS = 4.231e-05 | Rel Delta = 3.741e-04
+    block_06_attn        : RMS = 6.698e-05 | Rel Delta = 5.410e-04
+    block_06_mlp         : RMS = 4.121e-05 | Rel Delta = 3.514e-04
+    block_07_attn        : RMS = 5.414e-05 | Rel Delta = 4.312e-04
+    block_07_mlp         : RMS = 4.098e-05 | Rel Delta = 3.340e-04
+    block_08_attn        : RMS = 6.223e-05 | Rel Delta = 4.941e-04
+    block_08_mlp         : RMS = 4.087e-05 | Rel Delta = 3.110e-04
+    block_09_attn        : RMS = 6.410e-05 | Rel Delta = 4.964e-04
+    block_09_mlp         : RMS = 4.020e-05 | Rel Delta = 2.822e-04
+    block_10_attn        : RMS = 5.700e-05 | Rel Delta = 4.313e-04
+    block_10_mlp         : RMS = 4.677e-05 | Rel Delta = 3.018e-04
+    block_11_attn        : RMS = 6.704e-05 | Rel Delta = 4.651e-04
+    block_11_mlp         : RMS = 4.491e-05 | Rel Delta = 2.678e-04
+
+  PIVOTAL EXPERIMENT VERDICT : BINDING APPEARS (Subject-discriminable retention = 4/20, PPL = 46.79 at eta = 3.0e-04)
+===================================================================================================================
+
+===================================================================================================================
+  [PART 5: MODAL COLLAPSE DIAGNOSIS: RECENCY OR PRIOR?]
+===================================================================================================================
+  Relation 'born_city         ':
+    - Validation Fact Canonical Objects (in edit order): ['Oslo', 'Prague', 'Oslo', 'Oslo']
+    - Post-Edit Modal Object                           : 'oslo' (4/4, 100.0%)
+    - Recency Check (Modal == Last Edited Fact)         : True (Last Edited: 'Oslo')
+    - Pre-Edit Top-3 Unconditional Prior Candidates   : ['Rome (prob=0.0026, rank=1)', 'Paris (prob=0.0024, rank=2)', 'Berlin (prob=0.0023, rank=3)']
+    - Spearman Rank Correlation (Prior vs Post Freq)  : rho = -1.000
+  Relation 'profession        ':
+    - Validation Fact Canonical Objects (in edit order): ['astronomer', 'astronomer', 'surgeon', 'photographer']
+    - Post-Edit Modal Object                           : 'photographer' (4/4, 100.0%)
+    - Recency Check (Modal == Last Edited Fact)         : True (Last Edited: 'photographer')
+    - Pre-Edit Top-3 Unconditional Prior Candidates   : ['journalist (prob=0.0175, rank=1)', 'photographer (prob=0.0064, rank=2)', 'firefighter (prob=0.0050, rank=3)']
+    - Spearman Rank Correlation (Prior vs Post Freq)  : rho = +1.000
+  Relation 'plays_instrument  ':
+    - Validation Fact Canonical Objects (in edit order): ['accordion', 'oboe', 'drums', 'harmonica', 'banjo', 'oboe']
+    - Post-Edit Modal Object                           : 'oboe' (6/6, 100.0%)
+    - Recency Check (Modal == Last Edited Fact)         : True (Last Edited: 'oboe')
+    - Pre-Edit Top-3 Unconditional Prior Candidates   : ['piano (prob=0.0856, rank=1)', 'guitar (prob=0.0776, rank=2)', 'saxophone (prob=0.0320, rank=3)']
+    - Spearman Rank Correlation (Prior vs Post Freq)  : rho = -0.400
+  Relation 'capital_of_country':
+    - Validation Fact Canonical Objects (in edit order): ['Rome', 'Cairo', 'Lisbon', 'Berlin', 'Tokyo', 'Nairobi']
+    - Post-Edit Modal Object                           : 'oslo' (4/6, 66.7%)
+    - Recency Check (Modal == Last Edited Fact)         : False (Last Edited: 'Nairobi')
+    - Pre-Edit Top-3 Unconditional Prior Candidates   : ['Tokyo (prob=0.0013, rank=1)', 'Rome (prob=0.0012, rank=2)', 'Berlin (prob=0.0008, rank=3)']
+    - Spearman Rank Correlation (Prior vs Post Freq)  : rho = -0.086
+
+  MODAL COLLAPSE DIAGNOSIS VERDICT : RECENCY HYPOTHESIS SUPPORTED (Recency matches on 3/4 relations).
+===================================================================================================================
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1669.68it/s, Materializing param=transformer.wte.weight]
 GPT2LMHeadModel LOAD REPORT from: gpt2
 Key                  | Status     |  | 
 ---------------------+------------+--+-
@@ -297,43 +448,44 @@ Notes:
     Reproducibility Claim        : CERTIFIED (Exact match)
 
 ===================================================================================================================
-  [RESTRUCTURED STAGE B1-1 MULTI-SESSION PROJECTION BREAKDOWN (PART 4)]
+  [RESTRUCTURED STAGE B1-1 MULTI-SESSION PROJECTION BREAKDOWN (RECONCILED)]
 ===================================================================================================================
   Itemized Cost Breakdown per Single 1,000-Edit Run (10 Log Checkpoints):
-    1. T_retention            (1,888 prompts) :   198.6s ( 3.31 min)
-    2. T_prior                (2,000 prompts) :   210.4s ( 3.51 min)
-    3. T_generalization       (3,000 prompts) :   315.6s ( 5.26 min)
-    4. T_composition (at 1000)(1,000 prompts) :   105.2s ( 1.75 min) [Saved intermediate checks]
-    5. T_locality             (  400 prompts) :    42.1s ( 0.70 min)
-    6. T_ppl                  (   10 checks ) :   502.3s ( 8.37 min)
-    7. T_edit optimization    (1,000 edits  ) :   998.9s (16.65 min)
+    1. T_retention            (1,888 prompts) :   174.7s ( 2.91 min)
+    2. T_prior                (2,000 prompts) :   185.0s ( 3.08 min)
+    3. T_generalization       (3,000 prompts) :   277.5s ( 4.63 min)
+    4. T_composition (at 1000)(1,000 prompts) :    92.5s ( 1.54 min) [Saved 1,000 intermediate prompts]
+    5. T_locality             (  400 prompts) :    37.0s ( 0.62 min)
+    6. T_ppl                  (   10 checks ) :   491.3s ( 8.19 min)
+    7. T_edit optimization    (1,000 edits  ) :   786.7s (13.11 min)
     8. T_checkpointing_overhead(10 checkpoints):    15.0s ( 0.25 min)
     ---------------------------------------------------------------
-    Single 1,000-Edit Run Total               :  2388.0s (39.80 min /  0.66 h)
+    Single 1,000-Edit Run Total               :  2059.8s (34.33 min /  0.57 h)
 
   Pinned Method Arms & Multi-Session Schedule (Directive B1, Capped at <= 70% per session):
-    Session 1: M-A Naive Full-Param SGD (1 ordering)   :  2388.0s (39.80 min /  0.66 h) | Budget Used: 10.2% (CEILING < 70%)
-    Session 2: M-B Non-Param Retrieval  (3 orderings)  :  4167.3s (69.45 min /  1.16 h) | Budget Used: 17.8% (CEILING < 70%)
-    Session 3: M-C Constrained 1-MLP    (3 orderings)  :  5366.0s (89.43 min /  1.49 h) | Budget Used: 22.9% (CEILING < 70%)
+    Session 1: M-A Naive Full-Param SGD (1 ordering)   :  2059.8s (34.33 min /  0.57 h) | Budget Used:  8.8% (CEILING < 70%)
+    Session 2: M-B Non-Param Retrieval  (3 orderings)  :  3819.3s (63.66 min /  1.06 h) | Budget Used: 16.3% (CEILING < 70%)
+    Session 3: M-C Constrained 1-MLP    (3 orderings)  :  6533.6s (108.89 min /  1.81 h) | Budget Used: 27.9% (CEILING < 70%)
     ---------------------------------------------------------------
-    Grand Total Compute (All 7 Matrix Runs)            : 11921.2s ( 3.31 h)
+    Grand Total Compute (All 7 Matrix Runs)            : 12412.7s ( 3.45 h)
     Checkpointing & Resume Architecture                : Saves model weights & metric JSON every 100 edits to /kaggle/working.
     Resume Logic                                       : If checkpoint_edit_X.pt exists on startup, loads state and resumes from edit X+1.
 ===================================================================================================================
 
 ===================================================================================================================
-  [FINAL RE-GATED OUTCOMES SUMMARY -- DIRECTIVE B1-1B]
+  [FINAL RE-GATED OUTCOMES SUMMARY -- DIRECTIVE B1-1C]
 ===================================================================================================================
   Gate 1: Pre-Edit Accuracy on 1,000 Facts        : 0.10%                                -> PASS
   Gate 2: Step 1 Efficacy                         : 100.0%                                   -> PASS
-  Gate 3: Step 1 Locality KL (Self-Defined <0.50) : Step 1: 0.1929, Step 20: 1.4519        -> PASS (Inert Intervention)
-  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 1: 36.54, Step 20: 55.84 (Base: 36.03) -> PASS (Inert Intervention)
+  Gate 3: Locality KL (Self-Defined <0.50)        : Step 20: 1.4519 (Step 1: 0.1929)              -> FAIL
+  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 20: 55.84 (Step 1: 36.54, Base: 36.03) -> PASS
   Gate 5: Composition Measurability               : True 12.5% vs Shuf 1.5% (Tmpl: 6.0%) -> MARGINAL PASS
 ===================================================================================================================
 
-  Successfully recorded certified results to 'b1_results.json'.
+  [Final Consistency Assertions (Exit-Code Integrity)]
+  ALL CONSISTENCY ASSERTIONS PASSED (Exit-Code Integrity Verified).
 ===================================================================================================================
- DIRECTIVE B1-1B COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
- Total Wall Clock: 4026.52s
+ DIRECTIVE B1-1C COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
+ Total Wall Clock: 7660.73s
  EXIT_CODE = 0
 ===================================================================================================================
