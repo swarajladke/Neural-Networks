@@ -17,6 +17,7 @@ Key Enhancements in Directive B1-1D:
 """
 
 import os
+import gc
 import sys
 import math
 import time
