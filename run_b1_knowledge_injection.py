@@ -620,15 +620,52 @@ def compute_locality_kl(model: nn.Module, tokenizer: Any, neighborhood_prompts: 
         kl_divs.append(max(0.0, kl))
     return sum(kl_divs) / len(kl_divs) if kl_divs else 0.0
 
-def evaluate_wikitext_perplexity(model: nn.Module, tokenizer: Any, test_tokens: torch.Tensor, device: str = "cuda") -> Tuple[float, float]:
+def load_wikitext2_slice(tokenizer: Any, num_sequences: int = 1000, seq_len: int = 512) -> Tuple[torch.Tensor, str]:
+    """Loads and pins the held-out WikiText-2 [1000, 512] capability slice."""
+    from datasets import load_dataset
+    dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+    full_text = "\n\n".join(list(dataset["validation"]["text"]) + list(dataset["test"]["text"]))
+    tokens = tokenizer.encode(full_text)
+    total_needed = num_sequences * seq_len
+    if len(tokens) < total_needed:
+        tokens = (tokens * ((total_needed // len(tokens)) + 1))
+    selected_tokens = tokens[:total_needed]
+    tensor_slice = torch.tensor(selected_tokens, dtype=torch.long).view(num_sequences, seq_len)
+    slice_hash = hashlib.sha256(tensor_slice.numpy().tobytes()).hexdigest()
+    return tensor_slice, slice_hash
+
+def evaluate_wikitext_perplexity(
+    model: nn.Module,
+    tokenizer: Any,
+    wikitext_slice: torch.Tensor,
+    batch_size: int = 16,
+    device: str = "cuda"
+) -> Tuple[float, float]:
     """Evaluates cross-entropy loss and perplexity on the pinned WikiText-2 slice."""
     model.eval()
-    tokens = test_tokens.to(device)
+    total_loss = 0.0
+    total_tokens = 0
     with torch.no_grad():
-        outputs = model(tokens, labels=tokens)
-        ce_loss = outputs.loss.item()
-    ppl = math.exp(min(ce_loss, 50.0))
-    return ppl, ce_loss
+        for i in range(0, wikitext_slice.shape[0], batch_size):
+            batch = wikitext_slice[i:i + batch_size].to(device)
+            labels = batch.clone()
+            outputs = model(batch, labels=labels)
+            loss = outputs.loss
+            tokens_in_batch = batch.numel()
+            total_loss += loss.item() * tokens_in_batch
+            total_tokens += tokens_in_batch
+            
+    mean_loss = total_loss / total_tokens
+    if math.isnan(mean_loss) or math.isinf(mean_loss):
+        ppl = float("inf")
+    elif mean_loss > 100.0:
+        ppl = 1.0e9
+    else:
+        try:
+            ppl = math.exp(mean_loss)
+        except OverflowError:
+            ppl = 1.0e9
+    return ppl, mean_loss
 
 def compute_spearman_rank_correlation(x: List[float], y: List[float]) -> float:
     """Computes Spearman rank correlation coefficient between two numeric lists."""
@@ -1107,11 +1144,7 @@ def main():
     print(f"    b1_facts.json SHA-256        : {facts_sha}")
     
     # WikiText-2 Slice
-    from datasets import load_dataset
-    wikitext_raw = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
-    wikitext_enc = tokenizer("\n\n".join(wikitext_raw["text"]), return_tensors="pt").input_ids[0]
-    wikitext_slice = wikitext_enc[: 1000 * 512].view(1000, 512)
-    wikitext_hash = hashlib.sha256(wikitext_slice.numpy().tobytes()).hexdigest()
+    wikitext_slice, wikitext_hash = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
     print(f"\n  [2. WikiText-2 Capability Instrument]")
     print(f"    WikiText-2 Slice Shape       : {list(wikitext_slice.shape)}")
     print(f"    WikiText Slice SHA-256       : {wikitext_hash}")
