@@ -2028,7 +2028,9 @@ def main():
     print("=" * 115)
     
     # Evaluate generic templates on unedited base model for unconditional candidate object prior
-    val_model.load_state_dict(params_initial_snap)
+    with torch.no_grad():
+        for name, p in val_model.named_parameters():
+            p.copy_(params_initial_snap[name])
     generic_prompts = {
         "born_city": "A person was born in the city of",
         "profession": "A person worked professionally as a",
