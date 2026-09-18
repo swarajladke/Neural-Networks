@@ -638,7 +638,7 @@ def evaluate_wikitext_perplexity(
     model: nn.Module,
     tokenizer: Any,
     wikitext_slice: torch.Tensor,
-    batch_size: int = 16,
+    batch_size: int = 4,
     device: str = "cuda"
 ) -> Tuple[float, float]:
     """Evaluates cross-entropy loss and perplexity on the pinned WikiText-2 slice."""
@@ -654,6 +654,7 @@ def evaluate_wikitext_perplexity(
             tokens_in_batch = batch.numel()
             total_loss += loss.item() * tokens_in_batch
             total_tokens += tokens_in_batch
+            del batch, labels, outputs, loss
             
     mean_loss = total_loss / total_tokens
     if math.isnan(mean_loss) or math.isinf(mean_loss):
@@ -929,11 +930,14 @@ def edit_fact_naive_ma_sgd(model: nn.Module, tokenizer: Any, fact: Dict[str, Any
         if check_match(curr_pred, fact["object"]):
             break
             
+    final_loss_val = loss.item()
+    model.zero_grad(set_to_none=True)
+    del optimizer, out, loss, input_ids, labels
     return {
         "steps_taken": steps_taken,
         "cumulative_dose": cum_dose,
         "grad_norms": grad_norms,
-        "final_loss": loss.item()
+        "final_loss": final_loss_val
     }
 
 def edit_fact_readout_frozen_sgd(model: nn.Module, tokenizer: Any, fact: Dict[str, Any], lr: float = 3.0e-04, max_steps: int = 25, device: str = "cuda") -> Dict[str, Any]:
@@ -971,11 +975,14 @@ def edit_fact_readout_frozen_sgd(model: nn.Module, tokenizer: Any, fact: Dict[st
         if check_match(curr_pred, fact["object"]):
             break
             
+    final_loss_val = loss.item()
+    model.zero_grad(set_to_none=True)
+    del optimizer, out, loss, input_ids, labels
     return {
         "steps_taken": steps_taken,
         "cumulative_dose": cum_dose,
         "grad_norms": grad_norms,
-        "final_loss": loss.item()
+        "final_loss": final_loss_val
     }
 
 # ==============================================================================
@@ -1128,7 +1135,7 @@ def main():
     
     # Primary model instance
     model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
-    params_initial_snap = {name: p.detach().clone() for name, p in model.named_parameters()}
+    params_initial_snap = {name: p.detach().cpu().clone() for name, p in model.named_parameters()}
     
     # Injected facts & distinct subsets
     facts_1000, template_prior_controls, shuffled_facts = generate_synthetic_facts(1000, seed=42)
@@ -1292,6 +1299,9 @@ def main():
     print("  3. Cumulative Dose of Frozen Arm is ~6x Unfrozen Arm: Binding claim only survives if robust under damage-matched controls.")
     print("  4. If repeat orderings and controls refute binding, headline will formally declare: 'BINDING NOT ESTABLISHED'.")
     print("=" * 115)
+    model.cpu()
+    gc.collect()
+    torch.cuda.empty_cache()
     
     # -------------------------------------------------------------------------
     # PART 1: READOUT-FROZEN ARM INSTRUMENTATION TO UNFROZEN STANDARD (BLOCKING)
@@ -1526,7 +1536,7 @@ def main():
     frz_model.load_state_dict(frz_intact_state)
     block_named_params = [(name, p) for name, p in frz_model.named_parameters() if name.startswith("transformer.h.")]
     target_k = frz_model.transformer.wte.weight.numel() # 38,597,376
-    abs_diffs = [torch.abs(p - params_initial_snap[name]).detach().view(-1) for name, p in block_named_params]
+    abs_diffs = [torch.abs(p.detach().cpu() - params_initial_snap[name]).view(-1) for name, p in block_named_params]
     flat_diffs = torch.cat(abs_diffs)
     topk_vals, _ = torch.topk(flat_diffs, k=target_k)
     threshold_k = topk_vals[-1].item()
@@ -1541,8 +1551,12 @@ def main():
         for name, p in block_named_params:
             sz = p.numel()
             m_sub = mask_flat[offset : offset + sz].view_as(p).to(device)
-            p.data[m_sub] = params_initial_snap[name].data[m_sub]
+            p.data[m_sub] = params_initial_snap[name].data[m_sub].to(device)
             offset += sz
+            
+    del abs_diffs, flat_diffs, topk_vals, mask_flat
+    gc.collect()
+    torch.cuda.empty_cache()
             
     m_fc6 = evaluate_checkpoint_metrics(
         frz_model, tokenizer, frz_injected_facts, frz_injected_facts[-1],
@@ -1735,6 +1749,9 @@ def main():
     else:
         part2_verdict = f"BINDING NOT ESTABLISHED (Controls clean: {controls_clean}, Null degenerate: {is_null_degenerate}, p = {perm_p_val:.4f}, p99 = {p99})"
     print(f"\n  PART 2 RIGOROUS VERDICT : {part2_verdict}")
+    del frz_model, frz_intact_state
+    gc.collect()
+    torch.cuda.empty_cache()
     
     # -------------------------------------------------------------------------
     # PART 3: DAMAGE-MATCHED COMPARISONS (CHANGE 6, BLOCKING)
@@ -1767,14 +1784,14 @@ def main():
             template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
         )
         unfrozen_sweep_data[lr_test] = {
-            "model_state": {k: v.detach().clone() for k, v in u_model.state_dict().items()},
+            "model_state": {k: v.detach().cpu().clone() for k, v in u_model.state_dict().items()},
             "dose": u_dose,
             "mean_steps": sum(u_steps) / len(u_steps),
             "metrics": m_u
         }
         del u_model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        gc.collect()
+        torch.cuda.empty_cache()
         print(f"    - Unfrozen LR {lr_test:.1e} : Locality KL = {m_u['locality_kl']:.4f} | Total Dose = {u_dose:.4f} | PPL = {m_u['perplexity']:.2f} | Subj-Disc = {m_u['subj_discrim_count']}/20")
         
     # Select locality-matched LR (closest to 2.4)
@@ -1935,8 +1952,8 @@ def main():
             "p99": p99_o
         }
         del m_ord
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        gc.collect()
+        torch.cuda.empty_cache()
             
     # Seeds 42, 43, 44 for unfrozen arm (eta = 3.0e-05)
     for seed_ord in [42, 43, 44]:
@@ -1973,8 +1990,8 @@ def main():
             "dose": d_u
         }
         del m_u_ord
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        gc.collect()
+        torch.cuda.empty_cache()
             
     # Print Multi-Ordering Tables
     print("\n  [Multi-Ordering Results Table Across Seeds 42, 43, 44]")
@@ -2044,10 +2061,14 @@ def main():
     
     # Measure pre-edit unconditional prior distribution for all candidates in born_city
     gen_p = "A person was born in the city of"
+    model.to(device)
     inp_g = tokenizer.encode(gen_p, return_tensors="pt").to(device)
     with torch.no_grad():
         logits_g = model(inp_g).logits[0, -1, :]
         probs_g = F.softmax(logits_g, dim=-1)
+    model.cpu()
+    gc.collect()
+    torch.cuda.empty_cache()
         
     full_prior_ranks = []
     for cand_city, _ in CITIES_DATA:
@@ -2055,6 +2076,7 @@ def main():
         p_val = probs_g[t_ids[0]].item() if t_ids else 0.0
         full_prior_ranks.append((cand_city, p_val))
     full_prior_ranks.sort(key=lambda x: x[1], reverse=True)
+    del inp_g, logits_g, probs_g
     
     print(f"\n  Full Pre-Edit Unconditional Prior Ranking for '{chosen_rel}' ({len(full_prior_ranks)} candidates):")
     prior_rank_lookup = {}
@@ -2078,7 +2100,7 @@ def main():
         
     part5_facts = []
     for idx_6, obj_6 in enumerate(chosen_6_objs):
-        subj_name = f"TestSubj_{idx_6}_{seed_ord}"
+        subj_name = f"TestSubj_{idx_6}"
         part5_facts.append({
             "fact_id": 9000 + idx_6,
             "subject": subj_name,
@@ -2101,6 +2123,8 @@ def main():
     is_recency_frz = (modal_p5_frz == last_edited_frz)
     is_prior_frz = (modal_p5_frz == normalize_entity(chosen_6_objs[0]))
     del m_p5_frz
+    gc.collect()
+    torch.cuda.empty_cache()
     
     # Run 6 unfrozen edits
     configure_determinism(42, warn_only=True)
@@ -2114,6 +2138,8 @@ def main():
     is_recency_unf = (modal_p5_unf == last_edited_unf)
     is_prior_unf = (modal_p5_unf == normalize_entity(chosen_6_objs[0]))
     del m_p5_unf
+    gc.collect()
+    torch.cuda.empty_cache()
     
     print(f"\n  Discrimination Experiment Results:")
     print(f"    - Readout-Frozen Arm (eta = 3.0e-04) :")
@@ -2164,7 +2190,7 @@ def main():
     
     # Largest-delta blocks reset
     u_model_abl.load_state_dict(unf_opt_data["model_state"])
-    abs_d_u = [torch.abs(p - params_initial_snap[name]).detach().view(-1) for name, p in u_model_abl.named_parameters() if name.startswith("transformer.h.")]
+    abs_d_u = [torch.abs(p.detach().cpu() - params_initial_snap[name]).view(-1) for name, p in u_model_abl.named_parameters() if name.startswith("transformer.h.")]
     flat_d_u = torch.cat(abs_d_u)
     topk_u, _ = torch.topk(flat_d_u, k=target_k)
     thresh_u = topk_u[-1].item()
@@ -2178,10 +2204,13 @@ def main():
             if name.startswith("transformer.h."):
                 sz = p.numel()
                 m_sub = mask_u[off_u : off_u + sz].view_as(p).to(device)
-                p.data[m_sub] = params_initial_snap[name].data[m_sub]
+                p.data[m_sub] = params_initial_snap[name].data[m_sub].to(device)
                 off_u += sz
     ppl_u_blocks, _ = evaluate_wikitext_perplexity(u_model_abl, tokenizer, wikitext_slice, device=device)
+    del abs_d_u, flat_d_u, topk_u, mask_u
     del u_model_abl
+    gc.collect()
+    torch.cuda.empty_cache()
     
     dmg_tot = u_intact_ppl - baseline_ppl
     pct_dmg_target = ((u_intact_ppl - ppl_u_target) / (dmg_tot + 1e-12)) * 100.0
