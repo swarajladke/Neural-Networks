@@ -1504,7 +1504,7 @@ def main():
         if t_ids:
             distinct_target_tok_ids.add(t_ids[0])
     with torch.no_grad():
-        frz_model.transformer.wte.weight.data[list(distinct_target_tok_ids)] = params_initial_snap["transformer.wte.weight"].data[list(distinct_target_tok_ids)]
+        frz_model.transformer.wte.weight.data[list(distinct_target_tok_ids)] = params_initial_snap["transformer.wte.weight"].data[list(distinct_target_tok_ids)].to(device)
     m_fc4 = evaluate_checkpoint_metrics(
         frz_model, tokenizer, frz_injected_facts, frz_injected_facts[-1],
         all_neighborhood_prompts_40, pre_edit_neighborhood_log_probs,
@@ -1521,7 +1521,7 @@ def main():
     all_wte_row_ids = set(range(frz_model.transformer.wte.weight.shape[0]))
     non_target_ids = list(all_wte_row_ids - distinct_target_tok_ids)
     with torch.no_grad():
-        frz_model.transformer.wte.weight.data[non_target_ids] = params_initial_snap["transformer.wte.weight"].data[non_target_ids]
+        frz_model.transformer.wte.weight.data[non_target_ids] = params_initial_snap["transformer.wte.weight"].data[non_target_ids].to(device)
     m_fc5 = evaluate_checkpoint_metrics(
         frz_model, tokenizer, frz_injected_facts, frz_injected_facts[-1],
         all_neighborhood_prompts_40, pre_edit_neighborhood_log_probs,
@@ -2180,13 +2180,13 @@ def main():
     
     # Target rows reset
     with torch.no_grad():
-        u_model_abl.transformer.wte.weight.data[list(distinct_target_tok_ids)] = params_initial_snap["transformer.wte.weight"].data[list(distinct_target_tok_ids)]
+        u_model_abl.transformer.wte.weight.data[list(distinct_target_tok_ids)] = params_initial_snap["transformer.wte.weight"].data[list(distinct_target_tok_ids)].to(device)
     ppl_u_target, _ = evaluate_wikitext_perplexity(u_model_abl, tokenizer, wikitext_slice, device=device)
     
     # Non-target rows reset
     u_model_abl.load_state_dict(unf_opt_data["model_state"])
     with torch.no_grad():
-        u_model_abl.transformer.wte.weight.data[non_target_ids] = params_initial_snap["transformer.wte.weight"].data[non_target_ids]
+        u_model_abl.transformer.wte.weight.data[non_target_ids] = params_initial_snap["transformer.wte.weight"].data[non_target_ids].to(device)
     ppl_u_nontarget, _ = evaluate_wikitext_perplexity(u_model_abl, tokenizer, wikitext_slice, device=device)
     
     # Largest-delta blocks reset
