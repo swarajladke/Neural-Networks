@@ -74,6 +74,66 @@ def get_sdpa_flags() -> Dict[str, Any]:
     flags["warn_only"] = torch.is_deterministic_algorithms_warn_only_enabled() if hasattr(torch, "is_deterministic_algorithms_warn_only_enabled") else "N/A"
     return flags
 
+def compute_wilson_score_interval(k: int, n: int, z: float = 1.96) -> Tuple[float, float, float]:
+    """Computes exact Wilson score 95% confidence interval for a binomial proportion."""
+    if n == 0:
+        return 0.0, 0.0, 0.0
+    p_hat = k / n
+    denom = 1.0 + (z ** 2) / n
+    center = (p_hat + (z ** 2) / (2 * n)) / denom
+    spread = (z * math.sqrt((p_hat * (1 - p_hat) / n) + (z ** 2) / (4 * (n ** 2)))) / denom
+    lower = max(0.0, center - spread)
+    upper = min(1.0, center + spread)
+    return p_hat, lower, upper
+
+# ==============================================================================
+# FORMAL WITHDRAWALS REGISTRY (DIRECTIVE B1-1E CHANGE 9)
+# ==============================================================================
+WITHDRAWALS_REGISTRY = [
+    {
+        "id": "W1",
+        "title": "8.7% block subset non-selectivity",
+        "prior_claim": "8.7% of blocks are completely non-selective",
+        "reason": "Subset examined was non-representative; full-layer measurement is 17.9% (Directive B1-1D Part 0).",
+        "replacement_status": "WITHDRAWN: Replaced with 17.9% full-layer empirical measurement."
+    },
+    {
+        "id": "W2",
+        "title": "Exclusive relation-level interference",
+        "prior_claim": "Retention failure is driven exclusively by relation-level interference",
+        "reason": "'Exclusively' was unproven; within-relation and cross-relation interference both contribute.",
+        "replacement_status": "WITHDRAWN: Replaced with joint within-relation and cross-relation interference model."
+    },
+    {
+        "id": "W3",
+        "title": "Within-relation collapse",
+        "prior_claim": "Errors collapse strictly within-relation",
+        "reason": "In B1-1D Part 0, errors collapsed across all answer types, not specifically within-relation.",
+        "replacement_status": "WITHDRAWN: Replaced with general answer-type collapse description."
+    },
+    {
+        "id": "W4",
+        "title": "Recency bias support (3 of 4 relations)",
+        "prior_claim": "Recency bias: SUPPORTED (3 of 4 relations showed recency)",
+        "reason": "Re-audit in B1-1E showed 1 clean, 1 contradicting, 2 confounded relations.",
+        "replacement_status": "WITHDRAWN: Recency bias claim retracted pending unconfounded evaluation."
+    },
+    {
+        "id": "W5",
+        "title": "Binding claim refutation from B1-1D",
+        "prior_claim": "BINDING NOT ESTABLISHED (CLAIM REFUTED) from B1-1D",
+        "reason": "B1-1D suffered from metric/stopping regressions yielding 0.0% efficacy across all arms.",
+        "replacement_status": "WITHDRAWN: Run B1-1D declared VOID. Re-evaluated under repaired B1-1E harness."
+    },
+    {
+        "id": "W6",
+        "title": "Broad ROME and MEMIT claims",
+        "prior_claim": "Broad claims about ROME and MEMIT based on B1 experiments",
+        "reason": "ROME and MEMIT were never executed; B1 tests sequential fine-tuning.",
+        "replacement_status": "WITHDRAWN: All claims regarding ROME and MEMIT removed from B1 scope."
+    }
+]
+
 # ==============================================================================
 # 1. CONTROLLED SYNTHETIC FACT SET & TEMPLATE-PRIOR RESERVATIONS
 # ==============================================================================
@@ -98,106 +158,93 @@ CITIES_DATA = [
     ("Lisbon", "Portuguese"), ("Tokyo", "Japanese"), ("Paris", "French"),
     ("Rome", "Italian"), ("Berlin", "German"), ("Madrid", "Spanish"),
     ("Athens", "Greek"), ("Cairo", "Arabic"), ("Dublin", "English"),
-    ("Stockholm", "Swedish"), ("Oslo", "Norwegian"), ("Warsaw", "Polish"),
-    ("Vienna", "German"), ("Prague", "Czech"), ("Budapest", "Hungarian"),
-    ("Helsinki", "Finnish"), ("Copenhagen", "Danish"), ("Brussels", "French"),
-    ("Amsterdam", "Dutch"), ("Bern", "German"), ("Seoul", "Korean"),
-    ("Bangkok", "Thai"), ("Santiago", "Spanish"), ("Bogota", "Spanish"),
-    ("Lima", "Spanish"), ("Ankara", "Turkish"), ("Nairobi", "Swahili"),
-    ("Jakarta", "Indonesian"), ("Riyadh", "Arabic"), ("Canberra", "English"),
-    ("Ottawa", "English"), ("Brasilia", "Portuguese"), ("Beijing", "Chinese"),
-    ("Moscow", "Russian"), ("New Delhi", "Hindi"), ("Buenos Aires", "Spanish"),
-    ("Mexico City", "Spanish"), ("Manila", "Filipino"), ("Hanoi", "Vietnamese"),
-    ("Tehran", "Persian")
+    ("Vienna", "German"), ("Warsaw", "Polish"), ("Seoul", "Korean"),
+    ("Prague", "Czech"), ("Stockholm", "Swedish"), ("Oslo", "Norwegian"),
+    ("Helsinki", "Finnish"), ("Budapest", "Hungarian"), ("Copenhagen", "Danish"),
+    ("Brussels", "French"), ("Amsterdam", "Dutch")
 ]
 
 PROFESSIONS_DATA = [
-    ("astronomer", "telescope"), ("biologist", "microscope"), ("chemist", "beaker"),
-    ("physicist", "laser"), ("geologist", "hammer"), ("meteorologist", "barometer"),
-    ("botanist", "trowel"), ("zoologist", "binoculars"), ("paleontologist", "chisel"),
-    ("surgeon", "scalpel"), ("architect", "compass"), ("photographer", "camera"),
-    ("carpenter", "saw"), ("electrician", "multimeter"), ("blacksmith", "anvil"),
-    ("sculptor", "chisel"), ("mechanic", "wrench"), ("dentist", "drill"),
-    ("surveyor", "theodolite"), ("jeweler", "loupe"), ("gardener", "shears"),
-    ("tailor", "shears"), ("optometrist", "phoropter"), ("pilot", "altimeter")
+    ("surgeon", "scalpel"), ("astronomer", "telescope"), ("violinist", "violin"),
+    ("pilot", "airplane"), ("carpenter", "hammer"), ("dentist", "drill"),
+    ("chef", "knife"), ("blacksmith", "anvil"), ("gardener", "shovel"),
+    ("architect", "blueprint"), ("journalist", "microphone"), ("mechanic", "wrench"),
+    ("pharmacist", "medicine"), ("firefighter", "hose"), ("photographer", "camera"),
+    ("baker", "oven"), ("sculptor", "chisel"), ("optometrist", "lenses"),
+    ("electrician", "multimeter"), ("tailor", "needle")
 ]
 
 INSTRUMENTS_DATA = [
-    ("violin", "strings"), ("cello", "strings"), ("flute", "woodwinds"),
-    ("clarinet", "woodwinds"), ("trumpet", "brass"), ("trombone", "brass"),
-    ("tuba", "brass"), ("oboe", "woodwinds"), ("harp", "strings"),
-    ("accordion", "keys"), ("piano", "keys"), ("guitar", "strings"),
-    ("drums", "percussion"), ("saxophone", "woodwinds"), ("harmonica", "woodwinds"),
-    ("banjo", "strings"), ("mandolin", "strings"), ("bassoon", "woodwinds"),
-    ("timpani", "percussion"), ("xylophone", "percussion"), ("viola", "strings"),
-    ("french horn", "brass"), ("ukulele", "strings"), ("marimba", "percussion")
+    ("violin", "strings"), ("flute", "woodwinds"), ("guitar", "strings"),
+    ("piano", "keys"), ("drums", "percussion"), ("trumpet", "brass"),
+    ("cello", "strings"), ("saxophone", "woodwinds"), ("clarinet", "woodwinds"),
+    ("trombone", "brass"), ("harp", "strings"), ("accordion", "keys"),
+    ("banjo", "strings"), ("oboe", "woodwinds"), ("harmonica", "wind")
+]
+
+INVENTED_COUNTRIES = [
+    "Vandoria", "Aldoria", "Baeloria", "Crestovia", "Drakoria", "Elvoria",
+    "Fendaria", "Glynoria", "Halidor", "Iridia", "Kaeloria", "Luminor",
+    "Myrrhia", "Noveria", "Oakhaven", "Phaeror", "Quorath", "Rivenia",
+    "Sylvoria", "Thaloria", "Ulvoria", "Valoria", "Westeria", "Xanthia",
+    "Ylandia", "Zephyria"
 ]
 
 CAPITALS_DATA = [
-    ("France", "Paris"), ("Japan", "Tokyo"), ("Germany", "Berlin"),
-    ("Italy", "Rome"), ("Spain", "Madrid"), ("Egypt", "Cairo"),
-    ("Canada", "Ottawa"), ("Australia", "Canberra"), ("Brazil", "Brasilia"),
-    ("Greece", "Athens"), ("China", "Beijing"), ("Russia", "Moscow"),
-    ("India", "New Delhi"), ("Argentina", "Buenos Aires"), ("Mexico", "Mexico City"),
-    ("South Korea", "Seoul"), ("Norway", "Oslo"), ("Sweden", "Stockholm"),
-    ("Poland", "Warsaw"), ("Portugal", "Lisbon"), ("Turkey", "Ankara"),
-    ("Thailand", "Bangkok"), ("Kenya", "Nairobi"), ("Chile", "Santiago"),
-    ("Colombia", "Bogota"), ("Peru", "Lima"), ("Ireland", "Dublin"),
-    ("Austria", "Vienna"), ("Switzerland", "Bern"), ("Netherlands", "Amsterdam"),
-    ("Belgium", "Brussels"), ("Denmark", "Copenhagen"), ("Finland", "Helsinki"),
-    ("Czech Republic", "Prague"), ("Hungary", "Budapest"), ("Romania", "Bucharest"),
-    ("Ukraine", "Kyiv"), ("South Africa", "Pretoria"), ("Nigeria", "Abuja"),
-    ("Morocco", "Rabat")
+    ("Lisbon", "Europe"), ("Tokyo", "Asia"), ("Cairo", "Africa"),
+    ("Brasilia", "South America"), ("Ottawa", "North America"), ("Canberra", "Australia"),
+    ("Paris", "Europe"), ("Rome", "Europe"), ("Berlin", "Europe"),
+    ("Nairobi", "Africa"), ("Bangkok", "Asia"), ("Santiago", "South America")
 ]
 
 NEIGHBORHOOD_POOL = {
     "born_city": [
-        "The birthplace of Leonardo da Vinci was the town of",
-        "Isaac Newton was born in the manor house at",
+        "Albert Einstein was born in the city of",
+        "Isaac Newton was born in the town of",
+        "Marie Curie was born in the city of",
+        "Leonardo da Vinci was born in the town of",
         "Wolfgang Amadeus Mozart was born in the city of",
-        "Albert Einstein was born in the German city of",
-        "Marie Curie was born in the capital city of",
-        "Ludwig van Beethoven was born in the town of",
-        "Charles Darwin was born in the English town of",
         "William Shakespeare was born in the town of",
-        "Galileo Galilei was born in the Tuscan city of",
-        "Rene Descartes was born in the French town of"
+        "Charles Darwin was born in the town of",
+        "Ludwig van Beethoven was born in the city of",
+        "Galileo Galilei was born in the city of",
+        "Sigmund Freud was born in the town of"
     ],
     "profession": [
-        "Marie Curie spent her scientific career working as a",
-        "Albert Einstein was employed as a theoretical",
-        "Louis Pasteur made history working as a French",
-        "Charles Darwin was famous for working as a",
-        "Thomas Edison was renowned for working as an",
-        "Alexander Fleming made his discoveries as a",
-        "Galileo Galilei observed the cosmos as an",
-        "Nikola Tesla designed electrical machinery as an",
-        "Gregor Mendel established genetics while working as a",
-        "Ada Lovelace wrote early programs working as a"
+        "Pablo Picasso worked professionally as an",
+        "Louis Pasteur worked professionally as a",
+        "Nikola Tesla worked professionally as a",
+        "Johannes Kepler worked professionally as an",
+        "Alexander Fleming worked professionally as a",
+        "Ernest Hemingway worked professionally as a",
+        "Thomas Edison worked professionally as an",
+        "Robert Oppenheimer worked professionally as a",
+        "Gregor Mendel worked professionally as a",
+        "Alan Turing worked professionally as a"
     ],
     "plays_instrument": [
-        "Jimi Hendrix became a legend by playing the",
-        "Yo-Yo Ma is internationally celebrated for playing the",
-        "Miles Davis changed music history by playing the",
-        "John Coltrane was renowned for performing on the",
-        "Louis Armstrong was famous for playing the jazz",
-        "Glenn Gould became iconic for playing the classical",
-        "Ringo Starr performed with the Beatles by playing the",
-        "Eric Clapton is renowned for masterfully playing the",
-        "Pablo Casals was recognized globally for playing the",
-        "Yehudi Menuhin moved audiences worldwide by playing the"
+        "Miles Davis was famous for playing the",
+        "Jimi Hendrix was famous for playing the",
+        "Yo-Yo Ma was famous for playing the",
+        "John Coltrane was famous for playing the",
+        "Louis Armstrong was famous for playing the",
+        "Glenn Gould was famous for playing the",
+        "Eric Clapton was famous for playing the",
+        "Ringo Starr was famous for playing the",
+        "Yehudi Menuhin was famous for playing the",
+        "Pablo Casals was famous for playing the"
     ],
     "capital_of_country": [
-        "The national government of France meets in the capital of",
-        "The political center and capital of Germany is",
-        "The imperial seat and capital of Japan is the city of",
-        "The official federal capital of Australia is the city of",
-        "The seat of power and capital of Italy is located in",
-        "The historic government and capital of the United Kingdom is",
-        "The central administration and capital of Canada is",
-        "The government of Spain is headquartered in the capital of",
-        "The ancient seat of government and capital of Greece is",
-        "The capital of Egypt is the sprawling metropolis of"
+        "The capital city of France is",
+        "The capital city of Japan is",
+        "The capital city of Germany is",
+        "The capital city of Italy is",
+        "The capital city of Spain is",
+        "The capital city of Egypt is",
+        "The capital city of Canada is",
+        "The capital city of Australia is",
+        "The capital city of Brazil is",
+        "The capital city of Greece is"
     ]
 }
 
@@ -578,14 +625,25 @@ def get_distinct_object_facts(facts: List[Dict[str, Any]], seed: int = 42) -> Li
 # 2. STRING NORMALIZATION & METRIC HELPERS
 # ==============================================================================
 def normalize_entity(s: str) -> str:
-    """Strips whitespace, lowercases, and removes leading/trailing punctuation."""
+    """
+    Normalizes a prediction or canonical target string for fair modal comparison:
+    lowercased, stripped of leading/trailing whitespace and punctuation.
+    Extracts the primary target token (matching check_match semantics).
+    """
     if not s:
         return ""
-    return s.strip().strip(".,;:!?\"'()[]{}").lower()
+    cleaned = s.strip().lower().strip(" \t\n.,!?;:'\"-")
+    tokens = [t.strip(" \t\n.,!?;:'\"-") for t in cleaned.split() if t.strip(" \t\n.,!?;:'\"-")]
+    return tokens[0] if tokens else ""
 
 def check_match(prediction: str, target: str) -> bool:
-    """Exact case-insensitive match after entity normalization."""
-    return normalize_entity(prediction) == normalize_entity(target)
+    pred_clean = prediction.strip().lower()
+    target_clean = target.strip().lower()
+    if pred_clean.startswith(target_clean):
+        tail = pred_clean[len(target_clean):]
+        if len(tail) == 0 or tail[0] in " \t\n.,!?;:'\"-":
+            return True
+    return False
 
 def greedy_predict(model: nn.Module, tokenizer: Any, prompt: str, max_new_tokens: int = 5, device: str = "cuda") -> str:
     """Greedy generation returning the continuation string."""
@@ -1100,7 +1158,7 @@ def main():
     t0_suite = time.time()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("=" * 115)
-    print(" DIRECTIVE B1-1D -- QUALIFY OR KILL THE READOUT-FROZEN BINDING CLAIM")
+    print(" DIRECTIVE B1-1E -- HARNESS REGRESSION REPAIR AND RE-RUN OF B1-1D")
     print("=" * 115)
     
     # -------------------------------------------------------------------------
@@ -1139,33 +1197,95 @@ def main():
     total_model_params = sum(p.numel() for p in model.parameters())
     params_initial_snap = {name: p.detach().cpu().clone() for name, p in model.named_parameters()}
     
-    # Injected facts & distinct subsets
-    facts_1000, template_prior_controls, shuffled_facts = generate_synthetic_facts(1000, seed=42)
-    val_20_facts = shuffled_facts[:20]
-    distinct_object_facts_seed42 = get_distinct_object_facts(facts_1000, seed=42)
+    # =========================================================================
+    # PART A: FACT-SET PROVENANCE RESOLUTION & CHECKSUM AUDIT (CHANGES 1 & 4)
+    # =========================================================================
+    print("\n" + "=" * 115)
+    print("  [PART A: FACT-SET PROVENANCE DIAGNOSIS & CHECKSUM AUDIT (CHANGES 1 & 4)]")
+    print("=" * 115)
+    print("  1. B1-1D Hash Calculation Code Audit:")
+    print("     Script Line (commit 4041bf2:run_b1_knowledge_injection.py:1147):")
+    print("     facts_sha = hashlib.sha256(json.dumps(facts_1000, sort_keys=True).encode()).hexdigest()")
+    
+    print("\n  2. Git Diff Audit of Candidate Pools (B1-1C commit 8305c17 vs B1-1D commit 4041bf2):")
+    print("     Pool Name           | B1-1C (8305c17) Count | B1-1D (4041bf2) Count | Change Summary")
+    print("     --------------------+-----------------------+-----------------------+------------------------------------------")
+    print("     CITIES_DATA         |                    20 |                    40 | Expanded (+20 extra world cities)")
+    print("     PROFESSIONS_DATA    |                    20 |                    24 | Altered/expanded (+4 extra professions)")
+    print("     INSTRUMENTS_DATA    |                    15 |                    24 | Altered/expanded (+9 extra instruments)")
+    print("     CAPITALS_DATA       |                    12 |                    40 | Re-keyed to Country-Capital (+28 entries)")
+    print("     INVENTED_COUNTRIES  |                    26 |                    50 | Expanded (+24 extra invented nations)")
+    
+    print("\n  3. Fact Generation & Disk Storage Audit:")
+    print("     In B1-1D (commit 4041bf2), facts were dynamically generated in memory at runtime via generate_synthetic_facts().")
+    print("     No b1_facts.json file existed on disk or was tracked in git; the disk load path was absent.")
+    
+    print("\n  4. Root Cause Statement:")
+    print("     CAUSE: B1-1D dynamically re-generated facts using expanded candidate pools (40 cities, 24 professions),")
+    print("     altering canonical objects while carrying over the B1-1C hash (285638ad...) in b1_results.json and")
+    print("     generating a divergent runtime hash (22d831952258e04c560b3ad0c8e12cedb00f074c62fd48716e7c53e457f2c5c1).")
+    
+    print("\n  5. Loading Pinned Reference Fact File directly from disk:")
+    with open("b1_facts.json", "rb") as f:
+        facts_file_bytes = f.read()
+    facts_file_sha = hashlib.sha256(facts_file_bytes).hexdigest()
+    facts_1000 = json.loads(facts_file_bytes.decode("utf-8"))
+    print(f"     FACTS FILE SHA-256: {facts_file_sha}")
+    print(f"     FACTS LOADED: {len(facts_1000)}")
+    print(f"     FACTS SOURCE: b1_facts.json (committed file)")
+    assert facts_file_sha == "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536", (
+        f"FATAL: b1_facts.json SHA-256 mismatch! Expected 285638ad..., got {facts_file_sha}"
+    )
+    
+    # 10 diagnostic facts verification
+    expected_10_facts = {
+        776: "Rome", 507: "accordion", 33: "Oslo", 483: "astronomer", 85: "Prague",
+        523: "oboe", 922: "Lisbon", 354: "astronomer", 750: "Berlin", 615: "drums"
+    }
+    print("\n  6. Ten Diagnostic Canonical Objects Ground Truth Audit:")
+    for fid, exp_obj in expected_10_facts.items():
+        act_obj = facts_1000[fid]["object"]
+        print(f"     Fact {fid:>3} ({facts_1000[fid]['relation']:<18}): Expected '{exp_obj:<12}', Got '{act_obj:<12}' -> Match: {act_obj == exp_obj}")
+        assert act_obj == exp_obj, f"Mismatch on Fact {fid}: expected {exp_obj}, got {act_obj}"
+        
+    # Generate reserved control probes and subsets
+    _, template_prior_controls, shuffled_facts = generate_synthetic_facts(1000, seed=42)
+    val_20_facts = get_distinct_object_facts(facts_1000, seed=42)
+    distinct_object_facts_seed42 = val_20_facts
     distinct_object_facts_seed43 = get_distinct_object_facts(facts_1000, seed=43)
     distinct_object_facts_seed44 = get_distinct_object_facts(facts_1000, seed=44)
     
-    facts_sha = hashlib.sha256(json.dumps(facts_1000, sort_keys=True).encode()).hexdigest()
-    print(f"\n  [1. Fact Set Construction & Ordering Provenance]")
-    print(f"    Injected Facts Total         : {len(facts_1000)}")
-    print(f"    Reserved Control Probes      : {len(template_prior_controls)} (50 subjects x 4 relations)")
-    print(f"    b1_facts.json SHA-256        : {facts_sha}")
+    # Checksum discrepancy diagnostics (Change 4)
+    print("\n  7. Checksum Discrepancy Diagnostics (Change 4):")
+    print("     Parameter Summation Code: def compute_model_checksum(m): return sum(p.sum().item() for p in m.parameters())")
+    chk_f32 = sum(p.sum().item() for p in model.parameters())
+    chk_f64 = sum(p.double().sum().item() for p in model.parameters())
+    print(f"     Fresh Model Sum (float32 accumulation): {chk_f32:.8f}")
+    print(f"     Fresh Model Sum (float64 accumulation): {chk_f64:.8f}")
+    print(f"     B1-1C Recorded Checksum (commit 8305c17): -62119.87976855")
+    print(f"     B1-1D Recorded Checksum (commit 788ef41): -62119.88005775")
+    print(f"     PyTorch Version     : {torch.__version__}")
+    print(f"     CUDA Version        : {torch.version.cuda if torch.cuda.is_available() else 'N/A'}")
+    print(f"     cuDNN Version       : {torch.backends.cudnn.version() if torch.cuda.is_available() else 'N/A'}")
+    print(f"     Transformers Version: {transformers.__version__}")
+    print(f"     Deterministic Algos Active During Init: {torch.are_deterministic_algorithms_enabled()}")
+    chk_diff_mag = abs(chk_f32 - (-62119.87976855))
+    chk_rel_diff = chk_diff_mag / 62119.88 * 100.0
+    print(f"     CAUSE: NOT DETERMINED — difference is {chk_rel_diff:.8f}% of total magnitude, within single-precision epsilon (1.19e-7 * 62119 = 0.0074)")
+    print("=" * 115)
     
     # WikiText-2 Slice
     wikitext_slice, wikitext_hash = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
-    print(f"\n  [2. WikiText-2 Capability Instrument]")
+    print(f"\n  [WikiText-2 Capability Instrument]")
     print(f"    WikiText-2 Slice Shape       : {list(wikitext_slice.shape)}")
     print(f"    WikiText Slice SHA-256       : {wikitext_hash}")
     
-    # -------------------------------------------------------------------------
-    # COMPUTE PROJECTION WITH HARD ABORT (CHANGE 4)
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # PART E: COMPUTE PROJECTION WITH HARD 70% CEILING (CHANGES 4 & 8)
+    # =========================================================================
     print("\n" + "=" * 115)
-    print("  [COMPUTE PROJECTION & TIME BUDGET WITH HARD ABORT (CHANGE 4)]")
+    print("  [PART E: COMPUTE PROJECTION & TIME BUDGET WITH HARD ABORT (CHANGE 8)]")
     print("=" * 115)
-    
-    # Measure baseline PPL time and prompt time
     t_ppl_start = time.time()
     baseline_ppl, baseline_loss = evaluate_wikitext_perplexity(model, tokenizer, wikitext_slice, device=device)
     t_ppl_eval = time.time() - t_ppl_start
@@ -1178,31 +1298,230 @@ def main():
     print(f"    Measured Baseline WikiText-2 PPL: {baseline_ppl:.2f} (CE Loss = {baseline_loss:.4f}) [Evaluated in {t_ppl_eval:.2f}s]")
     print(f"    Measured Per-Prompt Eval Time   : {t_prompt_eval:.4f}s / prompt")
     
-    # Itemized budget projection
+    # Itemized budget projection across all parts
+    t_gate0_proj = (20 * 5 * 0.04) + (2 * t_ppl_eval) + (2 * 20 * t_prompt_eval)
     t_part1_proj = (20 * 9 * 0.04) + (20 * t_ppl_eval) + (20 * 20 * t_prompt_eval) + (7 * t_ppl_eval)
     t_part2_proj = (20 * 9 * 0.04) + (4 * 20 * t_prompt_eval) + 5.0
     t_part3_proj = (2 * 20 * 3 * 0.04) + (3 * t_ppl_eval) + (3 * 20 * t_prompt_eval)
-    t_part4_proj = (4 * 20 * 9 * 0.04) + (4 * t_ppl_eval) + (4 * 20 * t_prompt_eval) # 4 new orderings (2 frozen, 2 unfrozen)
+    t_part4_proj = (4 * 20 * 9 * 0.04) + (4 * t_ppl_eval) + (4 * 20 * t_prompt_eval)
     t_part5_proj = (12 * 5 * 0.04) + (12 * t_prompt_eval) + 10.0
-    t_misc_proj = 120.0 # checksums, initialization, data prep
-    total_proj_seconds = t_part1_proj + t_part2_proj + t_part3_proj + t_part4_proj + t_part5_proj + t_misc_proj
+    t_misc_proj = 120.0
+    total_proj_seconds = t_gate0_proj + t_part1_proj + t_part2_proj + t_part3_proj + t_part4_proj + t_part5_proj + t_misc_proj
     
-    print(f"    Part 1 Projection (Frozen Validation & Ablation) : {t_part1_proj:>7.1f}s ({t_part1_proj/60:.2f} min)")
-    print(f"    Part 2 Projection (Null Distribution & Controls) : {t_part2_proj:>7.1f}s ({t_part2_proj/60:.2f} min)")
-    print(f"    Part 3 Projection (Damage-Matched Comparisons)   : {t_part3_proj:>7.1f}s ({t_part3_proj/60:.2f} min)")
-    print(f"    Part 4 Projection (Repeat Orderings Seeds 42-44) : {t_part4_proj:>7.1f}s ({t_part4_proj/60:.2f} min)")
-    print(f"    Part 5 Projection (Recency vs Prior 6 Edits)     : {t_part5_proj:>7.1f}s ({t_part5_proj/60:.2f} min)")
-    print(f"    Miscellaneous Projection (Checksums & Baselines) : {t_misc_proj:>7.1f}s ({t_misc_proj/60:.2f} min)")
+    print(f"    Part C Projection (Gate 0 Certification Positive Control) : {t_gate0_proj:>7.1f}s ({t_gate0_proj/60:.2f} min)")
+    print(f"    Part 1 Projection (Frozen Validation & Ablation)          : {t_part1_proj:>7.1f}s ({t_part1_proj/60:.2f} min)")
+    print(f"    Part 2 Projection (Null Distribution & Controls)          : {t_part2_proj:>7.1f}s ({t_part2_proj/60:.2f} min)")
+    print(f"    Part 3 Projection (Damage-Matched Comparisons)            : {t_part3_proj:>7.1f}s ({t_part3_proj/60:.2f} min)")
+    print(f"    Part 4 Projection (Repeat Orderings Seeds 42-44)          : {t_part4_proj:>7.1f}s ({t_part4_proj/60:.2f} min)")
+    print(f"    Part 5 Projection (Recency vs Prior 6 Edits)              : {t_part5_proj:>7.1f}s ({t_part5_proj/60:.2f} min)")
+    print(f"    Miscellaneous Projection (Checksums & Baselines)          : {t_misc_proj:>7.1f}s ({t_misc_proj/60:.2f} min)")
     print(f"    -------------------------------------------------------------------")
-    print(f"    TOTAL PROJECTED SUITE WALL-CLOCK TIME            : {total_proj_seconds:>7.1f}s ({total_proj_seconds/60:.2f} min / {total_proj_seconds/3600:.2f} h)")
+    print(f"    TOTAL PROJECTED SUITE WALL-CLOCK TIME                     : {total_proj_seconds:>7.1f}s ({total_proj_seconds/60:.2f} min / {total_proj_seconds/3600:.2f} h)")
     
     hard_limit_seconds = 0.70 * 23400.0 # 16,380 seconds (4.55 hours)
-    print(f"    HARD ABORT CEILING (70% of 23,400s)              : {hard_limit_seconds:.1f}s (4.55 h)")
+    print(f"    HARD ABORT CEILING (70% of 23,400s)                       : {hard_limit_seconds:.1f}s (4.55 h)")
     if total_proj_seconds > hard_limit_seconds:
         print(f"\n  [HARD ABORT TRIGGERED]: Projected time {total_proj_seconds:.1f}s exceeds limit {hard_limit_seconds:.1f}s!")
         print("  Priority drop order: 1. Defer Part 5 to session 2. 2. Reduce Part 3 dose-matching to one LR.")
         sys.exit(1)
-    print(f"    COMPUTE BUDGET STATUS                            : APPROVED (Projection is {total_proj_seconds/hard_limit_seconds*100:.1f}% of limit).")
+    print(f"    COMPUTE BUDGET STATUS                                     : APPROVED (Projection is {total_proj_seconds/hard_limit_seconds*100:.1f}% of limit).")
+    print("=" * 115)
+    
+    # =========================================================================
+    # PART B: VERBATIM NORMALIZATION & MATCHING RESTORATION (CHANGES 2 & 5)
+    # =========================================================================
+    print("\n" + "=" * 115)
+    print("  [PART B: VERBATIM NORMALIZATION & MATCHING RESTORATION & 40-CASE EQUIVALENCE (CHANGES 2 & 5)]")
+    print("=" * 115)
+    print("  1. Side-by-Side Implementation Comparison:")
+    print("     --- B1-1C (commit 8305c17) Verbatim Functions ---")
+    print("     def normalize_entity(s): cleaned = s.strip().lower().strip(' \\t\\n.,!?;:\\'\\\"-'); tokens = [t.strip(' \\t\\n.,!?;:\\'\\\"-') for t in cleaned.split() if t.strip(' \\t\\n.,!?;:\\'\\\"-')]; return tokens[0] if tokens else ''")
+    print("     def check_match(p, t): p_c, t_c = p.strip().lower(), t.strip().lower(); return p_c.startswith(t_c) and (len(p_c)==len(t_c) or p_c[len(t_c)] in ' \\t\\n.,!?;:\\'\\\"-')")
+    print("     --- B1-1D (commit 4041bf2) Regressed Functions ---")
+    print("     def normalize_entity(s): return s.strip().strip('.,;:!?\\\"\\'()[]{}').lower()")
+    print("     def check_match(p, t): return normalize_entity(p) == normalize_entity(t)")
+    print("     --- Proposed B1-1E Implementation ---")
+    print("     VERBATIM RESTORATION OF B1-1C (Zero structural or algorithmic alterations).")
+    
+    # 40-case continuation equivalence check
+    cases_40_eval = [
+        (" oslo", "Rome"), (" oboe", "accordion"), (" oslo", "Cairo"), (" oslo", "Lisbon"),
+        (" oslo", "Oslo"), (" photographer", "astronomer"), (" oslo", "Prague"), (" oslo", "Berlin"),
+        (" photographer", "photographer"), (" oboe", "oboe"), (" Paris", "Paris"), (" Tokyo", "Tokyo"),
+        (" Berlin", "Berlin"), (" Madrid", "Madrid"), (" Athens", "Athens"), (" Cairo", "Cairo"),
+        (" Dublin", "Dublin"), (" Vienna", "Vienna"), (" Warsaw", "Warsaw"), (" Seoul", "Seoul"),
+        (" Oslo, Oslo Oslo Oslo", "Oslo"), (" oboe.", "oboe"), (" Canberra on 23 April 1946", "Canberra"),
+        (" photographer and astronomer. She", "photographer"), (" accordion. He plays", "accordion"),
+        (" Rome.", "Rome"), (" Rome", "Rome"), (" Osloman", "Oslo"), (" Romeo", "Rome"),
+        (" Cairo", "Canberra"), (" New Yorker", "New York"), (" New York, USA", "New York"),
+        (" surgeon in London", "surgeon"), (" violinist in the orchestra", "violinist"),
+        (" pilot who flies", "pilot"), (" carpenter with tools", "carpenter"),
+        (" dentist in clinic", "dentist"), (" chef in restaurant", "chef"),
+        (" blacksmith at forge", "blacksmith"), (" gardener in park", "gardener")
+    ]
+    
+    def check_match_b1c_sim(p, t):
+        pc, tc = p.strip().lower(), t.strip().lower()
+        return pc.startswith(tc) and (len(pc) == len(tc) or pc[len(tc)] in " \t\n.,!?;:'\"-")
+    def check_match_b1d_sim(p, t):
+        norm = lambda s: s.strip().strip(".,;:!?\"'()[]{}").lower() if s else ""
+        return norm(p) == norm(t)
+        
+    diffs_1c_1e = 0
+    diffs_1c_1d = 0
+    print("\n  2. 40-Case Continuation Match Results:")
+    print(f"     {'Idx':<4} | {'Prediction':<35} | {'Target':<15} | {'B1-1C':<6} | {'B1-1D':<6} | {'B1-1E':<6} | {'Discrepancy (1C!=1E)'}")
+    print("     " + "-" * 95)
+    for idx40, (pred40, tgt40) in enumerate(cases_40_eval):
+        m1c = check_match_b1c_sim(pred40, tgt40)
+        m1d = check_match_b1d_sim(pred40, tgt40)
+        m1e = check_match(pred40, tgt40)
+        if m1c != m1e:
+            diffs_1c_1e += 1
+        if m1c != m1d:
+            diffs_1c_1d += 1
+        discr = "MISMATCH" if m1c != m1e else "IDENTICAL"
+        print(f"     {idx40+1:<4} | {pred40:<35} | {tgt40:<15} | {str(m1c):<6} | {str(m1d):<6} | {str(m1e):<6} | {discr}")
+    print("     " + "-" * 95)
+    print(f"     Total differences between B1-1C and proposed B1-1E: {diffs_1c_1e} (ZERO REQUIRED)")
+    print(f"     Total false-negative regressions in B1-1D: {diffs_1c_1d}")
+    assert diffs_1c_1e == 0, f"REJECTED: Discrepancy between B1-1C and B1-1E: {diffs_1c_1e}"
+    
+    # 12-case strengthened test suite (Change 5)
+    test_12_suite = [
+        (" Canberra on 23 April 1946", "Canberra", True, "canberra"),
+        (" oboe.", "oboe", True, "oboe"),
+        (" Oslo, Oslo Oslo Oslo", "Oslo", True, "oslo"),
+        (" photographer and astronomer. She", "photographer", True, "photographer"),
+        (" accordion. He plays", "accordion", True, "accordion"),
+        (" Rome.", "Rome", True, "rome"),
+        (" Rome", "Rome", True, "rome"),
+        (" Osloman", "Oslo", False, "osloman"),
+        (" Romeo", "Rome", False, "romeo"),
+        (" Cairo", "Canberra", False, "cairo"),
+        (" New Yorker", "New York", False, "new"),
+        (" New York, USA", "New York", True, "new")
+    ]
+    print("\n  3. Strengthened 12-Case Match Test Suite (Change 5):")
+    for t_idx, (t_pred, t_tgt, exp_m, exp_n) in enumerate(test_12_suite):
+        act_m = check_match(t_pred, t_tgt)
+        act_n = normalize_entity(t_pred)
+        print(f"     Case {t_idx+1:>2}: Pred={t_pred!r:<35} | Tgt={t_tgt!r:<12} | ExpMatch={str(exp_m):<5} | ActMatch={str(act_m):<5} | ActNorm={act_n!r}")
+        assert act_m == exp_m, f"Test case {t_idx+1} match assertion failed: expected {exp_m}, got {act_m}"
+    print("     ALL 12 TEST CASES PASSED SUCCESSFULLY.")
+    print("=" * 115)
+    
+    # =========================================================================
+    # PART C: POSITIVE CONTROLS CERTIFICATION (GATE 0) (CHANGE 3)
+    # =========================================================================
+    print("\n" + "=" * 115)
+    print("  [PART C: POSITIVE CONTROLS CERTIFICATION (GATE 0) (CHANGE 3)]")
+    print("=" * 115)
+    with open("b1_reference_cell.json", "r", encoding="utf-8") as f_ref:
+        ref_cell = json.load(f_ref)
+    unf_ref = ref_cell["unfrozen_arm"]
+    frz_ref = ref_cell["frozen_arm"]
+    
+    print("  1. Executing Positive Control: Unfrozen Arm (eta = 3.0e-05, Seed 42):")
+    configure_determinism(42, warn_only=True)
+    ctrl_unf_model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
+    
+    # Measure pre-step-1 gradient norm on Fact 0
+    f0 = val_20_facts[0]
+    enc_p0 = tokenizer(f0["edit_prompt"], return_tensors="pt")
+    enc_f0 = tokenizer(f"{f0['edit_prompt']} {f0['object']}", return_tensors="pt")
+    i_ids0 = enc_f0["input_ids"].to(device)
+    p_len0 = enc_p0["input_ids"].shape[1]
+    l_ids0 = i_ids0.clone()
+    l_ids0[:, :p_len0] = -100
+    
+    ctrl_unf_model.zero_grad()
+    out0 = ctrl_unf_model(i_ids0, labels=l_ids0)
+    out0.loss.backward()
+    unf_grad_norm_pre = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in ctrl_unf_model.parameters() if p.grad is not None)).item()
+    ctrl_unf_model.zero_grad()
+    
+    unf_steps_list = []
+    unf_dose_tot = 0.0
+    for s_idx in range(20):
+        f_edit = val_20_facts[s_idx]
+        e_res = edit_fact_naive_ma_sgd(ctrl_unf_model, tokenizer, f_edit, lr=unf_ref["lr"], max_steps=25, device=device)
+        unf_steps_list.append(e_res["steps_taken"])
+        unf_dose_tot += e_res["cumulative_dose"]
+        
+    m_unf_step20 = evaluate_checkpoint_metrics(
+        ctrl_unf_model, tokenizer, val_20_facts, val_20_facts[-1],
+        [f["neighborhood_prompts"][0] for f in val_20_facts], {},
+        template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
+    )
+    unf_mean_steps = sum(unf_steps_list) / len(unf_steps_list)
+    unf_eff = m_unf_step20["efficacy"]
+    unf_ret = m_unf_step20["raw_retained_count"]
+    unf_ppl = m_unf_step20["perplexity"]
+    
+    print(f"     Measured Unfrozen Efficacy        : {unf_eff:.1f}% (Required: {unf_ref['target_efficacy_pct']}%)")
+    print(f"     Measured Unfrozen Mean Steps      : {unf_mean_steps:.2f} (Interval: [{unf_ref['mean_steps']['min']}, {unf_ref['mean_steps']['max']}])")
+    print(f"     Measured Unfrozen Step-20 PPL     : {unf_ppl:.2f} (Interval: [{unf_ref['step_20_ppl']['min']}, {unf_ref['step_20_ppl']['max']}])")
+    print(f"     Measured Unfrozen Pre Grad Norm   : {unf_grad_norm_pre:.2f} (Interval: [{unf_ref['pre_step_1_grad_norm']['min']}, {unf_ref['pre_step_1_grad_norm']['max']}])")
+    print(f"     Measured Unfrozen Retention       : {unf_ret}/20 (Interval: [{unf_ref['step_20_retention_count']['min']}, {unf_ref['step_20_retention_count']['max']}])")
+    
+    gate0_passed = (
+        (unf_eff == unf_ref["target_efficacy_pct"]) and
+        (unf_ref["mean_steps"]["min"] <= unf_mean_steps <= unf_ref["mean_steps"]["max"]) and
+        (unf_ref["step_20_ppl"]["min"] <= unf_ppl <= unf_ref["step_20_ppl"]["max"]) and
+        (unf_ref["pre_step_1_grad_norm"]["min"] <= unf_grad_norm_pre <= unf_ref["pre_step_1_grad_norm"]["max"]) and
+        (unf_ref["step_20_retention_count"]["min"] <= unf_ret <= unf_ref["step_20_retention_count"]["max"])
+    )
+    
+    if not gate0_passed:
+        print("\n  [HARNESS NOT CERTIFIED: GATE 0 FAILED]: Unfrozen positive control did not reproduce reference baseline!")
+        sys.exit(1)
+    print("\n  [HARNESS CERTIFIED: GATE 0 PASSED (POSITIVE CONTROL REPRODUCED)]")
+    del ctrl_unf_model
+    gc.collect()
+    torch.cuda.empty_cache()
+    
+    # 2. Executing Readout-Frozen Arm (Observed values, NOT gated per Change 3)
+    print("\n  2. Running Readout-Frozen Arm (eta = 3.0e-04) — Observed Scientific Measurement (NOT GATED):")
+    configure_determinism(42, warn_only=True)
+    ctrl_frz_model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
+    freeze_readout(ctrl_frz_model)
+    
+    ctrl_frz_model.zero_grad()
+    out0_frz = ctrl_frz_model(i_ids0, labels=l_ids0)
+    out0_frz.loss.backward()
+    frz_trainable = [p for p in ctrl_frz_model.parameters() if p.requires_grad]
+    frz_grad_norm_pre = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in frz_trainable if p.grad is not None)).item()
+    ctrl_frz_model.zero_grad()
+    print(f"     Measured Readout-Frozen Pre Grad Norm : {frz_grad_norm_pre:.2f} (Interval: [{frz_ref['pre_step_1_grad_norm']['min']}, {frz_ref['pre_step_1_grad_norm']['max']}])")
+    assert (frz_ref['pre_step_1_grad_norm']['min'] <= frz_grad_norm_pre <= frz_ref['pre_step_1_grad_norm']['max']), (
+        f"Freezing mask failure: grad norm {frz_grad_norm_pre} outside expected range"
+    )
+    
+    frz_steps_list_ctrl = []
+    for s_idx in range(20):
+        f_edit = val_20_facts[s_idx]
+        e_res = edit_fact_readout_frozen_sgd(ctrl_frz_model, tokenizer, f_edit, lr=frz_ref["lr"], max_steps=25, device=device)
+        frz_steps_list_ctrl.append(e_res["steps_taken"])
+        
+    m_frz_ctrl = evaluate_checkpoint_metrics(
+        ctrl_frz_model, tokenizer, val_20_facts, val_20_facts[-1],
+        [f["neighborhood_prompts"][0] for f in val_20_facts], {},
+        template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
+    )
+    frz_ctrl_eff = m_frz_ctrl["efficacy"]
+    frz_ctrl_ret = m_frz_ctrl["raw_retained_count"]
+    print(f"     Measured Readout-Frozen Efficacy  : {frz_ctrl_eff:.1f}%")
+    print(f"     Measured Readout-Frozen Mean Steps: {sum(frz_steps_list_ctrl)/len(frz_steps_list_ctrl):.2f}")
+    print(f"     Measured Readout-Frozen Retention : {frz_ctrl_ret}/20")
+    print(f"     Measured Readout-Frozen PPL       : {m_frz_ctrl['perplexity']:.2f}")
+    if frz_ctrl_eff < 90.0:
+        print("     [RESULT: FROZEN-ARM EFFICACY < 90% — EXPERIMENTAL FINDING, NOT HARNESS FAILURE]")
+    print("     Proceeding directly to Part D.")
+    del ctrl_frz_model, out0, out0_frz, i_ids0, l_ids0
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("=" * 115)
     
     # -------------------------------------------------------------------------
     # DYNAMIC BASELINE MEASUREMENTS (CHANGE 1)
@@ -2284,21 +2603,57 @@ def main():
     print("=" * 115)
     
     # -------------------------------------------------------------------------
-    # PART 6: GATE THE FROZEN ARM
+    # PART 6: CONTROL FLOOR ESTIMATION, GATE SUMMARY & WITHDRAWALS (CHANGES 6, 7, 9)
     # -------------------------------------------------------------------------
     print("\n" + "=" * 115)
-    print("  [PART 6: GATE SUMMARY EVALUATED ON READOUT-FROZEN ARM (eta = 3.0e-04)]")
+    print("  [PART 6: CONTROL FLOOR ESTIMATION & GATE SUMMARY EVALUATED ON FROZEN ARM (eta = 3.0e-04)]")
     print("=" * 115)
+    
+    # Wilson Control Floor Estimation (Change 6)
+    # Pool control observations: step 0 pre-edit matches and step 20 wrong-target matches
+    # across 3 seeds (42, 43, 44) for both arms (N = 120 total control observations)
+    pooled_control_matches = cnt_pre_base + cnt_wrong_disc + cnt_never + cnt_rand_disc
+    n_pooled_controls = 120
+    p_hat_ctrl, ci_low_ctrl, ci_upper_ctrl = compute_wilson_score_interval(pooled_control_matches, n_pooled_controls, z=1.96)
+    
+    print("  1. Control Floor Estimation & Wilson Score 95% Confidence Upper Bound (Change 6):")
+    print(f"     - Pooled Control False-Positive Matches : {pooled_control_matches} / {n_pooled_controls}")
+    print(f"     - Estimated Control Floor (p_hat)       : {p_hat_ctrl:.4f} ({p_hat_ctrl*100:.2f}%)")
+    print(f"     - Wilson 95% Confidence Interval        : [{ci_low_ctrl:.4f}, {ci_upper_ctrl:.4f}]")
+    print(f"     - Wilson 95% Upper Bound (p_upper)      : {ci_upper_ctrl:.4f} ({ci_upper_ctrl*20:.2f} / 20 facts)")
+    
+    # Evaluate B1-1C's 4/20 against this floor
+    b1c_4_20_ratio = 4.0 / 20.0
+    b1c_above_floor = b1c_4_20_ratio > ci_upper_ctrl
+    print(f"     - B1-1C Benchmark Re-evaluation (4/20)   : {b1c_4_20_ratio:.4f} vs p_upper {ci_upper_ctrl:.4f} -> {'[ABOVE FLOOR - GENUINE RETENTION]' if b1c_above_floor else '[AT FLOOR - INDISTINGUISHABLE FROM CHANCE]'}")
+    
+    # Tag primary frozen arm retention against floor
+    frz_ret_ratio = step20_frz_metrics["raw_retained_count"] / 20.0
+    frz_above_floor = frz_ret_ratio > ci_upper_ctrl
+    frz_floor_tag = "[ABOVE FLOOR]" if frz_above_floor else "[AT FLOOR]"
+    print(f"     - Readout-Frozen Retention vs Floor     : {step20_frz_metrics['raw_retained_count']}/20 ({frz_ret_ratio:.4f}) -> {frz_floor_tag}")
+    
+    # Gate 2 Evaluation with 95% Threshold (Change 7)
     gate1_status = "PASS" if pre_edit_acc < 1.0 else "FAIL"
-    gate2_status = "PASS" if step20_frz_metrics["efficacy"] >= 95.0 else "FAIL"
+    gate2_pass = (step20_frz_metrics["efficacy"] >= 95.0)
+    if gate2_pass:
+        gate2_status = f"PASS ({step20_frz_metrics['efficacy']:.1f}% >= 95.0%)"
+        binding_status = part2_verdict
+    else:
+        gate2_status = f"FAILED — PRIMARY ARM EFFICACY {step20_frz_metrics['efficacy']:.1f}% < 95.0%"
+        binding_status = "UNRESOLVED — PRIMARY ARM DID NOT MEET EFFICACY PREREQUISITE"
+        print(f"\n  [GATE 2 ALERT]: {gate2_status}")
+        print(f"  [BINDING STATUS]: {binding_status}")
+        
     exceed_kl_factor = step20_frz_metrics["locality_kl"] / 0.50
     gate3_status = "FAIL (Exceeds self-defined threshold 0.50 by " + f"{exceed_kl_factor:.1f}x)"
     gate4_status = "PASS" if step20_frz_metrics["perplexity"] <= 2.0 * baseline_ppl else "FAIL"
     gate6_status = "PASS" if (observed_subj_disc > p99 and controls_clean) else "FAIL"
     gate7_status = "PASS" if gate7_pass else "FAIL"
     
+    print(f"\n  Gate Summary Table:")
     print(f"  Gate 1: Pre-Edit Accuracy on 1,000 Facts        : {pre_edit_acc:.2f}%                                -> {gate1_status}")
-    print(f"  Gate 2: Step 1 Efficacy                         : {frz_val_records[0]['metrics']['efficacy']:.1f}%                                   -> {gate2_status}")
+    print(f"  Gate 2: Primary Frozen Arm Efficacy (>= 95.0%)  : {step20_frz_metrics['efficacy']:.1f}%                                   -> {gate2_status}")
     print(f"  Gate 3: Locality KL (Self-Defined <0.50)        : Step 20: {step20_frz_metrics['locality_kl']:.4f} (Step 1: {frz_val_records[0]['metrics']['locality_kl']:.4f})  -> {gate3_status}")
     print(f"  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 20: {step20_frz_metrics['perplexity']:.2f} (Base: {baseline_ppl:.2f})                   -> {gate4_status}")
     print(f"  Gate 5: Composition Measurability               : True 12.5% vs Shuf 1.5% (Tmpl: 6.0%) -> MARGINAL PASS (CARRIED OVER FROM 9adf182 -- NOT MEASURED IN THIS RUN)")
@@ -2306,40 +2661,61 @@ def main():
     print(f"  Gate 7: Multi-Ordering Consistency (3 Orderings): Counts: {frz_disc_counts}, Mean: {mean_frz_disc:.2f}                       -> {gate7_status}")
     print("=" * 115)
     
+    # Formal Withdrawals Registry Printout (Change 9)
+    print("\n" + "=" * 115)
+    print("  [FORMAL WITHDRAWALS REGISTRY (DIRECTIVE B1-1E CHANGE 9)]")
+    print("=" * 115)
+    for w in WITHDRAWALS_REGISTRY:
+        print(f"  [{w['id']}] {w['title']}")
+        print(f"       Prior Claim       : {w['prior_claim']}")
+        print(f"       Withdrawal Reason : {w['reason']}")
+        print(f"       Formal Status     : {w['replacement_status']}\n")
+    print("=" * 115)
+    
     # -------------------------------------------------------------------------
     # HEADLINE GENERATION & RESULTS SERIALIZATION (CHANGE 8)
     # -------------------------------------------------------------------------
     producing_sha = "PENDING_COMMIT"
     headline_finding = (
-        f"Directive B1-1D Certified Finding: Localization closure proved without 'exclusively' qualifier. "
+        f"Directive B1-1E Certified Finding: Harness regressions repaired and positive controls certified (Gate 0 PASS). "
         f"In unfrozen sequential SGD, resetting {part0_arithmetic['target_token_rows_param_count']:,} parameters "
         f"({part0_arithmetic['target_token_rows_network_pct']:.5f}% of network) removes {part0_arithmetic['target_row_removal_pct']:.1f}% "
         f"of capability damage and abolishes 100% of retention. Non-target rows remove {part0_arithmetic['nontarget_row_removal_pct']:.1f}%, "
         f"and largest-delta blocks remove {part0_arithmetic['largest_delta_block_subset_pct']:.1f}% (non-additive sum: {part0_arithmetic['partition_sum_pct']:.1f}%). "
         f"Single-edit gradient norm resides {part0_arithmetic['measured_gradient_budget_pct']:.1f}% in readout. "
-        f"Under readout-frozen SGD at eta=3.0e-04, {part2_verdict}. Repeat orderings yield counts {frz_disc_counts} "
+        f"Under readout-frozen SGD at eta=3.0e-04, {binding_status}. Repeat orderings yield counts {frz_disc_counts} "
         f"(mean {mean_frz_disc:.2f} +/- {std_frz_disc:.2f})."
     )
     
     results_payload = {
-        "directive": "B1-1D",
-        "status": "CERTIFIED_BY_B1_1D",
+        "directive": "B1-1E",
+        "status": "CERTIFIED_BY_B1_1E",
         "producing_commit_sha": producing_sha,
         "model": "gpt2 (124M parameters)",
         "execution_device": f"{device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})",
-        "fact_set_sha256": facts_sha,
+        "fact_set_sha256": facts_file_sha,
         "wikitext_slice_sha256": wikitext_hash,
         "headline_finding": headline_finding,
+        "withdrawals_registry": WITHDRAWALS_REGISTRY,
+        "wilson_control_floor": {
+            "n_observations": n_pooled_controls,
+            "false_positive_matches": pooled_control_matches,
+            "p_hat": p_hat_ctrl,
+            "ci_95_lower": ci_low_ctrl,
+            "ci_95_upper": ci_upper_ctrl,
+            "b1c_4_20_above_floor": b1c_above_floor
+        },
         "part0_arithmetic": part0_arithmetic,
         "part1_anisotropy": anisotropy_res,
         "part1_readout_frozen_step20": {
             "efficacy": step20_frz_metrics["efficacy"],
-            "generalization": step20_frz_metrics["generalization"],
+            "generalization": step20_frz_metrics["generalization"] if step20_frz_metrics["efficacy"] >= 90.0 else None,
             "locality_kl": step20_frz_metrics["locality_kl"],
-            "raw_retained_count": step20_frz_metrics["raw_retained_count"],
-            "raw_retained_pct": step20_frz_metrics["raw_retained_pct"],
-            "subj_discrim_count": step20_frz_metrics["subj_discrim_count"],
-            "subj_discrim_pct": step20_frz_metrics["subj_discrim_pct"],
+            "raw_retained_count": step20_frz_metrics["raw_retained_count"] if step20_frz_metrics["efficacy"] >= 90.0 else None,
+            "raw_retained_pct": step20_frz_metrics["raw_retained_pct"] if step20_frz_metrics["efficacy"] >= 90.0 else None,
+            "subj_discrim_count": step20_frz_metrics["subj_discrim_count"] if step20_frz_metrics["efficacy"] >= 90.0 else None,
+            "subj_discrim_pct": step20_frz_metrics["subj_discrim_pct"] if step20_frz_metrics["efficacy"] >= 90.0 else None,
+            "retention_reporting": f"{step20_frz_metrics['raw_retained_count']}/20 {frz_floor_tag}" if step20_frz_metrics["efficacy"] >= 90.0 else f"[NO RETENTION REPORTED — EFFICACY BELOW FLOOR: {step20_frz_metrics['efficacy']:.1f}%]",
             "perplexity": step20_frz_metrics["perplexity"],
             "rel_ppl": step20_frz_metrics["rel_ppl"],
             "total_dose": total_frz_dose,
@@ -2445,7 +2821,7 @@ def main():
     assert len(frz_disc_counts) == 3, "Multi-ordering count assertion failed!"
     print("  ALL CONSISTENCY ASSERTIONS PASSED (Exit-Code Integrity Verified).")
     print("=" * 115)
-    print(" DIRECTIVE B1-1D COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1")
+    print(" DIRECTIVE B1-1E COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1")
     print(f" Total Wall Clock: {time.time() - t0_suite:.2f}s")
     print(" EXIT_CODE = 0")
     print("=" * 115)

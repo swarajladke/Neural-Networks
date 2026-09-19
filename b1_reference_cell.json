@@ -1,0 +1,48 @@
+{
+  "description": "Reference values and tolerance intervals for Gate 0 harness certification from B1-1C",
+  "source_commit": "8305c17",
+  "unfrozen_arm": {
+    "lr": 3.0e-5,
+    "target_efficacy_pct": 100.0,
+    "mean_steps": {
+      "target": 5.05,
+      "min": 4.05,
+      "max": 6.05
+    },
+    "step_20_ppl": {
+      "target": 55.84,
+      "min": 52.84,
+      "max": 58.84
+    },
+    "step_20_loc_kl": {
+      "target": 1.4519,
+      "min": 1.2519,
+      "max": 1.6519
+    },
+    "cum_dose": {
+      "target": 0.5050,
+      "min": 0.4050,
+      "max": 0.6050
+    },
+    "step_20_retention_count": {
+      "target": 6,
+      "min": 4,
+      "max": 8,
+      "total": 20
+    },
+    "pre_step_1_grad_norm": {
+      "target": 215.10,
+      "min": 205.10,
+      "max": 225.10
+    }
+  },
+  "frozen_arm": {
+    "lr": 3.0e-4,
+    "observed_reference_efficacy_pct": 95.0,
+    "pre_step_1_grad_norm": {
+      "target": 63.02,
+      "min": 58.02,
+      "max": 68.02
+    }
+  }
+}
