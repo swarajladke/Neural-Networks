@@ -669,9 +669,13 @@ def get_next_token_log_probs(model: nn.Module, tokenizer: Any, prompt: str, devi
 
 def compute_locality_kl(model: nn.Module, tokenizer: Any, neighborhood_prompts: List[str], pre_edit_log_probs: Dict[str, torch.Tensor], device: str = "cuda") -> float:
     """Computes mean Forward KL divergence D_KL(P_pre || P_post) over neighborhood prompts."""
+    if not neighborhood_prompts or not pre_edit_log_probs:
+        return 0.0
     model.eval()
     kl_divs = []
     for prompt in neighborhood_prompts:
+        if prompt not in pre_edit_log_probs:
+            continue
         p_pre_log = pre_edit_log_probs[prompt]
         p_pre = torch.exp(p_pre_log)
         p_post_log = get_next_token_log_probs(model, tokenizer, prompt, device=device)
@@ -1451,7 +1455,7 @@ def main():
         
     m_unf_step20 = evaluate_checkpoint_metrics(
         ctrl_unf_model, tokenizer, val_20_facts, val_20_facts[-1],
-        [f["neighborhood_prompts"][0] for f in val_20_facts], {},
+        [], {},
         template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
     )
     unf_mean_steps = sum(unf_steps_list) / len(unf_steps_list)
@@ -1506,7 +1510,7 @@ def main():
         
     m_frz_ctrl = evaluate_checkpoint_metrics(
         ctrl_frz_model, tokenizer, val_20_facts, val_20_facts[-1],
-        [f["neighborhood_prompts"][0] for f in val_20_facts], {},
+        [], {},
         template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
     )
     frz_ctrl_eff = m_frz_ctrl["efficacy"]
