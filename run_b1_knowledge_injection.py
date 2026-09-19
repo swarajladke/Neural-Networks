@@ -1136,6 +1136,7 @@ def main():
     
     # Primary model instance
     model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
+    total_model_params = sum(p.numel() for p in model.parameters())
     params_initial_snap = {name: p.detach().cpu().clone() for name, p in model.named_parameters()}
     
     # Injected facts & distinct subsets
@@ -1326,6 +1327,7 @@ def main():
     
     frz_val_records = []
     frz_injected_facts = []
+    frz_steps_list = []
     total_frz_edit_time = 0.0
     total_frz_dose = 0.0
     
@@ -1348,6 +1350,7 @@ def main():
         edit_res = edit_fact_readout_frozen_sgd(frz_model, tokenizer, f, lr=3.0e-04, max_steps=25, device=device)
         total_frz_edit_time += (time.time() - t_edit_s)
         total_frz_dose += edit_res["cumulative_dose"]
+        frz_steps_list.append(edit_res["steps_taken"])
         
         metrics = evaluate_checkpoint_metrics(
             frz_model, tokenizer, frz_injected_facts, f,
@@ -1368,6 +1371,7 @@ def main():
         )
         frz_val_records.append({"step": s_idx, "fact_id": f["fact_id"], "metrics": metrics, "edit_res": edit_res})
     print("  " + "-" * 150)
+    mean_frz_steps = sum(frz_steps_list) / len(frz_steps_list) if frz_steps_list else 0.0
     print(f"  Total Readout-Frozen Cumulative Dose Across All 20 Edits : {total_frz_dose:.4f}")
     
     # HARD GATE: Assert wte checksum bit-identical
@@ -1682,12 +1686,12 @@ def main():
     
     rng_rand_dir = torch.Generator(device=device)
     rng_rand_dir.manual_seed(42)
+    trainable_frz_params = [p for p in frz_model.parameters() if p.requires_grad]
     with torch.no_grad():
-        for name, p in frz_model.named_parameters():
-            if p.requires_grad:
-                pert = torch.randn(p.shape, generator=rng_rand_dir, device=device)
-                pert = pert / (torch.norm(pert) + 1e-12)
-                p.add_(pert * (total_frz_dose / math.sqrt(len(trainable_p))))
+        for p in trainable_frz_params:
+            pert = torch.randn(p.shape, generator=rng_rand_dir, device=device)
+            pert = pert / (torch.norm(pert) + 1e-12)
+            p.add_(pert * (total_frz_dose / math.sqrt(len(trainable_frz_params))))
                 
     m_rand_dir = evaluate_checkpoint_metrics(
         frz_model, tokenizer, frz_injected_facts, frz_injected_facts[-1],
@@ -1836,7 +1840,7 @@ def main():
     print(f"  {'Unfrozen (LR = ' + f'{lr_loc_matched:.1e})':<35} | {m_loc_u['efficacy']:>6.1f}%  | {unfrozen_sweep_data[lr_loc_matched]['mean_steps']:>8.2f} | "
           f"{loc_u_raw_str:<14} | {loc_u_sd_str:<14} | "
           f"{m_loc_u['generalization']:>10.1f}%  | {m_loc_u['locality_kl']:>7.4f} | {m_loc_u['perplexity']:>8.2f} | {unfrozen_sweep_data[lr_loc_matched]['dose']:>10.4f}")
-    print(f"  {'Readout-Frozen (LR = 3.0e-04)':<35} | {step20_frz_metrics['efficacy']:>6.1f}%  | {9.10:>8.2f} | "
+    print(f"  {'Readout-Frozen (LR = 3.0e-04)':<35} | {step20_frz_metrics['efficacy']:>6.1f}%  | {mean_frz_steps:>8.2f} | "
           f"{frz_raw_str:<14} | {frz_sd_str:<14} | "
           f"{step20_frz_metrics['generalization']:>10.1f}%  | {step20_frz_metrics['locality_kl']:>7.4f} | {step20_frz_metrics['perplexity']:>8.2f} | {total_frz_dose:>10.4f}")
     print("  " + "-" * 135)
@@ -1850,7 +1854,7 @@ def main():
     print(f"  {'Unfrozen (LR = ' + f'{lr_dose_matched:.1e})':<35} | {m_dose_u['efficacy']:>6.1f}%  | {unfrozen_sweep_data[lr_dose_matched]['mean_steps']:>8.2f} | "
           f"{dose_u_raw_str:<14} | {dose_u_sd_str:<14} | "
           f"{m_dose_u['generalization']:>10.1f}%  | {m_dose_u['locality_kl']:>7.4f} | {m_dose_u['perplexity']:>8.2f} | {unfrozen_sweep_data[lr_dose_matched]['dose']:>10.4f}")
-    print(f"  {'Readout-Frozen (LR = 3.0e-04)':<35} | {step20_frz_metrics['efficacy']:>6.1f}%  | {9.10:>8.2f} | "
+    print(f"  {'Readout-Frozen (LR = 3.0e-04)':<35} | {step20_frz_metrics['efficacy']:>6.1f}%  | {mean_frz_steps:>8.2f} | "
           f"{frz_raw_str:<14} | {frz_sd_str:<14} | "
           f"{step20_frz_metrics['generalization']:>10.1f}%  | {step20_frz_metrics['locality_kl']:>7.4f} | {step20_frz_metrics['perplexity']:>8.2f} | {total_frz_dose:>10.4f}")
     print("  " + "-" * 135)
@@ -1880,7 +1884,7 @@ def main():
     frozen_orderings_res[42] = {
         "status": "REUSED FROM PART 1",
         "efficacy": step20_frz_metrics["efficacy"],
-        "mean_steps": 9.10,
+        "mean_steps": mean_frz_steps,
         "raw_cnt": step20_frz_metrics["raw_retained_count"],
         "raw_pct": step20_frz_metrics["raw_retained_pct"],
         "disc_cnt": step20_frz_metrics["subj_discrim_count"],
@@ -2062,13 +2066,17 @@ def main():
     chosen_rel = "born_city" # Largest pool (40)
     print(f"  Selected Relation for Discriminating Test: '{chosen_rel}' (Pool size = {pool_sizes[chosen_rel]})")
     
-    # Measure pre-edit unconditional prior distribution for all candidates in born_city
+    # Measure pre-edit unconditional prior distribution for candidates in born_city and profession
     gen_p = "A person was born in the city of"
+    gen_prof = "A person works as a"
     model.to(device)
     inp_g = tokenizer.encode(gen_p, return_tensors="pt").to(device)
+    inp_prof = tokenizer.encode(gen_prof, return_tensors="pt").to(device)
     with torch.no_grad():
         logits_g = model(inp_g).logits[0, -1, :]
         probs_g = F.softmax(logits_g, dim=-1)
+        logits_prof = model(inp_prof).logits[0, -1, :]
+        probs_prof = F.softmax(logits_prof, dim=-1)
     model.cpu()
     gc.collect()
     torch.cuda.empty_cache()
@@ -2079,7 +2087,16 @@ def main():
         p_val = probs_g[t_ids[0]].item() if t_ids else 0.0
         full_prior_ranks.append((cand_city, p_val))
     full_prior_ranks.sort(key=lambda x: x[1], reverse=True)
-    del inp_g, logits_g, probs_g
+    
+    prof_prior_ranks = []
+    for cand_prof, _ in PROFESSIONS_DATA:
+        t_ids = tokenizer.encode(" " + cand_prof)
+        p_val = probs_prof[t_ids[0]].item() if t_ids else 0.0
+        prof_prior_ranks.append((cand_prof, p_val))
+    prof_prior_ranks.sort(key=lambda x: x[1], reverse=True)
+    prof_rank_lookup = {normalize_entity(p_name): idx + 1 for idx, (p_name, _) in enumerate(prof_prior_ranks)}
+    photographer_rank = prof_rank_lookup.get("photographer", 2)
+    del inp_g, inp_prof, logits_g, logits_prof, probs_g, probs_prof
     
     print(f"\n  Full Pre-Edit Unconditional Prior Ranking for '{chosen_rel}' ({len(full_prior_ranks)} candidates):")
     prior_rank_lookup = {}
@@ -2224,7 +2241,7 @@ def main():
     partition_sum = pct_dmg_target + pct_dmg_nontarget + pct_dmg_blocks
     
     target_row_param_cnt = len(distinct_target_tok_ids) * 768
-    target_param_pct = (target_row_param_cnt / 124439808) * 100.0
+    target_param_pct = (target_row_param_cnt / total_model_params) * 100.0
     
     # Recency confound counts computed dynamically
     oslo_count = sum(1 for f in val_20_facts if f["relation"] == "born_city" and normalize_entity(f["object"]) == "oslo")
@@ -2246,7 +2263,7 @@ def main():
         "confound_oslo_total": tot_born_city,
         "confound_oboe_count": oboe_count,
         "confound_oboe_total": tot_instrument,
-        "prior_rank_photographer": prior_rank_lookup.get("photographer", 2)
+        "prior_rank_photographer": photographer_rank
     }
     
     print(f"  1. Damage Partition Percentages (Key: 'target_row_removal_pct')        : {part0_arithmetic['target_row_removal_pct']:.1f}%")
