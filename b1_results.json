@@ -1,93 +1,261 @@
 {
-  "directive": "B1-1C",
-  "status": "CERTIFIED_BY_B1_1C",
-  "producing_commit_sha": "8305c17",
+  "directive": "B1-1D",
+  "status": "CERTIFIED_BY_B1_1D",
+  "producing_commit_sha": "788ef41",
   "model": "gpt2 (124M parameters)",
-  "execution_device": "Tesla T4 (CUDA)",
+  "execution_device": "cuda (Tesla T4)",
   "fact_set_sha256": "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536",
   "wikitext_slice_sha256": "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7",
-  "headline_finding": "Localization Closure Proved: 100% of retained knowledge and 85.3% of capability damage reside exclusively in target token rows of the readout embedding (22 distinct rows, 16,896 params, 0.01358% of network). Non-target rows remove 23.5%, while an equal-sized block subset removes only 8.7%. Hidden-state prompt anisotropy (cosine = 0.9888) acts as a uniform token logit boost (predicted ratio 1.12, measured ratio 1.17). BINDING APPEARS (Subject-discriminable retention = 4/20, PPL = 46.79 at eta = 3.0e-04)",
-  "arithmetic_damage_removal": {
-    "target_row_removal_pct": 85.3,
-    "nontarget_row_removal_pct": 23.5,
-    "block_subset_removal_pct": 8.7,
-    "target_token_rows_param_count": 16896,
-    "target_token_rows_network_pct": 0.01358
+  "headline_finding": "Directive B1-1D Certified Finding: Localization closure proved without 'exclusively' qualifier. In unfrozen sequential SGD, resetting 15,360 parameters (0.01234% of network) removes 92.7% of capability damage and abolishes 100% of retention. Non-target rows remove 18.1%, and largest-delta blocks remove 34.2% (non-additive sum: 145.0%). Single-edit gradient norm resides 95.8% in readout. Under readout-frozen SGD at eta=3.0e-04, BINDING NOT ESTABLISHED (Controls clean: False, Null degenerate: False, p = 1.0000, p99 = 0). Repeat orderings yield counts [0, 1, 0] (mean 0.33 +/- 0.47).",
+  "part0_arithmetic": {
+    "target_token_rows_param_count": 15360,
+    "target_token_rows_network_pct": 0.012343317019582672,
+    "target_row_removal_pct": 92.70919168547567,
+    "nontarget_row_removal_pct": 18.1000095961135,
+    "largest_delta_block_subset_pct": 34.20691007383076,
+    "partition_sum_pct": 145.01611135541992,
+    "measured_gradient_budget_pct": 95.84668240353776
   },
   "part1_anisotropy": {
-    "mean_edit_all": 0.9888,
-    "std_edit_all": 0.0072,
+    "mean_edit_all": 0.9886,
+    "std_edit_all": 0.0074,
     "within_relations": {
-      "born_city": {"mean": 0.9997, "std": 0.0001},
-      "profession": {"mean": 0.9998, "std": 0.0001},
-      "plays_instrument": {"mean": 0.9997, "std": 0.0002},
-      "capital_of_country": {"mean": 0.9996, "std": 0.0002}
+      "born_city": {
+        "mean": 0.9997,
+        "std": 0.0001
+      },
+      "profession": {
+        "mean": 0.9998,
+        "std": 0.0001
+      },
+      "plays_instrument": {
+        "mean": 0.9997,
+        "std": 0.0002
+      },
+      "capital_of_country": {
+        "mean": 0.9997,
+        "std": 0.0002
+      }
     },
-    "cross_relation": {"mean": 0.9857, "std": 0.0049},
-    "edit_to_control": {"mean": 0.9887, "std": 0.0077},
-    "selectivity_margin": 0.0113,
-    "predicted_ratio": 1.125,
-    "measured_ratio": 1.173,
-    "ratio_discrepancy": 1.04
+    "cross_relation_mean": 0.9855,
+    "edit_to_control_mean": 0.9886,
+    "edit_to_control_std": 0.0078,
+    "selectivity_margin": 0.0145,
+    "edit_hidden_norm_mean": 222.6454,
+    "edit_hidden_norm_std": 35.7584,
+    "control_hidden_norm_mean": 223.4444,
+    "control_hidden_norm_std": 31.9618,
+    "norm_ratio": 0.9964,
+    "predicted_ratio": 1.008,
+    "measured_ratio": 1.302,
+    "ratio_discrepancy": 1.29
   },
-  "part2_binding_metrics": {
-    "standard_validation_step20": {
-      "raw_retained_count": 6,
-      "bound_retained_count": 0,
-      "subj_discrim_count": 0
+  "part1_readout_frozen_step20": {
+    "efficacy": 0.0,
+    "generalization": 0.0,
+    "locality_kl": 1.9976,
+    "raw_retained_count": 0,
+    "raw_retained_pct": 0.0,
+    "subj_discrim_count": 0,
+    "subj_discrim_pct": 0.0,
+    "perplexity": 65.4,
+    "rel_ppl": 81.51,
+    "total_dose": 4.8651,
+    "wte_invariant": true
+  },
+  "part1_frozen_ablation": {
+    "1. Intact Frozen Model": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 65.4,
+      "delta_ppl": 29.37
     },
-    "distinct_object_validation_step20": {
-      "raw_retained_count": 3,
-      "subj_discrim_count": 0,
-      "generalization": 100.0,
-      "locality_kl": 1.5512,
-      "perplexity": 43.21
+    "2. Readout Only Kept (Blocks+ln_f Reset)": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 36.03,
+      "delta_ppl": -29.37
+    },
+    "3. Readout Removed (wte + ln_f Reset)": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 65.4,
+      "delta_ppl": 0.0
+    },
+    "4. Target Rows Only Removed in wte": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 65.4,
+      "delta_ppl": 0.0
+    },
+    "5. Non-Target Rows Only Removed in wte": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 65.4,
+      "delta_ppl": 0.0
+    },
+    "6. Largest-Delta Block Subset (38.6M)": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 36.03,
+      "delta_ppl": -29.37
+    },
+    "7. Everything Removed (Pre-Edit Sanity)": {
+      "raw_cnt": 0,
+      "raw_pct": 0.0,
+      "disc_cnt": 0,
+      "disc_pct": 0.0,
+      "gen": 0.0,
+      "ppl": 36.03,
+      "delta_ppl": -29.37
     }
   },
-  "part3_complete_partitions": {
-    "1. Intact 20-Edit Model": {"raw_cnt": 6, "raw_pct": 30.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 33.3, "ppl": 55.84, "delta_ppl": 19.81},
-    "2. Readout Only Kept (Blocks+ln_f Reset)": {"raw_cnt": 6, "raw_pct": 30.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 33.3, "ppl": 51.88, "delta_ppl": -3.96},
-    "3. Readout Removed (wte + ln_f Reset)": {"raw_cnt": 0, "raw_pct": 0.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 0.0, "ppl": 36.20, "delta_ppl": -19.63},
-    "4. Target Rows Only Removed in wte": {"raw_cnt": 0, "raw_pct": 0.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 0.0, "ppl": 38.95, "delta_ppl": -16.88},
-    "5. Non-Target Rows Only Removed in wte": {"raw_cnt": 6, "raw_pct": 30.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 33.3, "ppl": 51.19, "delta_ppl": -4.65},
-    "6. Largest-Delta Block Subset (38.6M)": {"raw_cnt": 6, "raw_pct": 30.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 33.3, "ppl": 52.28, "delta_ppl": -3.55},
-    "7. Everything Removed (Pre-Edit Sanity)": {"raw_cnt": 0, "raw_pct": 0.0, "disc_cnt": 0, "disc_pct": 0.0, "gen": 0.0, "ppl": 36.03, "delta_ppl": -19.81}
+  "part2_null_distribution": {
+    "distinct_preds_count": 12,
+    "is_null_degenerate": false,
+    "null_mean": 0.0,
+    "p95": 0,
+    "p99": 0,
+    "perm_p_val": 1.0,
+    "cnt_never_edited": 1,
+    "cnt_rand_direction_disc": 0,
+    "cnt_wrong_target_disc": 1,
+    "cnt_pre_edit_base": 0,
+    "verdict": "BINDING NOT ESTABLISHED (Controls clean: False, Null degenerate: False, p = 1.0000, p99 = 0)"
   },
-  "part4_frozen_readout": {
-    "sweep_frontier": {
-      "3.0e-05": {"mean_steps": 24.90, "efficacy_rate": 5.0, "ppl_step20": 38.24, "loc_kl": 1.4696, "raw_ret_cnt": 1, "subj_disc_cnt": 0},
-      "1.0e-04": {"mean_steps": 17.90, "efficacy_rate": 55.0, "ppl_step20": 41.05, "loc_kl": 2.3066, "raw_ret_cnt": 4, "subj_disc_cnt": 1},
-      "3.0e-04": {"mean_steps": 9.10, "efficacy_rate": 95.0, "ppl_step20": 46.79, "loc_kl": 2.4389, "raw_ret_cnt": 10, "subj_disc_cnt": 4, "calibrated_optimum": true},
-      "1.0e-03": {"mean_steps": 3.55, "efficacy_rate": 100.0, "ppl_step20": 48.05, "loc_kl": 2.3355, "raw_ret_cnt": 8, "subj_disc_cnt": 2},
-      "3.0e-03": {"mean_steps": 8.25, "efficacy_rate": 75.0, "ppl_step20": 64000.0, "loc_kl": 4.1347, "raw_ret_cnt": 1, "subj_disc_cnt": 0}
+  "part3_damage_matched": {
+    "locality_matched": {
+      "selected_lr": 3e-05,
+      "runner_up_lr": 1e-05,
+      "unfrozen_kl": 2.3796,
+      "frozen_kl": 1.9976,
+      "unfrozen_subj_disc": 0,
+      "frozen_subj_disc": 0,
+      "verdict": "Frozen TIES/LOSES"
     },
-    "calibrated_lr_frozen": 3.0e-04,
-    "verdict": "BINDING APPEARS (Subject-discriminable retention = 4/20, PPL = 46.79 at eta = 3.0e-04)"
+    "dose_matched": {
+      "selected_lr": 0.0007,
+      "runner_up_lr": 0.0005,
+      "unfrozen_dose": 3.9246,
+      "frozen_dose": 4.8651,
+      "dose_match_label": "MATCHED (Within 20%)",
+      "unfrozen_subj_disc": 0,
+      "frozen_subj_disc": 0,
+      "verdict": "Frozen TIES/LOSES"
+    }
   },
-  "part5_modal_collapse": {
-    "recency_matches": {
-      "born_city": true,
-      "profession": true,
-      "plays_instrument": true,
-      "capital_of_country": false
+  "part4_multi_ordering": {
+    "frozen_orderings": {
+      "seed_42": {
+        "raw_ret": 0,
+        "subj_disc": 0,
+        "perm_p_val": 1.0,
+        "gen": 0.0,
+        "loc_kl": 1.9976,
+        "ppl": 65.4,
+        "dose": 4.8651
+      },
+      "seed_43": {
+        "raw_ret": 1,
+        "subj_disc": 1,
+        "perm_p_val": 0.0487,
+        "gen": 0.0,
+        "loc_kl": 1.912,
+        "ppl": 53.02,
+        "dose": 3.7948
+      },
+      "seed_44": {
+        "raw_ret": 0,
+        "subj_disc": 0,
+        "perm_p_val": 1.0,
+        "gen": 0.0,
+        "loc_kl": 1.8785,
+        "ppl": 48.02,
+        "dose": 3.5603
+      }
     },
-    "spearman_rhos": {
-      "born_city": -1.0,
-      "profession": 1.0,
-      "plays_instrument": -0.4,
-      "capital_of_country": -0.086
+    "unfrozen_orderings": {
+      "seed_42": {
+        "raw_ret": 0,
+        "subj_disc": 0,
+        "gen": 0.0,
+        "loc_kl": 2.3796,
+        "ppl": 79.73,
+        "dose": 1.0197
+      },
+      "seed_43": {
+        "raw_ret": 0,
+        "subj_disc": 0,
+        "gen": 0.0,
+        "loc_kl": 2.1986,
+        "ppl": 82.03,
+        "dose": 1.0114
+      },
+      "seed_44": {
+        "raw_ret": 0,
+        "subj_disc": 0,
+        "gen": 0.0,
+        "loc_kl": 1.9501,
+        "ppl": 61.79,
+        "dose": 1.0484
+      }
     },
-    "verdict": "RECENCY HYPOTHESIS SUPPORTED (Recency matches on 3/4 relations)."
+    "frozen_disc_counts": [
+      0,
+      1,
+      0
+    ],
+    "frozen_mean_disc": 0.3333333333333333,
+    "frozen_std_disc": 0.4714045207910317,
+    "unfrozen_disc_counts": [
+      0,
+      0,
+      0
+    ],
+    "unfrozen_mean_disc": 0.0,
+    "unfrozen_std_disc": 0.0,
+    "gate7_pass": false
+  },
+  "part5_recency_disambiguation": {
+    "chosen_relation": "born_city",
+    "part5_verdict": "MIXED HYPOTHESIS (Frozen modal: 'tokyo. it was designed' [Rank N/A], Unfrozen modal: 'tokyo tokyo tokyo tokyo tokyo' [Rank N/A]).",
+    "frozen_modal": "tokyo. it was designed",
+    "unfrozen_modal": "tokyo tokyo tokyo tokyo tokyo"
+  },
+  "carried_over_gates": {
+    "composition_measurability": {
+      "source_commit": "9adf182",
+      "status": "MARGINAL PASS",
+      "label": "CARRIED OVER FROM 9adf182 -- NOT MEASURED IN THIS RUN"
+    }
   },
   "gate_verdicts": {
     "gate1_pre_edit_accuracy": "PASS",
-    "gate2_step1_efficacy": "PASS",
+    "gate2_step1_efficacy": "FAIL",
     "gate3_step20_locality_kl": "FAIL",
     "gate4_step20_perplexity": "PASS",
-    "gate5_composition_measurability": "MARGINAL PASS"
+    "gate5_composition_measurability": "MARGINAL PASS (CARRIED OVER FROM 9adf182)",
+    "gate6_subject_discriminability_p99": "FAIL",
+    "gate7_multi_ordering_stability": "FAIL"
   },
-  "post_edit_checksum": "-62119.86336678",
-  "reproducibility_match": true,
-  "wall_clock_seconds": 7660.73,
+  "wall_clock_seconds": 4182.33,
   "exit_code": 0
 }
