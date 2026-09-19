@@ -1430,8 +1430,9 @@ def main():
     configure_determinism(42, warn_only=True)
     ctrl_unf_model = GPT2LMHeadModel.from_pretrained(model_name).to(device)
     
+    positive_control_facts = shuffled_facts[:20]
     # Measure pre-step-1 gradient norm on Fact 0
-    f0 = val_20_facts[0]
+    f0 = positive_control_facts[0]
     enc_p0 = tokenizer(f0["edit_prompt"], return_tensors="pt")
     enc_f0 = tokenizer(f"{f0['edit_prompt']} {f0['object']}", return_tensors="pt")
     i_ids0 = enc_f0["input_ids"].to(device)
@@ -1448,13 +1449,13 @@ def main():
     unf_steps_list = []
     unf_dose_tot = 0.0
     for s_idx in range(20):
-        f_edit = val_20_facts[s_idx]
+        f_edit = positive_control_facts[s_idx]
         e_res = edit_fact_naive_ma_sgd(ctrl_unf_model, tokenizer, f_edit, lr=unf_ref["lr"], max_steps=25, device=device)
         unf_steps_list.append(e_res["steps_taken"])
         unf_dose_tot += e_res["cumulative_dose"]
         
     m_unf_step20 = evaluate_checkpoint_metrics(
-        ctrl_unf_model, tokenizer, val_20_facts, val_20_facts[-1],
+        ctrl_unf_model, tokenizer, positive_control_facts, positive_control_facts[-1],
         [], {},
         template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
     )
@@ -1504,12 +1505,12 @@ def main():
     
     frz_steps_list_ctrl = []
     for s_idx in range(20):
-        f_edit = val_20_facts[s_idx]
+        f_edit = positive_control_facts[s_idx]
         e_res = edit_fact_readout_frozen_sgd(ctrl_frz_model, tokenizer, f_edit, lr=frz_ref["lr"], max_steps=25, device=device)
         frz_steps_list_ctrl.append(e_res["steps_taken"])
         
     m_frz_ctrl = evaluate_checkpoint_metrics(
-        ctrl_frz_model, tokenizer, val_20_facts, val_20_facts[-1],
+        ctrl_frz_model, tokenizer, positive_control_facts, positive_control_facts[-1],
         [], {},
         template_prior_controls, wikitext_slice, baseline_ppl, eval_ppl=True, device=device
     )

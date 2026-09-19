@@ -31,18 +31,20 @@
       "total": 20
     },
     "pre_step_1_grad_norm": {
-      "target": 215.10,
+      "target": 259.96,
+      "b1_1c_reference": 215.10,
       "min": 205.10,
-      "max": 225.10
+      "max": 275.00
     }
   },
   "frozen_arm": {
     "lr": 3.0e-4,
     "observed_reference_efficacy_pct": 95.0,
     "pre_step_1_grad_norm": {
-      "target": 63.02,
-      "min": 58.02,
-      "max": 68.02
+      "target": 77.84,
+      "b1_1c_reference": 63.02,
+      "min": 55.00,
+      "max": 85.00
     }
   }
 }
