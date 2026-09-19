@@ -1552,7 +1552,9 @@ def main():
         for name, p in block_named_params:
             sz = p.numel()
             m_sub = mask_flat[offset : offset + sz].view_as(p).to(device)
-            p.data[m_sub] = params_initial_snap[name].data[m_sub].to(device)
+            init_val = params_initial_snap[name].data.to(device)
+            p.data.copy_(torch.where(m_sub, init_val, p.data))
+            del m_sub, init_val
             offset += sz
             
     del abs_diffs, flat_diffs, topk_vals, mask_flat
@@ -2205,7 +2207,9 @@ def main():
             if name.startswith("transformer.h."):
                 sz = p.numel()
                 m_sub = mask_u[off_u : off_u + sz].view_as(p).to(device)
-                p.data[m_sub] = params_initial_snap[name].data[m_sub].to(device)
+                init_val = params_initial_snap[name].data.to(device)
+                p.data.copy_(torch.where(m_sub, init_val, p.data))
+                del m_sub, init_val
                 off_u += sz
     ppl_u_blocks, _ = evaluate_wikitext_perplexity(u_model_abl, tokenizer, wikitext_slice, device=device)
     del abs_d_u, flat_d_u, topk_u, mask_u
