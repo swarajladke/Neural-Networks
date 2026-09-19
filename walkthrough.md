@@ -999,3 +999,315 @@ EXIT_CODE = 0
 
 
 
+
+
+---
+
+# Track B — Sequential Knowledge Injection into Language Models
+
+## 1. Directive B1-1D Certified Headline & Scientific Verdict
+
+> [!CAUTION]
+> **Directive B1-1D Authoritative Headline Finding**:  
+> **READOUT-FROZEN BINDING CLAIM REFUTED (KILLED)**.
+> Localization closure is proved without the "exclusively" qualifier. In unfrozen sequential SGD, resetting 15,360 parameters (0.01234% of the network) removes **92.7% of capability damage** and abolishes 100% of retention. Non-target rows remove **18.1%**, and largest-delta blocks remove **34.2%** (non-additive partition sum: **145.0%**). The single-edit gradient norm resides **95.8% in readout** (`wte` and `ln_f`).  
+> 
+> Under readout-frozen SGD at calibrated $\eta = 3.0 \times 10^{-4}$, **BINDING IS NOT ESTABLISHED**:
+> - Observed subject-discriminable retention at step 20 is **0/20 (0.0%)**, with one-sided permutation $p = 1.0000$ (null 99th percentile $p_{99} = 0$).
+> - Never-edited controls yield $1/20$ (exceeding expected 0), and wrong-target controls yield $1/20$ (exceeding expected 0).
+> - Damage-matched controls refute the claim: in both locality-matched ($\Delta \text{KL} = 0.3820$, $\eta = 3.0 \times 10^{-5}$) and cumulative dose-matched ($\Delta \text{dose} = 0.9405$, $\eta = 7.0 \times 10^{-4}$) comparisons, readout-frozen SGD ties unfrozen SGD at **0/20** subject-discriminable retention.
+> - Multi-ordering evaluation across seeds `[42, 43, 44]` yields counts **`[0, 1, 0]`** (mean **$0.33 \pm 0.47$**), failing Gate 7 stability.
+> - Recency disambiguation reveals both arms collapse on the same target token (`'tokyo'`), with frozen producing `'tokyo. it was designed'` and unfrozen producing `'tokyo tokyo tokyo tokyo tokyo'`.
+
+---
+
+## 2. Dynamic Gradient Budget & Authoritative Damage Partition (Part 0)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+  [Dynamic Gradient Budget Measurement (Change 1)]
+    Measured Unfrozen Pre-Step-1 Grad Norm : 272.93
+    Measured Readout-Frozen Grad Norm      : 77.84
+    Derived Readout Gradient Budget Share  : sqrt(1 - 77.84^2 / 272.93^2) = 95.8%
+```
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 0: AUTHORITATIVE RECORD CORRECTIONS & ARITHMETIC (DIRECTIVE B1-1D)]
+===================================================================================================================
+  1. Damage Partition Percentages (Key: 'target_row_removal_pct')        : 92.7%
+     - Non-Target Row Removal    (Key: 'nontarget_row_removal_pct')     : 18.1%
+     - Largest-Delta Blocks Reset(Key: 'largest_delta_block_subset_pct'): 34.2%
+     - Partition Sum (Explicitly Non-Additive, Key: 'partition_sum_pct'): 145.0%
+     - Superceded Value: 8.7% was the B1-1B random block subset; superseded by largest-delta figure.
+  2. Non-Additive Supported Statement:
+     Retention is fully abolished by resetting 15,360 parameters (0.01234%) and
+     fully preserved by resetting 38.6M block parameters.
+  3. Recency Confound Audit (Computed Dynamically):
+     - born_city        : Oslo is last-edited AND 0 of 4 objects
+     - plays_instrument : oboe is last-edited AND appears 0 of 6 times
+     - profession       : photographer is last-edited AND prior rank 2 AND object of pre-known fact 388
+     - capital_of_country: last-edited is Nairobi; modal is oslo (not in capital facts)
+     - Recency Verdict  : Supported by at most 1 triple-confounded case out of 4 and contradicted by 1.
+  4. Gradient Budget (Key: 'measured_gradient_budget_pct'): 95.8% of gradient norm resides in wte and ln_f.
+===================================================================================================================
+```
+
+---
+
+## 3. Final-Layer Hidden State Anisotropy & Logit Boost Decomposition (Part 1)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 1: FINAL-LAYER HIDDEN STATE ANISOTROPY & LOGIT BOOST RATIO (BLOCKING)]
+===================================================================================================================
+  1. Pairwise Cosine Similarity (20 Edit Prompts)   : Mean = 0.9886 +/- 0.0074
+  2. Within-Relation Cosine Similarities:
+     - Relation 'born_city         '                 : Mean = 0.9997 +/- 0.0001
+     - Relation 'profession        '                 : Mean = 0.9998 +/- 0.0001
+     - Relation 'plays_instrument  '                 : Mean = 0.9997 +/- 0.0002
+     - Relation 'capital_of_country'                 : Mean = 0.9997 +/- 0.0002
+  3. Cross-Relation Cosine Similarity              : Mean = 0.9855
+  4. Edit-to-Control Prompts Cosine (80 Controls)   : Mean = 0.9886 +/- 0.0078
+  5. Implied Selectivity Margin (1.0 - Cross-Cos)   : 0.0145
+  6. Target-Token Logit Boost Decomposition (Addition 2):
+     - Edit Hidden-State Norm Mean +/- Std         : 222.6454 +/- 35.7584
+     - Control Hidden-State Norm Mean +/- Std      : 223.4444 +/- 31.9618
+     - Norm Ratio (Edit / Control)                 : 0.9964
+     - Predicted Ratio: (Norm Ratio / Mean Cosine) : 0.9964 / 0.9886 = 1.008
+     - Empirically Measured Logit Boost Ratio      : 1.302 (Edit: 2.5217, Mean Ctrl: 1.9361)
+     - Discrepancy (Predicted vs Measured)         : 1.29x (GUARD THRESHOLD: <= 2.0x)
+===================================================================================================================
+```
+
+---
+
+## 4. Readout-Frozen Step 20 Diagnostic Fact Audit (Part 1)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [STEP 20 DIAGNOSTIC FACT AUDIT: 10-FACT READOUT-FROZEN REPAIRED TABLE (PART 1)]
+===================================================================================================================
+  Fact ID | Relation           | Raw Pred                  | Norm Pred       | Canonical Obj   | Rel Modal Obj   | Match | Excl  | Bnd Ret | Shared | Subj Disc
+  -------------------------------------------------------------------------------------------------------------------------------------------------
+  776     | capital_of_country | ' Mérida de Mall'         | 'mérida de mall' | 'Lisbon'        | 'mérida de mall' | F     | T     | F       |  0/10 | F
+  507     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'mandolin'      | 'accordion. he plays' | F     | T     | F       |  5/10 | F
+  33      | born_city          | ' Canberra on 23 April 1946' | 'canberra on 23 april 1946' | 'Canberra'      | 'santiago de compostela' | F     | F     | F       |  0/10 | F
+  483     | profession         | ' jeweler and jeweler'    | 'jeweler and jeweler' | 'blacksmith'    | 'jeweler and jeweler' | F     | T     | F       |  6/10 | F
+  895     | capital_of_country | ' Breton, where capital'  | 'breton, where capital' | 'Stockholm'     | 'mérida de mall' | F     | F     | F       |  0/10 | F
+  523     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'trombone'      | 'accordion. he plays' | F     | T     | F       |  5/10 | F
+  85      | born_city          | ' Santiago de Compostela' | 'santiago de compostela' | 'Lima'          | 'santiago de compostela' | F     | T     | F       |  7/10 | F
+  354     | profession         | ' jeweler and jeweler'    | 'jeweler and jeweler' | 'optometrist'   | 'jeweler and jeweler' | F     | T     | F       |  6/10 | F
+  922     | capital_of_country | ' Freetowno N'            | 'freetowno n'   | 'Abuja'         | 'mérida de mall' | F     | F     | F       |  0/10 | F
+  615     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'harmonica'     | 'accordion. he plays' | F     | T     | F       |  5/10 | F
+  -------------------------------------------------------------------------------------------------------------------------------------------------
+  Summary across all 20 facts: Raw Retained = 0/20 (0.0%), Subject-Discriminable = 0/20 (0.0%)
+===================================================================================================================
+```
+
+---
+
+## 5. Complete 7-Condition Localization Partition Ablation on Frozen Arm (Part 1)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [7-CONDITION COMPLETE LOCALIZATION PARTITION ABLATION ON FROZEN ARM (CHANGE 5)]
+===================================================================================================================
+  Condition                                  | Raw Ret        | Subj-Disc      | Gen (3-Para)  | PPL       | Delta PPL 
+  -------------------------------------------------------------------------------------------------------------------
+  1. Intact Frozen Model                     |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |   +29.37
+  2. Readout Only Kept (Blocks+ln_f Reset)   |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
+  3. Readout Removed (wte + ln_f Reset)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
+  4. Target Rows Only Removed in wte         |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
+  5. Non-Target Rows Only Removed in wte     |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
+  6. Largest-Delta Block Subset (38.6M)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
+  7. Everything Removed (Pre-Edit Sanity)    |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
+  -------------------------------------------------------------------------------------------------------------------
+  PREDICTION EVALUATION STATUS : PREDICTION HELD (Condition 2 readout-only shows zero retention; Condition 3 block-only preserves retention)
+===================================================================================================================
+```
+
+---
+
+## 6. Null Distribution & Rigorous Controls (Part 2)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 2: NULL DISTRIBUTION & RIGOROUS CONTROLS (BLOCKING)]
+===================================================================================================================
+  1. Never-Edited Control Facts (20 Facts)          : Subject-Discriminable Retention = 1/20 (Expected: 0)
+  2. Permutation Null Diagnostic Checks             :
+     - Distinct Normalized Predictions              : 12 / 20
+     - Largest Collapsed Output Group Size          : 4 / 20
+     - STATUS: NON-DEGENERATE NULL (Sufficient output diversity)
+     - Permutation Null Distribution (10,000 Perms) : Mean = 0.000, 95th Pct = 0, 99th Pct = 0
+     - Observed Subject-Discriminable Retention     : 0/20
+     - One-Sided Permutation p-value                : p = 1.0000 (Interpretable: True)
+  3. Magnitude-Matched Random-Direction Control     : Raw = 0/20, Subj-Disc = 0/20 (Expected: 0)
+  4. Wrong-Target Control Facts (Assigned Targets)  : Raw = 1/20, Subj-Disc = 1/20 (Expected: 0)
+  5. Pre-Edit Baseline on Validation Facts          : Subj-Disc = 0/20 (Expected: 0)
+
+  PART 2 RIGOROUS VERDICT : BINDING NOT ESTABLISHED (Controls clean: False, Null degenerate: False, p = 1.0000, p99 = 0)
+===================================================================================================================
+```
+
+---
+
+## 7. Damage-Matched Comparisons (Part 3)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 3: DAMAGE-MATCHED COMPARISONS (CHANGE 6, BLOCKING)]
+===================================================================================================================
+  Locality-Matched Selection (Target KL = 1.9976):
+    - Selected Unfrozen LR : 3.0e-05 (KL = 2.3796, diff = 0.3820)
+    - Runner-up Unfrozen LR: 1.0e-05 (KL = 1.0581)
+
+  Dose-Matched Selection (Target Cumulative Dose = 4.8651):
+    - Selected Unfrozen LR : 7.0e-04 (Dose = 3.9246, diff = 0.9405) -> MATCHED (Within 20%)
+    - Runner-up Unfrozen LR: 5.0e-04 (Dose = 2.8979)
+
+  1. Locality-Matched Comparison Table:
+  Configuration                       | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Gen (3-Para) | Loc KL  | PPL      | Total Dose
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  Unfrozen (LR = 3.0e-05)             |    0.0%  |    24.20 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  2.3796 |    79.73 |     1.0197
+  Readout-Frozen (LR = 3.0e-04)       |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  1.9976 |    65.40 |     4.8651
+  ---------------------------------------------------------------------------------------------------------------------------------------
+
+  2. Dose-Matched Comparison Table:
+  Configuration                       | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Gen (3-Para) | Loc KL  | PPL      | Total Dose
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  Unfrozen (LR = 7.0e-04)             |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  4.8600 |  1279.83 |     3.9246
+  Readout-Frozen (LR = 3.0e-04)       |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  1.9976 |    65.40 |     4.8651
+  ---------------------------------------------------------------------------------------------------------------------------------------
+  MATCHED COMPARISON VERDICTS : Locality-Matched: Frozen TIES/LOSES | Dose-Matched: Frozen TIES/LOSES
+===================================================================================================================
+```
+
+---
+
+## 8. Repeat Orderings (Seeds 42, 43, 44) & Stability Audit (Part 4)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 4: REPEAT ORDERINGS (SEEDS 42, 43, 44) & STABILITY AUDIT (BLOCKING)]
+===================================================================================================================
+  [Multi-Ordering Results Table Across Seeds 42, 43, 44]
+  Arm / Seed                   | Status           | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Perm p-val  | Gen      | Loc KL  | PPL      | Dose    
+  ----------------------------------------------------------------------------------------------------------------------------------------------------
+  Frozen (Seed 42)             | REUSED FROM PART 1 |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    | 1.0000 (>0) |    0.0% |  1.9976 |    65.40 |   4.8651
+  Frozen (Seed 43)             | NEWLY COMPUTED   |    0.0%  |    23.75 | 1/20 (5.0%)    | 1/20 (5.0%)    | 0.0487 (>1) |    0.0% |  1.9120 |    53.02 |   3.7948
+  Frozen (Seed 44)             | NEWLY COMPUTED   |    0.0%  |    23.10 | 0/20 (0.0%)    | 0/20 (0.0%)    | 1.0000 (>1) |    0.0% |  1.8785 |    48.02 |   3.5603
+  Unfrozen (Seed 42)           | NEWLY COMPUTED   |    0.0%  |    24.20 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  2.3796 |    79.73 |   1.0197
+  Unfrozen (Seed 43)           | NEWLY COMPUTED   |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  2.1986 |    82.03 |   1.0114
+  Unfrozen (Seed 44)           | NEWLY COMPUTED   |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  1.9501 |    61.79 |   1.0484
+  ----------------------------------------------------------------------------------------------------------------------------------------------------
+  Individual Counts Summary :
+    - Frozen Arm Subject-Discriminable Counts Across 3 Orderings   : [0, 1, 0] -> Mean = 0.33 +/- 0.47
+    - Unfrozen Arm Subject-Discriminable Counts Across 3 Orderings : [0, 0, 0] -> Mean = 0.00 +/- 0.00
+    - Stability Diagnosis                                         : UNSTABLE (Zero on some orderings)
+    - Gate 7 Evaluation (Each Ordering > p99 & Mean > Pooled p99) : FAIL (Counts: [0, 1, 0], p99s: [0, 1, 1])
+===================================================================================================================
+```
+
+---
+
+## 9. Disambiguate Recency from Prior (Part 5)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 5: DISAMBIGUATE RECENCY FROM PRIOR (CHANGE 7)]
+===================================================================================================================
+  Candidate Object Pool Sizes by Relation:
+    - Relation 'born_city         ': 40 candidate objects
+    - Relation 'profession        ': 24 candidate objects
+    - Relation 'plays_instrument  ': 24 candidate objects
+    - Relation 'capital_of_country': 40 candidate objects
+  Selected Relation for Discriminating Test: 'born_city' (Pool size = 40)
+
+  Full Pre-Edit Unconditional Prior Ranking for 'born_city' (40 candidates):
+    Rank  1: Nairobi         (probability = 0.011295)
+    Rank  2: New Delhi       (probability = 0.007374)
+    Rank  3: Hanoi           (probability = 0.006287)
+    Rank  4: Rome            (probability = 0.002575)
+    Rank  5: Paris           (probability = 0.002444)
+    Rank  6: Berlin          (probability = 0.002272)
+    Rank  7: Cairo           (probability = 0.002161)
+    Rank  8: Athens          (probability = 0.001687)
+    Rank  9: Amsterdam       (probability = 0.001312)
+    Rank 10: Manila          (probability = 0.001303)
+    Rank 19: Oslo            (probability = 0.000786)
+    Rank 38: Mexico City     (probability = 0.000205)
+    Rank 39: Brasilia        (probability = 0.000125)
+    Rank 40: Canberra        (probability = 0.000070)
+
+  Selected 6 Facts Sequence for Discrimination Experiment:
+    Fact 1: Canonical Object = 'Nairobi'       (Pre-Edit Prior Rank = 1)
+    Fact 2: Canonical Object = 'Rome'          (Pre-Edit Prior Rank = 4)
+    Fact 3: Canonical Object = 'Paris'         (Pre-Edit Prior Rank = 5)
+    Fact 4: Canonical Object = 'Berlin'        (Pre-Edit Prior Rank = 6)
+    Fact 5: Canonical Object = 'Cairo'         (Pre-Edit Prior Rank = 7)
+    Fact 6: Canonical Object = 'Tokyo'         (Pre-Edit Prior Rank = 11)
+
+  Discrimination Experiment Results:
+    - Readout-Frozen Arm (eta = 3.0e-04) :
+      Predictions                       : ['tokyo. it was designed', 'tokyo. it was the', 'tokyo. it was designed', "tokyo. it's a", "tokyo. it's a", 'tokyo. it was the']
+      Modal Output                      : 'tokyo. it was designed' (Prior Rank = N/A)
+      Recency Match (Last Edited)       : False (Last Edited: 'tokyo')
+      Prior Match (Highest Prior Early) : False (Highest Prior: 'Nairobi')
+    - Unfrozen Arm (eta = 3.0e-05)       :
+      Predictions                       : ['tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo']
+      Modal Output                      : 'tokyo tokyo tokyo tokyo tokyo' (Prior Rank = N/A)
+      Recency Match (Last Edited)       : False (Last Edited: 'tokyo')
+      Prior Match (Highest Prior Early) : False (Highest Prior: 'Nairobi')
+  PART 5 VERDICT : MIXED HYPOTHESIS (Frozen modal: 'tokyo. it was designed' [Rank N/A], Unfrozen modal: 'tokyo tokyo tokyo tokyo tokyo' [Rank N/A]).
+===================================================================================================================
+```
+
+---
+
+## 10. Gate Summary & Exit-Code Integrity (Part 6)
+
+```text
+run_b1_knowledge_injection_stdout.txt (Commit 788ef41)
+===================================================================================================================
+  [PART 6: GATE SUMMARY EVALUATED ON READOUT-FROZEN ARM (eta = 3.0e-04)]
+===================================================================================================================
+  Gate 1: Pre-Edit Accuracy on 1,000 Facts        : 0.00%                                -> PASS
+  Gate 2: Step 1 Efficacy                         : 0.0%                                   -> FAIL
+  Gate 3: Locality KL (Self-Defined <0.50)        : Step 20: 1.9976 (Step 1: 0.1782)  -> FAIL (Exceeds self-defined threshold 0.50 by 4.0x)
+  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 20: 65.40 (Base: 36.03)                   -> PASS
+  Gate 5: Composition Measurability               : True 12.5% vs Shuf 1.5% (Tmpl: 6.0%) -> MARGINAL PASS (CARRIED OVER FROM 9adf182 -- NOT MEASURED IN THIS RUN)
+  Gate 6: Subject-Discriminability > Null 99th Pct: Observed 0 vs p99 0 (p = 1.0000)            -> FAIL
+  Gate 7: Multi-Ordering Consistency (3 Orderings): Counts: [0, 1, 0], Mean: 0.33                       -> FAIL
+===================================================================================================================
+
+  [Final Consistency Assertions (Exit-Code Integrity & Coverage Audit)]
+  Audited Headline Keys Consumed from Results Dict:
+    - Key 'part0_arithmetic.target_token_rows_param_count': Verified Present (Value: 15360)
+    - Key 'part0_arithmetic.target_token_rows_network_pct': Verified Present (Value: 0.012343317019582672)
+    - Key 'part0_arithmetic.target_row_removal_pct      ': Verified Present (Value: 92.70919168547567)
+    - Key 'part0_arithmetic.nontarget_row_removal_pct   ': Verified Present (Value: 18.1000095961135)
+    - Key 'part0_arithmetic.largest_delta_block_subset_pct': Verified Present (Value: 34.20691007383076)
+    - Key 'part0_arithmetic.partition_sum_pct           ': Verified Present (Value: 145.01611135541992)
+    - Key 'part0_arithmetic.measured_gradient_budget_pct': Verified Present (Value: 95.84668240353776)
+    - Key 'part4_multi_ordering.frozen_disc_counts      ': Verified Present (Value: [0, 1, 0])
+    - Key 'part4_multi_ordering.frozen_mean_disc        ': Verified Present (Value: 0.3333333333333333)
+    - Key 'part4_multi_ordering.frozen_std_disc         ': Verified Present (Value: 0.4714045207910317)
+  ALL CONSISTENCY ASSERTIONS PASSED (Exit-Code Integrity Verified).
+===================================================================================================================
+ DIRECTIVE B1-1D COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
+ Total Wall Clock: 4182.33s
+ EXIT_CODE = 0
+===================================================================================================================
+SCRIPT_EXIT=0
+```
+
