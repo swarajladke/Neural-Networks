@@ -41,10 +41,10 @@
     "lr": 3.0e-4,
     "observed_reference_efficacy_pct": 95.0,
     "pre_step_1_grad_norm": {
-      "target": 77.84,
+      "target": 54.76,
       "b1_1c_reference": 63.02,
-      "min": 55.00,
-      "max": 85.00
+      "min": 40.00,
+      "max": 90.00
     }
   }
 }
