@@ -1,8 +1,5 @@
-HEAD is now at 788ef41 ELIMINATE REMAINING MEASUREMENT LITERALS AND SCOPE AMBIGUITIES
-788ef41 ELIMINATE REMAINING MEASUREMENT LITERALS AND SCOPE AMBIGUITIES
-Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
 ===================================================================================================================
- DIRECTIVE B1-1D -- QUALIFY OR KILL THE READOUT-FROZEN BINDING CLAIM
+ DIRECTIVE B1-1E -- HARNESS REGRESSION REPAIR AND RE-RUN OF B1-1D
 ===================================================================================================================
 
   [0. Determinism Configuration & SDPA Flags Audit]
@@ -16,92 +13,213 @@ Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF
     PyTorch Version              : 2.10.0+cu128
     Transformers Version         : 5.0.0
     Execution Device             : cuda (Tesla T4)
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1853.37it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1996.57it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
     Fresh Load Checksum 1        : -62119.88005775
     Fresh Load Checksum 2        : -62119.88005775
     Checksum Reproducibility     : MATCH: True
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1587.75it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
 
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+===================================================================================================================
+  [PART A: FACT-SET PROVENANCE DIAGNOSIS & CHECKSUM AUDIT (CHANGES 1 & 4)]
+===================================================================================================================
+  1. B1-1D Hash Calculation Code Audit:
+     Script Line (commit 4041bf2:run_b1_knowledge_injection.py:1147):
+     facts_sha = hashlib.sha256(json.dumps(facts_1000, sort_keys=True).encode()).hexdigest()
 
-  [1. Fact Set Construction & Ordering Provenance]
-    Injected Facts Total         : 1000
-    Reserved Control Probes      : 200 (50 subjects x 4 relations)
-    b1_facts.json SHA-256        : 22d831952258e04c560b3ad0c8e12cedb00f074c62fd48716e7c53e457f2c5c1
-Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 87708.38 examples/s]
-Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 581953.60 examples/s]
-Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 658616.96 examples/s]
-Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
-`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  2. Git Diff Audit of Candidate Pools (B1-1C commit 8305c17 vs B1-1D commit 4041bf2):
+     Pool Name           | B1-1C (8305c17) Count | B1-1D (4041bf2) Count | Change Summary
+     --------------------+-----------------------+-----------------------+------------------------------------------
+     CITIES_DATA         |                    20 |                    40 | Expanded (+20 extra world cities)
+     PROFESSIONS_DATA    |                    20 |                    24 | Altered/expanded (+4 extra professions)
+     INSTRUMENTS_DATA    |                    15 |                    24 | Altered/expanded (+9 extra instruments)
+     CAPITALS_DATA       |                    12 |                    40 | Re-keyed to Country-Capital (+28 entries)
+     INVENTED_COUNTRIES  |                    26 |                    50 | Expanded (+24 extra invented nations)
 
-  [2. WikiText-2 Capability Instrument]
+  3. Fact Generation & Disk Storage Audit:
+     In B1-1D (commit 4041bf2), facts were dynamically generated in memory at runtime via generate_synthetic_facts().
+     No b1_facts.json file existed on disk or was tracked in git; the disk load path was absent.
+
+  4. Root Cause Statement:
+     CAUSE: B1-1D dynamically re-generated facts using expanded candidate pools (40 cities, 24 professions),
+     altering canonical objects while carrying over the B1-1C hash (285638ad...) in b1_results.json and
+     generating a divergent runtime hash (22d831952258e04c560b3ad0c8e12cedb00f074c62fd48716e7c53e457f2c5c1).
+
+  5. Loading Pinned Reference Fact File directly from disk:
+     FACTS FILE SHA-256: 285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536
+     FACTS LOADED: 1000
+     FACTS SOURCE: b1_facts.json (committed file)
+
+  6. Ten Diagnostic Canonical Objects Ground Truth Audit:
+     Fact 776 (capital_of_country): Expected 'Rome        ', Got 'Rome        ' -> Match: True
+     Fact 507 (plays_instrument  ): Expected 'accordion   ', Got 'accordion   ' -> Match: True
+     Fact  33 (born_city         ): Expected 'Oslo        ', Got 'Oslo        ' -> Match: True
+     Fact 483 (profession        ): Expected 'astronomer  ', Got 'astronomer  ' -> Match: True
+     Fact  85 (born_city         ): Expected 'Prague      ', Got 'Prague      ' -> Match: True
+     Fact 523 (plays_instrument  ): Expected 'oboe        ', Got 'oboe        ' -> Match: True
+     Fact 922 (capital_of_country): Expected 'Lisbon      ', Got 'Lisbon      ' -> Match: True
+     Fact 354 (profession        ): Expected 'astronomer  ', Got 'astronomer  ' -> Match: True
+     Fact 750 (capital_of_country): Expected 'Berlin      ', Got 'Berlin      ' -> Match: True
+     Fact 615 (plays_instrument  ): Expected 'drums       ', Got 'drums       ' -> Match: True
+
+  7. Checksum Discrepancy Diagnostics (Change 4):
+     Parameter Summation Code: def compute_model_checksum(m): return sum(p.sum().item() for p in m.parameters())
+     Fresh Model Sum (float32 accumulation): -62119.87976855
+     Fresh Model Sum (float64 accumulation): -62119.88245577
+     B1-1C Recorded Checksum (commit 8305c17): -62119.87976855
+     B1-1D Recorded Checksum (commit 788ef41): -62119.88005775
+     PyTorch Version     : 2.10.0+cu128
+     CUDA Version        : 12.8
+     cuDNN Version       : 91002
+     Transformers Version: 5.0.0
+     Deterministic Algos Active During Init: True
+     CAUSE: NOT DETERMINED — difference is 0.00000000% of total magnitude, within single-precision epsilon (1.19e-7 * 62119 = 0.0074)
+===================================================================================================================
+
+  [WikiText-2 Capability Instrument]
     WikiText-2 Slice Shape       : [1000, 512]
     WikiText Slice SHA-256       : 3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7
 
 ===================================================================================================================
-  [COMPUTE PROJECTION & TIME BUDGET WITH HARD ABORT (CHANGE 4)]
+  [PART E: COMPUTE PROJECTION & TIME BUDGET WITH HARD ABORT (CHANGE 8)]
 ===================================================================================================================
-    Measured Baseline WikiText-2 PPL: 36.03 (CE Loss = 3.5843) [Evaluated in 58.17s]
-    Measured Per-Prompt Eval Time   : 0.1042s / prompt
-    Part 1 Projection (Frozen Validation & Ablation) :  1619.4s (26.99 min)
-    Part 2 Projection (Null Distribution & Controls) :    20.5s (0.34 min)
-    Part 3 Projection (Damage-Matched Comparisons)   :   185.6s (3.09 min)
-    Part 4 Projection (Repeat Orderings Seeds 42-44) :   269.8s (4.50 min)
-    Part 5 Projection (Recency vs Prior 6 Edits)     :    13.7s (0.23 min)
-    Miscellaneous Projection (Checksums & Baselines) :   120.0s (2.00 min)
+    Measured Baseline WikiText-2 PPL: 36.03 (CE Loss = 3.5843) [Evaluated in 48.15s]
+    Measured Per-Prompt Eval Time   : 0.1232s / prompt
+    Part C Projection (Gate 0 Certification Positive Control) :   105.2s (1.75 min)
+    Part 1 Projection (Frozen Validation & Ablation)          :  1356.4s (22.61 min)
+    Part 2 Projection (Null Distribution & Controls)          :    22.1s (0.37 min)
+    Part 3 Projection (Damage-Matched Comparisons)            :   156.6s (2.61 min)
+    Part 4 Projection (Repeat Orderings Seeds 42-44)          :   231.2s (3.85 min)
+    Part 5 Projection (Recency vs Prior 6 Edits)              :    13.9s (0.23 min)
+    Miscellaneous Projection (Checksums & Baselines)          :   120.0s (2.00 min)
     -------------------------------------------------------------------
-    TOTAL PROJECTED SUITE WALL-CLOCK TIME            :  2229.0s (37.15 min / 0.62 h)
-    HARD ABORT CEILING (70% of 23,400s)              : 16380.0s (4.55 h)
-    COMPUTE BUDGET STATUS                            : APPROVED (Projection is 13.6% of limit).
+    TOTAL PROJECTED SUITE WALL-CLOCK TIME                     :  2005.5s (33.42 min / 0.56 h)
+    HARD ABORT CEILING (70% of 23,400s)                       : 16380.0s (4.55 h)
+    COMPUTE BUDGET STATUS                                     : APPROVED (Projection is 12.2% of limit).
+===================================================================================================================
+
+===================================================================================================================
+  [PART B: VERBATIM NORMALIZATION & MATCHING RESTORATION & 40-CASE EQUIVALENCE (CHANGES 2 & 5)]
+===================================================================================================================
+  1. Side-by-Side Implementation Comparison:
+     --- B1-1C (commit 8305c17) Verbatim Functions ---
+     def normalize_entity(s): cleaned = s.strip().lower().strip(' \t\n.,!?;:\'\"-'); tokens = [t.strip(' \t\n.,!?;:\'\"-') for t in cleaned.split() if t.strip(' \t\n.,!?;:\'\"-')]; return tokens[0] if tokens else ''
+     def check_match(p, t): p_c, t_c = p.strip().lower(), t.strip().lower(); return p_c.startswith(t_c) and (len(p_c)==len(t_c) or p_c[len(t_c)] in ' \t\n.,!?;:\'\"-')
+     --- B1-1D (commit 4041bf2) Regressed Functions ---
+     def normalize_entity(s): return s.strip().strip('.,;:!?\"\'()[]{}').lower()
+     def check_match(p, t): return normalize_entity(p) == normalize_entity(t)
+     --- Proposed B1-1E Implementation ---
+     VERBATIM RESTORATION OF B1-1C (Zero structural or algorithmic alterations).
+
+  2. 40-Case Continuation Match Results:
+     Idx  | Prediction                          | Target          | B1-1C  | B1-1D  | B1-1E  | Discrepancy (1C!=1E)
+     -----------------------------------------------------------------------------------------------
+     1    |  oslo                               | Rome            | False  | False  | False  | IDENTICAL
+     2    |  oboe                               | accordion       | False  | False  | False  | IDENTICAL
+     3    |  oslo                               | Cairo           | False  | False  | False  | IDENTICAL
+     4    |  oslo                               | Lisbon          | False  | False  | False  | IDENTICAL
+     5    |  oslo                               | Oslo            | True   | True   | True   | IDENTICAL
+     6    |  photographer                       | astronomer      | False  | False  | False  | IDENTICAL
+     7    |  oslo                               | Prague          | False  | False  | False  | IDENTICAL
+     8    |  oslo                               | Berlin          | False  | False  | False  | IDENTICAL
+     9    |  photographer                       | photographer    | True   | True   | True   | IDENTICAL
+     10   |  oboe                               | oboe            | True   | True   | True   | IDENTICAL
+     11   |  Paris                              | Paris           | True   | True   | True   | IDENTICAL
+     12   |  Tokyo                              | Tokyo           | True   | True   | True   | IDENTICAL
+     13   |  Berlin                             | Berlin          | True   | True   | True   | IDENTICAL
+     14   |  Madrid                             | Madrid          | True   | True   | True   | IDENTICAL
+     15   |  Athens                             | Athens          | True   | True   | True   | IDENTICAL
+     16   |  Cairo                              | Cairo           | True   | True   | True   | IDENTICAL
+     17   |  Dublin                             | Dublin          | True   | True   | True   | IDENTICAL
+     18   |  Vienna                             | Vienna          | True   | True   | True   | IDENTICAL
+     19   |  Warsaw                             | Warsaw          | True   | True   | True   | IDENTICAL
+     20   |  Seoul                              | Seoul           | True   | True   | True   | IDENTICAL
+     21   |  Oslo, Oslo Oslo Oslo               | Oslo            | True   | False  | True   | IDENTICAL
+     22   |  oboe.                              | oboe            | True   | True   | True   | IDENTICAL
+     23   |  Canberra on 23 April 1946          | Canberra        | True   | False  | True   | IDENTICAL
+     24   |  photographer and astronomer. She   | photographer    | True   | False  | True   | IDENTICAL
+     25   |  accordion. He plays                | accordion       | True   | False  | True   | IDENTICAL
+     26   |  Rome.                              | Rome            | True   | True   | True   | IDENTICAL
+     27   |  Rome                               | Rome            | True   | True   | True   | IDENTICAL
+     28   |  Osloman                            | Oslo            | False  | False  | False  | IDENTICAL
+     29   |  Romeo                              | Rome            | False  | False  | False  | IDENTICAL
+     30   |  Cairo                              | Canberra        | False  | False  | False  | IDENTICAL
+     31   |  New Yorker                         | New York        | False  | False  | False  | IDENTICAL
+     32   |  New York, USA                      | New York        | True   | False  | True   | IDENTICAL
+     33   |  surgeon in London                  | surgeon         | True   | False  | True   | IDENTICAL
+     34   |  violinist in the orchestra         | violinist       | True   | False  | True   | IDENTICAL
+     35   |  pilot who flies                    | pilot           | True   | False  | True   | IDENTICAL
+     36   |  carpenter with tools               | carpenter       | True   | False  | True   | IDENTICAL
+     37   |  dentist in clinic                  | dentist         | True   | False  | True   | IDENTICAL
+     38   |  chef in restaurant                 | chef            | True   | False  | True   | IDENTICAL
+     39   |  blacksmith at forge                | blacksmith      | True   | False  | True   | IDENTICAL
+     40   |  gardener in park                   | gardener        | True   | False  | True   | IDENTICAL
+     -----------------------------------------------------------------------------------------------
+     Total differences between B1-1C and proposed B1-1E: 0 (ZERO REQUIRED)
+     Total false-negative regressions in B1-1D: 13
+
+  3. Strengthened 12-Case Match Test Suite (Change 5):
+     Case  1: Pred=' Canberra on 23 April 1946'        | Tgt='Canberra'   | ExpMatch=True  | ActMatch=True  | ActNorm='canberra'
+     Case  2: Pred=' oboe.'                            | Tgt='oboe'       | ExpMatch=True  | ActMatch=True  | ActNorm='oboe'
+     Case  3: Pred=' Oslo, Oslo Oslo Oslo'             | Tgt='Oslo'       | ExpMatch=True  | ActMatch=True  | ActNorm='oslo'
+     Case  4: Pred=' photographer and astronomer. She' | Tgt='photographer' | ExpMatch=True  | ActMatch=True  | ActNorm='photographer'
+     Case  5: Pred=' accordion. He plays'              | Tgt='accordion'  | ExpMatch=True  | ActMatch=True  | ActNorm='accordion'
+     Case  6: Pred=' Rome.'                            | Tgt='Rome'       | ExpMatch=True  | ActMatch=True  | ActNorm='rome'
+     Case  7: Pred=' Rome'                             | Tgt='Rome'       | ExpMatch=True  | ActMatch=True  | ActNorm='rome'
+     Case  8: Pred=' Osloman'                          | Tgt='Oslo'       | ExpMatch=False | ActMatch=False | ActNorm='osloman'
+     Case  9: Pred=' Romeo'                            | Tgt='Rome'       | ExpMatch=False | ActMatch=False | ActNorm='romeo'
+     Case 10: Pred=' Cairo'                            | Tgt='Canberra'   | ExpMatch=False | ActMatch=False | ActNorm='cairo'
+     Case 11: Pred=' New Yorker'                       | Tgt='New York'   | ExpMatch=False | ActMatch=False | ActNorm='new'
+     Case 12: Pred=' New York, USA'                    | Tgt='New York'   | ExpMatch=True  | ActMatch=True  | ActNorm='new'
+     ALL 12 TEST CASES PASSED SUCCESSFULLY.
+===================================================================================================================
+
+===================================================================================================================
+  [PART C: POSITIVE CONTROLS CERTIFICATION (GATE 0) (CHANGE 3)]
+===================================================================================================================
+  1. Executing Positive Control: Unfrozen Arm (eta = 3.0e-05, Seed 42):
+     Measured Unfrozen Efficacy        : 100.0% (Required: 100.0%)
+     Measured Unfrozen Mean Steps      : 5.10 (Interval: [3.5, 6.5])
+     Measured Unfrozen Step-20 PPL     : 51.68 (Interval: [50.0, 65.0])
+     Measured Unfrozen Pre Grad Norm   : 259.96 (Interval: [205.1, 285.0])
+     Measured Unfrozen Retention       : 7/20 (Interval: [4, 10])
+
+  [HARNESS CERTIFIED: GATE 0 PASSED (POSITIVE CONTROL REPRODUCED)]
+
+  2. Running Readout-Frozen Arm (eta = 3.0e-04) — Observed Scientific Measurement (NOT GATED):
+     Measured Readout-Frozen Pre Grad Norm : 54.76 (Interval: [40.0, 90.0])
+     Measured Readout-Frozen Efficacy  : 100.0%
+     Measured Readout-Frozen Mean Steps: 5.90
+     Measured Readout-Frozen Retention : 11/20
+     Measured Readout-Frozen PPL       : 41.51
+     Proceeding directly to Part D.
+===================================================================================================================
 
   [Pre-Edit Fact Accuracy & Pre-Known Fact Verification]
-    Pre-Edit Fact Accuracy       : 0.00% (0/1000)
-    Pre-Known Fact 388 Detected  : False (Excluded from retention counting)
+    Pre-Edit Fact Accuracy       : 0.10% (1/1000)
+    Pre-Known Fact 388 Detected  : True (Excluded from retention counting)
 
   [Dynamic Gradient Budget Measurement (Change 1)]
-    Measured Unfrozen Pre-Step-1 Grad Norm : 272.93
-    Measured Readout-Frozen Grad Norm      : 77.84
-    Derived Readout Gradient Budget Share  : sqrt(1 - 77.84^2 / 272.93^2) = 95.8%
+    Measured Unfrozen Pre-Step-1 Grad Norm : 259.96
+    Measured Readout-Frozen Grad Norm      : 54.76
+    Derived Readout Gradient Budget Share  : sqrt(1 - 54.76^2 / 259.96^2) = 97.8%
 
 ===================================================================================================================
   [PART 1: FINAL-LAYER HIDDEN STATE ANISOTROPY & LOGIT BOOST RATIO (BLOCKING)]
 ===================================================================================================================
-  1. Pairwise Cosine Similarity (20 Edit Prompts)   : Mean = 0.9886 +/- 0.0074
+  1. Pairwise Cosine Similarity (20 Edit Prompts)   : Mean = 0.9880 +/- 0.0075
   2. Within-Relation Cosine Similarities:
-     - Relation 'born_city         '                 : Mean = 0.9997 +/- 0.0001
+     - Relation 'born_city         '                 : Mean = 0.9996 +/- 0.0002
      - Relation 'profession        '                 : Mean = 0.9998 +/- 0.0001
-     - Relation 'plays_instrument  '                 : Mean = 0.9997 +/- 0.0002
-     - Relation 'capital_of_country'                 : Mean = 0.9997 +/- 0.0002
-  3. Cross-Relation Cosine Similarity              : Mean = 0.9855
-  4. Edit-to-Control Prompts Cosine (80 Controls)   : Mean = 0.9886 +/- 0.0078
-  5. Implied Selectivity Margin (1.0 - Cross-Cos)   : 0.0145
+     - Relation 'plays_instrument  '                 : Mean = 0.9996 +/- 0.0003
+     - Relation 'capital_of_country'                 : Mean = 0.9996 +/- 0.0002
+  3. Cross-Relation Cosine Similarity              : Mean = 0.9848
+  4. Edit-to-Control Prompts Cosine (80 Controls)   : Mean = 0.9883 +/- 0.0079
+  5. Implied Selectivity Margin (1.0 - Cross-Cos)   : 0.0152
   6. Target-Token Logit Boost Decomposition (Addition 2):
-     - Edit Hidden-State Norm Mean +/- Std         : 222.6454 +/- 35.7584
+     - Edit Hidden-State Norm Mean +/- Std         : 222.9103 +/- 31.4844
      - Control Hidden-State Norm Mean +/- Std      : 223.4444 +/- 31.9618
-     - Norm Ratio (Edit / Control)                 : 0.9964
-     - Predicted Ratio: (Norm Ratio / Mean Cosine) : 0.9964 / 0.9886 = 1.008
-     - Empirically Measured Logit Boost Ratio      : 1.302 (Edit: 2.5217, Mean Ctrl: 1.9361)
-     - Discrepancy (Predicted vs Measured)         : 1.29x (GUARD THRESHOLD: <= 2.0x)
+     - Norm Ratio (Edit / Control)                 : 0.9976
+     - Predicted Ratio: (Norm Ratio / Mean Cosine) : 0.9976 / 0.9883 = 1.009
+     - Empirically Measured Logit Boost Ratio      : 1.241 (Edit: 2.0701, Mean Ctrl: 1.6682)
+     - Discrepancy (Predicted vs Measured)         : 1.23x (GUARD THRESHOLD: <= 2.0x)
 
 ===================================================================================================================
   [EXPECTED SCIENTIFIC OUTCOMES RECORDED PRIOR TO EVALUATION]
@@ -115,14 +233,6 @@ Token indices sequence length is longer than the specified maximum sequence leng
 ===================================================================================================================
   [PART 1: READOUT-FROZEN PER-STEP VALIDATION & REPAIRED DIAGNOSTICS (eta = 3.0e-04)]
 ===================================================================================================================
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1795.74it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
   Initial wte Parameter Checksum (Before Edits)     : 14659.96484375
   Verifying requires_grad Flag on Frozen Tensors    :
     - transformer.wte.weight.requires_grad          : False
@@ -130,92 +240,92 @@ Notes:
     - lm_head.weight.requires_grad                  : False
   Step  | Fact ID | Relation           | Canonical Object | Efficacy | Gen (3-Para) | Loc KL  | Raw Ret (Cnt/%)  | Subj-Disc (Cnt/%)  | PPL       | Rel PPL   | Cum Dose  | Steps
   ------------------------------------------------------------------------------------------------------------------------------------------------------
-  1     | 776     | capital_of_country | Lisbon           |    0.0%  |        0.0%  |  0.1782 |  0/1  (  0.0%)   |  0/1  (  0.0%)     |     37.17 |    +3.18% |    0.2252 |    25
-  2     | 507     | plays_instrument   | mandolin         |    0.0%  |        0.0%  |  0.3352 |  0/2  (  0.0%)   |  0/2  (  0.0%)     |     39.13 |    +8.60% |    0.1561 |    25
-  3     | 33      | born_city          | Canberra         |    0.0%  |        0.0%  |  0.6134 |  0/3  (  0.0%)   |  0/3  (  0.0%)     |     40.89 |   +13.50% |    0.2459 |    25
-  4     | 483     | profession         | blacksmith       |    0.0%  |        0.0%  |  0.5601 |  0/4  (  0.0%)   |  0/4  (  0.0%)     |     40.74 |   +13.09% |    0.1888 |    25
-  5     | 895     | capital_of_country | Stockholm        |    0.0%  |        0.0%  |  0.6748 |  0/5  (  0.0%)   |  0/5  (  0.0%)     |     44.36 |   +23.13% |    0.2512 |    25
-  6     | 523     | plays_instrument   | trombone         |    0.0%  |        0.0%  |  0.6734 |  0/6  (  0.0%)   |  0/6  (  0.0%)     |     43.37 |   +20.37% |    0.1662 |    25
-  7     | 85      | born_city          | Lima             |    0.0%  |        0.0%  |  0.6484 |  0/7  (  0.0%)   |  0/7  (  0.0%)     |     42.78 |   +18.74% |    0.3326 |    25
-  8     | 354     | profession         | optometrist      |    0.0%  |        0.0%  |  0.8467 |  0/8  (  0.0%)   |  0/8  (  0.0%)     |     48.16 |   +33.66% |    0.1577 |    25
-  9     | 922     | capital_of_country | Abuja            |    0.0%  |        0.0%  |  1.0142 |  0/9  (  0.0%)   |  0/9  (  0.0%)     |     50.81 |   +41.02% |    0.1412 |    25
-  10    | 615     | plays_instrument   | harmonica        |  100.0%  |        0.0%  |  0.7041 |  1/10 ( 10.0%)   |  1/10 ( 10.0%)     |     44.60 |   +23.78% |    0.4048 |    11
-  11    | 184     | born_city          | Riyadh           |    0.0%  |       33.3%  |  1.0921 |  0/11 (  0.0%)   |  0/11 (  0.0%)     |     52.00 |   +44.33% |    0.2775 |    25
-  12    | 336     | profession         | chemist          |    0.0%  |       33.3%  |  1.2755 |  0/12 (  0.0%)   |  0/12 (  0.0%)     |     52.36 |   +45.33% |    0.2355 |    25
-  13    | 750     | capital_of_country | Brussels         |    0.0%  |        0.0%  |  3.8765 |  0/13 (  0.0%)   |  0/13 (  0.0%)     |    589.46 | +1536.03% |    0.3645 |    25
-  14    | 732     | plays_instrument   | french horn      |    0.0%  |        0.0%  |  4.6685 |  0/14 (  0.0%)   |  0/14 (  0.0%)     |   4265.98 | +1.2e+04% |    0.2473 |    25
-  15    | 53      | born_city          | Hanoi            |    0.0%  |        0.0%  |  3.9071 |  0/15 (  0.0%)   |  0/15 (  0.0%)     |    165.45 |  +359.20% |    0.4432 |    25
-  16    | 450     | profession         | photographer     |    0.0%  |        0.0%  |  4.1240 |  0/16 (  0.0%)   |  0/16 (  0.0%)     |    300.43 |  +733.84% |    0.1768 |    25
-  17    | 809     | capital_of_country | Rabat            |    0.0%  |        0.0%  |  3.8439 |  0/17 (  0.0%)   |  0/17 (  0.0%)     |    157.54 |  +337.25% |    0.2793 |    25
-  18    | 622     | plays_instrument   | accordion        |    0.0%  |        0.0%  |  1.4902 |  0/18 (  0.0%)   |  0/18 (  0.0%)     |     51.98 |   +44.27% |    0.2327 |    25
-  19    | 185     | born_city          | Santiago         |    0.0%  |        0.0%  |  1.8399 |  0/19 (  0.0%)   |  0/19 (  0.0%)     |     59.50 |   +65.15% |    0.1479 |    25
-  20    | 350     | profession         | jeweler          |    0.0%  |        0.0%  |  1.9976 |  0/20 (  0.0%)   |  0/20 (  0.0%)     |     65.40 |   +81.51% |    0.1905 |    25
+  1     | 776     | capital_of_country | Rome             |  100.0%  |       33.3%  |  0.3622 |  1/1  (100.0%)   |  1/1  (100.0%)     |     36.42 |    +1.07% |    0.0880 |     5
+  2     | 507     | plays_instrument   | accordion        |  100.0%  |        0.0%  |  0.5884 |  2/2  (100.0%)   |  1/2  ( 50.0%)     |     37.13 |    +3.05% |    0.1352 |    17
+  3     | 33      | born_city          | Oslo             |  100.0%  |        0.0%  |  0.7124 |  3/3  (100.0%)   |  0/3  (  0.0%)     |     37.89 |    +5.16% |    0.1268 |     8
+  4     | 483     | profession         | astronomer       |  100.0%  |        0.0%  |  1.5890 |  4/4  (100.0%)   |  0/4  (  0.0%)     |     39.10 |    +8.53% |    0.2331 |    11
+  5     | 895     | capital_of_country | Cairo            |  100.0%  |        0.0%  |  1.8051 |  5/5  (100.0%)   |  1/5  ( 20.0%)     |     39.17 |    +8.72% |    0.0279 |     1
+  6     | 523     | plays_instrument   | oboe             |  100.0%  |        0.0%  |  1.8872 |  6/6  (100.0%)   |  2/6  ( 33.3%)     |     39.56 |    +9.80% |    0.1037 |     6
+  7     | 85      | born_city          | Prague           |  100.0%  |        0.0%  |  1.7796 |  5/7  ( 71.4%)   |  1/7  ( 14.3%)     |     39.61 |    +9.95% |    0.0912 |     5
+  8     | 418     | profession         | surgeon          |  100.0%  |       66.7%  |  1.3140 |  5/8  ( 62.5%)   |  2/8  ( 25.0%)     |     39.27 |    +9.00% |    0.1509 |     2
+  9     | 922     | capital_of_country | Lisbon           |  100.0%  |        0.0%  |  1.9280 |  6/9  ( 66.7%)   |  3/9  ( 33.3%)     |     39.38 |    +9.31% |    0.0675 |     3
+  10    | 615     | plays_instrument   | drums            |  100.0%  |        0.0%  |  1.9154 |  5/10 ( 50.0%)   |  1/10 ( 10.0%)     |     39.26 |    +8.97% |    0.1199 |     5
+  11    | 53      | born_city          | Amsterdam        |  100.0%  |       33.3%  |  1.9515 |  6/11 ( 54.5%)   |  2/11 ( 18.2%)     |     39.39 |    +9.33% |    0.0506 |     2
+  12    | 336     | profession         | photographer     |  100.0%  |        0.0%  |  1.9079 |  6/12 ( 50.0%)   |  2/12 ( 16.7%)     |     39.37 |    +9.27% |    0.1019 |     3
+  13    | 750     | capital_of_country | Berlin           |  100.0%  |        0.0%  |  2.2177 |  6/13 ( 46.2%)   |  2/13 ( 15.4%)     |     39.71 |   +10.21% |    0.0727 |     4
+  14    | 682     | plays_instrument   | harmonica        |  100.0%  |        0.0%  |  2.2453 |  8/14 ( 57.1%)   |  3/14 ( 21.4%)     |     39.83 |   +10.56% |    0.0744 |     8
+  15    | 185     | born_city          | Seoul            |  100.0%  |        0.0%  |  2.4100 |  5/15 ( 33.3%)   |  1/15 (  6.7%)     |     41.09 |   +14.03% |    0.1171 |     7
+  16    | 450     | profession         | sculptor         |  100.0%  |        0.0%  |  2.5995 |  6/16 ( 37.5%)   |  3/16 ( 18.8%)     |     41.09 |   +14.05% |    0.0720 |     6
+  17    | 809     | capital_of_country | Tokyo            |  100.0%  |        0.0%  |  2.1515 |  6/17 ( 35.3%)   |  2/17 ( 11.8%)     |     41.75 |   +15.87% |    0.0824 |     3
+  18    | 501     | plays_instrument   | banjo            |  100.0%  |        0.0%  |  2.2374 |  6/18 ( 33.3%)   |  4/18 ( 22.2%)     |     41.60 |   +15.47% |    0.0807 |     7
+  19    | 174     | born_city          | Vienna           |  100.0%  |       33.3%  |  2.2807 |  5/19 ( 26.3%)   |  4/19 ( 21.1%)     |     41.72 |   +15.78% |    0.0872 |     6
+  20    | 467     | profession         | gardener         |  100.0%  |        0.0%  |  2.3862 |  5/20 ( 25.0%)   |  3/20 ( 15.0%)     |     42.29 |   +17.36% |    0.1370 |    12
   ------------------------------------------------------------------------------------------------------------------------------------------------------
-  Total Readout-Frozen Cumulative Dose Across All 20 Edits : 4.8651
+  Total Readout-Frozen Cumulative Dose Across All 20 Edits : 2.0200
   Final wte Parameter Checksum (After 20 Edits)     : 14659.96484375
   HARD GATE: wte Checksum Invariance Verified       : True
 
   [Readout-Frozen Step 20 Module Deltas (Blocks Only)]
-    block_00_attn        : RMS = 1.420e-04 | Rel Delta = 7.552e-04
-    block_00_ln_1        : RMS = 2.715e-03 | Rel Delta = 2.036e-02
-    block_00_ln_2        : RMS = 4.381e-03 | Rel Delta = 6.217e-03
-    block_00_mlp         : RMS = 6.345e-05 | Rel Delta = 5.393e-04
-    block_01_attn        : RMS = 6.967e-05 | Rel Delta = 5.292e-04
-    block_01_ln_1        : RMS = 3.412e-03 | Rel Delta = 2.056e-02
-    block_01_ln_2        : RMS = 3.155e-03 | Rel Delta = 1.800e-02
-    block_01_mlp         : RMS = 6.312e-05 | Rel Delta = 5.681e-04
-    block_02_attn        : RMS = 8.749e-05 | Rel Delta = 6.326e-04
-    block_02_ln_1        : RMS = 2.252e-03 | Rel Delta = 1.216e-02
-    block_02_ln_2        : RMS = 5.143e-03 | Rel Delta = 2.430e-02
-    block_02_mlp         : RMS = 6.512e-05 | Rel Delta = 5.654e-04
-    block_03_attn        : RMS = 6.694e-05 | Rel Delta = 5.157e-04
-    block_03_ln_1        : RMS = 1.423e-03 | Rel Delta = 6.414e-03
-    block_03_ln_2        : RMS = 1.298e-03 | Rel Delta = 5.842e-03
-    block_03_mlp         : RMS = 4.883e-05 | Rel Delta = 4.346e-04
-    block_04_attn        : RMS = 5.951e-05 | Rel Delta = 4.401e-04
-    block_04_ln_1        : RMS = 1.566e-03 | Rel Delta = 6.713e-03
-    block_04_ln_2        : RMS = 1.385e-03 | Rel Delta = 7.061e-03
-    block_04_mlp         : RMS = 5.516e-05 | Rel Delta = 4.922e-04
-    block_05_attn        : RMS = 7.110e-05 | Rel Delta = 5.908e-04
-    block_05_ln_1        : RMS = 1.350e-03 | Rel Delta = 5.036e-03
-    block_05_ln_2        : RMS = 1.431e-03 | Rel Delta = 7.084e-03
-    block_05_mlp         : RMS = 5.674e-05 | Rel Delta = 5.020e-04
-    block_06_attn        : RMS = 5.994e-05 | Rel Delta = 4.846e-04
-    block_06_ln_1        : RMS = 1.988e-03 | Rel Delta = 7.925e-03
-    block_06_ln_2        : RMS = 1.572e-03 | Rel Delta = 8.361e-03
-    block_06_mlp         : RMS = 4.989e-05 | Rel Delta = 4.255e-04
-    block_07_attn        : RMS = 4.806e-05 | Rel Delta = 3.833e-04
-    block_07_ln_1        : RMS = 1.885e-03 | Rel Delta = 7.318e-03
-    block_07_ln_2        : RMS = 1.595e-03 | Rel Delta = 8.530e-03
-    block_07_mlp         : RMS = 4.423e-05 | Rel Delta = 3.606e-04
-    block_08_attn        : RMS = 5.169e-05 | Rel Delta = 4.109e-04
-    block_08_ln_1        : RMS = 1.720e-03 | Rel Delta = 7.043e-03
-    block_08_ln_2        : RMS = 1.636e-03 | Rel Delta = 8.744e-03
-    block_08_mlp         : RMS = 4.235e-05 | Rel Delta = 3.223e-04
-    block_09_attn        : RMS = 4.594e-05 | Rel Delta = 3.561e-04
-    block_09_ln_1        : RMS = 1.866e-03 | Rel Delta = 7.200e-03
-    block_09_ln_2        : RMS = 1.450e-03 | Rel Delta = 7.534e-03
-    block_09_mlp         : RMS = 3.766e-05 | Rel Delta = 2.644e-04
-    block_10_attn        : RMS = 4.733e-05 | Rel Delta = 3.586e-04
-    block_10_ln_1        : RMS = 1.846e-03 | Rel Delta = 6.750e-03
-    block_10_ln_2        : RMS = 2.282e-03 | Rel Delta = 1.082e-02
-    block_10_mlp         : RMS = 4.009e-05 | Rel Delta = 2.587e-04
-    block_11_attn        : RMS = 5.907e-05 | Rel Delta = 4.104e-04
-    block_11_ln_1        : RMS = 1.601e-03 | Rel Delta = 4.650e-03
-    block_11_ln_2        : RMS = 3.008e-03 | Rel Delta = 8.281e-03
-    block_11_mlp         : RMS = 3.909e-05 | Rel Delta = 2.332e-04
+    block_00_attn        : RMS = 8.168e-05 | Rel Delta = 4.344e-04
+    block_00_ln_1        : RMS = 1.607e-03 | Rel Delta = 1.205e-02
+    block_00_ln_2        : RMS = 1.432e-03 | Rel Delta = 2.032e-03
+    block_00_mlp         : RMS = 3.004e-05 | Rel Delta = 2.554e-04
+    block_01_attn        : RMS = 3.341e-05 | Rel Delta = 2.537e-04
+    block_01_ln_1        : RMS = 9.448e-04 | Rel Delta = 5.694e-03
+    block_01_ln_2        : RMS = 1.349e-03 | Rel Delta = 7.698e-03
+    block_01_mlp         : RMS = 3.360e-05 | Rel Delta = 3.024e-04
+    block_02_attn        : RMS = 5.180e-05 | Rel Delta = 3.745e-04
+    block_02_ln_1        : RMS = 1.218e-03 | Rel Delta = 6.578e-03
+    block_02_ln_2        : RMS = 1.386e-03 | Rel Delta = 6.548e-03
+    block_02_mlp         : RMS = 4.449e-05 | Rel Delta = 3.863e-04
+    block_03_attn        : RMS = 6.133e-05 | Rel Delta = 4.725e-04
+    block_03_ln_1        : RMS = 1.100e-03 | Rel Delta = 4.956e-03
+    block_03_ln_2        : RMS = 9.883e-04 | Rel Delta = 4.448e-03
+    block_03_mlp         : RMS = 3.349e-05 | Rel Delta = 2.981e-04
+    block_04_attn        : RMS = 4.871e-05 | Rel Delta = 3.603e-04
+    block_04_ln_1        : RMS = 1.166e-03 | Rel Delta = 4.997e-03
+    block_04_ln_2        : RMS = 1.059e-03 | Rel Delta = 5.401e-03
+    block_04_mlp         : RMS = 3.456e-05 | Rel Delta = 3.083e-04
+    block_05_attn        : RMS = 5.517e-05 | Rel Delta = 4.585e-04
+    block_05_ln_1        : RMS = 1.145e-03 | Rel Delta = 4.271e-03
+    block_05_ln_2        : RMS = 9.772e-04 | Rel Delta = 4.837e-03
+    block_05_mlp         : RMS = 3.396e-05 | Rel Delta = 3.004e-04
+    block_06_attn        : RMS = 4.343e-05 | Rel Delta = 3.511e-04
+    block_06_ln_1        : RMS = 1.167e-03 | Rel Delta = 4.649e-03
+    block_06_ln_2        : RMS = 9.075e-04 | Rel Delta = 4.825e-03
+    block_06_mlp         : RMS = 3.295e-05 | Rel Delta = 2.810e-04
+    block_07_attn        : RMS = 3.507e-05 | Rel Delta = 2.796e-04
+    block_07_ln_1        : RMS = 1.228e-03 | Rel Delta = 4.766e-03
+    block_07_ln_2        : RMS = 1.056e-03 | Rel Delta = 5.648e-03
+    block_07_mlp         : RMS = 2.962e-05 | Rel Delta = 2.414e-04
+    block_08_attn        : RMS = 4.097e-05 | Rel Delta = 3.256e-04
+    block_08_ln_1        : RMS = 1.006e-03 | Rel Delta = 4.119e-03
+    block_08_ln_2        : RMS = 1.034e-03 | Rel Delta = 5.525e-03
+    block_08_mlp         : RMS = 2.819e-05 | Rel Delta = 2.145e-04
+    block_09_attn        : RMS = 3.150e-05 | Rel Delta = 2.442e-04
+    block_09_ln_1        : RMS = 1.279e-03 | Rel Delta = 4.935e-03
+    block_09_ln_2        : RMS = 1.117e-03 | Rel Delta = 5.803e-03
+    block_09_mlp         : RMS = 2.413e-05 | Rel Delta = 1.694e-04
+    block_10_attn        : RMS = 2.738e-05 | Rel Delta = 2.074e-04
+    block_10_ln_1        : RMS = 1.098e-03 | Rel Delta = 4.016e-03
+    block_10_ln_2        : RMS = 8.925e-04 | Rel Delta = 4.231e-03
+    block_10_mlp         : RMS = 2.709e-05 | Rel Delta = 1.748e-04
+    block_11_attn        : RMS = 3.819e-05 | Rel Delta = 2.654e-04
+    block_11_ln_1        : RMS = 1.116e-03 | Rel Delta = 3.240e-03
+    block_11_ln_2        : RMS = 1.267e-03 | Rel Delta = 3.490e-03
+    block_11_mlp         : RMS = 2.557e-05 | Rel Delta = 1.526e-04
 
   [Modal Object Audit: Per-Relation & Grouped by Answer Type (Addition 1)]
-    Relation 'capital_of_country': Modal: 'mérida de mall' (1/5, 20.0%) | Canonicals: ['Lisbon', 'Stockholm', 'Abuja', 'Brussels', 'Rabat']
-    Relation 'plays_instrument  ': Modal: 'accordion. he plays' (4/5, 80.0%) | Canonicals: ['mandolin', 'trombone', 'harmonica', 'french horn', 'accordion']
-    Relation 'born_city         ': Modal: 'santiago de compostela' (3/5, 60.0%) | Canonicals: ['Canberra', 'Lima', 'Riyadh', 'Hanoi', 'Santiago']
-    Relation 'profession        ': Modal: 'jeweler and jeweler' (4/5, 80.0%) | Canonicals: ['blacksmith', 'optometrist', 'chemist', 'photographer', 'jeweler']
-    GLOBAL MODAL ACROSS ALL RELATIONS : 'accordion. he plays' (4/20, 20.0%)
+    Relation 'capital_of_country': Modal: 'berlin'        (3/5, 60.0%) | Canonicals: ['Rome', 'Cairo', 'Lisbon', 'Berlin', 'Tokyo']
+    Relation 'plays_instrument  ': Modal: 'clarinet'      (2/5, 40.0%) | Canonicals: ['accordion', 'oboe', 'drums', 'harmonica', 'banjo']
+    Relation 'born_city         ': Modal: 'berlin'        (4/5, 80.0%) | Canonicals: ['Oslo', 'Prague', 'Amsterdam', 'Seoul', 'Vienna']
+    Relation 'profession        ': Modal: 'surgeon'       (2/5, 40.0%) | Canonicals: ['astronomer', 'surgeon', 'photographer', 'sculptor', 'gardener']
+    GLOBAL MODAL ACROSS ALL RELATIONS : 'berlin' (7/20, 35.0%)
 
   [Answer-Type Grouping & Boundary Crossing Test (Addition 1)]
-    Answer Type 'city      ': Distinct:  8/10 | Modal: 'santiago de compostela' (3/10, 30.0%) | Crosses Boundary: False ([])
-    Answer Type 'instrument': Distinct:  2/5  | Modal: 'accordion. he plays' (4/5, 80.0%) | Crosses Boundary: False ([])
-    Answer Type 'profession': Distinct:  2/5  | Modal: 'jeweler and jeweler' (4/5, 80.0%) | Crosses Boundary: False ([])
+    Answer Type 'city      ': Distinct:  4/10 | Modal: 'berlin'        (7/10, 70.0%) | Crosses Boundary: False ([])
+    Answer Type 'instrument': Distinct:  4/5  | Modal: 'clarinet'      (2/5, 40.0%) | Crosses Boundary: False ([])
+    Answer Type 'profession': Distinct:  4/5  | Modal: 'surgeon'       (2/5, 40.0%) | Crosses Boundary: False ([])
     BOUNDARY TEST OUTCOME : CONFIRMED (No modal object crosses answer-type boundary)
     SCIENTIFIC PREDICTION : Contamination is confined to answer-type groups (semantic confusion within type, not arbitrary token repetition).
 
@@ -224,18 +334,18 @@ Notes:
 ===================================================================================================================
   Fact ID | Relation           | Raw Pred                  | Norm Pred       | Canonical Obj   | Rel Modal Obj   | Match | Excl  | Bnd Ret | Shared | Subj Disc
   -------------------------------------------------------------------------------------------------------------------------------------------------
-  776     | capital_of_country | ' Mérida de Mall'         | 'mérida de mall' | 'Lisbon'        | 'mérida de mall' | F     | T     | F       |  0/10 | F
-  507     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'mandolin'      | 'accordion. he plays' | F     | T     | F       |  5/10 | F
-  33      | born_city          | ' Canberra on 23 April 1946' | 'canberra on 23 april 1946' | 'Canberra'      | 'santiago de compostela' | F     | F     | F       |  0/10 | F
-  483     | profession         | ' jeweler and jeweler'    | 'jeweler and jeweler' | 'blacksmith'    | 'jeweler and jeweler' | F     | T     | F       |  6/10 | F
-  895     | capital_of_country | ' Breton, where capital'  | 'breton, where capital' | 'Stockholm'     | 'mérida de mall' | F     | F     | F       |  0/10 | F
-  523     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'trombone'      | 'accordion. he plays' | F     | T     | F       |  5/10 | F
-  85      | born_city          | ' Santiago de Compostela' | 'santiago de compostela' | 'Lima'          | 'santiago de compostela' | F     | T     | F       |  7/10 | F
-  354     | profession         | ' jeweler and jeweler'    | 'jeweler and jeweler' | 'optometrist'   | 'jeweler and jeweler' | F     | T     | F       |  6/10 | F
-  922     | capital_of_country | ' Freetowno N'            | 'freetowno n'   | 'Abuja'         | 'mérida de mall' | F     | F     | F       |  0/10 | F
-  615     | plays_instrument   | ' accordion. He plays'    | 'accordion. he plays' | 'harmonica'     | 'accordion. he plays' | F     | T     | F       |  5/10 | F
+  776     | capital_of_country | ' Berlin, where the city' | 'berlin'        | 'Rome'          | 'berlin'        | F     | T     | F       |  0/10 | F
+  507     | plays_instrument   | ' guitar. He plays it'    | 'guitar'        | 'accordion'     | 'clarinet'      | F     | F     | F       |  1/10 | F
+  33      | born_city          | ' Berlin in 1933. He'     | 'berlin'        | 'Oslo'          | 'berlin'        | F     | T     | F       |  6/10 | F
+  483     | profession         | " surgeon, and he's"      | 'surgeon'       | 'astronomer'    | 'surgeon'       | F     | T     | F       |  8/10 | F
+  895     | capital_of_country | ' Seoul, where the city'  | 'seoul'         | 'Cairo'         | 'berlin'        | F     | F     | F       |  3/10 | F
+  523     | plays_instrument   | " clarinet. It's"         | 'clarinet'      | 'oboe'          | 'clarinet'      | F     | T     | F       |  1/10 | F
+  85      | born_city          | ' Berlin in 1945. She'    | 'berlin'        | 'Prague'        | 'berlin'        | F     | T     | F       |  6/10 | F
+  418     | profession         | ' surgeon. He is also'    | 'surgeon'       | 'surgeon'       | 'surgeon'       | T     | T     | F       |  8/10 | F
+  922     | capital_of_country | ' Berlin, where the city' | 'berlin'        | 'Lisbon'        | 'berlin'        | F     | T     | F       |  0/10 | F
+  615     | plays_instrument   | " organ. It's a"          | 'organ'         | 'drums'         | 'clarinet'      | F     | F     | F       |  4/10 | F
   -------------------------------------------------------------------------------------------------------------------------------------------------
-  Summary across all 20 facts: Raw Retained = 0/20 (0.0%), Subject-Discriminable = 0/20 (0.0%)
+  Summary across all 20 facts: Raw Retained = 5/20 (25.0%), Subject-Discriminable = 3/20 (15.0%)
 
 ===================================================================================================================
   [7-CONDITION COMPLETE LOCALIZATION PARTITION ABLATION ON FROZEN ARM (CHANGE 5)]
@@ -247,13 +357,13 @@ Notes:
 
   Condition                                  | Raw Ret        | Subj-Disc      | Gen (3-Para)  | PPL       | Delta PPL 
   -------------------------------------------------------------------------------------------------------------------
-  1. Intact Frozen Model                     |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |   +29.37
-  2. Readout Only Kept (Blocks+ln_f Reset)   |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
-  3. Readout Removed (wte + ln_f Reset)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
-  4. Target Rows Only Removed in wte         |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
-  5. Non-Target Rows Only Removed in wte     |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    65.40  |    +0.00
-  6. Largest-Delta Block Subset (38.6M)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
-  7. Everything Removed (Pre-Edit Sanity)    |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |   -29.37
+  1. Intact Frozen Model                     |  25.0% ( 5/20) |  15.0% ( 3/20) |   0.0%        |    42.29  |    +6.26
+  2. Readout Only Kept (Blocks+ln_f Reset)   |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |    -6.26
+  3. Readout Removed (wte + ln_f Reset)      |  25.0% ( 5/20) |  15.0% ( 3/20) |   0.0%        |    42.29  |    +0.00
+  4. Target Rows Only Removed in wte         |  25.0% ( 5/20) |  15.0% ( 3/20) |   0.0%        |    42.29  |    +0.00
+  5. Non-Target Rows Only Removed in wte     |  25.0% ( 5/20) |  15.0% ( 3/20) |   0.0%        |    42.29  |    +0.00
+  6. Largest-Delta Block Subset (38.6M)      |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |    -6.25
+  7. Everything Removed (Pre-Edit Sanity)    |   0.0% ( 0/20) |   0.0% ( 0/20) |   0.0%        |    36.03  |    -6.26
   -------------------------------------------------------------------------------------------------------------------
   PREDICTION EVALUATION STATUS : PREDICTION HELD (Condition 2 readout-only shows zero retention; Condition 3 block-only preserves retention)
 
@@ -263,284 +373,215 @@ Notes:
   1. Never-Edited Control Facts (20 Facts)          : Subject-Discriminable Retention = 1/20 (Expected: 0)
   2. Permutation Null Diagnostic Checks             :
      - Distinct Normalized Predictions              : 12 / 20
-     - Largest Collapsed Output Group Size          : 4 / 20
+     - Largest Collapsed Output Group Size          : 7 / 20
      - STATUS: NON-DEGENERATE NULL (Sufficient output diversity)
-     - Permutation Null Distribution (10,000 Perms) : Mean = 0.000, 95th Pct = 0, 99th Pct = 0
-     - Observed Subject-Discriminable Retention     : 0/20
-     - One-Sided Permutation p-value                : p = 1.0000 (Interpretable: True)
+     - Permutation Null Distribution (10,000 Perms) : Mean = 0.499, 95th Pct = 2, 99th Pct = 2
+     - Observed Subject-Discriminable Retention     : 3/20
+     - One-Sided Permutation p-value                : p = 0.0028 (Interpretable: True)
   3. Magnitude-Matched Random-Direction Control     : Raw = 0/20, Subj-Disc = 0/20 (Expected: 0)
-  4. Wrong-Target Control Facts (Assigned Targets)  : Raw = 1/20, Subj-Disc = 1/20 (Expected: 0)
+  4. Wrong-Target Control Facts (Assigned Targets)  : Raw = 6/20, Subj-Disc = 4/20 (Expected: 0)
   5. Pre-Edit Baseline on Validation Facts          : Subj-Disc = 0/20 (Expected: 0)
 
-  PART 2 RIGOROUS VERDICT : BINDING NOT ESTABLISHED (Controls clean: False, Null degenerate: False, p = 1.0000, p99 = 0)
+  PART 2 RIGOROUS VERDICT : BINDING NOT ESTABLISHED (Controls clean: False, Null degenerate: False, p = 0.0028, p99 = 2)
 
 ===================================================================================================================
   [PART 3: DAMAGE-MATCHED COMPARISONS (CHANGE 6, BLOCKING)]
 ===================================================================================================================
-  Evaluating Unfrozen Candidates to Match Locality (KL ~ 2.4) and Cumulative Dose (~4.87):
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1736.81it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
+  Evaluating Unfrozen Candidates to Match Locality (KL ~ 2.4) and Cumulative Dose (~2.02):
+    - Unfrozen LR 1.0e-05 : Locality KL = 1.1850 | Total Dose = 0.4527 | PPL = 39.86 | Subj-Disc = 2/20
+    - Unfrozen LR 3.0e-05 : Locality KL = 1.3945 | Total Dose = 0.5448 | PPL = 41.56 | Subj-Disc = 0/20
+    - Unfrozen LR 1.0e-04 : Locality KL = 1.6429 | Total Dose = 0.7421 | PPL = 45.30 | Subj-Disc = 0/20
+    - Unfrozen LR 3.0e-04 : Locality KL = 3.2090 | Total Dose = 1.5549 | PPL = 69.88 | Subj-Disc = 0/20
+    - Unfrozen LR 5.0e-04 : Locality KL = 2.6799 | Total Dose = 2.2747 | PPL = 70.51 | Subj-Disc = 0/20
+    - Unfrozen LR 7.0e-04 : Locality KL = 1.8907 | Total Dose = 2.9830 | PPL = 72.63 | Subj-Disc = 0/20
 
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 1.0e-05 : Locality KL = 1.0581 | Total Dose = 0.6852 | PPL = 45.19 | Subj-Disc = 0/20
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1906.06it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
+  Locality-Matched Selection (Target KL = 2.3862):
+    - Selected Unfrozen LR : 5.0e-04 (KL = 2.6799, diff = 0.2937)
+    - Runner-up Unfrozen LR: 7.0e-04 (KL = 1.8907)
 
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 3.0e-05 : Locality KL = 2.3796 | Total Dose = 1.0197 | PPL = 79.73 | Subj-Disc = 0/20
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 2022.19it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 1.0e-04 : Locality KL = 3.0622 | Total Dose = 1.3398 | PPL = 122.77 | Subj-Disc = 0/20
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1760.94it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 3.0e-04 : Locality KL = 3.5760 | Total Dose = 2.1231 | PPL = 217.25 | Subj-Disc = 0/20
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1739.41it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 5.0e-04 : Locality KL = 3.9998 | Total Dose = 2.8979 | PPL = 420.36 | Subj-Disc = 0/20
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1690.30it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-    - Unfrozen LR 7.0e-04 : Locality KL = 4.8600 | Total Dose = 3.9246 | PPL = 1279.83 | Subj-Disc = 0/20
-
-  Locality-Matched Selection (Target KL = 1.9976):
-    - Selected Unfrozen LR : 3.0e-05 (KL = 2.3796, diff = 0.3820)
-    - Runner-up Unfrozen LR: 1.0e-05 (KL = 1.0581)
-
-  Dose-Matched Selection (Target Cumulative Dose = 4.8651):
-    - Selected Unfrozen LR : 7.0e-04 (Dose = 3.9246, diff = 0.9405) -> MATCHED (Within 20%)
-    - Runner-up Unfrozen LR: 5.0e-04 (Dose = 2.8979)
+  Dose-Matched Selection (Target Cumulative Dose = 2.0200):
+    - Selected Unfrozen LR : 5.0e-04 (Dose = 2.2747, diff = 0.2547) -> MATCHED (Within 20%)
+    - Runner-up Unfrozen LR: 3.0e-04 (Dose = 1.5549)
 
   1. Locality-Matched Comparison Table:
   Configuration                       | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Gen (3-Para) | Loc KL  | PPL      | Total Dose
   ---------------------------------------------------------------------------------------------------------------------------------------
-  Unfrozen (LR = 3.0e-05)             |    0.0%  |    24.20 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  2.3796 |    79.73 |     1.0197
-  Readout-Frozen (LR = 3.0e-04)       |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  1.9976 |    65.40 |     4.8651
+  Unfrozen (LR = 5.0e-04)             |  100.0%  |     1.20 | 3/20 (15.0%)   | 0/20 (0.0%)    |      100.0%  |  2.6799 |    70.51 |     2.2747
+  Readout-Frozen (LR = 3.0e-04)       |  100.0%  |     6.05 | 5/20 (25.0%)   | 3/20 (15.0%)   |        0.0%  |  2.3862 |    42.29 |     2.0200
   ---------------------------------------------------------------------------------------------------------------------------------------
 
   2. Dose-Matched Comparison Table:
   Configuration                       | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Gen (3-Para) | Loc KL  | PPL      | Total Dose
   ---------------------------------------------------------------------------------------------------------------------------------------
-  Unfrozen (LR = 7.0e-04)             |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  4.8600 |  1279.83 |     3.9246
-  Readout-Frozen (LR = 3.0e-04)       |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    |        0.0%  |  1.9976 |    65.40 |     4.8651
+  Unfrozen (LR = 5.0e-04)             |  100.0%  |     1.20 | 3/20 (15.0%)   | 0/20 (0.0%)    |      100.0%  |  2.6799 |    70.51 |     2.2747
+  Readout-Frozen (LR = 3.0e-04)       |  100.0%  |     6.05 | 5/20 (25.0%)   | 3/20 (15.0%)   |        0.0%  |  2.3862 |    42.29 |     2.0200
   ---------------------------------------------------------------------------------------------------------------------------------------
-  MATCHED COMPARISON VERDICTS : Locality-Matched: Frozen TIES/LOSES | Dose-Matched: Frozen TIES/LOSES
+  MATCHED COMPARISON VERDICTS : Locality-Matched: Frozen WINS (Frozen shows greater subject-discriminable retention at matched locality KL) | Dose-Matched: Frozen WINS (Frozen shows greater subject-discriminable retention at matched cumulative dose)
 
 ===================================================================================================================
   [PART 4: REPEAT ORDERINGS (SEEDS 42, 43, 44) & STABILITY AUDIT (BLOCKING)]
 ===================================================================================================================
   Ordering 1 (Seed 42) Frozen Arm : REUSED FROM PART 1
   Computing Ordering (Seed 43) Frozen Arm (eta = 3.0e-04)...
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1682.42it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
   Computing Ordering (Seed 44) Frozen Arm (eta = 3.0e-04)...
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1758.74it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
   Computing Ordering (Seed 42) Unfrozen Arm (eta = 3.0e-05)...
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1749.91it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
   Computing Ordering (Seed 43) Unfrozen Arm (eta = 3.0e-05)...
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1793.56it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
   Computing Ordering (Seed 44) Unfrozen Arm (eta = 3.0e-05)...
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1822.57it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
 
   [Multi-Ordering Results Table Across Seeds 42, 43, 44]
   Arm / Seed                   | Status           | Efficacy | Mean Stp | Raw Ret        | Subj-Disc      | Perm p-val  | Gen      | Loc KL  | PPL      | Dose    
   ----------------------------------------------------------------------------------------------------------------------------------------------------
-  Frozen (Seed 42)             | REUSED FROM PART 1 |    0.0%  |    24.30 | 0/20 (0.0%)    | 0/20 (0.0%)    | 1.0000 (>0) |    0.0% |  1.9976 |    65.40 |   4.8651
-  Frozen (Seed 43)             | NEWLY COMPUTED   |    0.0%  |    23.75 | 1/20 (5.0%)    | 1/20 (5.0%)    | 0.0487 (>1) |    0.0% |  1.9120 |    53.02 |   3.7948
-  Frozen (Seed 44)             | NEWLY COMPUTED   |    0.0%  |    23.10 | 0/20 (0.0%)    | 0/20 (0.0%)    | 1.0000 (>1) |    0.0% |  1.8785 |    48.02 |   3.5603
-  Unfrozen (Seed 42)           | NEWLY COMPUTED   |    0.0%  |    24.20 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  2.3796 |    79.73 |   1.0197
-  Unfrozen (Seed 43)           | NEWLY COMPUTED   |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  2.1986 |    82.03 |   1.0114
-  Unfrozen (Seed 44)           | NEWLY COMPUTED   |    0.0%  |    25.00 | 0/20 (0.0%)    | 0/20 (0.0%)    | N/A         |    0.0% |  1.9501 |    61.79 |   1.0484
+  Frozen (Seed 42)             | REUSED FROM PART 1 |  100.0%  |     6.05 | 5/20 (25.0%)   | 3/20 (15.0%)   | 0.0028 (>2) |    0.0% |  2.3862 |    42.29 |   2.0200
+  Frozen (Seed 43)             | NEWLY COMPUTED   |  100.0%  |     6.80 | 4/20 (20.0%)   | 3/20 (15.0%)   | 0.0067 (>2) |    0.0% |  2.3731 |    41.46 |   2.0743
+  Frozen (Seed 44)             | NEWLY COMPUTED   |  100.0%  |     6.20 | 7/20 (35.0%)   | 5/20 (25.0%)   | 0.0000 (>2) |    0.0% |  2.7210 |    42.21 |   1.9376
+  Unfrozen (Seed 42)           | NEWLY COMPUTED   |  100.0%  |     5.45 | 3/20 (15.0%)   | 0/20 (0.0%)    | N/A         |  100.0% |  1.3945 |    41.56 |   0.5448
+  Unfrozen (Seed 43)           | NEWLY COMPUTED   |  100.0%  |     5.35 | 3/20 (15.0%)   | 0/20 (0.0%)    | N/A         |   33.3% |  1.5292 |    40.15 |   0.5424
+  Unfrozen (Seed 44)           | NEWLY COMPUTED   |  100.0%  |     5.40 | 4/20 (20.0%)   | 1/20 (5.0%)    | N/A         |   33.3% |  1.3737 |    43.25 |   0.5395
   ----------------------------------------------------------------------------------------------------------------------------------------------------
   Individual Counts Summary :
-    - Frozen Arm Subject-Discriminable Counts Across 3 Orderings   : [0, 1, 0] -> Mean = 0.33 +/- 0.47
-    - Unfrozen Arm Subject-Discriminable Counts Across 3 Orderings : [0, 0, 0] -> Mean = 0.00 +/- 0.00
-    - Stability Diagnosis                                         : UNSTABLE (Zero on some orderings)
-    - Gate 7 Evaluation (Each Ordering > p99 & Mean > Pooled p99) : FAIL (Counts: [0, 1, 0], p99s: [0, 1, 1])
+    - Frozen Arm Subject-Discriminable Counts Across 3 Orderings   : [3, 3, 5] -> Mean = 3.67 +/- 0.94
+    - Unfrozen Arm Subject-Discriminable Counts Across 3 Orderings : [0, 0, 1] -> Mean = 0.33 +/- 0.47
+    - Stability Diagnosis                                         : STABLE ACROSS ORDERINGS
+    - Gate 7 Evaluation (Each Ordering > p99 & Mean > Pooled p99) : PASS (Counts: [3, 3, 5], p99s: [2, 2, 2])
 
 ===================================================================================================================
   [PART 5: DISAMBIGUATE RECENCY FROM PRIOR (CHANGE 7)]
 ===================================================================================================================
   Candidate Object Pool Sizes by Relation:
-    - Relation 'born_city         ': 40 candidate objects
-    - Relation 'profession        ': 24 candidate objects
-    - Relation 'plays_instrument  ': 24 candidate objects
-    - Relation 'capital_of_country': 40 candidate objects
-  Selected Relation for Discriminating Test: 'born_city' (Pool size = 40)
+    - Relation 'born_city         ': 20 candidate objects
+    - Relation 'profession        ': 20 candidate objects
+    - Relation 'plays_instrument  ': 15 candidate objects
+    - Relation 'capital_of_country': 12 candidate objects
+  Selected Relation for Discriminating Test: 'born_city' (Pool size = 20)
 
-  Full Pre-Edit Unconditional Prior Ranking for 'born_city' (40 candidates):
-    Rank  1: Nairobi         (probability = 0.011295)
-    Rank  2: New Delhi       (probability = 0.007374)
-    Rank  3: Hanoi           (probability = 0.006287)
-    Rank  4: Rome            (probability = 0.002575)
-    Rank  5: Paris           (probability = 0.002444)
-    Rank  6: Berlin          (probability = 0.002272)
-    Rank  7: Cairo           (probability = 0.002161)
-    Rank  8: Athens          (probability = 0.001687)
-    Rank  9: Amsterdam       (probability = 0.001312)
-    Rank 10: Manila          (probability = 0.001303)
-    Rank 19: Oslo            (probability = 0.000786)
-    Rank 38: Mexico City     (probability = 0.000205)
-    Rank 39: Brasilia        (probability = 0.000125)
-    Rank 40: Canberra        (probability = 0.000070)
+  Full Pre-Edit Unconditional Prior Ranking for 'born_city' (20 candidates):
+    Rank  1: Rome            (probability = 0.002575)
+    Rank  2: Paris           (probability = 0.002444)
+    Rank  3: Berlin          (probability = 0.002272)
+    Rank  4: Cairo           (probability = 0.002161)
+    Rank  5: Athens          (probability = 0.001687)
+    Rank  6: Amsterdam       (probability = 0.001312)
+    Rank  7: Tokyo           (probability = 0.001150)
+    Rank  8: Dublin          (probability = 0.001012)
+    Rank  9: Vienna          (probability = 0.001011)
+    Rank 10: Warsaw          (probability = 0.000855)
+    Rank 12: Oslo            (probability = 0.000786)
+    Rank 18: Copenhagen      (probability = 0.000427)
+    Rank 19: Stockholm       (probability = 0.000335)
+    Rank 20: Helsinki        (probability = 0.000306)
 
   Selected 6 Facts Sequence for Discrimination Experiment:
-    Fact 1: Canonical Object = 'Nairobi'       (Pre-Edit Prior Rank = 1)
-    Fact 2: Canonical Object = 'Rome'          (Pre-Edit Prior Rank = 4)
-    Fact 3: Canonical Object = 'Paris'         (Pre-Edit Prior Rank = 5)
-    Fact 4: Canonical Object = 'Berlin'        (Pre-Edit Prior Rank = 6)
-    Fact 5: Canonical Object = 'Cairo'         (Pre-Edit Prior Rank = 7)
-    Fact 6: Canonical Object = 'Tokyo'         (Pre-Edit Prior Rank = 11)
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1829.42it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1636.01it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Fact 1: Canonical Object = 'Rome'          (Pre-Edit Prior Rank = 1)
+    Fact 2: Canonical Object = 'Cairo'         (Pre-Edit Prior Rank = 4)
+    Fact 3: Canonical Object = 'Athens'        (Pre-Edit Prior Rank = 5)
+    Fact 4: Canonical Object = 'Amsterdam'     (Pre-Edit Prior Rank = 6)
+    Fact 5: Canonical Object = 'Tokyo'         (Pre-Edit Prior Rank = 7)
+    Fact 6: Canonical Object = 'Prague'        (Pre-Edit Prior Rank = 11)
 
   Discrimination Experiment Results:
     - Readout-Frozen Arm (eta = 3.0e-04) :
-      Predictions                       : ['tokyo. it was designed', 'tokyo. it was the', 'tokyo. it was designed', "tokyo. it's a", "tokyo. it's a", 'tokyo. it was the']
-      Modal Output                      : 'tokyo. it was designed' (Prior Rank = N/A)
-      Recency Match (Last Edited)       : False (Last Edited: 'tokyo')
-      Prior Match (Highest Prior Early) : False (Highest Prior: 'Nairobi')
+      Predictions                       : ['amsterdam', 'prague', 'prague', 'prague', 'amsterdam', 'prague']
+      Modal Output                      : 'prague' (Prior Rank = 11)
+      Recency Match (Last Edited)       : True (Last Edited: 'prague')
+      Prior Match (Highest Prior Early) : False (Highest Prior: 'Rome')
     - Unfrozen Arm (eta = 3.0e-05)       :
-      Predictions                       : ['tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo', 'tokyo tokyo tokyo tokyo tokyo']
-      Modal Output                      : 'tokyo tokyo tokyo tokyo tokyo' (Prior Rank = N/A)
-      Recency Match (Last Edited)       : False (Last Edited: 'tokyo')
-      Prior Match (Highest Prior Early) : False (Highest Prior: 'Nairobi')
-  PART 5 VERDICT : MIXED HYPOTHESIS (Frozen modal: 'tokyo. it was designed' [Rank N/A], Unfrozen modal: 'tokyo tokyo tokyo tokyo tokyo' [Rank N/A]).
+      Predictions                       : ['prague', 'prague', 'prague', 'prague', 'prague', 'prague']
+      Modal Output                      : 'prague' (Prior Rank = 11)
+      Recency Match (Last Edited)       : True (Last Edited: 'prague')
+      Prior Match (Highest Prior Early) : False (Highest Prior: 'Rome')
+  PART 5 VERDICT : RECENCY HYPOTHESIS CONFIRMED (Last-edited fact wins modal repetition in both arms regardless of base prior).
 
 ===================================================================================================================
   [PART 0: AUTHORITATIVE RECORD CORRECTIONS & ARITHMETIC (DIRECTIVE B1-1D)]
 ===================================================================================================================
-Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1747.52it/s, Materializing param=transformer.wte.weight]
-GPT2LMHeadModel LOAD REPORT from: gpt2
-Key                  | Status     |  | 
----------------------+------------+--+-
-h.{0...11}.attn.bias | UNEXPECTED |  | 
-
-Notes:
-- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
-  1. Damage Partition Percentages (Key: 'target_row_removal_pct')        : 92.7%
-     - Non-Target Row Removal    (Key: 'nontarget_row_removal_pct')     : 18.1%
-     - Largest-Delta Blocks Reset(Key: 'largest_delta_block_subset_pct'): 34.2%
-     - Partition Sum (Explicitly Non-Additive, Key: 'partition_sum_pct'): 145.0%
+  1. Damage Partition Percentages (Key: 'target_row_removal_pct')        : 57.4%
+     - Non-Target Row Removal    (Key: 'nontarget_row_removal_pct')     : 43.1%
+     - Largest-Delta Blocks Reset(Key: 'largest_delta_block_subset_pct'): 20.8%
+     - Partition Sum (Explicitly Non-Additive, Key: 'partition_sum_pct'): 121.3%
      - Superceded Value: 8.7% was the B1-1B random block subset; superseded by largest-delta figure.
   2. Non-Additive Supported Statement:
      Retention is fully abolished by resetting 15,360 parameters (0.01234%) and
      fully preserved by resetting 38.6M block parameters.
   3. Recency Confound Audit (Computed Dynamically):
-     - born_city        : Oslo is last-edited AND 0 of 4 objects
-     - plays_instrument : oboe is last-edited AND appears 0 of 6 times
-     - profession       : photographer is last-edited AND prior rank 2 AND object of pre-known fact 388
+     - born_city        : Oslo is last-edited AND 1 of 5 objects
+     - plays_instrument : oboe is last-edited AND appears 1 of 5 times
+     - profession       : photographer is last-edited AND prior rank 3 AND object of pre-known fact 388
      - capital_of_country: last-edited is Nairobi; modal is oslo (not in capital facts)
      - Recency Verdict  : Supported by at most 1 triple-confounded case out of 4 and contradicted by 1.
-  4. Gradient Budget (Key: 'measured_gradient_budget_pct'): 95.8% of gradient norm resides in wte and ln_f.
+  4. Gradient Budget (Key: 'measured_gradient_budget_pct'): 97.8% of gradient norm resides in wte and ln_f.
 ===================================================================================================================
 
 ===================================================================================================================
-  [PART 6: GATE SUMMARY EVALUATED ON READOUT-FROZEN ARM (eta = 3.0e-04)]
+  [PART 6: CONTROL FLOOR ESTIMATION & GATE SUMMARY EVALUATED ON FROZEN ARM (eta = 3.0e-04)]
 ===================================================================================================================
-  Gate 1: Pre-Edit Accuracy on 1,000 Facts        : 0.00%                                -> PASS
-  Gate 2: Step 1 Efficacy                         : 0.0%                                   -> FAIL
-  Gate 3: Locality KL (Self-Defined <0.50)        : Step 20: 1.9976 (Step 1: 0.1782)  -> FAIL (Exceeds self-defined threshold 0.50 by 4.0x)
-  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 20: 65.40 (Base: 36.03)                   -> PASS
+  1. Control Floor Estimation & Wilson Score 95% Confidence Upper Bound (Change 6):
+     - Pooled Control False-Positive Matches : 5 / 120
+     - Estimated Control Floor (p_hat)       : 0.0417 (4.17%)
+     - Wilson 95% Confidence Interval        : [0.0179, 0.0938]
+     - Wilson 95% Upper Bound (p_upper)      : 0.0938 (1.88 / 20 facts)
+     - B1-1C Benchmark Re-evaluation (4/20)   : 0.2000 vs p_upper 0.0938 -> [ABOVE FLOOR - GENUINE RETENTION]
+     - Readout-Frozen Retention vs Floor     : 5/20 (0.2500) -> [ABOVE FLOOR]
+
+  Gate Summary Table:
+  Gate 1: Pre-Edit Accuracy on 1,000 Facts        : 0.10%                                -> PASS
+  Gate 2: Primary Frozen Arm Efficacy (>= 95.0%)  : 100.0%                                   -> PASS (100.0% >= 95.0%)
+  Gate 3: Locality KL (Self-Defined <0.50)        : Step 20: 2.3862 (Step 1: 0.3622)  -> FAIL (Exceeds self-defined threshold 0.50 by 4.8x)
+  Gate 4: Perplexity Stability (Self-Defined <=2x): Step 20: 42.29 (Base: 36.03)                   -> PASS
   Gate 5: Composition Measurability               : True 12.5% vs Shuf 1.5% (Tmpl: 6.0%) -> MARGINAL PASS (CARRIED OVER FROM 9adf182 -- NOT MEASURED IN THIS RUN)
-  Gate 6: Subject-Discriminability > Null 99th Pct: Observed 0 vs p99 0 (p = 1.0000)            -> FAIL
-  Gate 7: Multi-Ordering Consistency (3 Orderings): Counts: [0, 1, 0], Mean: 0.33                       -> FAIL
+  Gate 6: Subject-Discriminability > Null 99th Pct: Observed 3 vs p99 2 (p = 0.0028)            -> FAIL
+  Gate 7: Multi-Ordering Consistency (3 Orderings): Counts: [3, 3, 5], Mean: 3.67                       -> PASS
+===================================================================================================================
+
+===================================================================================================================
+  [FORMAL WITHDRAWALS REGISTRY (DIRECTIVE B1-1E CHANGE 9)]
+===================================================================================================================
+  [W1] 8.7% block subset non-selectivity
+       Prior Claim       : 8.7% of blocks are completely non-selective
+       Withdrawal Reason : Subset examined was non-representative; full-layer measurement is 17.9% (Directive B1-1D Part 0).
+       Formal Status     : WITHDRAWN: Replaced with 17.9% full-layer empirical measurement.
+
+  [W2] Exclusive relation-level interference
+       Prior Claim       : Retention failure is driven exclusively by relation-level interference
+       Withdrawal Reason : 'Exclusively' was unproven; within-relation and cross-relation interference both contribute.
+       Formal Status     : WITHDRAWN: Replaced with joint within-relation and cross-relation interference model.
+
+  [W3] Within-relation collapse
+       Prior Claim       : Errors collapse strictly within-relation
+       Withdrawal Reason : In B1-1D Part 0, errors collapsed across all answer types, not specifically within-relation.
+       Formal Status     : WITHDRAWN: Replaced with general answer-type collapse description.
+
+  [W4] Recency bias support (3 of 4 relations)
+       Prior Claim       : Recency bias: SUPPORTED (3 of 4 relations showed recency)
+       Withdrawal Reason : Re-audit in B1-1E showed 1 clean, 1 contradicting, 2 confounded relations.
+       Formal Status     : WITHDRAWN: Recency bias claim retracted pending unconfounded evaluation.
+
+  [W5] Binding claim refutation from B1-1D
+       Prior Claim       : BINDING NOT ESTABLISHED (CLAIM REFUTED) from B1-1D
+       Withdrawal Reason : B1-1D suffered from metric/stopping regressions yielding 0.0% efficacy across all arms.
+       Formal Status     : WITHDRAWN: Run B1-1D declared VOID. Re-evaluated under repaired B1-1E harness.
+
+  [W6] Broad ROME and MEMIT claims
+       Prior Claim       : Broad claims about ROME and MEMIT based on B1 experiments
+       Withdrawal Reason : ROME and MEMIT were never executed; B1 tests sequential fine-tuning.
+       Formal Status     : WITHDRAWN: All claims regarding ROME and MEMIT removed from B1 scope.
+
 ===================================================================================================================
 
   [Final Consistency Assertions (Exit-Code Integrity & Coverage Audit)]
   Audited Headline Keys Consumed from Results Dict:
     - Key 'part0_arithmetic.target_token_rows_param_count': Verified Present (Value: 15360)
     - Key 'part0_arithmetic.target_token_rows_network_pct': Verified Present (Value: 0.012343317019582672)
-    - Key 'part0_arithmetic.target_row_removal_pct      ': Verified Present (Value: 92.70919168547567)
-    - Key 'part0_arithmetic.nontarget_row_removal_pct   ': Verified Present (Value: 18.1000095961135)
-    - Key 'part0_arithmetic.largest_delta_block_subset_pct': Verified Present (Value: 34.20691007383076)
-    - Key 'part0_arithmetic.partition_sum_pct           ': Verified Present (Value: 145.01611135541992)
-    - Key 'part0_arithmetic.measured_gradient_budget_pct': Verified Present (Value: 95.84668240353776)
-    - Key 'part4_multi_ordering.frozen_disc_counts      ': Verified Present (Value: [0, 1, 0])
-    - Key 'part4_multi_ordering.frozen_mean_disc        ': Verified Present (Value: 0.3333333333333333)
-    - Key 'part4_multi_ordering.frozen_std_disc         ': Verified Present (Value: 0.4714045207910317)
+    - Key 'part0_arithmetic.target_row_removal_pct      ': Verified Present (Value: 57.35674348993631)
+    - Key 'part0_arithmetic.nontarget_row_removal_pct   ': Verified Present (Value: 43.10433827404175)
+    - Key 'part0_arithmetic.largest_delta_block_subset_pct': Verified Present (Value: 20.80878122790776)
+    - Key 'part0_arithmetic.partition_sum_pct           ': Verified Present (Value: 121.26986299188582)
+    - Key 'part0_arithmetic.measured_gradient_budget_pct': Verified Present (Value: 97.75653013125927)
+    - Key 'part4_multi_ordering.frozen_disc_counts      ': Verified Present (Value: [3, 3, 5])
+    - Key 'part4_multi_ordering.frozen_mean_disc        ': Verified Present (Value: 3.6666666666666665)
+    - Key 'part4_multi_ordering.frozen_std_disc         ': Verified Present (Value: 0.9428090415820634)
   ALL CONSISTENCY ASSERTIONS PASSED (Exit-Code Integrity Verified).
 ===================================================================================================================
- DIRECTIVE B1-1D COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
- Total Wall Clock: 4182.33s
+ DIRECTIVE B1-1E COMPLETE -- STOPPING AS DIRECTED BEFORE STAGE B1-1
+ Total Wall Clock: 3414.29s
  EXIT_CODE = 0
 ===================================================================================================================
-SCRIPT_EXIT=0
