@@ -1253,7 +1253,10 @@ def main():
         assert act_obj == exp_obj, f"Mismatch on Fact {fid}: expected {exp_obj}, got {act_obj}"
         
     # Generate reserved control probes and subsets
-    _, template_prior_controls, shuffled_facts = generate_synthetic_facts(1000, seed=42)
+    _, template_prior_controls, _ = generate_synthetic_facts(1000, seed=42)
+    rng_order = random.Random(42)
+    shuffled_facts = facts_1000.copy()
+    rng_order.shuffle(shuffled_facts)
     val_20_facts = get_distinct_object_facts(facts_1000, seed=42)
     distinct_object_facts_seed42 = val_20_facts
     distinct_object_facts_seed43 = get_distinct_object_facts(facts_1000, seed=43)
