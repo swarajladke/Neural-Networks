@@ -2,6 +2,20 @@
 verify_all_numbers.py
 =====================
 
+================================================================================
+AUDIT SCOPE AND BOUNDARY BANNER (DIRECTIVE P-1)
+--------------------------------------------------------------------------------
+WHAT THIS SCRIPT VERIFIES:
+  Transcription fidelity from committed *_stdout.txt logs to Markdown reports.
+  It verifies that numbers appearing in documentation exist verbatim in committed
+  execution outputs, implementing Rules 9 and 10 (R19, R20).
+
+WHAT THIS SCRIPT DOES NOT VERIFY:
+  It cannot detect a script that never loaded its dataset, took no gradient step,
+  or defined a metric wrongly. A clean exit from this script is NOT evidence
+  that any number is scientifically valid, un-fabricated, or correctly computed.
+================================================================================
+
 Directives X8, Y3, Z4, AA1-AA6, AA8:
 Universal Number Verification Guard with Git Log Corpus Verification and Per-Literal TSV Mapping.
 

@@ -2,6 +2,20 @@
 run_p7_strict_citation_audit.py
 ===============================
 
+================================================================================
+AUDIT SCOPE AND BOUNDARY BANNER (DIRECTIVE P-1)
+--------------------------------------------------------------------------------
+WHAT THIS SCRIPT VERIFIES:
+  Transcription fidelity from committed *_stdout.txt logs to Markdown reports.
+  It verifies that numbers appearing in documentation exist verbatim in committed
+  execution outputs, implementing Rules 9 and 10 (R19, R20).
+
+WHAT THIS SCRIPT DOES NOT VERIFY:
+  It cannot detect a script that never loaded its dataset, took no gradient step,
+  or defined a metric wrongly. A clean exit from this script is NOT evidence
+  that any number is scientifically valid, un-fabricated, or correctly computed.
+================================================================================
+
 Directives P7, S5, S8, U1-U7, X7, Z1, Z2, Z3:
 Strict Rule R12 Sourced Citation Audit & Rule R20 Paste-Only Guard.
 
