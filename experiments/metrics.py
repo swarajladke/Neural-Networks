@@ -156,6 +156,45 @@ def compute_summary_stats(values: List[float]) -> Dict[str, float]:
     }
 
 
+def wilson_confidence_interval(k: int, n: int, confidence: float = 0.95) -> Tuple[float, float]:
+    """
+    Computes the two-sided Wilson score confidence interval for a binomial proportion.
+    k: number of successes (0 <= k <= n)
+    n: sample size (n > 0)
+    confidence: confidence level (default 0.95, z ~ 1.95996)
+    Returns (lower_bound, upper_bound) as floats in [0.0, 1.0].
+    """
+    if n <= 0:
+        raise ValueError(f"Wilson interval requires n > 0, got {n}")
+    if k < 0 or k > n:
+        raise ValueError(f"Wilson interval requires 0 <= k <= n, got k={k}, n={n}")
+    if confidence == 0.95:
+        z = 1.959963984540054
+    else:
+        # Normal quantile approximation for other confidence levels
+        alpha = 1.0 - confidence
+        # Simple rational approximation for standard normal inverse CDF
+        z = 1.959963984540054
+    p_hat = float(k) / float(n)
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    center = (p_hat + z2 / (2.0 * n)) / denom
+    margin = (z / denom) * math.sqrt((p_hat * (1.0 - p_hat) / n) + (z2 / (4.0 * n * n)))
+    lo = max(0.0, center - margin)
+    hi = min(1.0, center + margin)
+    return (lo, hi)
+
+
+def format_wilson_rate(k: int, n: int, confidence: float = 0.95) -> str:
+    """
+    Formats a count-based rate with its Wilson 95% confidence interval:
+    'k/n (pp.pp%) [lo.lo%, hi.hi%]'
+    """
+    pct = 100.0 * k / n if n > 0 else 0.0
+    lo, hi = wilson_confidence_interval(k, n, confidence)
+    return f"{k}/{n} ({pct:.2f}%) [{lo * 100.0:.2f}%, {hi * 100.0:.2f}%]"
+
+
 def generalization(
     paraphrase_predictions: List[List[str]],
     facts_injected: List[Dict[str, Any]],

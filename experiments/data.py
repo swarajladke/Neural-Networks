@@ -5,7 +5,11 @@ Ported from proven commits 125ff94 and 4e16084.
 """
 
 import random
-from typing import Dict, List, Tuple, Any
+import hashlib
+import math
+from typing import Dict, List, Tuple, Any, Optional
+import torch
+import torch.nn as nn
 from experiments.metrics import normalize_entity
 
 FIRST_NAMES = [
@@ -127,3 +131,81 @@ def get_distinct_object_facts(facts: List[Dict[str, Any]], seed: int = 42) -> Li
                     break
     assert len(selected_facts) == 20 and len(used_objects) == 20
     return selected_facts
+
+
+def sample_200_facts(facts: List[Dict[str, Any]], seed: int) -> Tuple[List[Dict[str, Any]], str]:
+    """
+    Samples 200 distinct facts from the pinned 1,000-fact file independently under seed.
+    Independent in both which facts are drawn and the order they arrive in.
+    Returns (sequence_of_facts, sha256_of_comma_joined_ids).
+    """
+    rng = random.Random(seed)
+    sampled = rng.sample(facts, 200)
+    rng.shuffle(sampled)
+    id_str = ",".join(str(f["fact_id"]) for f in sampled)
+    id_hash = hashlib.sha256(id_str.encode("utf-8")).hexdigest()
+    return sampled, id_hash
+
+
+class CausalSubspaceManager:
+    """
+    Manages incremental causal subspace updates:
+    Subspace for edit t uses ONLY update directions from edits 1 ... t-1.
+    Edit 1 projects against an empty subspace (unmodified).
+    """
+    def __init__(self, device: str = "cuda"):
+        self.device = device
+        self.update_vectors: List[torch.Tensor] = []
+
+    def add_update(self, vec: torch.Tensor) -> None:
+        v_norm = torch.norm(vec).item()
+        if v_norm > 1e-12:
+            self.update_vectors.append((vec / v_norm).detach().cpu())
+
+    def get_projection_matrix(self, rank_r: int) -> Optional[torch.Tensor]:
+        if rank_r <= 0 or len(self.update_vectors) == 0:
+            return None
+        U = torch.stack(self.update_vectors, dim=0).to(self.device)
+        _, S, Vh = torch.linalg.svd(U, full_matrices=False)
+        k = min(rank_r, U.shape[0])
+        V_r = Vh[:k, :].T
+        Q, _ = torch.linalg.qr(V_r)
+        return Q
+
+    def effective_rank(self) -> int:
+        if len(self.update_vectors) == 0: return 0
+        U = torch.stack(self.update_vectors, dim=0)
+        _, S, _ = torch.linalg.svd(U, full_matrices=False)
+        tol = S[0].item() * max(U.shape) * 1e-6 if len(S) > 0 else 1e-6
+        return int((S > tol).sum().item())
+
+
+def load_wikitext2_slice(tokenizer: Any, num_sequences: int = 1000, seq_len: int = 512) -> Tuple[torch.Tensor, str]:
+    from datasets import load_dataset
+    dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+    full_text = "\n\n".join(list(dataset["validation"]["text"]) + list(dataset["test"]["text"]))
+    tokens = tokenizer.encode(full_text)
+    total_needed = num_sequences * seq_len
+    if len(tokens) < total_needed:
+        tokens = tokens * ((total_needed // len(tokens)) + 1)
+    tensor_slice = torch.tensor(tokens[:total_needed], dtype=torch.long).view(num_sequences, seq_len)
+    return tensor_slice, hashlib.sha256(tensor_slice.numpy().tobytes()).hexdigest()
+
+
+def evaluate_wikitext_perplexity(model: nn.Module, wikitext_slice: torch.Tensor, slice_hash: str, pinned_hash: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7", batch_size: int = 4, device: str = "cuda") -> float:
+    assert slice_hash == pinned_hash, f"Perplexity calculation blocked: slice hash mismatch ({slice_hash} != {pinned_hash})"
+    model.eval()
+    total_loss, total_tokens = 0.0, 0
+    with torch.no_grad():
+        for i in range(0, wikitext_slice.shape[0], batch_size):
+            batch = wikitext_slice[i:i + batch_size].to(device)
+            labels = batch.clone()
+            outputs = model(batch, labels=labels)
+            cnt = batch.numel()
+            total_loss += outputs.loss.item() * cnt
+            total_tokens += cnt
+            del batch, labels, outputs
+    mean_loss = total_loss / total_tokens
+    if math.isnan(mean_loss) or math.isinf(mean_loss): return float("inf")
+    try: return math.exp(mean_loss)
+    except OverflowError: return float("inf")

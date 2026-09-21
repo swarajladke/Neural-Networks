@@ -28,16 +28,18 @@ from experiments.metrics import (
     check_match,
     immediate_efficacy,
     terminal_retention,
-    efficacy,
-    raw_retention,
-    compute_summary_stats,
     generalization,
     bound_retention,
     subject_discriminable_retention,
+    compute_locality_kl,
     pool_controls,
+    compute_summary_stats,
+    raw_retention,
     simulate_stopping_rule,
-    CONTROL_NAMES
+    wilson_confidence_interval,
+    format_wilson_rate
 )
+from experiments.data import sample_200_facts
 
 # ==============================================================================
 # AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
@@ -52,6 +54,8 @@ ALLOW_LIST = {
     "-" * 95: "historical comparison table separator line",
     "-" * 135: "cell comparison table separator line",
     "=" * 135: "cell comparison table border line",
+    "-" * 145: "sweep comparison table separator line",
+    "=" * 145: "sweep comparison table border line",
     ":4096:8": "cublas deterministic workspace configuration flag",
     "SUPPRESSED — immediate efficacy below 90%": "directive S0-2 B5 gate suppression text",
 }
@@ -312,7 +316,60 @@ def run_all_tests() -> int:
     tests_passed += 1
     
     # --------------------------------------------------------------------------
-    # 3.7 TEST SUITE SUMMARY
+    # 3.7 WILSON CONFIDENCE INTERVAL UNIT TESTS (DIRECTIVE S0-3 PART 2.2)
+    # --------------------------------------------------------------------------
+    print("\n[3.7 Wilson Score Confidence Interval Unit Tests]")
+    lo_4, hi_4 = wilson_confidence_interval(4, 20)
+    tests_run += 1
+    print(f"  Test 3.7a (Wilson k=4, n=20)       : lo={lo_4:.4f}, hi={hi_4:.4f}")
+    assert 0.080 <= lo_4 <= 0.082 and 0.415 <= hi_4 <= 0.417
+    tests_passed += 1
+
+    lo_0, hi_0 = wilson_confidence_interval(0, 20)
+    tests_run += 1
+    print(f"  Test 3.7b (Wilson k=0, n=20)       : lo={lo_0:.4f}, hi={hi_0:.4f}")
+    assert lo_0 == 0.0 and 0.160 <= hi_0 <= 0.162
+    tests_passed += 1
+
+    formatted = format_wilson_rate(4, 20)
+    tests_run += 1
+    print(f"  Test 3.7c (Wilson Formatted String): {formatted}")
+    assert formatted.startswith("4/20 (20.00%) [8.")
+    tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # 3.8 STATISTICAL POWER SAMPLING UNIT TESTS (DIRECTIVE S0-3 PART 2.1)
+    # --------------------------------------------------------------------------
+    print("\n[3.8 N=200 Sequence Sampling Unit Tests]")
+    mock_facts = [{"fact_id": i, "subject": f"Subj_{i}", "relation": "born_city", "object": f"City_{i}"} for i in range(1000)]
+    seq_0, hash_0 = sample_200_facts(mock_facts, seed=0)
+    seq_1, hash_1 = sample_200_facts(mock_facts, seed=1)
+    tests_run += 1
+    print(f"  Test 3.8a (N=200 seed=0 hash)      : {hash_0[:16]}... (200 facts)")
+    assert len(seq_0) == 200 and len(set(f["fact_id"] for f in seq_0)) == 200
+    assert len(seq_1) == 200 and hash_0 != hash_1
+    tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # 3.9 CAUSAL SUBSPACE ORTHOGONAL PROJECTION TESTS (DIRECTIVE S0-3 PART 1 & 4)
+    # --------------------------------------------------------------------------
+    print("\n[3.9 Causal Subspace Orthogonal Projection Tests]")
+    torch.manual_seed(42)
+    dim = 64
+    rank = 4
+    basis = torch.randn(dim, rank)
+    Q, _ = torch.linalg.qr(basis)
+    grad = torch.randn(10, dim)
+    proj_comp = (grad @ Q) @ Q.T
+    grad_proj = grad - proj_comp
+    overlap = torch.norm(grad_proj @ Q).item()
+    tests_run += 1
+    print(f"  Test 3.9a (Orthogonality norm)     : {overlap:.8f} (Expected near zero)")
+    assert overlap < 1e-5
+    tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # 3.10 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
