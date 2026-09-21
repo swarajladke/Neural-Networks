@@ -292,7 +292,7 @@ def main():
     # PART 1: CAUSAL SUBSPACE REPAIR (EXECUTED WITH --repair)
     # ==============================================================================
     print("\n--- [PART 1: Causal Subspace Repair (Directive S0-3)] ---")
-    print("  0.1 Answered YES: Replacing non-causal S0-2 subspace with causal incremental subspace.")
+    print("  Part 0 Disclosure Answered YES: Replacing non-causal S0-2 subspace with causal incremental subspace.")
     print("  Causal Rule                 : Subspace for edit t built ONLY from update vectors of edits 1 ... t-1.")
     print("  Edit 1 Status               : Empty subspace (unmodified injection).")
 
@@ -431,7 +431,7 @@ def main():
     print(f"\n  Pooled Unmodified ImmEff            : {format_wilson_rate(pooled_imm_num, pooled_imm_den)}")
     print(f"  Pooled Unmodified TermRet           : {format_wilson_rate(pooled_term_num, pooled_term_den)}")
     print(f"  Pooled never_edited Floor           : {format_wilson_rate(pooled_ctrl_measures['never_edited'].numerator, pooled_ctrl_measures['never_edited'].denominator)}")
-    print(f"  Terminal Retention Exceeds Floor    : {ret_exceeds_floor} (Non-overlapping 95 pct Wilson CIs: [{term_lo*100:.2f}%, {term_hi*100:.2f}%] vs [{never_lo*100:.2f}%, {never_hi*100:.2f}%])")
+    print(f"  Terminal Retention Exceeds Floor    : {ret_exceeds_floor} (Non-overlapping 95 pct Wilson CIs: [{term_lo*100:.2f} pct, {term_hi*100:.2f} pct] vs [{never_lo*100:.2f} pct, {never_hi*100:.2f} pct])")
 
     # ==============================================================================
     # PART 3: GATE S0-3
@@ -501,7 +501,7 @@ def main():
             for s_idx, s in enumerate(seq_seeds):
                 assert cell_seed_results[s_idx]["immediate_efficacy"].pair == unmod_records_by_seed[s]["immediate_efficacy"].pair
                 assert cell_seed_results[s_idx]["terminal_retention"].pair == unmod_records_by_seed[s]["terminal_retention"].pair
-            print("  B2 POSITIVE CONTROL: PASSED (r=0 identically reproduces Part 2.4 unmodified arm across all seeds).")
+            print("  B2 POSITIVE CONTROL: PASSED (r=0 identically reproduces Part 2D unmodified arm across all seeds).")
 
         all_sweep_results.append({"cell": cell, "per_seed": cell_seed_results, "total_steps": cell_total_steps})
 
