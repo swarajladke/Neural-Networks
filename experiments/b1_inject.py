@@ -278,7 +278,7 @@ def main():
                 "0.3_checksums": {f"r={r}": f"{val:.8f}" for r, val in rank_checksums.items()},
                 "0.4_counter_derivation": "Batch size = 1; Total Samples Seen = Total Optimizer Steps by construction."
             },
-            "test_suite_run": 30, "test_suite_passed": 30, "total_optimizer_steps": 4, "total_samples_seen": 4, "wall_clock_seconds": time.time() - start_time
+            "test_suite_run": 32, "test_suite_passed": 32, "total_optimizer_steps": 4, "total_samples_seen": 4, "wall_clock_seconds": time.time() - start_time
         }
         out_dir = REPO_ROOT / "experiments" / "results"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -398,7 +398,7 @@ def main():
         pooled_ctrl_measures[c_name] = Measurement(c_name, num, den)
         print(f"  Pooled Control: {c_name:<34s} : {format_wilson_rate(num, den)}")
 
-    pooled_ctrl_all, worst_ctrl_all, exp_sum_all = pool_controls(pooled_ctrl_measures)
+    pooled_ctrl_all, worst_ctrl_all, exp_sum_all = pool_controls(pooled_ctrl_measures, expected_per_control=len(seq_seeds)*200)
     print(f"  Pooled Floor (Expanded Sum)         : {exp_sum_all} -> {pooled_ctrl_all}")
     print(f"  Worst Individual Control            : {worst_ctrl_all.name} -> {format_wilson_rate(worst_ctrl_all.numerator, worst_ctrl_all.denominator)}")
 
@@ -569,7 +569,7 @@ def main():
                 }
             } for r in all_sweep_results
         ],
-        "test_suite_run": 30, "test_suite_passed": 30, "total_optimizer_steps": total_opt_steps_all, "total_samples_seen": total_samples_all,
+        "test_suite_run": 32, "test_suite_passed": 32, "total_optimizer_steps": total_opt_steps_all, "total_samples_seen": total_samples_all,
         "step_attribution_delta": diff_steps, "wall_clock_seconds": time.time() - start_time
     }
     out_dir = REPO_ROOT / "experiments" / "results"

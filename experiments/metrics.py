@@ -313,7 +313,8 @@ CONTROL_NAMES = [
 ]
 
 def pool_controls(
-    control_measurements: Dict[str, Measurement]
+    control_measurements: Dict[str, Measurement],
+    expected_per_control: Optional[int] = None
 ) -> Tuple[Measurement, Measurement, str]:
     """
     Pools exactly four named controls:
@@ -321,8 +322,14 @@ def pool_controls(
       - random_direction_magnitude_matched
       - wrong_target
       - pre_edit_baseline
-    Each evaluates on exactly 20 facts.
-    Asserts pooled denominator == 80.
+
+    What it counts:
+      Total prompt matches across all 4 control arms.
+    What would make it zero:
+      Zero matches across every evaluated control arm (total numerator == 0).
+
+    Asserts each control denominator equals expected_per_control (or matches the first control if None).
+    Asserts pooled denominator == sum of per-control denominators.
     Returns:
       (pooled_measurement, worst_individual_measurement, expanded_sum_str)
     Raises ValueError immediately if any numerator > denominator or any control is missing/malformed.
@@ -331,6 +338,9 @@ def pool_controls(
     if missing:
         raise ValueError(f"Missing required controls in pool_controls: {missing}")
     
+    if expected_per_control is None:
+        expected_per_control = control_measurements[CONTROL_NAMES[0]].denominator
+    
     total_num = 0
     total_den = 0
     num_strs = []
@@ -338,8 +348,8 @@ def pool_controls(
     
     for c_name in CONTROL_NAMES:
         m = control_measurements[c_name]
-        if m.denominator != 20:
-            raise ValueError(f"Control {c_name} denominator must be exactly 20, got {m.denominator}")
+        if m.denominator != expected_per_control:
+            raise ValueError(f"Control {c_name} denominator must be exactly {expected_per_control}, got {m.denominator}")
         if m.numerator > m.denominator:
             raise ValueError(f"Control {c_name} impossible value: numerator {m.numerator} > denominator {m.denominator}")
         total_num += m.numerator
@@ -347,7 +357,8 @@ def pool_controls(
         num_strs.append(str(m.numerator))
         den_strs.append(str(m.denominator))
         
-    assert total_den == 80, f"Pooled control denominator must equal 80, got {total_den}"
+    expected_total_den = len(CONTROL_NAMES) * expected_per_control
+    assert total_den == expected_total_den, f"Pooled control denominator must equal {expected_total_den}, got {total_den}"
     
     expanded_sum_str = f"{' + '.join(num_strs)} = {total_num} over {' + '.join(den_strs)} = {total_den}"
     pooled_m = Measurement("pooled_control_floor", total_num, total_den, "controls_pool", "eval")
