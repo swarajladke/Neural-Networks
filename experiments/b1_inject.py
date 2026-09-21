@@ -510,16 +510,16 @@ def main():
 
     print(f"{'Quantity':<26s} | {'Historical Cell':<18s} | {'Dropout-ON Range (10 reps)':<28s} | {'Signed Delta from ON Mean'}")
     print("-" * 95)
-    for q_name, h_key, is_pct in [
-        ("Raw Retention Count", "raw_retained_count", False),
-        ("Subj-Discrim Count", "subj_discrim_count", False),
-        ("Generalization (%)", "generalization", True),
-        ("Locality KL", "locality_kl", False),
-        ("Perplexity", "perplexity", False)
+    for q_name, h_key, r_key, is_pct in [
+        ("Raw Retention Count", "raw_retained_count", "raw_retention", False),
+        ("Subj-Discrim Count", "subj_discrim_count", "subj_discrim_retention", False),
+        ("Generalization (%)", "generalization", "generalization", True),
+        ("Locality KL", "locality_kl", "locality_kl", False),
+        ("Perplexity", "perplexity", "perplexity", False)
     ]:
         h_val = hist_cell[h_key]
-        min_v, max_v, mean_v = get_on_stats(h_key if not is_pct else "generalization")
-        if is_pct and h_key == "generalization":
+        min_v, max_v, mean_v = get_on_stats(r_key)
+        if is_pct and r_key == "generalization":
             vals_pct = [r["generalization"].pct for r in dropout_on_records]
             min_v, max_v, mean_v = min(vals_pct), max(vals_pct), sum(vals_pct) / len(vals_pct)
         delta = h_val - mean_v
