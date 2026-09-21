@@ -1,0 +1,294 @@
+===================================================================================================================
+ DIRECTIVE S0-2: SEPARATE EFFICACY FROM RETENTION & FIRST MECHANISM TEST
+ MANDATE: TESTS AND DEFINITIONS ONLY. NO SCIENCE, NO VERDICTS, NO CERTIFICATION.
+===================================================================================================================
+
+--- [PART 3: Pre-Flight Test Suite Execution (Directive S0-2 Part A2 & A3)] ---
+====================================================================================================
+ PRE-FLIGHT TEST SUITE (Directive S0-2 Part A): Hand-Constructed Metric Stubs
+====================================================================================================
+
+[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    ':4096:8': cublas deterministic workspace configuration flag
+    'SUPPRESSED — immediate efficacy ': directive S0-2 B5 gate suppression text
+  [Literal scanner] 0 violation(s) detected in b1_inject.py
+  AST Literal Scanner: PASSED (0 unlisted decimal/percent literals).
+
+[A2.1 Immediate Efficacy vs Terminal Retention Disagreement Fixture]
+  Immediate Efficacy (all took)     : Expected (20, 20), Actual (20, 20) -> 20/20 (100.00%)
+  Terminal Retention (4 survived)   : Expected (4, 20), Actual (4, 20) -> 4/20 (20.00%)
+
+[A2.2 Immediate Efficacy Failure on Exhausted Max Steps]
+  Immediate Efficacy (1 exhausted)  : Expected (2, 3), Actual (2, 3) -> 2/3 (66.67%)
+
+[A2.3 Denominator Equality Across N in {1, 5, 12, 20}]
+  Denominator Assertion             : Strictly equals N for both metrics across N in [1, 5, 12, 20]
+
+[A3. Summary Statistic Reduction Test (S0-2 A3)]
+  Summary stats on incident list    : min=0.0, max=2.0, mean=0.7000
+
+[3.2 Generalization Metric Unit Tests]
+  Test 3.2 (20 facts, 2/3 correct)  : Expected (40, 60), Actual (40, 60) -> 40/60 (66.67%)
+
+[3.3 Retention Metrics Unit Tests on Hand-Counted Fixture]
+  Test 3.3a (Terminal/Raw Retention): Expected (3, 5), Actual (3, 5) -> 3/5 (60.00%)
+  Test 3.3b (Bound Retention)      : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+  Test 3.3c (Subj-Discrim Ret)     : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+
+[3.4 Stopping Rule Simulation Tests]
+  Test 3.4a (Terminates on match)   : Expected (3, True), Actual (3, True)
+  Test 3.4b (Terminates at step 1)  : Expected (1, True), Actual (1, True)
+  Test 3.4c (Runs to max_steps)     : Expected (15, False), Actual (15, False)
+  Test 3.4d (Falling loss no match) : Expected (4, False), Actual (4, False)
+
+[3.5 Proven 12-Case Match & Normalization Equivalence Suite]
+  Test 3.5 (12-Case Equivalence)    : All 12 proven test cases PASSED identically.
+
+[3.6 Control Accounting & Impossible-Value Guard Tests]
+  Test 3.6a (Valid Control Pooling) : Expanded Sum -> 0 + 1 + 0 + 2 = 3 over 20 + 20 + 20 + 20 = 80
+                                      Pooled Floor -> 3/80 (3.75%), Worst -> pre_edit_baseline: 2/20 (10.00%)
+  Test 3.6b (Numerator > Denominator): Correctly halted with ValueError: faulty_control: numerator 21 exceeds denominator 20 -- impossible value, halting
+
+====================================================================================================
+ PRE-FLIGHT TEST SUMMARY: 27 tests run, 27 tests passed, 0 failures.
+====================================================================================================
+
+--- [PART 4: Environment Fingerprint & Input Hashes (Directive S0-2)] ---
+  Pinned Facts SHA-256        : 285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536 (Verified)
+  Synthetic Facts Agreement   : 1,000/1,000 facts match pinned file field-by-field
+  Control-Probe Set SHA-256   : 8f4ffa6b18d63531c898a6b2bf97d8b4a83d7038a54b9748bf77862178213887 (Verified 200 prompts)
+  Distinct Sequence Fact IDs  : [776, 507, 33, 483, 895, 523, 85, 418, 922, 615, 53, 336, 750, 682, 185, 450, 809, 501, 174, 467]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1613.03it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 92868.17 examples/s]
+Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 685335.13 examples/s]
+Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 619815.40 examples/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  PyTorch / Transformers      : 2.10.0+cu128 / 5.0.0
+  Device / cuDNN              : cuda (Tesla T4) / 91002
+  Pinned Model Revision       : 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  Weight File SHA-256         : 248dfc3911869ec493c76e65bf2fcf7f615828b0254c12b473182f0f81d3a707 (Verified)
+  WikiText Slice SHA-256      : 3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7 (Verified)
+  Fresh Model Checksum        : -62119.87976855
+  Pre-Edit Baseline Perplexity: 36.0299
+
+--- [Compute Budget Projection (Directive S0-2 B8)] ---
+  Session Cap                 : 23400.0 s | Ceiling Limit (70 pct): 16380.0 s
+  Projected Compute Wall-Clock: 240.0 s (Within 70 pct limit: PASSED)
+
+--- [PART A: Unmodified Full-Parameter Arm (Dropout OFF, 3 repeats)] ---
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1715.20it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Rep 1/3: ImmEff=20/20 (100.00%) | TermRet=4/20 (20.00%) | Steps=109
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1720.95it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Rep 2/3: ImmEff=20/20 (100.00%) | TermRet=4/20 (20.00%) | Steps=109
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1773.27it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Rep 3/3: ImmEff=20/20 (100.00%) | TermRet=4/20 (20.00%) | Steps=109
+  Part A Determinism: PASSED (3 repeats identical).
+
+--- [PART A6: The Efficacy Gate] ---
+  Observed Immediate Efficacy : 20/20 (100.00%)
+  Gate A6 PASSED: Immediate efficacy meets threshold (at least 90 percent). Proceeding to Part B mechanism test.
+
+--- [PART B: Pre-Computing Control Mean & Sequence Subspaces] ---
+
+--- [PART B6: Re-Evaluating Four Named Controls] ---
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1751.17it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1827.21it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1759.26it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Control: never_edited                       : 1/20 (5.00%)
+  Control: random_direction_magnitude_matched : 0/20 (0.00%)
+  Control: wrong_target                       : 0/20 (0.00%)
+  Control: pre_edit_baseline                  : 0/20 (0.00%)
+  Pooled Floor (Expanded Sum)         : 1 + 0 + 0 + 0 = 1 over 20 + 20 + 20 + 20 = 80 -> 1/80 (1.25%)
+  Worst Individual Control            : never_edited -> 1/20 (5.00%)
+
+--- [PART B: Running Sweep Over 13 Mechanism Cells] ---
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1768.24it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  B2 Positive Control (r=0 == Part A): PASSED (Identical to Part A cell).
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1728.67it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1670.27it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1756.50it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1676.94it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1759.03it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1615.13it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1758.47it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1713.14it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1787.55it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1720.69it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1664.42it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1698.69it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+
+=======================================================================================================================================
+Cell Name              | ImmEff       | TermRet      | BoundRet     | SubjDisc (vs Worst)  | Gen          | LocKL    | PPL      | Steps 
+---------------------------------------------------------------------------------------------------------------------------------------
+r=0_unmodified         | 20/20        | 4/20         | 1/20         | 1/20 (w:1/20)        | 11/60        | 1.3935   | 41.70    | 109   
+r=1_projected          | 6/20         | SUPPRESSED — immediate efficacy below 90% (observed: 30.00%)
+r=1_param_matched      | 15/20        | SUPPRESSED — immediate efficacy below 90% (observed: 75.00%)
+r=1_random_control     | 20/20        | 4/20         | 1/20         | 1/20 (w:1/20)        | 11/60        | 1.3897   | 41.67    | 109   
+r=4_projected          | 4/20         | SUPPRESSED — immediate efficacy below 90% (observed: 20.00%)
+r=4_param_matched      | 15/20        | SUPPRESSED — immediate efficacy below 90% (observed: 75.00%)
+r=4_random_control     | 20/20        | 4/20         | 1/20         | 1/20 (w:1/20)        | 11/60        | 1.3785   | 41.58    | 109   
+r=16_projected         | 3/20         | SUPPRESSED — immediate efficacy below 90% (observed: 15.00%)
+r=16_param_matched     | 15/20        | SUPPRESSED — immediate efficacy below 90% (observed: 75.00%)
+r=16_random_control    | 20/20        | 4/20         | 1/20         | 1/20 (w:1/20)        | 10/60        | 1.3567   | 41.44    | 110   
+r=64_projected         | 3/20         | SUPPRESSED — immediate efficacy below 90% (observed: 15.00%)
+r=64_param_matched     | 15/20        | SUPPRESSED — immediate efficacy below 90% (observed: 75.00%)
+r=64_random_control    | 20/20        | 4/20         | 1/20         | 1/20 (w:1/20)        | 10/60        | 1.3563   | 41.44    | 110   
+=======================================================================================================================================
+
+--- [PART B: Serialization of S0-2 Results] ---
+  Total Optimizer Steps       : 4063 (Asserted > 0)
+  Total Samples Seen          : 4063 (Asserted > 0)
+  Artifact Written            : experiments/results/s0_2.json
+
+===================================================================================================================
+ DIRECTIVE S0-2 COMPLETE: ALL TESTS AND MEASUREMENTS EXECUTED SUCCESSFULLY
+===================================================================================================================

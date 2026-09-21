@@ -1,0 +1,558 @@
+{
+  "directive": "S0-2",
+  "commit": "11eeb1984d524122a87ceef35bb79da8f4d66fb2",
+  "timestamp": "2026-09-21 04:30:00 UTC",
+  "environment": {
+    "torch": "2.10.0+cu128",
+    "transformers": "5.0.0",
+    "cuda": "12.8",
+    "gpu": "Tesla T4",
+    "pinned_revision": "607a30d783dfa663caf39e06633721c8d4cfcd7e",
+    "fresh_checksum": -62119.87976855
+  },
+  "sequence": {
+    "name": "distinct_object_validation_step20",
+    "fact_ids": [
+      776,
+      507,
+      33,
+      483,
+      895,
+      523,
+      85,
+      418,
+      922,
+      615,
+      53,
+      336,
+      750,
+      682,
+      185,
+      450,
+      809,
+      501,
+      174,
+      467
+    ]
+  },
+  "part_a_deterministic_3_repeats": [
+    {
+      "rep": 1,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3935,
+      "perplexity": 41.7,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012
+    },
+    {
+      "rep": 2,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3935,
+      "perplexity": 41.7,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012
+    },
+    {
+      "rep": 3,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3935,
+      "perplexity": 41.7,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012
+    }
+  ],
+  "part_b_cells": [
+    {
+      "cell_name": "r=0_unmodified",
+      "r": 0,
+      "mode": "unmodified",
+      "seed": 42,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3935,
+      "perplexity": 41.7,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012,
+      "suppressed": false
+    },
+    {
+      "cell_name": "r=1_projected",
+      "r": 1,
+      "mode": "projected",
+      "seed": 42,
+      "immediate_efficacy": [
+        6,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 382,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=1_param_matched",
+      "r": 1,
+      "mode": "param_matched",
+      "seed": 42,
+      "immediate_efficacy": [
+        15,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 227,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=1_random_control",
+      "r": 1,
+      "mode": "random_control",
+      "seed": 42,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3897,
+      "perplexity": 41.67,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012,
+      "suppressed": false
+    },
+    {
+      "cell_name": "r=4_projected",
+      "r": 4,
+      "mode": "projected",
+      "seed": 42,
+      "immediate_efficacy": [
+        4,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 424,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=4_param_matched",
+      "r": 4,
+      "mode": "param_matched",
+      "seed": 42,
+      "immediate_efficacy": [
+        15,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 227,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=4_random_control",
+      "r": 4,
+      "mode": "random_control",
+      "seed": 42,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        11,
+        60
+      ],
+      "locality_kl": 1.3785,
+      "perplexity": 41.58,
+      "optimizer_steps": 109,
+      "mean_update_norm": 0.0012,
+      "suppressed": false
+    },
+    {
+      "cell_name": "r=16_projected",
+      "r": 16,
+      "mode": "projected",
+      "seed": 42,
+      "immediate_efficacy": [
+        3,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 441,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=16_param_matched",
+      "r": 16,
+      "mode": "param_matched",
+      "seed": 42,
+      "immediate_efficacy": [
+        15,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 227,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=16_random_control",
+      "r": 16,
+      "mode": "random_control",
+      "seed": 42,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        10,
+        60
+      ],
+      "locality_kl": 1.3567,
+      "perplexity": 41.44,
+      "optimizer_steps": 110,
+      "mean_update_norm": 0.0012,
+      "suppressed": false
+    },
+    {
+      "cell_name": "r=64_projected",
+      "r": 64,
+      "mode": "projected",
+      "seed": 42,
+      "immediate_efficacy": [
+        3,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 441,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=64_param_matched",
+      "r": 64,
+      "mode": "param_matched",
+      "seed": 42,
+      "immediate_efficacy": [
+        15,
+        20
+      ],
+      "terminal_retention": [
+        0,
+        20
+      ],
+      "bound_retention": [
+        0,
+        20
+      ],
+      "subj_discrim_retention": [
+        0,
+        20
+      ],
+      "generalization": [
+        0,
+        60
+      ],
+      "locality_kl": 0.0,
+      "perplexity": 0.0,
+      "optimizer_steps": 227,
+      "mean_update_norm": 0.0012,
+      "suppressed": true
+    },
+    {
+      "cell_name": "r=64_random_control",
+      "r": 64,
+      "mode": "random_control",
+      "seed": 42,
+      "immediate_efficacy": [
+        20,
+        20
+      ],
+      "terminal_retention": [
+        4,
+        20
+      ],
+      "bound_retention": [
+        1,
+        20
+      ],
+      "subj_discrim_retention": [
+        1,
+        20
+      ],
+      "generalization": [
+        10,
+        60
+      ],
+      "locality_kl": 1.3563,
+      "perplexity": 41.44,
+      "optimizer_steps": 110,
+      "mean_update_norm": 0.0012,
+      "suppressed": false
+    }
+  ],
+  "controls": {
+    "never_edited": [
+      1,
+      20
+    ],
+    "random_direction_magnitude_matched": [
+      0,
+      20
+    ],
+    "wrong_target": [
+      0,
+      20
+    ],
+    "pre_edit_baseline": [
+      0,
+      20
+    ]
+  },
+  "pooled_control_floor": [
+    1,
+    80
+  ],
+  "worst_control": {
+    "name": "never_edited",
+    "pair": [
+      1,
+      20
+    ]
+  },
+  "total_optimizer_steps": 4063,
+  "total_samples_seen": 4063,
+  "wall_clock_seconds": 139.73
+}
