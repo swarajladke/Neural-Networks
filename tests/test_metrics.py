@@ -2,7 +2,7 @@
 """
 tests/test_metrics.py
 =====================
-Pre-Flight Unit Test Suite for Continual Learning Metrics (Directive S0-1 Part 3).
+Pre-Flight Unit Test Suite for Continual Learning Metrics (Directive S0-2).
 
 Mandate:
   - Must run before any model loads or accelerator initializes.
@@ -11,6 +11,8 @@ Mandate:
   - Zero tests run is an immediate failure.
 """
 
+import ast
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Any
@@ -24,9 +26,12 @@ from experiments.metrics import (
     Measurement,
     normalize_entity,
     check_match,
+    immediate_efficacy,
+    terminal_retention,
     efficacy,
-    generalization,
     raw_retention,
+    compute_summary_stats,
+    generalization,
     bound_retention,
     subject_discriminable_retention,
     pool_controls,
@@ -34,68 +39,145 @@ from experiments.metrics import (
     CONTROL_NAMES
 )
 
+# ==============================================================================
+# AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
+# ==============================================================================
+NUMERIC = re.compile(r"\d+\.\d+|\d+\s*%|%\s*\d+")
+
+ALLOW_LIST = {
+    "=" * 115: "table rule border line",
+    "-" * 115: "table rule separator line",
+    "=" * 100: "test suite banner border line",
+    "-" * 100: "test suite section separator line",
+    "-" * 95: "historical comparison table separator line",
+    "-" * 135: "cell comparison table separator line",
+    "=" * 135: "cell comparison table border line",
+    ":4096:8": "cublas deterministic workspace configuration flag",
+    "SUPPRESSED — immediate efficacy below 90%": "directive S0-2 B5 gate suppression text",
+}
+
+def _format_spec_node_ids(call: ast.Call) -> set:
+    ids = set()
+    for sub in ast.walk(call):
+        if isinstance(sub, ast.FormattedValue) and sub.format_spec is not None:
+            for n in ast.walk(sub.format_spec):
+                ids.add(id(n))
+    return ids
+
+def scan_for_typed_literals(path: str) -> List[tuple]:
+    tree = ast.parse(open(path, encoding="utf-8").read(), filename=path)
+    hits = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print"):
+            continue
+        skip = _format_spec_node_ids(node)
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str) and id(sub) not in skip:
+                text = sub.value
+                if NUMERIC.search(text) and text not in ALLOW_LIST:
+                    hits.append((getattr(sub, "lineno", -1), text))
+    return hits
+
+def enforce_no_typed_literals(path: str) -> None:
+    print("  [Literal scanner] Allow-list:")
+    for entry, why in ALLOW_LIST.items():
+        print(f"    {entry[:32]!r}: {why}")
+    hits = scan_for_typed_literals(path)
+    for lineno, text in hits:
+        print(f"    VIOLATION line {lineno}: {text!r}")
+    print(f"  [Literal scanner] {len(hits)} violation(s) detected in {Path(path).name}")
+    assert len(hits) == 0, f"Literal scanner detected {len(hits)} violation(s) in {path}"
+
+
 def run_all_tests() -> int:
     tests_run = 0
     tests_passed = 0
     
     print("=" * 100)
-    print(" PRE-FLIGHT TEST SUITE (Directive S0-1 Part 3): Hand-Constructed Metric Stubs")
+    print(" PRE-FLIGHT TEST SUITE (Directive S0-2 Part A): Hand-Constructed Metric Stubs")
     print("=" * 100)
     
     # --------------------------------------------------------------------------
-    # 3.1 EFFICACY TESTS
+    # AST LITERAL SCANNER ON b1_inject.py
     # --------------------------------------------------------------------------
-    print("\n[3.1 Efficacy Metric Unit & Regression Tests]")
-    
-    # Case A: 20 facts, exactly 13 succeeding
+    print("\n[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]")
+    target_script = REPO_ROOT / "experiments" / "b1_inject.py"
+    if target_script.exists():
+        tests_run += 1
+        enforce_no_typed_literals(str(target_script))
+        print("  AST Literal Scanner: PASSED (0 unlisted decimal/percent literals).")
+        tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # A2.1 IMMEDIATE EFFICACY VS TERMINAL RETENTION DISAGREEMENT FIXTURE
+    # --------------------------------------------------------------------------
+    print("\n[A2.1 Immediate Efficacy vs Terminal Retention Disagreement Fixture]")
+    # 20 facts injected sequentially:
+    # All 20 took immediately upon their own edit: immediate_matches = [True] * 20
+    # Later edits overwrite earlier ones, leaving only 4 matching at step 20
     facts_20 = [{"object": f"target_{i}"} for i in range(20)]
-    preds_13_of_20 = [f"target_{i}" if i < 13 else "wrong_token" for i in range(20)]
-    m_eff_13 = efficacy(preds_13_of_20, facts_20)
-    tests_run += 1
-    exp_13 = (13, 20)
-    print(f"  Test 3.1a (20 facts, 13 match)   : Expected {exp_13}, Actual {m_eff_13.pair} -> {m_eff_13}")
-    assert m_eff_13.pair == exp_13, f"Mismatch: expected {exp_13}, got {m_eff_13.pair}"
-    tests_passed += 1
+    imm_matches_20 = [True] * 20
+    preds_step20 = [f"target_{i}" if i >= 16 else "overwritten_target" for i in range(20)]
     
-    # Case B: 20 facts, all 20 succeeding
-    preds_20_of_20 = [f"target_{i}" for i in range(20)]
-    m_eff_20 = efficacy(preds_20_of_20, facts_20)
+    m_imm = immediate_efficacy(imm_matches_20, input_set="distinct20", mode="eval")
+    m_term = terminal_retention(preds_step20, facts_20, input_set="distinct20", mode="eval")
     tests_run += 1
-    exp_20 = (20, 20)
-    print(f"  Test 3.1b (20 facts, 20 match)   : Expected {exp_20}, Actual {m_eff_20.pair} -> {m_eff_20}")
-    assert m_eff_20.pair == exp_20, f"Mismatch: expected {exp_20}, got {m_eff_20.pair}"
+    exp_imm = (20, 20)
+    exp_term = (4, 20)
+    print(f"  Immediate Efficacy (all took)     : Expected {exp_imm}, Actual {m_imm.pair} -> {m_imm}")
+    print(f"  Terminal Retention (4 survived)   : Expected {exp_term}, Actual {m_term.pair} -> {m_term}")
+    assert m_imm.pair == exp_imm, f"Immediate efficacy mismatch: {m_imm.pair} != {exp_imm}"
+    assert m_term.pair == exp_term, f"Terminal retention mismatch: {m_term.pair} != {exp_term}"
+    assert m_imm.pair != m_term.pair, "Defect: immediate_efficacy and terminal_retention are identical!"
     tests_passed += 1
-    
-    # Case C: 1 fact injected and succeeding -> must return (1, 1), NEVER bare float 100.0
-    facts_1 = [{"object": "target_0"}]
-    preds_1 = ["target_0"]
-    m_eff_1 = efficacy(preds_1, facts_1)
+
+    # A2.2 IMMEDIATE EFFICACY FAILURE ON EXHAUSTED MAX_STEPS
+    print("\n[A2.2 Immediate Efficacy Failure on Exhausted Max Steps]")
+    # Fact 0 took (matched at step 3) -> True
+    # Fact 1 exhausted 25 steps without matching -> False
+    # Fact 2 took (matched at step 25) -> True
+    imm_matches_3 = [True, False, True]
+    m_imm_3 = immediate_efficacy(imm_matches_3, input_set="test3", mode="eval")
     tests_run += 1
-    exp_1 = (1, 1)
-    print(f"  Test 3.1c (1 fact, 1 match)      : Expected {exp_1}, Actual {m_eff_1.pair} (Type: {type(m_eff_1).__name__})")
-    assert m_eff_1.pair == exp_1, f"Mismatch: expected {exp_1}, got {m_eff_1.pair}"
-    assert not isinstance(m_eff_1, float), f"Defect recurrence: efficacy returned bare float {m_eff_1}"
+    exp_imm_3 = (2, 3)
+    print(f"  Immediate Efficacy (1 exhausted)  : Expected {exp_imm_3}, Actual {m_imm_3.pair} -> {m_imm_3}")
+    assert m_imm_3.pair == exp_imm_3, f"Mismatch: expected {exp_imm_3}, got {m_imm_3.pair}"
     tests_passed += 1
-    
-    # Case D: Regression test: denominator MUST equal count of injected facts
+
+    # A2.3 DENOMINATOR EQUALITY ASSERTION ACROSS N in {1, 5, 12, 20}
+    print("\n[A2.3 Denominator Equality Across N in {1, 5, 12, 20}]")
     tests_run += 1
     for k in [1, 5, 12, 20]:
-        sub_facts = [{"object": f"target_{i}"} for i in range(k)]
-        sub_preds = [f"target_{i}" for i in range(k)]
-        m_k = efficacy(sub_preds, sub_facts)
-        assert m_k.denominator == k, f"Regression failure: denominator {m_k.denominator} != injected count {k}"
-    print("  Test 3.1d (Regression Guard)     : Denominator strictly equals injected facts count N for N in [1, 5, 12, 20]")
+        k_matches = [True] * k
+        k_facts = [{"object": f"target_{i}"} for i in range(k)]
+        k_preds = [f"target_{i}" for i in range(k)]
+        res_imm = immediate_efficacy(k_matches, input_set=f"test_{k}")
+        res_term = terminal_retention(k_preds, k_facts, input_set=f"test_{k}")
+        assert res_imm.denominator == k, f"Immediate efficacy denominator {res_imm.denominator} != {k}"
+        assert res_term.denominator == k, f"Terminal retention denominator {res_term.denominator} != {k}"
+    print("  Denominator Assertion             : Strictly equals N for both metrics across N in [1, 5, 12, 20]")
     tests_passed += 1
-    
+
+    # --------------------------------------------------------------------------
+    # A3. SUMMARY STATISTIC DEFECT REGRESSION TEST
+    # --------------------------------------------------------------------------
+    print("\n[A3. Summary Statistic Reduction Test (S0-2 A3)]")
+    # Pinned list from S0-1 incident: 0, 1, 0, 0, 2, 1, 0, 1, 1, 1 (sum=7, mean=0.70)
+    incident_values = [0.0, 1.0, 0.0, 0.0, 2.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+    stats = compute_summary_stats(incident_values)
+    tests_run += 1
+    exp_min, exp_max, exp_mean = 0.0, 2.0, 0.70
+    print(f"  Summary stats on incident list    : min={stats['min']}, max={stats['max']}, mean={stats['mean']:.4f}")
+    assert stats["min"] == exp_min, f"Min mismatch: expected {exp_min}, got {stats['min']}"
+    assert stats["max"] == exp_max, f"Max mismatch: expected {exp_max}, got {stats['max']}"
+    assert abs(stats["mean"] - exp_mean) < 1e-6, f"Mean mismatch: expected {exp_mean}, got {stats['mean']}"
+    tests_passed += 1
+
     # --------------------------------------------------------------------------
     # 3.2 GENERALIZATION TEST
     # --------------------------------------------------------------------------
     print("\n[3.2 Generalization Metric Unit Tests]")
-    # 20 facts, exactly 2 of 3 paraphrases correct per fact -> (40, 60)
-    para_preds_40_60 = [
-        [f"target_{i}", f"target_{i}", "wrong_paraphrase"]
-        for i in range(20)
-    ]
+    para_preds_40_60 = [[f"target_{i}", f"target_{i}", "wrong_paraphrase"] for i in range(20)]
     m_gen = generalization(para_preds_40_60, facts_20)
     tests_run += 1
     exp_gen = (40, 60)
@@ -107,17 +189,6 @@ def run_all_tests() -> int:
     # 3.3 THREE RETENTION METRICS (HAND-CONSTRUCTED FIXTURE)
     # --------------------------------------------------------------------------
     print("\n[3.3 Retention Metrics Unit Tests on Hand-Counted Fixture]")
-    # Fixture: 5 facts across 2 relations
-    # Fact 0: rel="born_city", obj="Paris", pred="Paris", rel_modal="Paris", shared_ctrl=1
-    #         -> raw match: True, bound: False (is modal), subj_disc: True (shared<=2)
-    # Fact 1: rel="born_city", obj="Berlin", pred="Berlin", rel_modal="Paris", shared_ctrl=3
-    #         -> raw match: True, bound: True (not modal), subj_disc: False (shared>2)
-    # Fact 2: rel="born_city", obj="Rome", pred="Paris", rel_modal="Paris", shared_ctrl=1
-    #         -> raw match: False, bound: False, subj_disc: False
-    # Fact 3: rel="instrument", obj="piano", pred="piano", rel_modal="violin", shared_ctrl=0
-    #         -> raw match: True, bound: True (not modal), subj_disc: True (shared<=2)
-    # Fact 4: rel="instrument", obj="flute", pred="drums", rel_modal="violin", shared_ctrl=0
-    #         -> raw match: False, bound: False, subj_disc: False
     fixture_facts = [
         {"fact_id": 0, "relation": "born_city", "object": "Paris"},
         {"fact_id": 1, "relation": "born_city", "object": "Berlin"},
@@ -128,20 +199,17 @@ def run_all_tests() -> int:
     fixture_preds = ["Paris", "Berlin", "Paris", "piano", "drums"]
     fixture_rel_modals = {"born_city": "Paris", "instrument": "violin"}
     fixture_ctrl_preds = {
-        "born_city": ["Paris", "Berlin", "Berlin", "Berlin", "Madrid"],  # 'Paris' appears 1x, 'Berlin' appears 3x
-        "instrument": ["violin", "violin", "guitar"]                      # 'piano' appears 0x
+        "born_city": ["Paris", "Berlin", "Berlin", "Berlin", "Madrid"],
+        "instrument": ["violin", "violin", "guitar"]
     }
     
-    # Hand-counted expected results:
-    # Raw retention: facts 0, 1, 3 match -> 3 / 5
     m_raw = raw_retention(fixture_preds, fixture_facts)
     tests_run += 1
     exp_raw = (3, 5)
-    print(f"  Test 3.3a (Raw Retention)        : Expected {exp_raw}, Actual {m_raw.pair} -> {m_raw}")
+    print(f"  Test 3.3a (Terminal/Raw Retention): Expected {exp_raw}, Actual {m_raw.pair} -> {m_raw}")
     assert m_raw.pair == exp_raw, f"Raw retention mismatch: expected {exp_raw}, got {m_raw.pair}"
     tests_passed += 1
     
-    # Bound retention: facts 1, 3 match and are non-modal -> 2 / 5
     m_bound = bound_retention(fixture_preds, fixture_facts, fixture_rel_modals)
     tests_run += 1
     exp_bound = (2, 5)
@@ -149,7 +217,6 @@ def run_all_tests() -> int:
     assert m_bound.pair == exp_bound, f"Bound retention mismatch: expected {exp_bound}, got {m_bound.pair}"
     tests_passed += 1
     
-    # Subject-discriminable retention: facts 0, 3 match and shared_ctrl <= 2 -> 2 / 5
     m_disc = subject_discriminable_retention(fixture_preds, fixture_facts, fixture_ctrl_preds, max_shared_controls=2)
     tests_run += 1
     exp_disc = (2, 5)
@@ -158,42 +225,36 @@ def run_all_tests() -> int:
     tests_passed += 1
     
     # --------------------------------------------------------------------------
-    # 3.4 STOPPING RULE UNIT TESTS (SYNTHETIC LOGITS / PREDICTIONS)
+    # 3.4 STOPPING RULE UNIT TESTS
     # --------------------------------------------------------------------------
     print("\n[3.4 Stopping Rule Simulation Tests]")
     target_token = "Rome"
-    
-    # Case A: Target becomes argmax at step 3 -> terminates at step 3 with True
     steps_a = ["Paris", "Berlin", "Rome", "Rome", "Rome"]
     steps_taken_a, succ_a = simulate_stopping_rule(steps_a, target_token, max_steps=25)
     tests_run += 1
     print(f"  Test 3.4a (Terminates on match)   : Expected (3, True), Actual ({steps_taken_a}, {succ_a})")
-    assert (steps_taken_a, succ_a) == (3, True), f"Mismatch: expected (3, True), got ({steps_taken_a}, {succ_a})"
+    assert (steps_taken_a, succ_a) == (3, True)
     tests_passed += 1
     
-    # Case B: Target is already argmax at step 1 -> terminates immediately at step 1
     steps_b = ["Rome", "Rome", "Rome"]
     steps_taken_b, succ_b = simulate_stopping_rule(steps_b, target_token, max_steps=25)
     tests_run += 1
     print(f"  Test 3.4b (Terminates at step 1)  : Expected (1, True), Actual ({steps_taken_b}, {succ_b})")
-    assert (steps_taken_b, succ_b) == (1, True), f"Mismatch: expected (1, True), got ({steps_taken_b}, {succ_b})"
+    assert (steps_taken_b, succ_b) == (1, True)
     tests_passed += 1
     
-    # Case C: Target never becomes argmax -> runs to max_steps and reports False
     steps_c = ["Paris"] * 30
     steps_taken_c, succ_c = simulate_stopping_rule(steps_c, target_token, max_steps=15)
     tests_run += 1
     print(f"  Test 3.4c (Runs to max_steps)     : Expected (15, False), Actual ({steps_taken_c}, {succ_c})")
-    assert (steps_taken_c, succ_c) == (15, False), f"Mismatch: expected (15, False), got ({steps_taken_c}, {succ_c})"
+    assert (steps_taken_c, succ_c) == (15, False)
     tests_passed += 1
     
-    # Case D: Falling loss while target is NOT argmax -> must NOT terminate early
-    # (Simulated by 10 non-matching predictions with decreasing losses)
     steps_d = ["token_loss_5.0", "token_loss_3.0", "token_loss_1.0", "token_loss_0.5"]
     steps_taken_d, succ_d = simulate_stopping_rule(steps_d, target_token, max_steps=4)
     tests_run += 1
     print(f"  Test 3.4d (Falling loss no match) : Expected (4, False), Actual ({steps_taken_d}, {succ_d})")
-    assert (steps_taken_d, succ_d) == (4, False), f"Mismatch: expected (4, False), got ({steps_taken_d}, {succ_d})"
+    assert (steps_taken_d, succ_d) == (4, False)
     tests_passed += 1
     
     # --------------------------------------------------------------------------
@@ -218,8 +279,7 @@ def run_all_tests() -> int:
         tests_run += 1
         act_m = check_match(t_pred, t_tgt)
         act_n = normalize_entity(t_pred)
-        assert act_m == exp_m, f"Case {idx+1} match mismatch: expected {exp_m}, got {act_m}"
-        assert act_n == exp_n, f"Case {idx+1} normalize mismatch: expected {exp_n}, got {act_n}"
+        assert act_m == exp_m and act_n == exp_n
         tests_passed += 1
     print(f"  Test 3.5 (12-Case Equivalence)    : All 12 proven test cases PASSED identically.")
     
@@ -227,7 +287,6 @@ def run_all_tests() -> int:
     # 3.6 CONTROL ACCOUNTING & IMPOSSIBLE-VALUE GUARD
     # --------------------------------------------------------------------------
     print("\n[3.6 Control Accounting & Impossible-Value Guard Tests]")
-    # Case A: Valid controls
     valid_controls = {
         "never_edited": Measurement("never_edited", 0, 20),
         "random_direction_magnitude_matched": Measurement("random_direction_magnitude_matched", 1, 20),
@@ -238,11 +297,10 @@ def run_all_tests() -> int:
     tests_run += 1
     print(f"  Test 3.6a (Valid Control Pooling) : Expanded Sum -> {exp_sum_str}")
     print(f"                                      Pooled Floor -> {pooled_m}, Worst -> {worst_m.name}: {worst_m}")
-    assert pooled_m.pair == (3, 80), f"Expected (3, 80), got {pooled_m.pair}"
+    assert pooled_m.pair == (3, 80)
     assert worst_m.name == "pre_edit_baseline" and worst_m.pair == (2, 20)
     tests_passed += 1
     
-    # Case B: Impossible value numerator > denominator (e.g. 21/20, simulating the 450% incident)
     tests_run += 1
     impossible_caught = False
     try:

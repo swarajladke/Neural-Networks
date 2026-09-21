@@ -87,26 +87,73 @@ def check_match(prediction: str, target: str) -> bool:
 
 
 # ==============================================================================
-# CORE CONTINUAL LEARNING METRICS
+# CORE CONTINUAL LEARNING METRICS (DIRECTIVE S0-2 SEPARATION)
 # ==============================================================================
-def efficacy(
+def immediate_efficacy(
+    immediate_matches: List[bool],
+    input_set: str = "distinct20",
+    mode: str = "eval"
+) -> Measurement:
+    """
+    Immediate Efficacy:
+    For each fact, evaluated IMMEDIATELY after that fact's own edit loop terminates
+    and before the next fact is injected, did greedy decoding from its edit prompt
+    match its canonical object?
+    Numerator is the count of facts that took immediately.
+    Denominator is the number of facts attempted (len(immediate_matches)).
+    What would make it zero: Zero if no fact takes effect immediately upon its own edit.
+    Distinction from terminal_retention: immediate_efficacy measures whether the intervention
+    took effect at the moment of editing (step k for fact k), whereas terminal_retention is
+    measured at the very end of the sequence (step N for all facts), measuring forgetting.
+    """
+    n = len(immediate_matches)
+    if n == 0:
+        raise ValueError("immediate_efficacy: cannot evaluate on 0 attempts")
+    correct = sum(1 for m in immediate_matches if bool(m))
+    return Measurement("immediate_efficacy", correct, n, input_set, mode)
+
+
+def terminal_retention(
     predictions: List[str],
     facts_injected: List[Dict[str, Any]],
     input_set: str = "distinct20",
     mode: str = "eval"
 ) -> Measurement:
     """
-    Calculates the fraction of ALL injected facts whose canonical object is currently
-    the greedy continuation of that fact's edit prompt.
-    Denominator is the count of facts injected so far (len(facts_injected)), never 1.
-    Zero if no predictions match their canonical targets.
+    Terminal Retention:
+    Counts how many injected facts produce their canonical object at the very end
+    of the sequence (step N).
+    Numerator is the count of facts correctly recalled at step N.
+    Denominator is the number of facts injected (len(facts_injected)).
+    What would make it zero: Zero if all injected facts are completely forgotten by step N.
+    Distinction from immediate_efficacy: terminal_retention evaluates retention and catastrophic
+    forgetting after all sequential edits have occurred (at step N), whereas immediate_efficacy
+    measures whether each individual edit took effect immediately when applied (at step k).
     """
     n = len(facts_injected)
     if n == 0:
-        raise ValueError("efficacy: cannot evaluate on 0 injected facts")
+        raise ValueError("terminal_retention: cannot evaluate on 0 injected facts")
     assert len(predictions) == n, f"Predictions count {len(predictions)} != facts count {n}"
     correct = sum(1 for p, f in zip(predictions, facts_injected) if check_match(p, f["object"]))
-    return Measurement("efficacy", correct, n, input_set, mode)
+    return Measurement("terminal_retention", correct, n, input_set, mode)
+
+# Maintain backward compatibility aliases
+raw_retention = terminal_retention
+efficacy = terminal_retention
+
+
+def compute_summary_stats(values: List[float]) -> Dict[str, float]:
+    """
+    Computes summary statistics (min, max, mean) by reducing the stored per-repeat list
+    at evaluation/print time. Does not maintain a separate accumulator (AGENTS.md S0-2 A3).
+    """
+    if not values:
+        raise ValueError("compute_summary_stats: cannot compute stats on empty list")
+    return {
+        "min": min(values),
+        "max": max(values),
+        "mean": sum(values) / len(values)
+    }
 
 
 def generalization(
@@ -134,27 +181,6 @@ def generalization(
     expected_denom = 3 * n
     assert total_paraphrases == expected_denom, f"Expected {expected_denom} paraphrases, got {total_paraphrases}"
     return Measurement("generalization", correct, total_paraphrases, input_set, mode)
-
-
-def raw_retention(
-    predictions: List[str],
-    facts_injected: List[Dict[str, Any]],
-    input_set: str = "distinct20",
-    mode: str = "eval"
-) -> Measurement:
-    """
-    Raw Retention:
-    Counts how many injected facts (s_i, r_i, o_i) have check_match(pred_i, o_i) == True
-    when prompted with the fact's edit prompt.
-    Denominator is len(facts_injected).
-    Distinction: Evaluates raw surface recall of canonical objects across the injected sequence,
-    without correcting for modal collapse or template-level bias. Zero if no target is recalled.
-    """
-    n = len(facts_injected)
-    if n == 0:
-        raise ValueError("raw_retention: cannot evaluate on 0 injected facts")
-    correct = sum(1 for p, f in zip(predictions, facts_injected) if check_match(p, f["object"]))
-    return Measurement("raw_retention", correct, n, input_set, mode)
 
 
 def bound_retention(
