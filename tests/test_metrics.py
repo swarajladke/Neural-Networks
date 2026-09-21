@@ -16,6 +16,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Any
+import torch
+
 
 # Ensure repository root is in sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
