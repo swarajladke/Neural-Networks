@@ -303,10 +303,17 @@ def compute_alignment(
     norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
     if norm_raw < 1e-12:
         return 0.0
-    u1 = Q[:, 0]
+    u1 = Q[:, 0].flatten()
     u1_norm = float(torch.linalg.vector_norm(u1).item())
-    cos_val = torch.abs(torch.dot(delta_raw.flatten(), u1.flatten()) / (norm_raw * u1_norm)).item()
-    return float(cos_val)
+    if u1_norm < 1e-12:
+        return 0.0
+    if delta_raw.dim() == 1:
+        proj_norm = float(torch.abs(torch.dot(delta_raw, u1)).item())
+    else:
+        proj = delta_raw @ u1
+        proj_norm = float(torch.linalg.vector_norm(proj).item())
+    cos_val = proj_norm / (norm_raw * u1_norm)
+    return float(min(1.0, max(0.0, cos_val)))
 
 
 def assert_pythagorean_projection(
