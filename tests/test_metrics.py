@@ -39,7 +39,11 @@ from experiments.metrics import (
     raw_retention,
     simulate_stopping_rule,
     wilson_confidence_interval,
-    format_wilson_rate
+    format_wilson_rate,
+    compute_projection_components,
+    compute_surviving_fraction,
+    compute_alignment,
+    assert_pythagorean_projection
 )
 from experiments.data import sample_200_facts
 
@@ -318,7 +322,129 @@ def run_all_tests() -> int:
     tests_passed += 1
     
     # --------------------------------------------------------------------------
-    # 3.7 WILSON CONFIDENCE INTERVAL UNIT TESTS (DIRECTIVE S0-3 PART 2.2)
+    # PART 1: PROVENANCE GUARD TESTS (DIRECTIVE S0-4 PART 1.3 & 1.4)
+    # --------------------------------------------------------------------------
+    print("\n[PART 1: Provenance Guard Tests (Directive S0-4 Part 1)]")
+    
+    # 1.3a Control pool numerator with arm population denominator raises
+    tests_run += 1
+    caught_1_3a = False
+    try:
+        Measurement("terminal_retention", 33, 600, arm="controls_pool", metric="terminal_retention")
+    except ValueError as e:
+        caught_1_3a = True
+        print(f"  Test 1.3a (Control-pool retention raises)   : Caught expected ValueError: {e}")
+    assert caught_1_3a, "FAIL: Constructing retention on controls_pool with arm population denominator failed to raise!"
+    tests_passed += 1
+
+    # 1.3b Numerator 21 of denominator 20 raises
+    tests_run += 1
+    caught_1_3b = False
+    try:
+        Measurement("faulty_control", 21, 20)
+    except ValueError as e:
+        caught_1_3b = True
+        print(f"  Test 1.3b (num 21 > den 20 raises)         : Caught expected ValueError: {e}")
+    assert caught_1_3b, "FAIL: Impossible value (num > den) failed to raise ValueError!"
+    tests_passed += 1
+
+    # 1.3c Legitimate measurement round-trips through renderer unchanged
+    tests_run += 1
+    m_valid = Measurement("terminal_retention", 33, 600, arm="r0_unconstrained", metric="terminal_retention")
+    rendered = format_wilson_rate(m_valid)
+    print(f"  Test 1.3c (Renderer round-trip)            : {rendered}")
+    assert rendered.startswith("33/600 (5.50%) [")
+    # Rendering bare integers raises TypeError
+    caught_type_err = False
+    try:
+        format_wilson_rate((33, 600))  # type: ignore
+    except TypeError:
+        caught_type_err = True
+    assert caught_type_err, "FAIL: format_wilson_rate on bare tuple failed to raise TypeError!"
+    tests_passed += 1
+
+    # 1.4 Grep harness and report generator for loose-variable rate formatting
+    print("\n[1.4 Loose-Variable Rate Formatting Grep Audit]")
+    tests_run += 1
+    loose_violations = 0
+    harness_p = REPO_ROOT / "experiments" / "b1_inject.py"
+    report_p = REPO_ROOT / "tools" / "make_report.py"
+    for target_p in [harness_p, report_p]:
+        if not target_p.exists(): continue
+        t_tree = ast.parse(target_p.read_text(encoding="utf-8"), filename=str(target_p))
+        for t_node in ast.walk(t_tree):
+            if isinstance(t_node, ast.Call):
+                f_name = ""
+                if isinstance(t_node.func, ast.Name): f_name = t_node.func.id
+                elif isinstance(t_node.func, ast.Attribute): f_name = t_node.func.attr
+                if f_name == "format_wilson_rate":
+                    if len(t_node.args) >= 2 and not (isinstance(t_node.args[1], ast.Constant) and isinstance(t_node.args[1].value, float)):
+                        loose_violations += 1
+                        print(f"    VIOLATION in {target_p.name}:{t_node.lineno}: format_wilson_rate called with loose variables")
+    print(f"  Test 1.4 (Loose-variable rate formatting)  : {loose_violations} violation(s) detected.")
+    assert loose_violations == 0, f"FAIL: {loose_violations} loose-variable rate formatting site(s) found!"
+    tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # PART 2: SURVIVING-FRACTION & ALIGNMENT UNIT TESTS (DIRECTIVE S0-4 PART 2)
+    # --------------------------------------------------------------------------
+    print("\n[PART 2: Surviving-Fraction & Alignment Unit Tests (Directive S0-4 Part 2)]")
+    
+    # 2.2a Delta lying entirely inside subspace -> 0.0000
+    Q_1d = torch.tensor([[1.0, 0.0, 0.0, 0.0]]).T
+    delta_in = torch.tensor([2.0, 0.0, 0.0, 0.0])
+    sf_in = compute_surviving_fraction(delta_in, Q_1d)
+    tests_run += 1
+    print(f"  Test 2.2a (Delta inside subspace)          : Expected 0.0000, Actual {sf_in:.4f}")
+    assert abs(sf_in - 0.0000) < 1e-4
+    tests_passed += 1
+
+    # 2.2b Delta entirely orthogonal to subspace -> 1.0000
+    delta_orth = torch.tensor([0.0, 3.0, 0.0, 0.0])
+    sf_orth = compute_surviving_fraction(delta_orth, Q_1d)
+    tests_run += 1
+    print(f"  Test 2.2b (Delta orthogonal to subspace)   : Expected 1.0000, Actual {sf_orth:.4f}")
+    assert abs(sf_orth - 1.0000) < 1e-4
+    tests_passed += 1
+
+    # 2.2c Delta at 45 degrees to rank-1 subspace -> 0.7071
+    delta_45 = torch.tensor([1.0, 1.0, 0.0, 0.0])
+    sf_45 = compute_surviving_fraction(delta_45, Q_1d)
+    tests_run += 1
+    print(f"  Test 2.2c (Delta at 45 deg to rank-1)      : Expected 0.7071, Actual {sf_45:.4f}")
+    assert abs(sf_45 - 0.7071) < 1e-3
+    tests_passed += 1
+
+    # 2.2d Delta with 3 of 4 unit components inside rank-3 subspace -> 0.5000
+    Q_3d = torch.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]]).T
+    delta_3of4 = torch.tensor([1.0, 1.0, 1.0, 1.0])
+    sf_3of4 = compute_surviving_fraction(delta_3of4, Q_3d)
+    tests_run += 1
+    print(f"  Test 2.2d (3 of 4 unit in rank-3)          : Expected 0.5000, Actual {sf_3of4:.4f}")
+    assert abs(sf_3of4 - 0.5000) < 1e-4
+    tests_passed += 1
+
+    # 2.3 Alignment diagnostic on synthetic vectors with hand-computed cosines (1.0, 0.0, 0.7071)
+    tests_run += 1
+    u1_mock = Q_1d
+    align_1 = compute_alignment(torch.tensor([2.0, 0.0, 0.0, 0.0]), u1_mock)
+    align_0 = compute_alignment(torch.tensor([0.0, 3.0, 0.0, 0.0]), u1_mock)
+    align_45 = compute_alignment(torch.tensor([1.0, 1.0, 0.0, 0.0]), u1_mock)
+    print(f"  Test 2.3 (Alignment cosines)               : Expected (1.0000, 0.0000, 0.7071), Actual ({align_1:.4f}, {align_0:.4f}, {align_45:.4f})")
+    assert abs(align_1 - 1.0000) < 1e-4
+    assert abs(align_0 - 0.0000) < 1e-4
+    assert abs(align_45 - 0.7071) < 1e-3
+    tests_passed += 1
+
+    # 2.4 Pythagorean projection identity check
+    tests_run += 1
+    assert_pythagorean_projection(delta_45, Q_1d)
+    assert_pythagorean_projection(delta_3of4, Q_3d)
+    print("  Test 2.4 (Pythagorean projection identity) : PASSED on synthetic test cases")
+    tests_passed += 1
+
+    # --------------------------------------------------------------------------
+    # 3.7 WILSON CONFIDENCE INTERVAL UNIT TESTS
     # --------------------------------------------------------------------------
     print("\n[3.7 Wilson Score Confidence Interval Unit Tests]")
     lo_4, hi_4 = wilson_confidence_interval(4, 20)
@@ -333,14 +459,8 @@ def run_all_tests() -> int:
     assert lo_0 == 0.0 and 0.160 <= hi_0 <= 0.162
     tests_passed += 1
 
-    formatted = format_wilson_rate(4, 20)
-    tests_run += 1
-    print(f"  Test 3.7c (Wilson Formatted String): {formatted}")
-    assert formatted.startswith("4/20 (20.00%) [8.")
-    tests_passed += 1
-
     # --------------------------------------------------------------------------
-    # 3.8 STATISTICAL POWER SAMPLING UNIT TESTS (DIRECTIVE S0-3 PART 2.1)
+    # 3.8 STATISTICAL POWER SAMPLING UNIT TESTS
     # --------------------------------------------------------------------------
     print("\n[3.8 N=200 Sequence Sampling Unit Tests]")
     mock_facts = [{"fact_id": i, "subject": f"Subj_{i}", "relation": "born_city", "object": f"City_{i}"} for i in range(1000)]
@@ -353,7 +473,7 @@ def run_all_tests() -> int:
     tests_passed += 1
 
     # --------------------------------------------------------------------------
-    # 3.9 CAUSAL SUBSPACE ORTHOGONAL PROJECTION TESTS (DIRECTIVE S0-3 PART 1 & 4)
+    # 3.9 CAUSAL SUBSPACE ORTHOGONAL PROJECTION TESTS
     # --------------------------------------------------------------------------
     print("\n[3.9 Causal Subspace Orthogonal Projection Tests]")
     torch.manual_seed(42)

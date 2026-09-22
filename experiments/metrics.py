@@ -16,19 +16,45 @@ import math
 import re
 import torch
 
+DECLARED_ARM_POPULATIONS: Dict[str, Any] = {
+    "r0_unconstrained": {200, 600},
+    "r1_causal_perstep": {200, 600},
+    "r1_causal_posthoc": {200, 600},
+    "r1_rank_matched_random": {200, 600},
+    "r4_causal_perstep": {200, 600},
+    "never_edited": {20, 200, 600},
+    "random_direction_magnitude_matched": {20, 200, 600},
+    "wrong_target": {20, 200, 600},
+    "pre_edit_baseline": {20, 200, 600},
+    "controls_pool": {80, 2400},
+    "pooled_control_floor": {80, 2400},
+    "unmodified_base": {200, 600},
+}
+
+RETENTION_METRIC_NAMES = {
+    "terminal_retention",
+    "bound_retention",
+    "subject_discriminable_retention",
+    "subj_discrim_retention",
+    "raw_retention",
+    "retention"
+}
+
 @dataclass(frozen=True)
 class Measurement:
     """
     A count-based measurement that cannot be reported without its denominator.
     Enforces the metrics contract: every rate carries the population it was computed over,
-    the identity of the input set, and the execution mode.
-    Impossible values raise at construction rather than being printed.
+    the identity of the input set, the execution mode, the arm name, and metric name (Directive S0-4 Part 1.1).
+    Impossible values and declared population mismatches raise at construction (Part 1.2).
     """
     name: str
     numerator: int
     denominator: int
     input_set: str = "distinct20_seed42"
     mode: str = "eval_no_dropout"
+    arm: str = "unassigned"
+    metric: str = "unassigned"
 
     def __post_init__(self) -> None:
         if not isinstance(self.numerator, int) or not isinstance(self.denominator, int):
@@ -42,6 +68,26 @@ class Measurement:
                 f"{self.name}: numerator {self.numerator} exceeds denominator "
                 f"{self.denominator} -- impossible value, halting"
             )
+
+        eff_arm = self.arm if self.arm != "unassigned" else self.name
+        eff_metric = self.metric if self.metric != "unassigned" else self.name
+
+        # Prevent reporting retention metrics on control pool (Directive S0-4 Part 1.3a)
+        if eff_metric in RETENTION_METRIC_NAMES and eff_arm in {"controls_pool", "pooled_control_floor"}:
+            raise ValueError(
+                f"Provenance violation: cannot construct retention measurement on control pool arm '{eff_arm}'"
+            )
+
+        # Enforce declared arm populations (Directive S0-4 Part 1.2)
+        if eff_arm in DECLARED_ARM_POPULATIONS:
+            allowed = DECLARED_ARM_POPULATIONS[eff_arm]
+            if "generalization" in eff_metric:
+                allowed = {3 * p for p in allowed}
+            if self.denominator not in allowed:
+                raise ValueError(
+                    f"Arm '{eff_arm}' population violation: denominator {self.denominator} "
+                    f"does not match declared population size(s) {sorted(list(allowed))}"
+                )
 
     @property
     def pct(self) -> float:
@@ -185,14 +231,99 @@ def wilson_confidence_interval(k: int, n: int, confidence: float = 0.95) -> Tupl
     return (lo, hi)
 
 
-def format_wilson_rate(k: int, n: int, confidence: float = 0.95) -> str:
+def format_wilson_rate(measurement: Any, confidence: float = 0.95) -> str:
     """
-    Formats a count-based rate with its Wilson 95% confidence interval:
+    Formats a count-based rate from a Measurement object with its Wilson 95% confidence interval:
     'k/n (pp.pp%) [lo.lo%, hi.hi%]'
+    Rendering from a bare integer pair or primitive values must raise TypeError (Directive S0-4 Part 1.1).
     """
-    pct = 100.0 * k / n if n > 0 else 0.0
+    if not isinstance(measurement, Measurement):
+        raise TypeError(
+            f"format_wilson_rate requires a Measurement object, got {type(measurement).__name__}. "
+            "Rendering a rate from bare integers or tuples is strictly prohibited (Directive S0-4 Part 1.1)."
+        )
+    k = measurement.numerator
+    n = measurement.denominator
+    pct = measurement.pct
     lo, hi = wilson_confidence_interval(k, n, confidence)
     return f"{k}/{n} ({pct:.2f}%) [{lo * 100.0:.2f}%, {hi * 100.0:.2f}%]"
+
+
+# ==============================================================================
+# PROJECTION & DIAGNOSTIC REPAIRS (DIRECTIVE S0-4 PART 2)
+# ==============================================================================
+def compute_projection_components(
+    delta_raw: torch.Tensor,
+    Q: Optional[torch.Tensor]
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Computes orthogonal projection components P Δ_raw and P_perp Δ_raw.
+    Q: orthonormal basis matrix (dim, rank) or None.
+    Returns (p_par, p_perp).
+    """
+    if Q is None or Q.numel() == 0:
+        p_par = torch.zeros_like(delta_raw)
+        p_perp = delta_raw.clone()
+    else:
+        p_par = (delta_raw @ Q) @ Q.T
+        p_perp = delta_raw - p_par
+    return p_par, p_perp
+
+
+def compute_surviving_fraction(
+    delta_raw: torch.Tensor,
+    Q: Optional[torch.Tensor]
+) -> float:
+    """
+    Unambiguously defines surviving fraction as ‖P⊥ Δ_raw‖ / ‖Δ_raw‖ (Directive S0-4 Part 2.1).
+    Δ_raw is the update or gradient BEFORE any projection is applied.
+    """
+    norm_raw = torch.norm(delta_raw).item()
+    if norm_raw < 1e-12:
+        return 1.0
+    _, p_perp = compute_projection_components(delta_raw, Q)
+    return float(torch.norm(p_perp).item() / norm_raw)
+
+
+def compute_alignment(
+    delta_raw: torch.Tensor,
+    Q: Optional[torch.Tensor]
+) -> float:
+    """
+    Defines alignment diagnostic as |cos(Δ_raw, u₁)| where u₁ = Q[:, 0]
+    is the top singular direction of the causal subspace at that edit (Directive S0-4 Part 2.3).
+    """
+    if Q is None or Q.numel() == 0:
+        return 0.0
+    norm_raw = torch.norm(delta_raw).item()
+    if norm_raw < 1e-12:
+        return 0.0
+    u1 = Q[:, 0]
+    cos_val = torch.abs(torch.dot(delta_raw.flatten(), u1.flatten()) / (norm_raw * torch.norm(u1).item())).item()
+    return float(cos_val)
+
+
+def assert_pythagorean_projection(
+    delta_raw: torch.Tensor,
+    Q: Optional[torch.Tensor],
+    rel_tol: float = 1e-5
+) -> None:
+    """
+    Asserts ‖P Δ_raw‖² + ‖P⊥ Δ_raw‖² == ‖Δ_raw‖² to within rel_tol (Directive S0-4 Part 2.4).
+    Halt on violation.
+    """
+    p_par, p_perp = compute_projection_components(delta_raw, Q)
+    norm_par_sq = torch.sum(p_par * p_par).item()
+    norm_perp_sq = torch.sum(p_perp * p_perp).item()
+    norm_raw_sq = torch.sum(delta_raw * delta_raw).item()
+    sum_parts = norm_par_sq + norm_perp_sq
+    if norm_raw_sq > 1e-12:
+        rel_diff = abs(sum_parts - norm_raw_sq) / norm_raw_sq
+        if rel_diff > rel_tol:
+            raise AssertionError(
+                f"Pythagorean projection violation: ‖P Δ‖² ({norm_par_sq:.8f}) + ‖P⊥ Δ‖² ({norm_perp_sq:.8f}) = "
+                f"{sum_parts:.8f} != ‖Δ‖² ({norm_raw_sq:.8f}), rel_diff={rel_diff:.2e} > {rel_tol}"
+            )
 
 
 def generalization(
