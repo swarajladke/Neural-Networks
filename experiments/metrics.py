@@ -138,7 +138,9 @@ def check_match(prediction: str, target: str) -> bool:
 def immediate_efficacy(
     immediate_matches: List[bool],
     input_set: str = "distinct20",
-    mode: str = "eval"
+    mode: str = "eval",
+    arm: str = "unassigned",
+    metric: str = "immediate_efficacy"
 ) -> Measurement:
     """
     Immediate Efficacy:
@@ -156,14 +158,16 @@ def immediate_efficacy(
     if n == 0:
         raise ValueError("immediate_efficacy: cannot evaluate on 0 attempts")
     correct = sum(1 for m in immediate_matches if bool(m))
-    return Measurement("immediate_efficacy", correct, n, input_set, mode)
+    return Measurement("immediate_efficacy", correct, n, input_set, mode, arm=arm, metric=metric)
 
 
 def terminal_retention(
     predictions: List[str],
     facts_injected: List[Dict[str, Any]],
     input_set: str = "distinct20",
-    mode: str = "eval"
+    mode: str = "eval",
+    arm: str = "unassigned",
+    metric: str = "terminal_retention"
 ) -> Measurement:
     """
     Terminal Retention:
@@ -181,7 +185,7 @@ def terminal_retention(
         raise ValueError("terminal_retention: cannot evaluate on 0 injected facts")
     assert len(predictions) == n, f"Predictions count {len(predictions)} != facts count {n}"
     correct = sum(1 for p, f in zip(predictions, facts_injected) if check_match(p, f["object"]))
-    return Measurement("terminal_retention", correct, n, input_set, mode)
+    return Measurement("terminal_retention", correct, n, input_set, mode, arm=arm, metric=metric)
 
 # Maintain backward compatibility aliases
 raw_retention = terminal_retention
@@ -336,7 +340,9 @@ def generalization(
     paraphrase_predictions: List[List[str]],
     facts_injected: List[Dict[str, Any]],
     input_set: str = "distinct20",
-    mode: str = "eval"
+    mode: str = "eval",
+    arm: str = "unassigned",
+    metric: str = "generalization"
 ) -> Measurement:
     """
     Calculates the fraction of paraphrases across ALL injected facts whose greedy
@@ -356,7 +362,7 @@ def generalization(
                 correct += 1
     expected_denom = 3 * n
     assert total_paraphrases == expected_denom, f"Expected {expected_denom} paraphrases, got {total_paraphrases}"
-    return Measurement("generalization", correct, total_paraphrases, input_set, mode)
+    return Measurement("generalization", correct, total_paraphrases, input_set, mode, arm=arm, metric=metric)
 
 
 def bound_retention(
@@ -364,7 +370,9 @@ def bound_retention(
     facts_injected: List[Dict[str, Any]],
     rel_modal_objects: Dict[str, str],
     input_set: str = "distinct20",
-    mode: str = "eval"
+    mode: str = "eval",
+    arm: str = "unassigned",
+    metric: str = "bound_retention"
 ) -> Measurement:
     """
     Bound Retention:
@@ -385,7 +393,7 @@ def bound_retention(
             modal_obj = rel_modal_objects.get(f["relation"], "")
             if normalize_entity(p) != normalize_entity(modal_obj):
                 correct += 1
-    return Measurement("bound_retention", correct, n, input_set, mode)
+    return Measurement("bound_retention", correct, n, input_set, mode, arm=arm, metric=metric)
 
 
 def subject_discriminable_retention(
@@ -394,7 +402,9 @@ def subject_discriminable_retention(
     control_predictions_by_rel: Dict[str, List[str]],
     max_shared_controls: int = 2,
     input_set: str = "distinct20",
-    mode: str = "eval"
+    mode: str = "eval",
+    arm: str = "unassigned",
+    metric: str = "subj_discrim_retention"
 ) -> Measurement:
     """
     Subject-Discriminable Retention:
@@ -418,7 +428,7 @@ def subject_discriminable_retention(
             shared_count = sum(1 for cp in ctrl_preds if normalize_entity(cp) == norm_p)
             if shared_count <= max_shared_controls:
                 correct += 1
-    return Measurement("subject_discriminable_retention", correct, n, input_set, mode)
+    return Measurement("subject_discriminable_retention", correct, n, input_set, mode, arm=arm, metric=metric)
 
 
 def compute_locality_kl(
