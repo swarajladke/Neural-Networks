@@ -149,12 +149,17 @@ def edit_fact_sgd(
 
 
 def main():
+    try: sys.stdout.reconfigure(line_buffering=True)
+    except Exception: pass
     parser = argparse.ArgumentParser(description="Directive S0-3 Injection Harness")
     parser.add_argument("--repair", action="store_true", help="Proceed to Part 1 causal repair & Parts 2-4 sweep")
     args = parser.parse_args()
 
     start_time = time.time()
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu":
+        print("FATAL: CUDA not detected. Enable GPU T4 in Kaggle Settings (right sidebar -> Accelerator -> GPU T4).")
+        sys.exit(1)
     print("=" * 115)
     print(" DIRECTIVE S0-3: CAUSAL SUBSPACE, ADEQUATE POWER, AND CONSTRAINED-OPTIMIZATION EDITING")
     print(" MANDATE: CAUSAL SUBSPACE DISCLOSURE, REPAIR, ADEQUATE POWER (N=200), AND CONSTRAINED OPTIMIZATION SWEEP")
