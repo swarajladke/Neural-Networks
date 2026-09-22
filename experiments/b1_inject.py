@@ -44,7 +44,7 @@ def configure_determinism(seed: int = 42, warn_only: bool = True):
     if hasattr(torch.backends.cuda, "enable_math_sdp"): torch.backends.cuda.enable_math_sdp(True)
     try: torch.use_deterministic_algorithms(True, warn_only=warn_only)
     except Exception as e: print(f"Warning setting deterministic algorithms: {e}")
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"; os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 def greedy_predict(model: nn.Module, tokenizer: Any, prompt: str, max_new_tokens: int = 5, device: str = "cuda", expected_mode: bool = False) -> str:
@@ -129,6 +129,7 @@ def edit_fact_sgd(
     surviving_fraction = compute_surviving_fraction(delta_raw, Q_causal)
     alignment = compute_alignment(delta_raw, Q_causal)
     assert_pythagorean_projection(delta_raw, Q_causal)
+    del delta_raw
 
     delta_applied = (model.lm_head.weight.data - w_pre).detach()
     target_tokens = tokenizer.encode(fact["target_token_str"])
@@ -139,7 +140,7 @@ def edit_fact_sgd(
     del optimizer, out, input_ids, labels, w_pre, grad_raw_sum
     return {
         "steps_taken": steps_taken, "cumulative_dose": cum_dose,
-        "immediate_match": immediate_match, "delta_raw": delta_raw,
+        "immediate_match": immediate_match,
         "delta_applied": delta_applied, "delta_target_vec": delta_target_vec,
         "surviving_fraction": surviving_fraction, "alignment": alignment
     }
@@ -277,7 +278,7 @@ def main():
                 p.add_(pert / (torch.norm(pert) + 1e-12) * (5.0 * 3.0e-05 * 10.0))
         preds_rand = [greedy_predict(m_rand, tokenizer, f["edit_prompt"], 5, device, False) for f in seq_facts]
         m_rand_dir = Measurement("random_direction_magnitude_matched", sum(1 for p, f in zip(preds_rand, seq_facts) if check_match(p, f["object"])), 200, arm="random_direction_magnitude_matched", metric="random_direction_magnitude_matched")
-        del m_rand
+        del m_rand; gc.collect(); torch.cuda.empty_cache()
 
         m_wrong = GPT2LMHeadModel.from_pretrained(model_name, revision=pinned_revision).to(device)
         wrong_facts, rng_w = [], random.Random(s)
@@ -290,11 +291,12 @@ def main():
         for fw in wrong_facts:
             rw = edit_fact_sgd(m_wrong, tokenizer, fw, lr=3.0e-05, max_steps=25, device=device, train_mode=False)
             wrong_steps += rw["steps_taken"]
+            del rw
         total_optimizer_steps_global += wrong_steps
         line_item_steps.append({"item": "control:wrong_target", "seed": s, "steps": wrong_steps, "shared": False})
         preds_wrong = [greedy_predict(m_wrong, tokenizer, f["edit_prompt"], 5, device, False) for f in seq_facts]
         m_wrong_tgt = Measurement("wrong_target", sum(1 for p, f in zip(preds_wrong, seq_facts) if check_match(p, f["object"])), 200, arm="wrong_target", metric="wrong_target")
-        del m_wrong
+        del m_wrong; gc.collect(); torch.cuda.empty_cache()
 
         preds_pre = [greedy_predict(fresh_model, tokenizer, f["edit_prompt"], 5, device, False) for f in seq_facts]
         m_pre = Measurement("pre_edit_baseline", sum(1 for p, f in zip(preds_pre, seq_facts) if check_match(p, f["object"])), 200, arm="pre_edit_baseline", metric="pre_edit_baseline")
@@ -353,13 +355,12 @@ def main():
                     m_arm, tokenizer, f, lr=3.0e-05, max_steps=25, device=device,
                     train_mode=False, arm_mode=a_mode, Q_causal=Q_t, rand_seed=r_seed
                 )
-                edit_res_arm.append(res_e)
                 subspace_mgr.add_update(res_e["delta_target_vec"])
                 cum_applied_update += res_e["delta_applied"]
                 total_edits_pythagorean_asserted += 1
-
-                if s == 0 and t_num == 1:
-                    seed0_first_edit_updates[arm_name] = res_e["delta_applied"].clone()
+                if s == 0 and t_num == 1: seed0_first_edit_updates[arm_name] = res_e["delta_applied"].clone()
+                edit_res_arm.append({"steps_taken": res_e["steps_taken"], "immediate_match": res_e["immediate_match"], "surviving_fraction": res_e["surviving_fraction"], "alignment": res_e["alignment"]})
+                del res_e
 
             if s == 0:
                 seed0_cumulative_updates[arm_name] = cum_applied_update.clone()
@@ -374,7 +375,7 @@ def main():
             ev_arm = evaluate_sequence_metrics(m_arm, sequences[s], edit_res_arm, f"{arm_name}_s{s}", arm_name)
             per_seed_records[s] = ev_arm
             print(f"    Seed {s}: ImmEff={format_wilson_rate(ev_arm['immediate_efficacy'])} | TermRet={format_wilson_rate(ev_arm['terminal_retention'])} | Steps={ev_arm['optimizer_steps']}")
-            del m_arm, subspace_mgr; gc.collect()
+            del m_arm, subspace_mgr; gc.collect(); torch.cuda.empty_cache()
 
         arms_results[arm_name] = per_seed_records
 

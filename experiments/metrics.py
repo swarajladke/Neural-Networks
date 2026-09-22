@@ -278,11 +278,12 @@ def compute_surviving_fraction(
     Unambiguously defines surviving fraction as ‖P⊥ Δ_raw‖ / ‖Δ_raw‖ (Directive S0-4 Part 2.1).
     Δ_raw is the update or gradient BEFORE any projection is applied.
     """
-    norm_raw = torch.norm(delta_raw).item()
-    if norm_raw < 1e-12:
+    norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
+    if norm_raw < 1e-12 or Q is None or Q.numel() == 0:
         return 1.0
     _, p_perp = compute_projection_components(delta_raw, Q)
-    return float(torch.norm(p_perp).item() / norm_raw)
+    norm_perp = float(torch.linalg.vector_norm(p_perp).item())
+    return float(norm_perp / norm_raw)
 
 
 def compute_alignment(
@@ -295,11 +296,12 @@ def compute_alignment(
     """
     if Q is None or Q.numel() == 0:
         return 0.0
-    norm_raw = torch.norm(delta_raw).item()
+    norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
     if norm_raw < 1e-12:
         return 0.0
     u1 = Q[:, 0]
-    cos_val = torch.abs(torch.dot(delta_raw.flatten(), u1.flatten()) / (norm_raw * torch.norm(u1).item())).item()
+    u1_norm = float(torch.linalg.vector_norm(u1).item())
+    cos_val = torch.abs(torch.dot(delta_raw.flatten(), u1.flatten()) / (norm_raw * u1_norm)).item()
     return float(cos_val)
 
 
@@ -312,18 +314,22 @@ def assert_pythagorean_projection(
     Asserts ‖P Δ_raw‖² + ‖P⊥ Δ_raw‖² == ‖Δ_raw‖² to within rel_tol (Directive S0-4 Part 2.4).
     Halt on violation.
     """
+    if Q is None or Q.numel() == 0:
+        return
+    norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
+    if norm_raw < 1e-12:
+        return
     p_par, p_perp = compute_projection_components(delta_raw, Q)
-    norm_par_sq = torch.sum(p_par * p_par).item()
-    norm_perp_sq = torch.sum(p_perp * p_perp).item()
-    norm_raw_sq = torch.sum(delta_raw * delta_raw).item()
+    norm_par_sq = float(torch.linalg.vector_norm(p_par).item() ** 2)
+    norm_perp_sq = float(torch.linalg.vector_norm(p_perp).item() ** 2)
+    norm_raw_sq = norm_raw ** 2
     sum_parts = norm_par_sq + norm_perp_sq
-    if norm_raw_sq > 1e-12:
-        rel_diff = abs(sum_parts - norm_raw_sq) / norm_raw_sq
-        if rel_diff > rel_tol:
-            raise AssertionError(
-                f"Pythagorean projection violation: ‖P Δ‖² ({norm_par_sq:.8f}) + ‖P⊥ Δ‖² ({norm_perp_sq:.8f}) = "
-                f"{sum_parts:.8f} != ‖Δ‖² ({norm_raw_sq:.8f}), rel_diff={rel_diff:.2e} > {rel_tol}"
-            )
+    rel_diff = abs(sum_parts - norm_raw_sq) / norm_raw_sq
+    if rel_diff > rel_tol:
+        raise AssertionError(
+            f"Pythagorean projection violation: ‖P Δ‖² ({norm_par_sq:.8f}) + ‖P⊥ Δ‖² ({norm_perp_sq:.8f}) = "
+            f"{sum_parts:.8f} != ‖Δ‖² ({norm_raw_sq:.8f}), rel_diff={rel_diff:.2e} > {rel_tol}"
+        )
 
 
 def generalization(
