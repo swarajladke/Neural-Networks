@@ -185,7 +185,7 @@ def main():
     print(f"  WikiText Slice SHA-256      : {slice_sha} (Verified)")
     print(f"  Fresh Model Checksum        : {fresh_checksum:.8f}")
 
-    print("\n--- [Multi-Token Target Object Fractions (S0-6 Section 2.2)] ---")
+    print("\n--- [Multi-Token Target Object Fractions (Directive S0-6)] ---")
     multi_1000 = sum(1 for f in facts_1000 if len(tokenizer.encode(f["object"].strip())) > 1)
     print(f"  Pinned 1,000 Facts Multi-Tok: {multi_1000}/1000 ({multi_1000/10.0:.2f} pct)")
     sequences, seq_hashes = {}, {}
@@ -269,7 +269,7 @@ def main():
     arm_b_observed_sf_records: Dict[Tuple[int, int], float] = {}
     cond_results: Dict[str, Dict[int, Any]] = {}
 
-    print(f"\n  Running Arm B (r1_causal_perstep, delta=0.0 across 6 seeds)")
+    print(f"\n  Running Arm B (r1_causal_perstep, delta=0 across 6 seeds)")
     per_seed_b = {}
     for s in SEEDS:
         configure_determinism(seed=s)
@@ -294,7 +294,7 @@ def main():
         del m_arm, subspace_mgr; gc.collect(); torch.cuda.empty_cache()
     cond_results["r1_causal_perstep_d0.0"] = per_seed_b
 
-    print(f"\n  Running Arm F (r1_magnitude_only, delta=0.0 across 6 seeds)")
+    print(f"\n  Running Arm F (r1_magnitude_only, delta=0 across 6 seeds)")
     per_seed_f = {}
     for s in SEEDS:
         configure_determinism(seed=s)
@@ -347,7 +347,7 @@ def main():
             del m_arm, subspace_unapplied; gc.collect(); torch.cuda.empty_cache()
         cond_results[c_label] = per_seed_a
 
-    print("\n--- [Extended 3-Arm Positive Control Re-Confirmation (Seeds 0-2, delta=0.0)] ---")
+    print("\n--- [Extended 3-Arm Positive Control Re-Confirmation (Seeds 0-2, delta=0)] ---")
     pos_ctrl_verdicts = {}
     r0_d0 = cond_results["r0_unconstrained_d0.0"]
     r0_imm_num = sum(r0_d0[s]["immediate_efficacy"].numerator for s in [0, 1, 2])
@@ -414,6 +414,7 @@ def main():
     print(gate_table_sep)
     d0_rec = cond_results["r0_unconstrained_d0.0"]
     conditional_data = {}
+    base_arm_lbl = "r0_unconstrained_d0.0"
     for c_k in all_conditions:
         if not gate_data[c_k]["passed"]:
             rec = cond_results[c_k]
@@ -429,11 +430,12 @@ def main():
             pct_c = 100.0 * k_cond / n_succ if n_succ > 0 else 0.0
             pct_m = 100.0 * k_match / n_succ if n_succ > 0 else 0.0
             print(f"{c_k:<28s} | 3a Conditional   | {k_cond}/{n_succ} ({pct_c:.2f} pct) [{lo_c*100.0:.2f} pct, {hi_c*100.0:.2f} pct] | N={n_succ}")
-            print(f"{'r0_unconstrained_d0.0':<28s} | 3b Matched-Sub   | {k_match}/{n_succ} ({pct_m:.2f} pct) [{lo_m*100.0:.2f} pct, {hi_m*100.0:.2f} pct] | N={n_succ}")
+            print(f"{base_arm_lbl:<28s} | 3b Matched-Sub   | {k_match}/{n_succ} ({pct_m:.2f} pct) [{lo_m*100.0:.2f} pct, {hi_m*100.0:.2f} pct] | N={n_succ}")
     print(gate_table_border)
 
     print("\n--- [Recency Profile (20 Bins of 10 Edits across 6 Seeds, N=60 per Bin)] ---")
-    print(gate_table_border); print(f"{'Bin (Edits)':<16s} | {'Arm A d0.0':<18s} | {'Arm A d1.0':<18s} | {'Arm A d3.0':<18s} | {'Arm A d6.0':<18s} | {'Arm B d0.0'}")
+    rec_hdr = f"{'Bin (Edits)':<16s} | {'Arm A d0':<18s} | {'Arm A d1':<18s} | {'Arm A d3':<18s} | {'Arm A d6':<18s} | {'Arm B d0'}"
+    print(gate_table_border); print(rec_hdr)
     print(gate_table_sep)
     bin_measurements = {c_k: [] for c_k in all_conditions}
     for b in range(20):
@@ -452,7 +454,7 @@ def main():
         assert sum_b_num == tot_num, f"Bin sum check failed for {c_k}: {sum_b_num} != {tot_num}"
     print("  Recency Profile Bin Sum Check: All 20 bins sum exactly to pooled terminal retention (PASSED).")
 
-    print("\n--- [Monotone Retention Horizon Search (Directive S0-6 Section 2.3 & 4.1)] ---")
+    print("\n--- [Monotone Retention Horizon Search (Directive S0-6)] ---")
     print(gate_table_border); print(f"{'Condition':<28s} | {'Monotone Horizon k':<20s} | {'Separated at Horizon':<24s} | {'Remainder Retention'}")
     print(gate_table_sep)
     horizons_data = {}
