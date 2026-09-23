@@ -44,6 +44,9 @@ from experiments.metrics import (
     compute_alignment,
     assert_pythagorean_projection,
     assert_orthonormality,
+    compute_paired_stats,
+    compute_monotone_retention_horizon,
+    classify_reversion_pattern,
     POPULATION_REGISTRY
 )
 from experiments.data import sample_200_facts
@@ -64,8 +67,9 @@ ALLOW_LIST = {
     "=" * 135: "cell comparison table border line",
     "-" * 145: "sweep comparison table separator line",
     "=" * 145: "sweep comparison table border line",
+    "=" * 125: "diagnostic table border line",
+    "-" * 125: "diagnostic table separator line",
     ":4096:8": "cublas deterministic workspace configuration flag",
-    "SUPPRESSED — immediate efficacy below 90%": "directive S0-2 B5 gate suppression text",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:
@@ -172,7 +176,7 @@ def run_all_tests() -> int:
     # 1.5 Legitimate measurement round-trips through renderer unchanged
     tests_run += 1
     valid_outcomes = [True] * 33 + [False] * 567
-    m_valid = Measurement.from_outcomes(valid_outcomes, metric="terminal_retention", arm="r0_unconstrained", scope="pooled", input_set="test_600", mode="eval_no_dropout")
+    m_valid = Measurement.from_outcomes(valid_outcomes, metric="terminal_retention", arm="r0_unconstrained", scope="pooled_600", input_set="test_600", mode="eval_no_dropout")
     rendered = format_wilson_rate(m_valid)
     print(f"  Test 1.5 (Renderer round-trip)              : {rendered}")
     assert rendered.startswith("33/600 (5.50%) [")
@@ -204,6 +208,50 @@ def run_all_tests() -> int:
                         print(f"    VIOLATION in {target_p.name}:{t_node.lineno}: format_wilson_rate called with loose variables")
     print(f"  Test 1.6 (Loose-variable rate formatting)   : {loose_violations} violation(s) detected.")
     assert loose_violations == 0, f"FAIL: {loose_violations} loose-variable rate formatting site(s) found!"
+    tests_passed += 1
+
+    # 1.7 Principled Reversion Pattern Classifier Unit Test (Directive S0-6)
+    print("\n[1.7 Principled Reversion Pattern Classifier Test (Directive S0-6)]")
+    tests_run += 1
+    # Test case 1: S0-5 overlapping intervals -> must return FLAT
+    s05_intervals = [(0.015, 0.082), (0.020, 0.091), (0.018, 0.085)]
+    s05_rates = [0.045, 0.051, 0.048]
+    p_flat = classify_reversion_pattern(s05_intervals, s05_rates)
+    print(f"  S0-5 Overlapping bins classification        : {p_flat}")
+    assert p_flat == "FLAT — NO DOSE RESPONSE DETECTED", f"Expected FLAT, got {p_flat}"
+    # Test case 2: Monotonic non-overlapping -> GRADED
+    graded_intervals = [(0.40, 0.60), (0.20, 0.35), (0.01, 0.10)]
+    graded_rates = [0.50, 0.27, 0.05]
+    p_graded = classify_reversion_pattern(graded_intervals, graded_rates)
+    print(f"  Monotonic non-overlapping bins              : {p_graded}")
+    assert "GRADED" in p_graded, f"Expected GRADED, got {p_graded}"
+    tests_passed += 1
+
+    # 1.8 Paired Statistics Unit Test (Directive S0-6)
+    print("\n[1.8 Paired Statistics Unit Test (df=5)]")
+    tests_run += 1
+    x1_mock = [10.0, 12.0, 11.0, 13.0, 14.0, 12.0]
+    x2_mock = [8.0, 9.0, 10.0, 11.0, 12.0, 10.0]
+    p_stats = compute_paired_stats(x1_mock, x2_mock)
+    print(f"  Paired stats (mean diff={p_stats['mean_diff']:.2f}, df={p_stats['df']}, t={p_stats['t_stat']:.4f}, W={p_stats['wilcoxon_stat']})")
+    assert p_stats["df"] == 5, f"Expected df=5, got {p_stats['df']}"
+    assert abs(p_stats["mean_diff"] - 2.0) < 1e-6, f"Expected mean diff 2.0, got {p_stats['mean_diff']}"
+    assert p_stats["t_stat"] > 0, "Expected positive t-stat"
+    tests_passed += 1
+
+    # 1.9 Monotone Retention Horizon Unit Test (Directive S0-6)
+    print("\n[1.9 Monotone Retention Horizon Unit Test]")
+    tests_run += 1
+    # Create synthetic terminal matches where last 20 edits (180-199) retain at 50% and first 180 retain at 0%
+    synth_matches = {}
+    for s in range(6):
+        synth_matches[s] = [False] * 180 + [True, False] * 10
+    floor_interval = (0.01, 0.05)
+    horiz_res = compute_monotone_retention_horizon(synth_matches, floor_interval, step_size=10, total_edits=200)
+    print(f"  Monotone horizon search result              : horizon_k={horiz_res['horizon_k']}")
+    assert horiz_res["horizon_k"] == 20, f"Expected horizon_k=20, got {horiz_res['horizon_k']}"
+    assert horiz_res["remainder"] is not None and horiz_res["remainder"]["k"] == 180
+    assert horiz_res["remainder"]["numerator"] == 0
     tests_passed += 1
 
     # --------------------------------------------------------------------------

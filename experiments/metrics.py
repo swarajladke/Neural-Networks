@@ -20,12 +20,17 @@ _FACTORY_SENTINEL = object()
 
 POPULATION_REGISTRY: Dict[str, int] = {
     "per_seed": 200,
-    "pooled": 600,
+    "pooled": 1200,
+    "pooled_600": 600,
     "generalization_per_seed": 600,
-    "generalization_pooled": 1800,
+    "generalization_pooled": 3600,
+    "generalization_pooled_1800": 1800,
     "recency_bin": 60,
     "revert_bin": 120,
-    "controls_pooled": 2400,
+    "controls_pooled": 4800,
+    "controls_pooled_2400": 2400,
+    "control_arm_pooled": 1200,
+    "control_arm_pooled_600": 600,
     "fixture_1": 1,
     "fixture_3": 3,
     "fixture_5": 5,
@@ -33,6 +38,8 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "fixture_20": 20,
     "fixture_60": 60,
     "fixture_80": 80,
+    "fixture_600": 600,
+    "fixture_1200": 1200,
 }
 
 RETENTION_METRIC_NAMES = {
@@ -648,7 +655,12 @@ def pool_controls(
     assert total_den == expected_total_den, f"Pooled control denominator must equal {expected_total_den}, got {total_den}"
     
     expanded_sum_str = f"{' + '.join(num_strs)} = {total_num} over {' + '.join(den_strs)} = {total_den}"
-    scope = "controls_pooled" if total_den == 2400 else "fixture_80"
+    if total_den == 4800:
+        scope = "controls_pooled"
+    elif total_den == 2400:
+        scope = "controls_pooled_2400"
+    else:
+        scope = "fixture_80"
     pooled_m = Measurement.from_outcomes(
         pooled_outcomes,
         metric="pooled_control_floor",
@@ -660,6 +672,147 @@ def pool_controls(
     
     worst_m = max(control_measurements.values(), key=lambda x: x.pct)
     return pooled_m, worst_m, expanded_sum_str
+
+
+# ==============================================================================
+# PAIRED STATISTICAL INFERENCE (DIRECTIVE S0-6 SECTION 2.4)
+# ==============================================================================
+def compute_paired_stats(x1: Sequence[float], x2: Sequence[float]) -> Dict[str, Any]:
+    """
+    Computes paired difference statistics across matching seeds:
+    - difference vector d = x1 - x2
+    - mean difference d_bar
+    - sample standard deviation s_d (ddof=1)
+    - paired t-statistic: t = d_bar / (s_d / sqrt(n)), df = n - 1
+    - Wilcoxon signed-rank test statistic W
+    """
+    assert len(x1) == len(x2), f"Length mismatch: {len(x1)} != {len(x2)}"
+    n = len(x1)
+    assert n >= 2, "Paired analysis requires at least 2 pairs"
+    diffs = [float(a - b) for a, b in zip(x1, x2)]
+    mean_d = sum(diffs) / float(n)
+    var_d = sum((d - mean_d) ** 2 for d in diffs) / float(n - 1)
+    std_d = math.sqrt(var_d)
+    
+    se_d = std_d / math.sqrt(n)
+    t_stat = (mean_d / se_d) if se_d > 1e-12 else 0.0
+    df = n - 1
+    
+    nz_diffs = [d for d in diffs if abs(d) > 1e-9]
+    if len(nz_diffs) == 0:
+        w_stat = 0.0
+    else:
+        abs_diffs = [(abs(d), i, 1 if d > 0 else -1) for i, d in enumerate(nz_diffs)]
+        abs_diffs.sort(key=lambda x: x[0])
+        ranks = [0.0] * len(abs_diffs)
+        i = 0
+        while i < len(abs_diffs):
+            j = i
+            while j < len(abs_diffs) and abs(abs_diffs[j][0] - abs_diffs[i][0]) < 1e-9:
+                j += 1
+            avg_rank = (i + 1 + j) / 2.0
+            for k in range(i, j):
+                ranks[k] = avg_rank
+            i = j
+        w_plus = sum(ranks[k] for k in range(len(abs_diffs)) if abs_diffs[k][2] > 0)
+        w_minus = sum(ranks[k] for k in range(len(abs_diffs)) if abs_diffs[k][2] < 0)
+        w_stat = min(w_plus, w_minus)
+    
+    return {
+        "diffs": diffs,
+        "mean_diff": mean_d,
+        "std_diff": std_d,
+        "t_stat": t_stat,
+        "df": df,
+        "wilcoxon_stat": w_stat
+    }
+
+
+# ==============================================================================
+# MONOTONE RETENTION HORIZON SEARCH (DIRECTIVE S0-6 SECTION 2.3 & 4.1)
+# ==============================================================================
+def compute_monotone_retention_horizon(
+    terminal_matches_by_seed: Dict[int, List[bool]],
+    floor_interval: Tuple[float, float],
+    step_size: int = 10,
+    total_edits: int = 200
+) -> Dict[str, Any]:
+    """
+    Finds largest k in {10, 20, ..., total_edits} such that retention over
+    edits (total_edits - k) ... total_edits is separable from the negative control
+    floor by non-overlapping 95% Wilson intervals for EVERY k' <= k (first failure point).
+    """
+    seeds = sorted(terminal_matches_by_seed.keys())
+    num_seeds = len(seeds)
+    floor_lo, floor_hi = floor_interval
+    
+    step_verdicts = []
+    largest_k = 0
+    monotone_broken = False
+    
+    for k in range(step_size, total_edits + 1, step_size):
+        start_idx = total_edits - k
+        outcomes_k = [terminal_matches_by_seed[s][i] for s in seeds for i in range(start_idx, total_edits)]
+        num_k = sum(1 for x in outcomes_k if x)
+        den_k = len(outcomes_k)
+        w_lo, w_hi = wilson_confidence_interval(num_k, den_k)
+        separates = (w_lo > floor_hi)
+        step_verdicts.append({
+            "k": k, "numerator": num_k, "denominator": den_k,
+            "rate": (num_k / den_k) if den_k > 0 else 0.0,
+            "wilson_lo": w_lo, "wilson_hi": w_hi, "separates": separates
+        })
+        if not monotone_broken:
+            if separates:
+                largest_k = k
+            else:
+                monotone_broken = True
+                
+    # Compute remainder retention over edits 1 ... (total_edits - largest_k)
+    rem_k = total_edits - largest_k
+    rem_data = None
+    if rem_k > 0:
+        rem_outcomes = [terminal_matches_by_seed[s][i] for s in seeds for i in range(0, rem_k)]
+        r_num = sum(1 for x in rem_outcomes if x)
+        r_den = len(rem_outcomes)
+        r_lo, r_hi = wilson_confidence_interval(r_num, r_den)
+        rem_data = {
+            "k": rem_k, "numerator": r_num, "denominator": r_den,
+            "rate": (r_num / r_den) if r_den > 0 else 0.0,
+            "wilson_lo": r_lo, "wilson_hi": r_hi
+        }
+        
+    return {
+        "horizon_k": largest_k,
+        "step_verdicts": step_verdicts,
+        "remainder": rem_data
+    }
+
+
+# ==============================================================================
+# PRINCIPLED REVERSION PATTERN CLASSIFIER (DIRECTIVE S0-6 PART 3.1 & 4.2)
+# ==============================================================================
+def classify_reversion_pattern(bin_intervals: Sequence[Tuple[float, float]], bin_rates: Sequence[float]) -> str:
+    """
+    Principled classifier for reversion dose-response:
+    - If all 95% Wilson intervals share a common intersection (max(lo) <= min(hi)),
+      all bins are statistically indistinguishable from a constant line -> FLAT.
+    - Otherwise, if rates are monotonically decreasing with surviving fraction -> GRADED.
+    - Otherwise -> THRESHOLD-LIKE.
+    """
+    assert len(bin_intervals) == len(bin_rates) and len(bin_intervals) > 0
+    max_lo = max(inv[0] for inv in bin_intervals)
+    min_hi = min(inv[1] for inv in bin_intervals)
+    
+    if max_lo <= min_hi:
+        return "FLAT — NO DOSE RESPONSE DETECTED"
+        
+    # Check monotonicity
+    is_monotonic = all(bin_rates[i] >= bin_rates[i+1] for i in range(len(bin_rates)-1))
+    if is_monotonic and bin_intervals[0][0] > bin_intervals[-1][1]:
+        return "GRADED: Revert rate decreases progressively with increasing surviving fraction."
+        
+    return "THRESHOLD-LIKE: Reversion occurs sharply across surviving fraction boundary."
 
 
 # ==============================================================================
@@ -682,3 +835,4 @@ def simulate_stopping_rule(
         if check_match(pred, target):
             return steps_taken, True
     return steps_taken, False
+
