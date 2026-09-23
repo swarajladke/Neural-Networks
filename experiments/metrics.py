@@ -3,32 +3,36 @@ experiments/metrics.py
 ======================
 Central Metric Definitions for Continual Knowledge Injection.
 
-Contract (Directive S0-1 & AGENTS.md Protocol §1):
+Contract (Directive S0-5 & AGENTS.md Protocol §1):
   - Every count-based metric returns an explicit (numerator, denominator) Measurement pair.
+  - Measurement is constructible strictly via Measurement.from_outcomes(...) with a module-private sentinel.
+  - Closed registry scope -> legal_denominator with fixed test denominators.
   - Denominators equal the population the claim is about (never hardcoded to 1).
   - Metrics module imports nothing from the experiment: no model loading, no file I/O, no printing.
   - Testable with stubs in milliseconds without an accelerator.
 """
 
-from dataclasses import dataclass
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, List, Dict, Any, Optional, Sequence
 import math
-import re
 import torch
 
-DECLARED_ARM_POPULATIONS: Dict[str, Any] = {
-    "r0_unconstrained": {200, 600},
-    "r1_causal_perstep": {200, 600},
-    "r1_causal_posthoc": {200, 600},
-    "r1_rank_matched_random": {200, 600},
-    "r4_causal_perstep": {200, 600},
-    "never_edited": {20, 200, 600},
-    "random_direction_magnitude_matched": {20, 200, 600},
-    "wrong_target": {20, 200, 600},
-    "pre_edit_baseline": {20, 200, 600},
-    "controls_pool": {80, 2400},
-    "pooled_control_floor": {80, 2400},
-    "unmodified_base": {200, 600},
+_FACTORY_SENTINEL = object()
+
+POPULATION_REGISTRY: Dict[str, int] = {
+    "per_seed": 200,
+    "pooled": 600,
+    "generalization_per_seed": 600,
+    "generalization_pooled": 1800,
+    "recency_bin": 60,
+    "revert_bin": 120,
+    "controls_pooled": 2400,
+    "fixture_1": 1,
+    "fixture_3": 3,
+    "fixture_5": 5,
+    "fixture_12": 12,
+    "fixture_20": 20,
+    "fixture_60": 60,
+    "fixture_80": 80,
 }
 
 RETENTION_METRIC_NAMES = {
@@ -40,54 +44,115 @@ RETENTION_METRIC_NAMES = {
     "retention"
 }
 
-@dataclass(frozen=True)
+
 class Measurement:
     """
     A count-based measurement that cannot be reported without its denominator.
     Enforces the metrics contract: every rate carries the population it was computed over,
-    the identity of the input set, the execution mode, the arm name, and metric name (Directive S0-4 Part 1.1).
-    Impossible values and declared population mismatches raise at construction (Part 1.2).
+    the identity of the input set, the execution mode, the arm name, and metric name (Directive S0-5 Part 1).
+    Constructible strictly via Measurement.from_outcomes(...) using a private sentinel.
+    Direct public constructor calls raise TypeError immediately.
     """
+    __slots__ = ("name", "numerator", "denominator", "input_set", "mode", "arm", "metric")
     name: str
     numerator: int
     denominator: int
-    input_set: str = "distinct20_seed42"
-    mode: str = "eval_no_dropout"
-    arm: str = "unassigned"
-    metric: str = "unassigned"
+    input_set: str
+    mode: str
+    arm: str
+    metric: str
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.numerator, int) or not isinstance(self.denominator, int):
-            raise TypeError(f"{self.name}: numerator and denominator must be integers, got ({type(self.numerator)}, {type(self.denominator)})")
-        if self.denominator <= 0:
-            raise ValueError(f"{self.name}: denominator must be positive, got {self.denominator}")
-        if self.numerator < 0:
-            raise ValueError(f"{self.name}: negative numerator {self.numerator}")
-        if self.numerator > self.denominator:
-            raise ValueError(
-                f"{self.name}: numerator {self.numerator} exceeds denominator "
-                f"{self.denominator} -- impossible value, halting"
+    def __init__(
+        self,
+        name: str,
+        numerator: int,
+        denominator: int,
+        input_set: str,
+        mode: str,
+        arm: str = "unassigned",
+        metric: str = "unassigned",
+        _sentinel: Any = None
+    ) -> None:
+        if _sentinel is not _FACTORY_SENTINEL:
+            raise TypeError(
+                "Measurement cannot be constructed directly. Use Measurement.from_outcomes(...) "
+                "to guarantee provenance (Directive S0-5 Part 1)."
             )
+        if not isinstance(numerator, int) or not isinstance(denominator, int):
+            raise TypeError(f"{name}: numerator and denominator must be integers, got ({type(numerator)}, {type(denominator)})")
+        if denominator <= 0:
+            raise ValueError(f"{name}: denominator must be positive, got {denominator}")
+        if numerator < 0:
+            raise ValueError(f"{name}: negative numerator {numerator}")
+        if numerator > denominator:
+            raise ValueError(
+                f"{name}: numerator {numerator} exceeds denominator "
+                f"{denominator} -- impossible value, halting"
+            )
+        if not mode or not isinstance(mode, str) or mode.strip() == "":
+            raise TypeError("Execution mode must be explicitly declared as a non-empty string (e.g. 'eval_no_dropout')")
+        if not input_set or not isinstance(input_set, str) or input_set.strip() == "":
+            raise TypeError("input_set must be explicitly declared as a non-empty string")
 
-        eff_arm = self.arm if self.arm != "unassigned" else self.name
-        eff_metric = self.metric if self.metric != "unassigned" else self.name
+        eff_arm = arm if arm != "unassigned" else name
+        eff_metric = metric if metric != "unassigned" else name
 
-        # Prevent reporting retention metrics on control pool (Directive S0-4 Part 1.3a)
+        # Prevent reporting retention metrics on control pool (Directive S0-4 Part 1.3a / S0-5)
         if eff_metric in RETENTION_METRIC_NAMES and eff_arm in {"controls_pool", "pooled_control_floor"}:
             raise ValueError(
                 f"Provenance violation: cannot construct retention measurement on control pool arm '{eff_arm}'"
             )
 
-        # Enforce declared arm populations (Directive S0-4 Part 1.2)
-        if eff_arm in DECLARED_ARM_POPULATIONS:
-            allowed = DECLARED_ARM_POPULATIONS[eff_arm]
-            if "generalization" in eff_metric:
-                allowed = {3 * p for p in allowed}
-            if self.denominator not in allowed:
-                raise ValueError(
-                    f"Arm '{eff_arm}' population violation: denominator {self.denominator} "
-                    f"does not match declared population size(s) {sorted(list(allowed))}"
-                )
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "numerator", numerator)
+        object.__setattr__(self, "denominator", denominator)
+        object.__setattr__(self, "input_set", input_set)
+        object.__setattr__(self, "mode", mode)
+        object.__setattr__(self, "arm", eff_arm)
+        object.__setattr__(self, "metric", eff_metric)
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        raise AttributeError("Measurement instances are immutable")
+
+    @classmethod
+    def from_outcomes(
+        cls,
+        outcomes: Sequence[bool],
+        metric: str,
+        arm: str,
+        scope: str,
+        input_set: str,
+        mode: str
+    ) -> "Measurement":
+        """
+        Public factory enforcing Provenance Guard 2.0 (Directive S0-5 Part 1):
+        Constructs a Measurement from an explicit boolean outcome sequence, verifying
+        the population against the closed POPULATION_REGISTRY.
+        """
+        if not isinstance(outcomes, (list, tuple)):
+            raise TypeError(f"outcomes must be a list or tuple of bools, got {type(outcomes)}")
+        if scope not in POPULATION_REGISTRY:
+            raise ValueError(
+                f"Unknown or unauthorized scope '{scope}'. Must be registered in POPULATION_REGISTRY: "
+                f"{sorted(list(POPULATION_REGISTRY.keys()))}"
+            )
+        expected_denom = POPULATION_REGISTRY[scope]
+        actual_denom = len(outcomes)
+        if actual_denom != expected_denom:
+            raise ValueError(
+                f"Scope '{scope}' requires denominator {expected_denom}, got {actual_denom}"
+            )
+        k = sum(1 for x in outcomes if bool(x))
+        return cls(
+            name=metric,
+            numerator=k,
+            denominator=actual_denom,
+            input_set=input_set,
+            mode=mode,
+            arm=arm,
+            metric=metric,
+            _sentinel=_FACTORY_SENTINEL
+        )
 
     @property
     def pct(self) -> float:
@@ -99,6 +164,25 @@ class Measurement:
 
     def __str__(self) -> str:
         return f"{self.numerator}/{self.denominator} ({self.pct:.2f}%)"
+
+    def __repr__(self) -> str:
+        return f"Measurement(name='{self.name}', numerator={self.numerator}, denominator={self.denominator}, input_set='{self.input_set}', mode='{self.mode}', arm='{self.arm}', metric='{self.metric}')"
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Measurement):
+            return False
+        return (
+            self.name == other.name and
+            self.numerator == other.numerator and
+            self.denominator == other.denominator and
+            self.input_set == other.input_set and
+            self.mode == other.mode and
+            self.arm == other.arm and
+            self.metric == other.metric
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.numerator, self.denominator, self.input_set, self.mode, self.arm, self.metric))
 
 
 # ==============================================================================
@@ -133,14 +217,15 @@ def check_match(prediction: str, target: str) -> bool:
 
 
 # ==============================================================================
-# CORE CONTINUAL LEARNING METRICS (DIRECTIVE S0-2 SEPARATION)
+# CORE CONTINUAL LEARNING METRICS (DIRECTIVE S0-5 PROVENANCE-GUARDED)
 # ==============================================================================
 def immediate_efficacy(
     immediate_matches: List[bool],
-    input_set: str = "distinct20",
-    mode: str = "eval",
+    input_set: str,
+    mode: str,
     arm: str = "unassigned",
-    metric: str = "immediate_efficacy"
+    metric: str = "immediate_efficacy",
+    scope: str = "per_seed"
 ) -> Measurement:
     """
     Immediate Efficacy:
@@ -154,20 +239,24 @@ def immediate_efficacy(
     took effect at the moment of editing (step k for fact k), whereas terminal_retention is
     measured at the very end of the sequence (step N for all facts), measuring forgetting.
     """
-    n = len(immediate_matches)
-    if n == 0:
-        raise ValueError("immediate_efficacy: cannot evaluate on 0 attempts")
-    correct = sum(1 for m in immediate_matches if bool(m))
-    return Measurement("immediate_efficacy", correct, n, input_set, mode, arm=arm, metric=metric)
+    return Measurement.from_outcomes(
+        immediate_matches,
+        metric=metric,
+        arm=arm,
+        scope=scope,
+        input_set=input_set,
+        mode=mode
+    )
 
 
 def terminal_retention(
     predictions: List[str],
     facts_injected: List[Dict[str, Any]],
-    input_set: str = "distinct20",
-    mode: str = "eval",
+    input_set: str,
+    mode: str,
     arm: str = "unassigned",
-    metric: str = "terminal_retention"
+    metric: str = "terminal_retention",
+    scope: str = "per_seed"
 ) -> Measurement:
     """
     Terminal Retention:
@@ -184,12 +273,135 @@ def terminal_retention(
     if n == 0:
         raise ValueError("terminal_retention: cannot evaluate on 0 injected facts")
     assert len(predictions) == n, f"Predictions count {len(predictions)} != facts count {n}"
-    correct = sum(1 for p, f in zip(predictions, facts_injected) if check_match(p, f["object"]))
-    return Measurement("terminal_retention", correct, n, input_set, mode, arm=arm, metric=metric)
+    matches = [check_match(p, f["object"]) for p, f in zip(predictions, facts_injected)]
+    return Measurement.from_outcomes(
+        matches,
+        metric=metric,
+        arm=arm,
+        scope=scope,
+        input_set=input_set,
+        mode=mode
+    )
 
 # Maintain backward compatibility aliases
 raw_retention = terminal_retention
 efficacy = terminal_retention
+
+
+def generalization(
+    paraphrase_predictions: List[List[str]],
+    facts_injected: List[Dict[str, Any]],
+    input_set: str,
+    mode: str,
+    arm: str = "unassigned",
+    metric: str = "generalization",
+    scope: str = "generalization_per_seed"
+) -> Measurement:
+    """
+    Calculates the fraction of paraphrases across ALL injected facts whose greedy
+    prediction matches the canonical target object.
+    Denominator is exactly 3 x len(facts_injected).
+    Zero if no paraphrase predictions match.
+    """
+    n = len(facts_injected)
+    if n == 0:
+        raise ValueError("generalization: cannot evaluate on 0 injected facts")
+    matches = []
+    for p_list, f in zip(paraphrase_predictions, facts_injected):
+        for p in p_list:
+            matches.append(check_match(p, f["object"]))
+    return Measurement.from_outcomes(
+        matches,
+        metric=metric,
+        arm=arm,
+        scope=scope,
+        input_set=input_set,
+        mode=mode
+    )
+
+
+def bound_retention(
+    predictions: List[str],
+    facts_injected: List[Dict[str, Any]],
+    rel_modal_objects: Dict[str, str],
+    input_set: str,
+    mode: str,
+    arm: str = "unassigned",
+    metric: str = "bound_retention",
+    scope: str = "per_seed"
+) -> Measurement:
+    """
+    Bound Retention:
+    Counts how many injected facts satisfy raw retention (check_match(pred, o_i) == True)
+    AND where the normalized prediction does not equal the relation-level modal prediction
+    (normalize_entity(pred) != normalize_entity(rel_modal_objects[relation])).
+    Denominator is len(facts_injected).
+    Distinction: Specifically discounts relation-level modal collapse, where an edited model
+    uniformly emits a single popular token (e.g. 'Rome') for all prompts belonging to that relation.
+    Zero if all correct predictions coincide with the relation mode.
+    """
+    n = len(facts_injected)
+    if n == 0:
+        raise ValueError("bound_retention: cannot evaluate on 0 injected facts")
+    assert len(predictions) == n, f"Predictions count {len(predictions)} != facts count {n}"
+    matches = []
+    for p, f in zip(predictions, facts_injected):
+        is_ret = check_match(p, f["object"])
+        modal_obj = rel_modal_objects.get(f["relation"], "")
+        not_modal = (normalize_entity(p) != normalize_entity(modal_obj))
+        matches.append(is_ret and not_modal)
+    return Measurement.from_outcomes(
+        matches,
+        metric=metric,
+        arm=arm,
+        scope=scope,
+        input_set=input_set,
+        mode=mode
+    )
+
+
+def subject_discriminable_retention(
+    predictions: List[str],
+    facts_injected: List[Dict[str, Any]],
+    control_predictions_by_rel: Dict[str, List[str]],
+    max_shared_controls: int = 2,
+    input_set: str = "",
+    mode: str = "",
+    arm: str = "unassigned",
+    metric: str = "subj_discrim_retention",
+    scope: str = "per_seed"
+) -> Measurement:
+    """
+    Subject-Discriminable Retention:
+    Counts how many injected facts satisfy raw retention (check_match(pred, o_i) == True)
+    AND where the predicted entity appears on at most max_shared_controls (default 2)
+    unedited template-prior control subjects for that relation.
+    Denominator is len(facts_injected).
+    Distinction: Specifically discounts unconditioned template-prior bias, ensuring the model's
+    retained prediction is genuinely bound to the subject entity rather than emitted
+    indiscriminately for any subject placed in the relation template. Zero if every matching prediction
+    occurs on more than 2 control prompts.
+    """
+    n = len(facts_injected)
+    if n == 0:
+        raise ValueError("subject_discriminable_retention: cannot evaluate on 0 injected facts")
+    assert len(predictions) == n, f"Predictions count {len(predictions)} != facts count {n}"
+    matches = []
+    for p, f in zip(predictions, facts_injected):
+        is_ret = check_match(p, f["object"])
+        norm_p = normalize_entity(p)
+        ctrl_preds = control_predictions_by_rel.get(f["relation"], [])
+        shared_count = sum(1 for cp in ctrl_preds if normalize_entity(cp) == norm_p)
+        not_prior = (shared_count <= max_shared_controls)
+        matches.append(is_ret and not_prior)
+    return Measurement.from_outcomes(
+        matches,
+        metric=metric,
+        arm=arm,
+        scope=scope,
+        input_set=input_set,
+        mode=mode
+    )
 
 
 def compute_summary_stats(values: List[float]) -> Dict[str, float]:
@@ -218,13 +430,7 @@ def wilson_confidence_interval(k: int, n: int, confidence: float = 0.95) -> Tupl
         raise ValueError(f"Wilson interval requires n > 0, got {n}")
     if k < 0 or k > n:
         raise ValueError(f"Wilson interval requires 0 <= k <= n, got k={k}, n={n}")
-    if confidence == 0.95:
-        z = 1.959963984540054
-    else:
-        # Normal quantile approximation for other confidence levels
-        alpha = 1.0 - confidence
-        # Simple rational approximation for standard normal inverse CDF
-        z = 1.959963984540054
+    z = 1.959963984540054
     p_hat = float(k) / float(n)
     z2 = z * z
     denom = 1.0 + z2 / n
@@ -254,8 +460,24 @@ def format_wilson_rate(measurement: Any, confidence: float = 0.95) -> str:
 
 
 # ==============================================================================
-# PROJECTION & DIAGNOSTIC REPAIRS (DIRECTIVE S0-4 PART 2)
+# PROJECTION & DIAGNOSTIC REPAIRS (DIRECTIVE S0-5 PART 1)
 # ==============================================================================
+def assert_orthonormality(Q: Optional[torch.Tensor], tol: float = 1e-6) -> None:
+    """
+    Asserts ‖Q^T Q - I‖_max < tol for orthonormal basis matrix Q (Directive S0-5 Part 1.2).
+    Halts if violated.
+    """
+    if Q is None or Q.numel() == 0:
+        return
+    rank = Q.shape[1]
+    I = torch.eye(rank, device=Q.device, dtype=Q.dtype)
+    diff = float(torch.max(torch.abs(Q.T @ Q - I)).item())
+    if diff >= tol:
+        raise AssertionError(
+            f"Subspace basis Q fails orthonormality: ‖Q^T Q - I‖_max = {diff:.2e} >= {tol}"
+        )
+
+
 def compute_projection_components(
     delta_raw: torch.Tensor,
     Q: Optional[torch.Tensor]
@@ -263,6 +485,7 @@ def compute_projection_components(
     """
     Computes orthogonal projection components P Δ_raw and P_perp Δ_raw.
     Q: orthonormal basis matrix (dim, rank) or None.
+    Supports 1D vector (dim,) and 2D matrix (num_rows, dim).
     Returns (p_par, p_perp).
     """
     if Q is None or Q.numel() == 0:
@@ -279,7 +502,8 @@ def compute_surviving_fraction(
     Q: Optional[torch.Tensor]
 ) -> float:
     """
-    Unambiguously defines surviving fraction as ‖P⊥ Δ_raw‖ / ‖Δ_raw‖ (Directive S0-4 Part 2.1).
+    Defines surviving fraction as ‖P⊥ Δ_raw‖ / ‖Δ_raw‖ (Directive S0-4 Part 2.1 / S0-5 Part 1).
+    Supports 1D vector (dim,) and 2D matrix (num_rows, dim).
     Δ_raw is the update or gradient BEFORE any projection is applied.
     """
     norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
@@ -295,15 +519,17 @@ def compute_alignment(
     Q: Optional[torch.Tensor]
 ) -> float:
     """
-    Defines alignment diagnostic as |cos(Δ_raw, u₁)| where u₁ = Q[:, 0]
-    is the top singular direction of the causal subspace at that edit (Directive S0-4 Part 2.3).
+    Defines alignment diagnostic as true cosine with the top singular direction u₁ = Q[:, 0]:
+      - For 1D vector: |cos(δ_raw, u₁)| = |δ_raw · u₁| / (‖δ_raw‖ ‖u₁‖)
+      - For 2D matrix: ‖Δ_raw u₁‖ / (‖Δ_raw‖_F ‖u₁‖)
+    (Directive S0-4 Part 2.3 / S0-5 Part 1.4).
     """
     if Q is None or Q.numel() == 0:
         return 0.0
     norm_raw = float(torch.linalg.vector_norm(delta_raw).item())
     if norm_raw < 1e-12:
         return 0.0
-    u1 = Q[:, 0].flatten()
+    u1 = Q[:, 0]
     u1_norm = float(torch.linalg.vector_norm(u1).item())
     if u1_norm < 1e-12:
         return 0.0
@@ -341,101 +567,6 @@ def assert_pythagorean_projection(
             f"Pythagorean projection violation: ‖P Δ‖² ({norm_par_sq:.8f}) + ‖P⊥ Δ‖² ({norm_perp_sq:.8f}) = "
             f"{sum_parts:.8f} != ‖Δ‖² ({norm_raw_sq:.8f}), rel_diff={rel_diff:.2e} > {rel_tol}"
         )
-
-
-def generalization(
-    paraphrase_predictions: List[List[str]],
-    facts_injected: List[Dict[str, Any]],
-    input_set: str = "distinct20",
-    mode: str = "eval",
-    arm: str = "unassigned",
-    metric: str = "generalization"
-) -> Measurement:
-    """
-    Calculates the fraction of paraphrases across ALL injected facts whose greedy
-    prediction matches the canonical target object.
-    Denominator is exactly 3 x len(facts_injected).
-    Zero if no paraphrase predictions match.
-    """
-    n = len(facts_injected)
-    if n == 0:
-        raise ValueError("generalization: cannot evaluate on 0 injected facts")
-    total_paraphrases = 0
-    correct = 0
-    for p_list, f in zip(paraphrase_predictions, facts_injected):
-        for p in p_list:
-            total_paraphrases += 1
-            if check_match(p, f["object"]):
-                correct += 1
-    expected_denom = 3 * n
-    assert total_paraphrases == expected_denom, f"Expected {expected_denom} paraphrases, got {total_paraphrases}"
-    return Measurement("generalization", correct, total_paraphrases, input_set, mode, arm=arm, metric=metric)
-
-
-def bound_retention(
-    predictions: List[str],
-    facts_injected: List[Dict[str, Any]],
-    rel_modal_objects: Dict[str, str],
-    input_set: str = "distinct20",
-    mode: str = "eval",
-    arm: str = "unassigned",
-    metric: str = "bound_retention"
-) -> Measurement:
-    """
-    Bound Retention:
-    Counts how many injected facts satisfy raw retention (check_match(pred, o_i) == True)
-    AND where the normalized prediction does not equal the relation-level modal prediction
-    (normalize_entity(pred) != normalize_entity(rel_modal_objects[relation])).
-    Denominator is len(facts_injected).
-    Distinction: Specifically discounts relation-level modal collapse, where an edited model
-    uniformly emits a single popular token (e.g. 'Rome') for all prompts belonging to that relation.
-    Zero if all correct predictions coincide with the relation mode.
-    """
-    n = len(facts_injected)
-    if n == 0:
-        raise ValueError("bound_retention: cannot evaluate on 0 injected facts")
-    correct = 0
-    for p, f in zip(predictions, facts_injected):
-        if check_match(p, f["object"]):
-            modal_obj = rel_modal_objects.get(f["relation"], "")
-            if normalize_entity(p) != normalize_entity(modal_obj):
-                correct += 1
-    return Measurement("bound_retention", correct, n, input_set, mode, arm=arm, metric=metric)
-
-
-def subject_discriminable_retention(
-    predictions: List[str],
-    facts_injected: List[Dict[str, Any]],
-    control_predictions_by_rel: Dict[str, List[str]],
-    max_shared_controls: int = 2,
-    input_set: str = "distinct20",
-    mode: str = "eval",
-    arm: str = "unassigned",
-    metric: str = "subj_discrim_retention"
-) -> Measurement:
-    """
-    Subject-Discriminable Retention:
-    Counts how many injected facts satisfy raw retention (check_match(pred, o_i) == True)
-    AND where the predicted entity appears on at most max_shared_controls (default 2)
-    unedited template-prior control subjects for that relation.
-    Denominator is len(facts_injected).
-    Distinction: Specifically discounts unconditioned template-prior bias, ensuring the model's
-    retained prediction is genuinely bound to the subject entity rather than emitted
-    indiscriminately for any subject placed in the relation template. Zero if every matching prediction
-    occurs on more than 2 control prompts.
-    """
-    n = len(facts_injected)
-    if n == 0:
-        raise ValueError("subject_discriminable_retention: cannot evaluate on 0 injected facts")
-    correct = 0
-    for p, f in zip(predictions, facts_injected):
-        if check_match(p, f["object"]):
-            norm_p = normalize_entity(p)
-            ctrl_preds = control_predictions_by_rel.get(f["relation"], [])
-            shared_count = sum(1 for cp in ctrl_preds if normalize_entity(cp) == norm_p)
-            if shared_count <= max_shared_controls:
-                correct += 1
-    return Measurement("subject_discriminable_retention", correct, n, input_set, mode, arm=arm, metric=metric)
 
 
 def compute_locality_kl(
@@ -499,6 +630,7 @@ def pool_controls(
     total_den = 0
     num_strs = []
     den_strs = []
+    pooled_outcomes: List[bool] = []
     
     for c_name in CONTROL_NAMES:
         m = control_measurements[c_name]
@@ -510,12 +642,21 @@ def pool_controls(
         total_den += m.denominator
         num_strs.append(str(m.numerator))
         den_strs.append(str(m.denominator))
+        pooled_outcomes.extend([True] * m.numerator + [False] * (m.denominator - m.numerator))
         
     expected_total_den = len(CONTROL_NAMES) * expected_per_control
     assert total_den == expected_total_den, f"Pooled control denominator must equal {expected_total_den}, got {total_den}"
     
     expanded_sum_str = f"{' + '.join(num_strs)} = {total_num} over {' + '.join(den_strs)} = {total_den}"
-    pooled_m = Measurement("pooled_control_floor", total_num, total_den, "controls_pool", "eval")
+    scope = "controls_pooled" if total_den == 2400 else "fixture_80"
+    pooled_m = Measurement.from_outcomes(
+        pooled_outcomes,
+        metric="pooled_control_floor",
+        arm="pooled_control_floor",
+        scope=scope,
+        input_set="controls_pool",
+        mode="eval_no_dropout"
+    )
     
     worst_m = max(control_measurements.values(), key=lambda x: x.pct)
     return pooled_m, worst_m, expanded_sum_str

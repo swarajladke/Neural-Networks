@@ -1,0 +1,510 @@
+===================================================================================================================
+ DIRECTIVE S0-5: PROVE OR KILL THE PERPLEXITY DISSOCIATION, AND FIX THE PROJECTION DIAGNOSTIC FOR THE THIRD TIME
+ MANDATE: ARM F MAGNITUDE CONTROL, PROVENANCE GUARD TWO, RECENCY BINS, DUAL MECHANISM DIAGNOSTICS
+===================================================================================================================
+
+--- [Pre-Flight Test Suite Execution (Directive S0-5 Part 1)] ---
+====================================================================================================
+ PRE-FLIGHT TEST SUITE (Directive S0-5 Part 1): Metric Stubs & Provenance Guard 2.0
+====================================================================================================
+
+[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    ':4096:8': cublas deterministic workspace configuration flag
+    'SUPPRESSED — immediate efficacy ': directive S0-2 B5 gate suppression text
+  [Literal scanner] 0 violation(s) detected in b1_inject.py
+  AST Literal Scanner: PASSED (0 unlisted decimal/percent literals).
+
+[PART 1: Provenance Guard 2.0 (Directive S0-5 Part 1)]
+  Test 1.1 (Direct constructor call raises)   : Caught expected TypeError: Measurement cannot be constructed directly. Use Measurement.from_outcomes(...) to guarantee provenance (Directive S0-5 Part 1).
+  Test 1.2 (Missing mode raises)              : Caught expected TypeError: Execution mode must be explicitly declared as a non-empty string (e.g. 'eval_no_dropout')
+  Test 1.3 (Scope mismatch raises)            : Caught expected ValueError: Scope 'pooled' requires denominator 600, got 33
+  Test 1.4 (Control-pool retention raises)    : Caught expected ValueError: Provenance violation: cannot construct retention measurement on control pool arm 'controls_pool'
+  Test 1.5 (Renderer round-trip)              : 33/600 (5.50%) [3.94%, 7.62%]
+
+[1.6 Loose-Variable Rate Formatting Grep Audit]
+  Test 1.6 (Loose-variable rate formatting)   : 0 violation(s) detected.
+
+[PART 1.4: Surviving-Fraction & Alignment Independence Proof (Directive S0-5)]
+  Vector v1 (in span(u1)) -> SF = 0.0000 (tol=1e-4), Alignment = 1.0000 (tol=1e-4)
+  Vector v2 (in span(u2)) -> SF = 0.0000 (tol=1e-4), Alignment = 0.0000 (tol=1e-4)
+  Independence Proof: PASSED (SF and Alignment dissociate geometrically in rank-2 subspace).
+
+[PART 1.2: Orthonormality Assertion Audit]
+  Orthonormality Guard: PASSED (Orthonormal passes, non-orthonormal raises).
+
+[PART 1.6: Seven Synthetic Tests with Stated Tolerances]
+  Synthetic 1 (SF inside subspace)     : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 2 (SF orthogonal)          : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 3 (SF 45 deg)              : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Synthetic 4 (SF 3 of 4 unit in r=3)  : Expected 0.5000, Actual 0.5000 (tol=1e-4)
+  Synthetic 5 (Align parallel)         : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 6 (Align orthogonal)       : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 7 (Align 45 deg)           : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Pythagorean Projection Identity     : PASSED on synthetic test cases
+
+[A2.1 Immediate Efficacy vs Terminal Retention Disagreement Fixture]
+  Immediate Efficacy (all took)       : Expected (20, 20), Actual (20, 20) -> 20/20 (100.00%)
+  Terminal Retention (4 survived)     : Expected (4, 20), Actual (4, 20) -> 4/20 (20.00%)
+
+[A2.2 Immediate Efficacy Failure on Exhausted Max Steps]
+  Immediate Efficacy (1 exhausted)    : Expected (2, 3), Actual (2, 3) -> 2/3 (66.67%)
+
+[A2.3 Denominator Equality Across N in {1, 5, 12, 20}]
+  Denominator Assertion               : Strictly equals N for both metrics across N in [1, 5, 12, 20]
+
+[A3. Summary Statistic Reduction Test (S0-2 A3)]
+  Summary stats on incident list      : min=0.0, max=2.0, mean=0.7000
+
+[3.2 Generalization Metric Unit Tests]
+  Test 3.2 (20 facts, 2/3 correct)    : Expected (40, 60), Actual (40, 60) -> 40/60 (66.67%)
+
+[3.3 Retention Metrics Unit Tests on Hand-Counted Fixture]
+  Test 3.3a (Terminal/Raw Retention)  : Expected (3, 5), Actual (3, 5) -> 3/5 (60.00%)
+  Test 3.3b (Bound Retention)        : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+  Test 3.3c (Subj-Discrim Ret)       : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+
+[3.4 Stopping Rule Simulation Tests]
+  Test 3.4a (Terminates on match)     : Expected (3, True), Actual (3, True)
+  Test 3.4b (Terminates at step 1)    : Expected (1, True), Actual (1, True)
+  Test 3.4c (Runs to max_steps)       : Expected (15, False), Actual (15, False)
+  Test 3.4d (Falling loss no match)   : Expected (4, False), Actual (4, False)
+
+[3.5 Proven 12-Case Match & Normalization Equivalence Suite]
+  Test 3.5 (12-Case Equivalence)      : All 12 proven test cases PASSED identically.
+
+[3.6 Control Accounting & Impossible-Value Guard Tests]
+  Test 3.6a (Valid Control Pooling)   : Expanded Sum -> 0 + 1 + 0 + 2 = 3 over 20 + 20 + 20 + 20 = 80
+                                        Pooled Floor -> 3/80 (3.75%), Worst -> pre_edit_baseline: 2/20 (10.00%)
+
+[3.7 Wilson Score Confidence Interval Unit Tests]
+  Test 3.7a (Wilson k=4, n=20)         : lo=0.0807, hi=0.4160
+  Test 3.7b (Wilson k=0, n=20)         : lo=0.0000, hi=0.1611
+
+[3.8 N=200 Sequence Sampling Unit Tests]
+  Test 3.8a (N=200 seed=0 hash)        : 21eb027af79426e0... (200 facts)
+
+[3.9 Causal Subspace Orthogonal Projection Tests]
+  Test 3.9a (Orthogonality norm)       : 0.00000118 (Expected near zero)
+
+====================================================================================================
+ PRE-FLIGHT TEST SUMMARY: 46 tests run, 46 tests passed, 0 failures.
+====================================================================================================
+
+--- [Environment Fingerprint & Input Hashes (Directive S0-5 Section 0)] ---
+  Pinned Facts SHA-256        : 285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536 (Verified)
+  Synthetic Facts Agreement   : 1,000/1,000 facts match pinned file field-by-field
+  Control-Probe Set SHA-256   : 8f4ffa6b18d63531c898a6b2bf97d8b4a83d7038a54b9748bf77862178213887 (Verified 200 prompts)
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1783.84it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 68539.67 examples/s]
+Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 587945.54 examples/s]
+Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 518717.99 examples/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
+  PyTorch / Transformers      : 2.10.0+cu128 / 5.0.0
+  Device / cuDNN              : cuda (Tesla T4) / 91002
+  Pinned Model Revision       : 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  Weight File SHA-256         : 248dfc3911869ec493c76e65bf2fcf7f615828b0254c12b473182f0f81d3a707 (Verified)
+  WikiText Slice SHA-256      : 3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7 (Verified)
+  Fresh Model Checksum        : -62119.87976855
+
+--- [PART 1: Parameter Block Geometry & Orthonormality Disclosure] ---
+  Parameter Block Target      : lm_head.weight shape = 50257 x 768
+  Representation Dimension    : d = 768
+  Subspace Basis Q Dimension  : (768, rank)
+  Projection Operation Scope  : Operates row-wise across all 50,257 rows of lm_head.weight.
+
+--- [Sequence Fact-ID SHA-256 Hashes] ---
+  Seed 0 Sequence Fact-ID Hash   : 21eb027af79426e0f70c61b1c0b25e3a2a169e1bb5f004bebf6eb99d59de8162 (200 facts)
+  Seed 1 Sequence Fact-ID Hash   : b8a14100f5d87e0672a824884855409a3fe0fd050b3939853603fd0a6bbde0cf (200 facts)
+  Seed 2 Sequence Fact-ID Hash   : 6bc3d36c7282d36a78af8526e96fb9f71429ac8638a05beb9282cdd9e85350a0 (200 facts)
+
+--- [Compute Budget Projection] ---
+  Session Cap                 : 23400.0 s | Ceiling Limit (70 pct): 16380.0 s
+  Projected Compute Wall-Clock: 2400.0 s (Within ceiling: PASSED)
+
+--- [Re-Measuring Four Named Controls at N=200 x 3 Seeds (N=600)] ---
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1618.51it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1834.88it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1667.02it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1670.31it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1795.21it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1702.24it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+  Pooled Control: never_edited                       : 3/600 (0.50%) [0.17%, 1.46%]
+  Pooled Control: random_direction_magnitude_matched : 1/600 (0.17%) [0.03%, 0.94%]
+  Pooled Control: wrong_target                       : 28/600 (4.67%) [3.25%, 6.66%]
+  Pooled Control: pre_edit_baseline                  : 1/600 (0.17%) [0.03%, 0.94%]
+  Pooled Floor (Expanded Sum)         : 3 + 1 + 28 + 1 = 33 over 600 + 600 + 600 + 600 = 2400 -> 33/2400 (1.38%)
+  Worst Individual Control            : wrong_target -> 28/600 (4.67%) [3.25%, 6.66%]
+
+--- [PART 2: Continual Knowledge Injection Experiment (Arms A, B, F, D)] ---
+
+  Running Arm: r0_unconstrained         (No projection (unconstrained SGD))
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1967.81it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | Steps=669
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1617.73it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | Steps=664
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1724.11it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 2: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | Steps=656
+
+  Running Arm: r1_causal_perstep        (Causal rank-1 projection at every step)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1941.11it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 0: ImmEff=199/200 (99.50%) [97.22%, 99.91%] | TermRet=9/200 (4.50%) [2.39%, 8.33%] | Steps=1065
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1789.38it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 1: ImmEff=198/200 (99.00%) [96.43%, 99.73%] | TermRet=13/200 (6.50%) [3.84%, 10.80%] | Steps=1049
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1726.95it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 2: ImmEff=198/200 (99.00%) [96.43%, 99.73%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | Steps=1014
+
+  Running Arm: r1_magnitude_only        (Scaled SGD updates by alpha_B without projection)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1639.06it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | Steps=844
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1630.52it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | Steps=824
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1668.10it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 2: ImmEff=199/200 (99.50%) [97.22%, 99.91%] | TermRet=17/200 (8.50%) [5.37%, 13.19%] | Steps=821
+
+  Running Arm: r1_rank_matched_random   (Random 1D orthogonal direction per edit (skips edit 1))
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1669.94it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | Steps=668
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1645.55it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | Steps=665
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1572.70it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+    Seed 2: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | Steps=655
+
+  Pythagorean Projection Runtime Assertions: 2400 edits checked (0 violations).
+
+--- [Arm A Positive Control Re-Confirmation (Directive S0-5A Part 3, Item 2)] ---
+  Immediate Efficacy          : 600/600 (Reference: 600/600)
+  Optimizer Steps Per Seed    : [669, 664, 656] (Reference: [669, 664, 656])
+  Total Optimizer Steps       : 1989 (Reference: 1989)
+  B2 POSITIVE CONTROL         : PASSED
+
+--- [Arm D Instrument Calibration (Directive S0-5A Part 3, Item 3)] ---
+  Observed Random SF Mean     : 0.999441
+  Analytic SF sqrt(1 - 1/768) : 0.999349
+  Tolerance Window            : [0.989349, 1.009349]
+  INSTRUMENT CALIBRATED       : PASSED
+
+--- [Gate S0-5 Evaluation Table] ---
+===================================================================================================================
+Arm Name                 | Pooled Immediate Efficacy            | Seed 0       | Seed 1       | Seed 2       | Verdict
+-------------------------------------------------------------------------------------------------------------------
+r0_unconstrained         | 600/600 (100.00%) [99.36%, 100.00%]  | 200/200     | 200/200     | 200/200     | GATE: PASSED
+r1_causal_perstep        | 595/600 (99.17%) [98.06%, 99.64%]    | 199/200     | 198/200     | 198/200     | GATE: PASSED
+r1_magnitude_only        | 599/600 (99.83%) [99.06%, 99.97%]    | 200/200     | 200/200     | 199/200     | GATE: PASSED
+r1_rank_matched_random   | 600/600 (100.00%) [99.36%, 100.00%]  | 200/200     | 200/200     | 200/200     | GATE: PASSED
+===================================================================================================================
+
+--- [The Retention Panel (Seven Primary Deliverables)] ---
+=================================================================================================================================================
+Arm Name               | Immediate Efficacy               | Terminal Retention               | Bound Ret  | Subj Disc  | Gen (3xN)    | Loc KL   | Wiki PPL
+-------------------------------------------------------------------------------------------------------------------------------------------------
+r0_unconstrained       | 600/600 (100.00%) [99.36%, 100.00%] | 33/600 (5.50%) [3.94%, 7.62%]    | 6/600     | 0/600     | 91/1800      | 2.8368   | 58.62
+r1_causal_perstep      | 595/600 (99.17%) [98.06%, 99.64%] | 36/600 (6.00%) [4.37%, 8.19%]    | 8/600     | 1/600     | 76/1800      | 2.7723   | 51.11
+r1_magnitude_only      | 599/600 (99.83%) [99.06%, 99.97%] | 36/600 (6.00%) [4.37%, 8.19%]    | 8/600     | 1/600     | 98/1800      | 2.8292   | 55.38
+r1_rank_matched_random | 600/600 (100.00%) [99.36%, 100.00%] | 33/600 (5.50%) [3.94%, 7.62%]    | 6/600     | 0/600     | 91/1800      | 2.8340   | 58.61
+=================================================================================================================================================
+
+--- [Per-Seed Retention Panel Breakdown] ---
+  Arm: r0_unconstrained
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | PPL=62.54 | LocKL=3.0152
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | PPL=58.20 | LocKL=2.7174
+    Seed 2: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | PPL=55.14 | LocKL=2.7778
+  Arm: r1_causal_perstep
+    Seed 0: ImmEff=199/200 (99.50%) [97.22%, 99.91%] | TermRet=9/200 (4.50%) [2.39%, 8.33%] | PPL=48.34 | LocKL=3.0596
+    Seed 1: ImmEff=198/200 (99.00%) [96.43%, 99.73%] | TermRet=13/200 (6.50%) [3.84%, 10.80%] | PPL=54.32 | LocKL=2.7423
+    Seed 2: ImmEff=198/200 (99.00%) [96.43%, 99.73%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | PPL=50.67 | LocKL=2.5149
+  Arm: r1_magnitude_only
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | PPL=58.33 | LocKL=3.1795
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | PPL=54.48 | LocKL=2.6430
+    Seed 2: ImmEff=199/200 (99.50%) [97.22%, 99.91%] | TermRet=17/200 (8.50%) [5.37%, 13.19%] | PPL=53.32 | LocKL=2.6652
+  Arm: r1_rank_matched_random
+    Seed 0: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=8/200 (4.00%) [2.04%, 7.69%] | PPL=62.51 | LocKL=3.0145
+    Seed 1: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=14/200 (7.00%) [4.22%, 11.41%] | PPL=58.19 | LocKL=2.7178
+    Seed 2: ImmEff=200/200 (100.00%) [98.12%, 100.00%] | TermRet=11/200 (5.50%) [3.10%, 9.58%] | PPL=55.14 | LocKL=2.7696
+
+--- [Primary Readout: Perplexity & Locality KL Panel (Directive S0-5A Part 4)] ---
+=================================================================================================================================================
+Arm                      | Seed 0 (PPL/KL)    | Seed 1 (PPL/KL)    | Seed 2 (PPL/KL)    | Mean (PPL/KL)      | PPL Range [min, max]   | Delta A Damage
+-------------------------------------------------------------------------------------------------------------------------------------------------
+Arm A (unconstrained)    | 62.54 / 3.0152     | 58.20 / 2.7174     | 55.14 / 2.7778     | 58.62 / 2.8368     | [55.14, 62.54]         | 1.0000
+Arm B (causal perstep)   | 48.34 / 3.0596     | 54.32 / 2.7423     | 50.67 / 2.5149     | 51.11 / 2.7723     | [48.34, 54.32]         | 0.6674
+Arm F (magnitude only)   | 58.33 / 3.1795     | 54.48 / 2.6430     | 53.32 / 2.6652     | 55.38 / 2.8292     | [53.32, 58.33]         | 0.8563
+Arm D (rank-1 random)    | 62.51 / 3.0145     | 58.19 / 2.7178     | 55.14 / 2.7696     | 58.61 / 2.8340     | [55.14, 62.51]         | 0.9996
+=================================================================================================================================================
+
+--- [Primary Question Generated Verdicts (Directive S0-5A Part 4)] ---
+  Is arm B's perplexity range disjoint from arm A's? : YES (Arm B [48.34, 54.32] vs Arm A [55.14, 62.54])
+  Is arm B's perplexity range disjoint from arm F's? : NO (Arm B [48.34, 54.32] vs Arm F [53.32, 58.33])
+  Is arm F's perplexity range disjoint from arm A's? : NO (Arm F [53.32, 58.33] vs Arm A [55.14, 62.54])
+
+  Interpretation Protocol (Fixed in advance):
+                     If arm F ≈ arm B: the effect is step size. No subspace mechanism. Report it.
+                     If arm F ≈ arm A and arm B is better than both: direction matters independently of magnitude. This is a mechanism result.
+  [SELECTED VERDICT] If B and F overlap each other and both sit between A and better: the run is underpowered at three seeds. Scale seeds, not arms.
+
+--- [Arm F Scale Factors alpha_B(t) Provenance Audit (Directive S0-5A Part 3, Item 1)] ---
+===============================================================================================
+Seed / Scope         | Mean alpha_B     | Min alpha_B      | Max alpha_B      | Provenance
+-----------------------------------------------------------------------------------------------
+Seed 0               | 0.7075           | 0.2055           | 1.0000           | Measured in-run from Arm B
+Seed 1               | 0.6959           | 0.1649           | 1.0000           | Measured in-run from Arm B
+Seed 2               | 0.7097           | 0.0405           | 1.0000           | Measured in-run from Arm B
+-----------------------------------------------------------------------------------------------
+Pooled (600 facts)   | 0.7044           | 0.0405           | 1.0000           | Measured in-run from Arm B
+===============================================================================================
+  Provenance Assertion: All scale factors were measured dynamically in-run from Arm B (0 values carried from prior run tables).
+
+--- [Counterfactual Post-Hoc Probe (Directive S0-5A Part 2)] ---
+  NON-SEQUENTIAL PROBE — NO RETENTION OR QUALITY METRICS
+===================================================================================================================
+Seed / Scope         | Post-Hoc Revert Rate (Wilson 95-pct CI)    | Row SF / Align       | Matrix SF / Align
+-------------------------------------------------------------------------------------------------------------------
+Seed 0               | 188/200 (94.00%) [89.81%, 96.53%]          | 0.1102 / 0.9892     | 0.1138 / 0.9888
+Seed 1               | 189/200 (94.50%) [90.42%, 96.90%]          | 0.1111 / 0.9892     | 0.1140 / 0.9889
+Seed 2               | 181/200 (90.50%) [85.64%, 93.83%]          | 0.1086 / 0.9894     | 0.1117 / 0.9890
+-------------------------------------------------------------------------------------------------------------------
+Pooled (600 facts)   | 558/600 (93.00%) [90.67%, 94.78%]          | 0.1099 / 0.9893     | 0.1132 / 0.9889
+===================================================================================================================
+
+--- [Counterfactual Revert Rate Binned by Surviving Fraction (5 Quintiles)] ---
+===================================================================================================================
+Quintile Bin     | SF Range (Row)           | Revert Rate (Wilson 95-pct CI)             | Bin Edges
+-------------------------------------------------------------------------------------------------------------------
+Bin 0            | [0.0174, 0.0923]         | 108/120 (90.00%) [83.33%, 94.19%]          | N=120
+Bin 1            | [0.0923, 0.0982]         | 113/120 (94.17%) [88.45%, 97.15%]          | N=120
+Bin 2            | [0.0982, 0.1040]         | 114/120 (95.00%) [89.52%, 97.69%]          | N=120
+Bin 3            | [0.1041, 0.1237]         | 112/120 (93.33%) [87.39%, 96.58%]          | N=120
+Bin 4            | [0.1238, 1.0000]         | 111/120 (92.50%) [86.36%, 96.00%]          | N=120
+===================================================================================================================
+  Reversion Pattern Assessment: Threshold-like: Reversion occurs sharply across surviving fraction boundary.
+
+--- [Methodological Contrast: Counterfactual Probe vs Sequential Post-Hoc] ---
+  Counterfactual Probe Revert Rate : 558/600 (93.00%) [90.67%, 94.78%] (Evaluated on Arm A's unconstrained updates)
+  S0-4 Sequential Post-Hoc Efficacy: 117/600 (19.50%) [16.53%, 22.86%] (Evaluated on sequential training)
+  Estimand Distinction Statement   : Counterfactual probe measures instantaneous projection reversion on unconstrained weights;
+                                     sequential post-hoc includes up to 199 edits of compounding trajectory divergence.
+
+--- [Recency Profile (10 Bins of 20 Edits across 3 Seeds)] ---
+===============================================================================================
+Bin Range (Edits)    | Arm B Retention                  | Arm A Retention                 
+-----------------------------------------------------------------------------------------------
+Edits 001 - 020       | 5/60 (8.33%) [3.61%, 18.07%]     | 3/60 (5.00%) [1.71%, 13.70%]    
+Edits 021 - 040       | 3/60 (5.00%) [1.71%, 13.70%]     | 3/60 (5.00%) [1.71%, 13.70%]    
+Edits 041 - 060       | 0/60 (0.00%) [0.00%, 6.02%]      | 0/60 (0.00%) [0.00%, 6.02%]     
+Edits 061 - 080       | 4/60 (6.67%) [2.62%, 15.93%]     | 2/60 (3.33%) [0.92%, 11.36%]    
+Edits 081 - 100       | 2/60 (3.33%) [0.92%, 11.36%]     | 4/60 (6.67%) [2.62%, 15.93%]    
+Edits 101 - 120       | 3/60 (5.00%) [1.71%, 13.70%]     | 3/60 (5.00%) [1.71%, 13.70%]    
+Edits 121 - 140       | 1/60 (1.67%) [0.29%, 8.86%]      | 2/60 (3.33%) [0.92%, 11.36%]    
+Edits 141 - 160       | 3/60 (5.00%) [1.71%, 13.70%]     | 1/60 (1.67%) [0.29%, 8.86%]     
+Edits 161 - 180       | 3/60 (5.00%) [1.71%, 13.70%]     | 2/60 (3.33%) [0.92%, 11.36%]    
+Edits 181 - 200       | 12/60 (20.00%) [11.83%, 31.78%]  | 13/60 (21.67%) [13.12%, 33.62%] 
+===============================================================================================
+  Recency Bin Sum Check (Arm B)     : 36 == 36 (PASSED)
+  Recency Bin Sum Check (Arm A)     : 33 == 33 (PASSED)
+
+--- [Mechanism Diagnostics (Dual Target-Row & Full-Matrix)] ---
+=================================================================================================================================================
+Arm Name                 | Steps (Tot/Mean) | Mean Succ / Exh  | Exhausted (max=25)   | Row SF / Align       | Matrix SF / Align    | Reverted
+-------------------------------------------------------------------------------------------------------------------------------------------------
+r0_unconstrained         | 1989   / 3.31     | 3.31   / 0.00   | 0                    | 1.0000 / 0.0000     | 1.0000 / 0.0000     | 0
+r1_causal_perstep        | 3128   / 5.21     | 5.05   / 25.00  | 5                    | 0.7044 / 0.7001     | 0.7046 / 0.6999     | 0
+r1_magnitude_only        | 2489   / 4.15     | 4.11   / 8.33   | 1                    | 0.1101 / 0.9893     | 0.1132 / 0.9889     | 0
+r1_rank_matched_random   | 1988   / 3.31     | 3.31   / 0.00   | 0                    | 0.9994 / 0.0265     | 0.9994 / 0.0265     | 0
+=================================================================================================================================================
+
+--- [Structural-Invariance Float64 Checksum Audit] ---
+  First Edit (t=1, seed=0) Applied Update Checksum: r0_unconstrained         = 0.00012223
+  Cumulative Sequence (seed=0) Applied Update Checksum: r0_unconstrained         = 0.04022141
+  First Edit (t=1, seed=0) Applied Update Checksum: r1_causal_perstep        = 0.00012223
+  Cumulative Sequence (seed=0) Applied Update Checksum: r1_causal_perstep        = 0.03131341
+  First Edit (t=1, seed=0) Applied Update Checksum: r1_magnitude_only        = 0.00012223
+  Cumulative Sequence (seed=0) Applied Update Checksum: r1_magnitude_only        = 0.04436378
+  First Edit (t=1, seed=0) Applied Update Checksum: r1_rank_matched_random   = 0.00012223
+  Cumulative Sequence (seed=0) Applied Update Checksum: r1_rank_matched_random   = 0.04135392
+  Structural Invariance Outcome: PASSED (All four experimental arms produce distinct sequence updates).
+
+--- [Line-Item Step Attribution Accounting Table] ---
+===============================================================================================
+Item / Subsystem                     | Seed   | Steps Consumed   | Accounting Note
+-----------------------------------------------------------------------------------------------
+control:wrong_target                 | 0      | 646              | Primary execution
+control:wrong_target                 | 1      | 688              | Primary execution
+control:wrong_target                 | 2      | 658              | Primary execution
+arm:r0_unconstrained                 | 0      | 669              | Shared positive control B2
+arm:r0_unconstrained                 | 1      | 664              | Shared positive control B2
+arm:r0_unconstrained                 | 2      | 656              | Shared positive control B2
+arm:r1_causal_perstep                | 0      | 1065             | Primary execution
+arm:r1_causal_perstep                | 1      | 1049             | Primary execution
+arm:r1_causal_perstep                | 2      | 1014             | Primary execution
+arm:r1_magnitude_only                | 0      | 844              | Primary execution
+arm:r1_magnitude_only                | 1      | 824              | Primary execution
+arm:r1_magnitude_only                | 2      | 821              | Primary execution
+arm:r1_rank_matched_random           | 0      | 668              | Primary execution
+arm:r1_rank_matched_random           | 1      | 665              | Primary execution
+arm:r1_rank_matched_random           | 2      | 655              | Primary execution
+arm:c_posthoc_counterfactual         | ALL    | 0                | Non-sequential probe (0 steps)
+-----------------------------------------------------------------------------------------------
+Sum of Line-Item Steps               | ALL    | 11586            | Sum
+Global Optimizer Steps Counter       | ALL    | 11586            | Global tally
+Unexplained Attribution Delta        | ALL    | 0                | Delta == 0
+===============================================================================================
+
+--- [Step vs Sample Counter Derivation] ---
+  Counter Derivation: Batch size = 1 (each SGD step processes exactly 1 fact prompt).
+  Relationship      : Total Samples Seen is identically derived from Total Optimizer Steps (1 sample / step).
+
+--- [Wall-Clock Budget Audit] ---
+  Projected Compute Wall-Clock: 2400.0 s
+  Actual Compute Wall-Clock   : 4412.7 s
+
+  Artifact Written            : experiments/results/s0_5.json
+
+===================================================================================================================
+ DIRECTIVE S0-5 COMPLETE: ALL MEASUREMENTS, PERPLEXITY TEST, AND DIAGNOSTICS EXECUTED
+===================================================================================================================
+SCRIPT_EXIT=0
