@@ -82,11 +82,12 @@ def edit_fact_sgd(
         for _ in range(max_steps):
             steps_taken += 1
             optimizer.zero_grad(); out = model(input_ids, labels=labels)
-            prompt_logits = out.logits[0, prompt_len - 1, :]
-            val_primary = prompt_logits[primary_tok]
-            top2_vals, top2_idx = torch.topk(prompt_logits, 2)
-            runner_up = top2_vals[1] if top2_idx[0].item() == primary_tok else top2_vals[0]
-            margin_val = float((val_primary - runner_up).item())
+            with torch.no_grad():
+                prompt_logits = out.logits[0, prompt_len - 1, :].detach()
+                val_primary = prompt_logits[primary_tok].item()
+                top2_vals, top2_idx = torch.topk(prompt_logits, 2)
+                runner_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
+                margin_val = float(val_primary - runner_up)
             out.loss.backward(); del out
             g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
             if arm_mode == "r1_causal_perstep" and Q_causal is not None and Q_causal.numel() > 0:
@@ -200,14 +201,16 @@ def main():
     for delta_p in MARGINS:
         t_p_start = time.time(); configure_determinism(seed=0)
         m_pilot = GPT2LMHeadModel.from_pretrained(model_name, revision=pinned_revision).to(device)
-        edit_p_res = []
+        edit_p_res = []; cum_applied_p = torch.zeros_like(m_pilot.lm_head.weight.data); first_upd_p = None
         max_st = 25 if delta_p == 0.0 else 100
-        for f in sequences[0]:
+        for t_idx, f in enumerate(sequences[0]):
             r_p = edit_fact_sgd(m_pilot, tokenizer, f, lr=3.0e-05, max_steps=max_st, delta=delta_p, device=device, train_mode=False, arm_mode="r0_unconstrained")
+            if t_idx == 0: first_upd_p = r_p["delta_applied"].clone()
+            cum_applied_p += r_p["delta_applied"]; del r_p["delta_applied"]
             edit_p_res.append(r_p)
         ev_p = evaluate_sequence_metrics(m_pilot, sequences[0], edit_p_res, f"pilot_d{delta_p}_s0", f"r0_unconstrained_d{delta_p}", fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device)
         t_p_elapsed = time.time() - t_p_start
-        pilot_times[delta_p] = t_p_elapsed; pilot_res_s0[delta_p] = (ev_p, edit_p_res)
+        pilot_times[delta_p] = t_p_elapsed; pilot_res_s0[delta_p] = (ev_p, edit_p_res, first_upd_p, cum_applied_p)
         print(f"  Pilot Arm A Seed 0 delta={delta_p:<3.1f} : {t_p_elapsed:.2f} s | ImmEff={format_wilson_rate(ev_p['immediate_efficacy'])} | Steps={ev_p['optimizer_steps']}")
         del m_pilot; gc.collect(); torch.cuda.empty_cache()
 
@@ -284,7 +287,7 @@ def main():
             subspace_mgr.add_update(res_e["delta_target_vec"]); cum_applied += res_e["delta_applied"]
             total_edits_pythagorean_asserted += 1
             if s == 0 and t_num == 1: seed0_first_edit_updates["r1_causal_perstep"] = res_e["delta_applied"].clone()
-            edit_res.append(res_e)
+            del res_e["delta_applied"]; edit_res.append(res_e)
         if s == 0: seed0_cumulative_updates["r1_causal_perstep"] = cum_applied.clone()
         s_steps = sum(r["steps_taken"] for r in edit_res); total_optimizer_steps_global += s_steps
         line_item_steps.append({"item": "arm:r1_causal_perstep_d0.0", "seed": s, "steps": s_steps, "shared": False})
@@ -305,7 +308,7 @@ def main():
             res_e = edit_fact_sgd(m_arm, tokenizer, f, lr=3.0e-05, max_steps=25, delta=0.0, device=device, train_mode=False, arm_mode="r1_magnitude_only", alpha_scale=alpha_val)
             cum_applied += res_e["delta_applied"]
             if s == 0 and t_num == 1: seed0_first_edit_updates["r1_magnitude_only"] = res_e["delta_applied"].clone()
-            edit_res.append(res_e)
+            del res_e["delta_applied"]; edit_res.append(res_e)
         if s == 0: seed0_cumulative_updates["r1_magnitude_only"] = cum_applied.clone()
         s_steps = sum(r["steps_taken"] for r in edit_res); total_optimizer_steps_global += s_steps
         line_item_steps.append({"item": "arm:r1_magnitude_only_d0.0", "seed": s, "steps": s_steps, "shared": False})
@@ -321,12 +324,12 @@ def main():
         per_seed_a = {}
         for s in SEEDS:
             if s == 0:
-                ev_a0, edit_res_a0 = pilot_res_s0[delta_val]
+                ev_a0, edit_res_a0, first_upd_a0, cum_upd_a0 = pilot_res_s0[delta_val]
                 per_seed_a[0] = ev_a0
                 s0_steps = sum(r["steps_taken"] for r in edit_res_a0); total_optimizer_steps_global += s0_steps
                 line_item_steps.append({"item": f"arm:{c_label}", "seed": 0, "steps": s0_steps, "shared": (delta_val == 0.0)})
-                seed0_first_edit_updates[c_label] = edit_res_a0[0]["delta_applied"].clone()
-                seed0_cumulative_updates[c_label] = sum([r["delta_applied"] for r in edit_res_a0], torch.zeros_like(edit_res_a0[0]["delta_applied"]))
+                seed0_first_edit_updates[c_label] = first_upd_a0
+                seed0_cumulative_updates[c_label] = cum_upd_a0
                 print(f"    Seed 0 (from pilot): ImmEff={format_wilson_rate(ev_a0['immediate_efficacy'])} | TermRet={format_wilson_rate(ev_a0['terminal_retention'])} | Steps={ev_a0['optimizer_steps']}")
                 continue
             configure_determinism(seed=s)
@@ -338,7 +341,7 @@ def main():
                 Q_unapp = subspace_unapplied.get_projection_matrix(1)
                 res_e = edit_fact_sgd(m_arm, tokenizer, f, lr=3.0e-05, max_steps=max_st, delta=delta_val, device=device, train_mode=False, arm_mode="r0_unconstrained", Q_causal=Q_unapp)
                 subspace_unapplied.add_update(res_e["delta_target_vec"])
-                edit_res.append(res_e)
+                del res_e["delta_applied"]; edit_res.append(res_e)
             s_steps = sum(r["steps_taken"] for r in edit_res); total_optimizer_steps_global += s_steps
             line_item_steps.append({"item": f"arm:{c_label}", "seed": s, "steps": s_steps, "shared": (delta_val == 0.0 and s < 3)})
             ev_a = evaluate_sequence_metrics(m_arm, sequences[s], edit_res, f"{c_label}_s{s}", c_label, fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device)
