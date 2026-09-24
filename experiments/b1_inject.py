@@ -502,11 +502,14 @@ def main():
     ]
     paired_results = []
     for c1, c2, lbl in comparisons:
+        ppl_d = sum(cond_results[c1][s]["perplexity"] - cond_results[c2][s]["perplexity"] for s in SEEDS) / 6.0
+        kl_d = sum(cond_results[c1][s]["locality_kl"] - cond_results[c2][s]["locality_kl"] for s in SEEDS) / 6.0
+        dmg_agree = (ppl_d * kl_d >= 0)
         for m_name in ["terminal_retention", "perplexity", "locality_kl"]:
             v1 = [cond_results[c1][s][m_name].numerator if hasattr(cond_results[c1][s][m_name], "numerator") else cond_results[c1][s][m_name] for s in SEEDS]
             v2 = [cond_results[c2][s][m_name].numerator if hasattr(cond_results[c2][s][m_name], "numerator") else cond_results[c2][s][m_name] for s in SEEDS]
             st = compute_paired_stats(v1, v2)
-            sign_agree = (st["t_stat"] >= 0 and st["mean_diff"] >= 0) or (st["t_stat"] <= 0 and st["mean_diff"] <= 0)
+            sign_agree = dmg_agree if m_name in ["perplexity", "locality_kl"] else ((st["t_stat"] >= 0 and st["mean_diff"] >= 0) or (st["t_stat"] <= 0 and st["mean_diff"] <= 0))
             paired_results.append({"label": lbl, "metric": m_name, "stats": st, "sign_agreement": sign_agree})
             print(f"{lbl:<34s} | {m_name:<14s} | {st['mean_diff']:<12.4f} | {st['std_diff']:<12.4f} | {st['t_stat']:<14.4f} | {st['wilcoxon_stat']:<12.1f} | {'YES' if sign_agree else 'NO'}")
     print(paired_border)
