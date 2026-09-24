@@ -63,7 +63,7 @@ def project_orthogonal(grad: torch.Tensor, Q: torch.Tensor) -> torch.Tensor:
     return grad - (grad @ Q) @ Q.T
 
 def edit_fact_sgd(
-    model: nn.Module, tokenizer: Any, fact: Dict[str, Any], lr: float = 3.0e-05, max_steps: int = 25,
+    model: nn.Module, tokenizer: Any, fact: Dict[str, Any], lr: float = 3.0e-05, max_steps: int = 100,
     delta: float = 0.0, device: str = "cuda", train_mode: bool = False, arm_mode: str = "r0_unconstrained",
     Q_causal: Optional[torch.Tensor] = None, alpha_scale: Optional[float] = None
 ) -> Dict[str, Any]:
@@ -73,8 +73,8 @@ def edit_fact_sgd(
     enc_prompt, enc_full = tokenizer(fact["edit_prompt"], return_tensors="pt"), tokenizer(full_text, return_tensors="pt")
     prompt_len = enc_prompt["input_ids"].shape[1]
     input_ids = enc_full["input_ids"].to(device); labels = input_ids.clone(); labels[:, :prompt_len] = -100
-    target_tokens = tokenizer.encode(fact["target_token_str"])
-    primary_tok = target_tokens[0] if len(target_tokens) > 0 else 0
+    prompt_ids = enc_prompt["input_ids"].to(device)
+    primary_tok = input_ids[0, prompt_len].item()
     steps_taken, cum_dose, curr_pred, margin_val = 0, 0.0, "", 0.0
     w_pre = model.lm_head.weight.data.clone(); grad_raw_sum = torch.zeros_like(model.lm_head.weight.data)
 
@@ -82,12 +82,6 @@ def edit_fact_sgd(
         for _ in range(max_steps):
             steps_taken += 1
             optimizer.zero_grad(); out = model(input_ids, labels=labels)
-            with torch.no_grad():
-                prompt_logits = out.logits[0, prompt_len - 1, :].detach()
-                val_primary = prompt_logits[primary_tok].item()
-                top2_vals, top2_idx = torch.topk(prompt_logits, 2)
-                runner_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
-                margin_val = float(val_primary - runner_up)
             out.loss.backward(); del out
             g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
             if arm_mode == "r1_causal_perstep" and Q_causal is not None and Q_causal.numel() > 0:
@@ -96,10 +90,26 @@ def edit_fact_sgd(
                 model.lm_head.weight.grad.mul_(alpha_scale)
             step_norm = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in model.parameters() if p.grad is not None)).item()
             cum_dose += (lr * step_norm); optimizer.step()
-            curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
-            if check_match(curr_pred, fact["object"]) and (margin_val >= delta): break
+            if delta == 0.0:
+                curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
+                if check_match(curr_pred, fact["object"]): break
+            else:
+                with torch.no_grad():
+                    p_logits = model(prompt_ids).logits[0, -1, :]
+                    top2_vals, top2_idx = torch.topk(p_logits, 2)
+                    r_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
+                    margin_val = float(p_logits[primary_tok].item() - r_up)
+                if margin_val >= delta:
+                    curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
+                    if check_match(curr_pred, fact["object"]): break
 
-    immediate_match = check_match(curr_pred, fact["object"]) and (margin_val >= delta)
+    with torch.no_grad():
+        p_logits = model(prompt_ids).logits[0, -1, :]
+        top2_vals, top2_idx = torch.topk(p_logits, 2)
+        r_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
+        margin_val = float(p_logits[primary_tok].item() - r_up)
+    if not curr_pred: curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
+    immediate_match = check_match(curr_pred, fact["object"]) if delta == 0.0 else (check_match(curr_pred, fact["object"]) and (margin_val >= delta))
     delta_raw = -lr * grad_raw_sum; row_raw = delta_raw[primary_tok, :]
     sf_mat, al_mat = compute_surviving_fraction(delta_raw, Q_causal), compute_alignment(delta_raw, Q_causal)
     sf_row, al_row = compute_surviving_fraction(row_raw, Q_causal), compute_alignment(row_raw, Q_causal)
@@ -108,7 +118,7 @@ def edit_fact_sgd(
     delta_applied = (model.lm_head.weight.data - w_pre).detach()
     delta_target_vec = delta_applied[primary_tok, :].clone()
     model.zero_grad(set_to_none=True)
-    del optimizer, input_ids, labels, w_pre, grad_raw_sum, delta_raw, row_raw
+    del optimizer, input_ids, labels, prompt_ids, w_pre, grad_raw_sum, delta_raw, row_raw
     return {
         "steps_taken": steps_taken, "cumulative_dose": cum_dose, "immediate_match": immediate_match,
         "primary_tok": primary_tok, "margin_achieved": margin_val, "delta_applied": delta_applied,
@@ -130,8 +140,7 @@ def evaluate_sequence_metrics(m: nn.Module, facts_list: List[Dict[str, Any]], ed
     succeeded_steps = [r["steps_taken"] for r in edit_results if r["immediate_match"]]
     exhausted_steps = [r["steps_taken"] for r in edit_results if not r["immediate_match"]]
     return {
-        "immediate_matches": imm_matches, "terminal_matches": term_matches, "preds": preds,
-        "margins_achieved": [r["margin_achieved"] for r in edit_results],
+        "immediate_matches": imm_matches, "terminal_matches": term_matches, "preds": preds, "margins_achieved": [r["margin_achieved"] for r in edit_results],
         "immediate_efficacy": immediate_efficacy(imm_matches, seq_name, "eval_no_dropout", arm=arm_name, scope="per_seed"),
         "terminal_retention": terminal_retention(preds, facts_list, seq_name, "eval_no_dropout", arm=arm_name, scope="per_seed"),
         "bound_retention": bound_retention(preds, facts_list, rel_modals, seq_name, "eval_no_dropout", arm=arm_name, scope="per_seed"),
@@ -141,9 +150,8 @@ def evaluate_sequence_metrics(m: nn.Module, facts_list: List[Dict[str, Any]], ed
         "mean_steps_succeeded": sum(succeeded_steps)/len(succeeded_steps) if succeeded_steps else 0.0,
         "mean_steps_exhausted": sum(exhausted_steps)/len(exhausted_steps) if exhausted_steps else 0.0,
         "exhausted_count": len(exhausted_steps), "sf_row_mean": sum(r["sf_row"] for r in edit_results)/len(edit_results),
-        "al_row_mean": sum(r["al_row"] for r in edit_results)/len(edit_results),
-        "sf_mat_mean": sum(r["sf_mat"] for r in edit_results)/len(edit_results),
-        "al_mat_mean": sum(r["al_mat"] for r in edit_results)/len(edit_results),
+        "al_row_mean": sum(r["al_row"] for r in edit_results)/len(edit_results), "sf_mat_mean": sum(r["sf_mat"] for r in edit_results)/len(edit_results),
+        "al_mat_mean": sum(r["al_mat"] for r in edit_results)/len(edit_results)
     }
 
 def main():
@@ -202,9 +210,8 @@ def main():
         t_p_start = time.time(); configure_determinism(seed=0)
         m_pilot = GPT2LMHeadModel.from_pretrained(model_name, revision=pinned_revision).to(device)
         edit_p_res = []; cum_applied_p = torch.zeros_like(m_pilot.lm_head.weight.data); first_upd_p = None
-        max_st = 25 if delta_p == 0.0 else 100
         for t_idx, f in enumerate(sequences[0]):
-            r_p = edit_fact_sgd(m_pilot, tokenizer, f, lr=3.0e-05, max_steps=max_st, delta=delta_p, device=device, train_mode=False, arm_mode="r0_unconstrained")
+            r_p = edit_fact_sgd(m_pilot, tokenizer, f, lr=3.0e-05, max_steps=100, delta=delta_p, device=device, train_mode=False, arm_mode="r0_unconstrained")
             if t_idx == 0: first_upd_p = r_p["delta_applied"].clone()
             cum_applied_p += r_p["delta_applied"]; del r_p["delta_applied"]
             edit_p_res.append(r_p)
@@ -218,8 +225,8 @@ def main():
     inflation_factors = {d: pilot_times[d] / t_base for d in MARGINS}
     print(f"  Margin Inflation Factors    : " + ", ".join(f"delta={d:.1f}: {inflation_factors[d]:.2f}x" for d in MARGINS))
     proj_arm_a = sum(6.0 * pilot_times[d] for d in MARGINS)
-    proj_arm_b_f = 12.0 * t_base * 1.5
-    proj_ctrls = 6.0 * t_base * 1.1 + 18.0 * 2.0
+    proj_arm_b_f = 6.0 * t_base * 1.5 + 6.0 * t_base * 1.25
+    proj_ctrls = 6.0 * t_base * 1.05 + 6.0 * 45.0
     projected_seconds = proj_arm_a + proj_arm_b_f + proj_ctrls
     session_cap, budget_limit = 23400.0, 16380.0
     print(f"  Projected Compute Wall-Clock: {projected_seconds:.1f} s (Ceiling Limit: {budget_limit:.1f} s)")
@@ -334,12 +341,10 @@ def main():
                 continue
             configure_determinism(seed=s)
             m_arm = GPT2LMHeadModel.from_pretrained(model_name, revision=pinned_revision).to(device)
-            subspace_unapplied = CausalSubspaceManager(device=device)
-            edit_res = []
-            max_st = 25 if delta_val == 0.0 else 100
+            subspace_unapplied = CausalSubspaceManager(device=device); edit_res = []
             for t_idx, f in enumerate(sequences[s]):
                 Q_unapp = subspace_unapplied.get_projection_matrix(1)
-                res_e = edit_fact_sgd(m_arm, tokenizer, f, lr=3.0e-05, max_steps=max_st, delta=delta_val, device=device, train_mode=False, arm_mode="r0_unconstrained", Q_causal=Q_unapp)
+                res_e = edit_fact_sgd(m_arm, tokenizer, f, lr=3.0e-05, max_steps=100, delta=delta_val, device=device, train_mode=False, arm_mode="r0_unconstrained", Q_causal=Q_unapp)
                 subspace_unapplied.add_update(res_e["delta_target_vec"])
                 del res_e["delta_applied"]; edit_res.append(res_e)
             s_steps = sum(r["steps_taken"] for r in edit_res); total_optimizer_steps_global += s_steps
@@ -464,24 +469,19 @@ def main():
     for c_k in all_conditions:
         t_matches_dict = {s: cond_results[c_k][s]["terminal_matches"] for s in SEEDS}
         h_res = compute_monotone_retention_horizon(t_matches_dict, floor_interval=worst_ctrl_wilson, step_size=10, total_edits=200)
-        horizons_data[c_k] = h_res
-        hk = h_res["horizon_k"]
-        rem = h_res["remainder"]
+        horizons_data[c_k] = h_res; hk, rem = h_res["horizon_k"], h_res["remainder"]
         rem_str = f"{rem['numerator']}/{rem['denominator']} ({rem['rate']*100.0:.2f} pct)" if rem else "N/A"
         print(f"{c_k:<28s} | k = {hk:<16d} | {'YES' if hk > 0 else 'NO':<24s} | {rem_str}")
     print(gate_table_border)
 
     print("\n--- [Tradeoff Curve: Retention Horizon vs WikiText-2 Perplexity Damage] ---")
     base_ppl = 36.03
-    print(gate_table_border); print(f"{'Margin delta':<16s} | {'Horizon k':<14s} | {'PPL Mean':<12s} | {'Delta PPL Damage':<20s} | {'Locality KL'}")
-    print(gate_table_sep)
+    print(gate_table_border); print(f"{'Margin delta':<16s} | {'Horizon k':<14s} | {'PPL Mean':<12s} | {'Delta PPL Damage':<20s} | {'Locality KL'}"); print(gate_table_sep)
     tradeoff_data = []
     for d in MARGINS:
         c_k = f"r0_unconstrained_d{d:.1f}"
-        hk = horizons_data[c_k]["horizon_k"]
-        p_m = primary_panel_data[c_k]["ppl"]; dmg = p_m - base_ppl
-        loc_m = primary_panel_data[c_k]["loc_kl"]
-        tradeoff_data.append({"delta": d, "horizon_k": hk, "ppl": p_m, "damage": dmg, "locality_kl": loc_m})
+        hk = horizons_data[c_k]["horizon_k"]; p_m, loc_m = primary_panel_data[c_k]["ppl"], primary_panel_data[c_k]["loc_kl"]
+        dmg = p_m - base_ppl; tradeoff_data.append({"delta": d, "horizon_k": hk, "ppl": p_m, "damage": dmg, "locality_kl": loc_m})
         print(f"delta = {d:<10.1f} | k = {hk:<10d} | {p_m:<12.2f} | {dmg:<20.2f} | {loc_m:.4f}")
     print(gate_table_border)
 
