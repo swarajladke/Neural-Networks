@@ -79,36 +79,40 @@ def edit_fact_sgd(
     w_pre = model.lm_head.weight.data.clone(); grad_raw_sum = torch.zeros_like(model.lm_head.weight.data)
 
     with torch.set_grad_enabled(True):
-        for _ in range(max_steps):
-            steps_taken += 1
-            optimizer.zero_grad(); out = model(input_ids, labels=labels)
-            out.loss.backward(); del out
-            g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
-            if arm_mode == "r1_causal_perstep" and Q_causal is not None and Q_causal.numel() > 0:
-                model.lm_head.weight.grad.copy_(project_orthogonal(model.lm_head.weight.grad, Q_causal))
-            elif arm_mode == "r1_magnitude_only" and alpha_scale is not None:
-                model.lm_head.weight.grad.mul_(alpha_scale)
-            step_norm = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in model.parameters() if p.grad is not None)).item()
-            cum_dose += (lr * step_norm); optimizer.step()
-            if delta == 0.0:
+        if delta == 0.0:
+            for _ in range(max_steps):
+                steps_taken += 1
+                optimizer.zero_grad(); out = model(input_ids, labels=labels); out.loss.backward(); del out
+                g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
+                if arm_mode == "r1_causal_perstep" and Q_causal is not None and Q_causal.numel() > 0:
+                    model.lm_head.weight.grad.copy_(project_orthogonal(model.lm_head.weight.grad, Q_causal))
+                elif arm_mode == "r1_magnitude_only" and alpha_scale is not None:
+                    model.lm_head.weight.grad.mul_(alpha_scale)
+                step_norm = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in model.parameters() if p.grad is not None)).item()
+                cum_dose += (lr * step_norm); optimizer.step()
                 curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
                 if check_match(curr_pred, fact["object"]): break
-            else:
-                with torch.no_grad():
-                    p_logits = model(prompt_ids).logits[0, -1, :]
-                    top2_vals, top2_idx = torch.topk(p_logits, 2)
+        else:
+            for step_idx in range(max_steps):
+                optimizer.zero_grad(); out = model(input_ids, labels=labels)
+                if step_idx > 0:
+                    p_logits = out.logits[0, prompt_len - 1, :]; top2_vals, top2_idx = torch.topk(p_logits, 2)
                     r_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
                     margin_val = float(p_logits[primary_tok].item() - r_up)
-                if margin_val >= delta:
-                    curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
-                    if check_match(curr_pred, fact["object"]): break
+                    if margin_val >= delta:
+                        curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
+                        if check_match(curr_pred, fact["object"]): break
+                steps_taken += 1; out.loss.backward(); del out
+                g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
+                step_norm = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in model.parameters() if p.grad is not None)).item()
+                cum_dose += (lr * step_norm); optimizer.step()
 
-    with torch.no_grad():
-        p_logits = model(prompt_ids).logits[0, -1, :]
-        top2_vals, top2_idx = torch.topk(p_logits, 2)
-        r_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
-        margin_val = float(p_logits[primary_tok].item() - r_up)
-    if not curr_pred: curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
+    if not curr_pred:
+        with torch.no_grad():
+            p_logits = model(prompt_ids).logits[0, -1, :]; top2_vals, top2_idx = torch.topk(p_logits, 2)
+            r_up = top2_vals[1].item() if top2_idx[0].item() == primary_tok else top2_vals[0].item()
+            margin_val = float(p_logits[primary_tok].item() - r_up)
+        curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
     immediate_match = check_match(curr_pred, fact["object"]) if delta == 0.0 else (check_match(curr_pred, fact["object"]) and (margin_val >= delta))
     delta_raw = -lr * grad_raw_sum; row_raw = delta_raw[primary_tok, :]
     sf_mat, al_mat = compute_surviving_fraction(delta_raw, Q_causal), compute_alignment(delta_raw, Q_causal)
@@ -221,12 +225,11 @@ def main():
         print(f"  Pilot Arm A Seed 0 delta={delta_p:<3.1f} : {t_p_elapsed:.2f} s | ImmEff={format_wilson_rate(ev_p['immediate_efficacy'])} | Steps={ev_p['optimizer_steps']}")
         del m_pilot; gc.collect(); torch.cuda.empty_cache()
 
-    t_base = pilot_times[0.0]
-    inflation_factors = {d: pilot_times[d] / t_base for d in MARGINS}
+    t_base = pilot_times[0.0]; inflation_factors = {d: pilot_times[d] / t_base for d in MARGINS}
     print(f"  Margin Inflation Factors    : " + ", ".join(f"delta={d:.1f}: {inflation_factors[d]:.2f}x" for d in MARGINS))
     proj_arm_a = sum(6.0 * pilot_times[d] for d in MARGINS)
     proj_arm_b_f = 6.0 * t_base * 1.5 + 6.0 * t_base * 1.25
-    proj_ctrls = 6.0 * t_base * 1.05 + 6.0 * 45.0
+    proj_ctrls = 6.0 * (t_base + 35.0)
     projected_seconds = proj_arm_a + proj_arm_b_f + proj_ctrls
     session_cap, budget_limit = 23400.0, 16380.0
     print(f"  Projected Compute Wall-Clock: {projected_seconds:.1f} s (Ceiling Limit: {budget_limit:.1f} s)")
@@ -563,12 +566,9 @@ def main():
         "directive": "S0-6", "producing_commit_sha": producing_commit, "exit_code": 0,
         "hashes": {"facts_json_sha256": facts_sha, "wikitext_slice_sha256": slice_sha, "weight_file_sha256": weight_sha, "control_probes_sha256": ctrl_probe_sha},
         "environment": {"torch": torch.__version__, "transformers": transformers.__version__, "cuda": torch.version.cuda if torch.cuda.is_available() else "N/A", "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU", "pinned_revision": pinned_revision, "fresh_checksum": fresh_checksum},
-        "sequence_hashes": {f"seed_{s}": seq_hashes[s] for s in SEEDS},
-        "multitoken_fractions": {"pinned_1000": [multi_1000, 1000]},
-        "pilot_timing": pilot_times, "inflation_factors": inflation_factors,
-        "controls_pooled": {c: pooled_ctrl_measures[c].pair for c in CONTROL_NAMES},
-        "worst_control": {"name": worst_ctrl_all.name, "pair": worst_ctrl_all.pair},
-        "positive_controls": pos_ctrl_verdicts,
+        "sequence_hashes": {f"seed_{s}": seq_hashes[s] for s in SEEDS}, "multitoken_fractions": {"pinned_1000": [multi_1000, 1000]},
+        "pilot_timing": pilot_times, "inflation_factors": inflation_factors, "controls_pooled": {c: pooled_ctrl_measures[c].pair for c in CONTROL_NAMES},
+        "worst_control": {"name": worst_ctrl_all.name, "pair": worst_ctrl_all.pair}, "positive_controls": pos_ctrl_verdicts,
         "gate_s0_6": {c: {"imm_eff": gate_data[c]["measurement"].pair, "passed": gate_data[c]["passed"], "mean_margin": gate_data[c]["mean_margin"]} for c in gate_data},
         "primary_panel": {c: {k: (primary_panel_data[c][k].pair if hasattr(primary_panel_data[c][k], "pair") else primary_panel_data[c][k]) for k in primary_panel_data[c]} for c in primary_panel_data},
         "conditional_retention": conditional_data,
