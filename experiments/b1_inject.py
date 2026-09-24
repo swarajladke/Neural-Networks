@@ -103,8 +103,8 @@ def edit_fact_sgd(
                         curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, train_mode)
                         if check_match(curr_pred, fact["object"]): break
                 steps_taken += 1; out.loss.backward(); del out
-                g_raw = model.lm_head.weight.grad.clone(); grad_raw_sum += g_raw
-                step_norm = torch.sqrt(sum(torch.sum(p.grad ** 2) for p in model.parameters() if p.grad is not None)).item()
+                grad_raw_sum.add_(model.lm_head.weight.grad)
+                step_norm = torch.linalg.vector_norm(torch.stack([p.grad.detach().norm() for p in model.parameters() if p.grad is not None])).item()
                 cum_dose += (lr * step_norm); optimizer.step()
 
     if not curr_pred:
@@ -228,8 +228,8 @@ def main():
     t_base = pilot_times[0.0]; inflation_factors = {d: pilot_times[d] / t_base for d in MARGINS}
     print(f"  Margin Inflation Factors    : " + ", ".join(f"delta={d:.1f}: {inflation_factors[d]:.2f}x" for d in MARGINS))
     proj_arm_a = sum(6.0 * pilot_times[d] for d in MARGINS)
-    proj_arm_b_f = 6.0 * t_base * 1.5 + 6.0 * t_base * 1.25
-    proj_ctrls = 6.0 * (t_base + 35.0)
+    proj_arm_b_f = 6.0 * (t_base * 1.35) + 6.0 * (t_base * 1.15)
+    proj_ctrls = 6.0 * (t_base * 0.35 + 15.0)
     projected_seconds = proj_arm_a + proj_arm_b_f + proj_ctrls
     session_cap, budget_limit = 23400.0, 16380.0
     print(f"  Projected Compute Wall-Clock: {projected_seconds:.1f} s (Ceiling Limit: {budget_limit:.1f} s)")
