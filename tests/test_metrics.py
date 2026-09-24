@@ -166,7 +166,7 @@ def run_all_tests() -> int:
     tests_run += 1
     caught_ctrl_ret = False
     try:
-        Measurement.from_outcomes([True] * 600, metric="terminal_retention", arm="controls_pool", scope="pooled", input_set="test", mode="eval_no_dropout")
+        Measurement.from_outcomes([True] * 1200, metric="terminal_retention", arm="controls_pool", scope="pooled", input_set="test", mode="eval_no_dropout")
     except ValueError as e:
         caught_ctrl_ret = True
         print(f"  Test 1.4 (Control-pool retention raises)    : Caught expected ValueError: {e}")
@@ -246,7 +246,7 @@ def run_all_tests() -> int:
     synth_matches = {}
     for s in range(6):
         synth_matches[s] = [False] * 180 + [True, False] * 10
-    floor_interval = (0.01, 0.05)
+    floor_interval = (0.30, 0.35)
     horiz_res = compute_monotone_retention_horizon(synth_matches, floor_interval, step_size=10, total_edits=200)
     print(f"  Monotone horizon search result              : horizon_k={horiz_res['horizon_k']}")
     assert horiz_res["horizon_k"] == 20, f"Expected horizon_k=20, got {horiz_res['horizon_k']}"
