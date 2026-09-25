@@ -18,7 +18,7 @@ Contract:
 
 import math
 import random
-from typing import Sequence, Tuple, Dict, Any, List
+from typing import Sequence, Tuple, Dict, Any, List, Optional
 
 
 def regularized_incomplete_beta(
