@@ -56,8 +56,12 @@ from experiments.stats import (
     exact_student_t_pvalue,
     exact_wilcoxon_signed_rank_pvalue,
     newcombe_score_interval,
-    compute_paired_stats_with_pvalues
+    compute_paired_stats_with_pvalues,
+    fit_logistic_position_slope,
+    exact_wilcoxon_floor,
+    cluster_bootstrap_slope_difference
 )
+from experiments.s0_7b_audit import compute_maximal_retention_horizon
 
 # ==============================================================================
 # AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
@@ -78,6 +82,14 @@ ALLOW_LIST = {
     "=" * 125: "diagnostic table border line",
     "-" * 125: "diagnostic table separator line",
     ":4096:8": "cublas deterministic workspace configuration flag",
+    " GATE 0: EARLY BIT-REPRODUCTION POSITIVE CONTROL (Seed 0, Arm A delta=0.0)": "Gate 0 title banner",
+    "  Running Arm A (r0_unconstrained_d0.0 across 6 seeds)": "Arm A delta 0 banner",
+    "  Running Arm A (r0_unconstrained_d1.0 across 6 seeds)": "Arm A delta 1 banner",
+    "  Running Arm B (r1_causal_perstep_d0.0 across 6 seeds)": "Arm B banner",
+    "  Running Arm F (r1_magnitude_only_d0.0 across 6 seeds)": "Arm F banner",
+    "--- [Running Untied Arm A (r0_unconstrained_d0.0, seeds 0..2)] ---": "Untied Arm A banner",
+    "--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---": "Untied Arm B banner",
+    "  S0-6 Conclusion 1 Audit      : delta=1.0 max k ({max_k_d1}) vs delta=0.0 max k ({max_k_d0})": "Conclusion 1 condition label",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:
@@ -129,7 +141,12 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "b1_inject.py",
         REPO_ROOT / "experiments" / "run_s0_7a.py",
         REPO_ROOT / "experiments" / "horizon_audit.py",
-        REPO_ROOT / "experiments" / "stats.py"
+        REPO_ROOT / "experiments" / "stats.py",
+        REPO_ROOT / "experiments" / "stage_j.py",
+        REPO_ROOT / "experiments" / "re_emission.py",
+        REPO_ROOT / "experiments" / "weight_tying.py",
+        REPO_ROOT / "experiments" / "s0_7b_audit.py",
+        REPO_ROOT / "experiments" / "run_s0_7b.py"
     ]
     for ts in target_scripts:
         if ts.exists():
@@ -753,7 +770,100 @@ def run_all_tests() -> int:
     print("  Test 3.14 (40-Case Equivalence)      : All 40 cases from commit 4e16084 PASSED identically.")
 
     # --------------------------------------------------------------------------
-    # 3.15 TEST SUITE SUMMARY
+    # 3.15 TEST MAXIMAL-DEPTH ESTIMATOR (DIRECTIVE S0-7b H1)
+    # --------------------------------------------------------------------------
+    print("\n[3.15 Test Maximal-Depth Estimator (Directive S0-7b H1)]")
+    tests_run += 1
+    # Construct 6 seeds x 200 edits with re-separation at k=30 after failure at k=20
+    # Floor: [0.05, 0.10]
+    # k=10 (edits 190..199): 15 successes / 60 total -> Wilson lo ~ 0.158 > 0.10 (separates)
+    # k=20 (edits 180..199): 15 successes / 120 total -> Wilson lo ~ 0.078 <= 0.10 (fails)
+    # k=30 (edits 170..199): 50 successes / 180 total -> Wilson lo ~ 0.218 > 0.10 (re-separates)
+    test_ladder = {s: [False] * 200 for s in range(6)}
+    # Distribute 15 successes across 6 seeds in edits 190..199
+    for idx in range(15):
+        s_i = idx % 6
+        pos_i = 190 + (idx // 6)
+        test_ladder[s_i][pos_i] = True
+    # Edits 180..189 remain False (0 successes)
+    # Distribute 35 successes across 6 seeds in edits 170..179
+    for idx in range(35):
+        s_i = idx % 6
+        pos_i = 170 + (idx // 6)
+        test_ladder[s_i][pos_i] = True
+
+    hz_test = compute_maximal_retention_horizon(test_ladder, (0.05, 0.10))
+    assert hz_test["first_crossing_k"] == 10, f"Expected first-crossing k=10, got {hz_test['first_crossing_k']}"
+    assert hz_test["maximal_depth_k"] == 30, f"Expected maximal-depth k=30, got {hz_test['maximal_depth_k']}"
+    assert hz_test["re_separates"] is True, f"Expected re_separates=True, got {hz_test['re_separates']}"
+    tests_passed += 1
+    print("  Test 3.15 (Maximal-Depth Estimator)   : First-crossing k=10, Maximal-depth k=30, Re-separation PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.16 TEST LOGISTIC SLOPE FIT AGAINST KNOWN SYNTHETIC FIXTURES (DIRECTIVE S0-7b H3)
+    # --------------------------------------------------------------------------
+    print("\n[3.16 Test Logistic Slope Fit against Known Synthetic Fixtures (Directive S0-7b H3)]")
+    # Fixture 1: Strong positive slope (False on [0..99], True on [100..199])
+    tests_run += 1
+    pos_data = [False] * 100 + [True] * 100
+    fit_p = fit_logistic_position_slope(pos_data)
+    assert fit_p["converged"] is True, "Fit should converge for positive slope"
+    assert fit_p["beta1"] > 0.0, f"Expected positive slope, got {fit_p['beta1']}"
+    assert fit_p["grad_norm"] < 1e-4, f"Expected small gradient norm, got {fit_p['grad_norm']}"
+    tests_passed += 1
+
+    # Fixture 2: Strong negative slope (True on [0..99], False on [100..199])
+    tests_run += 1
+    neg_data = [True] * 100 + [False] * 100
+    fit_n = fit_logistic_position_slope(neg_data)
+    assert fit_n["converged"] is True, "Fit should converge for negative slope"
+    assert fit_n["beta1"] < 0.0, f"Expected negative slope, got {fit_n['beta1']}"
+    tests_passed += 1
+
+    # Fixture 3: Flat slope (alternating outcomes)
+    tests_run += 1
+    flat_data = [True, False] * 100
+    fit_f = fit_logistic_position_slope(flat_data)
+    assert fit_f["converged"] is True, "Fit should converge for flat slope"
+    assert abs(fit_f["beta1"]) < 1e-3, f"Expected near-zero slope, got {fit_f['beta1']}"
+    tests_passed += 1
+    print("  Test 3.16 (Logistic Slope Fixtures)   : Positive, negative, and flat fixtures PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.17 TEST PAIRED SEED-LEVEL INFERENCE & WILCOXON FLOOR (DIRECTIVE S0-7b H3)
+    # --------------------------------------------------------------------------
+    print("\n[3.17 Test Paired Seed-Level Inference & Wilcoxon Floor (Directive S0-7b H3)]")
+    tests_run += 1
+    floor_6 = exact_wilcoxon_floor(6)
+    expected_floor = 2.0 / 64.0
+    assert abs(floor_6 - expected_floor) < 1e-9, f"Wilcoxon floor mismatch: {floor_6} != {expected_floor}"
+    tests_passed += 1
+
+    tests_run += 1
+    s_arm1 = [1.8, 2.1, 1.9, 2.4, 2.0, 2.3]
+    s_arm2 = [0.8, 0.9, 0.7, 1.1, 0.8, 1.0]
+    p_stat = compute_paired_stats_with_pvalues(s_arm1, s_arm2)
+    assert p_stat["df"] == 5, f"Expected df=5, got {p_stat['df']}"
+    assert p_stat["mean_diff"] > 1.0, f"Expected mean_diff > 1.0, got {p_stat['mean_diff']}"
+    assert p_stat["t_pvalue"] < 0.001, f"Expected small t_pvalue, got {p_stat['t_pvalue']}"
+    assert abs(p_stat["wilcoxon_pvalue"] - floor_6) < 1e-9, f"Expected Wilcoxon floor p-value, got {p_stat['wilcoxon_pvalue']}"
+    tests_passed += 1
+    print("  Test 3.17 (Paired Inference & Floor)  : Dynamic df=5 derivation and exact Wilcoxon floor PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.18 TEST STAGE J TOKENIZATION CONVENTIONS (DIRECTIVE S0-7b STAGE J)
+    # --------------------------------------------------------------------------
+    print("\n[3.18 Test Stage J Tokenization Conventions (Directive S0-7b Stage J)]")
+    tests_run += 1
+    facts_raw = json.loads((REPO_ROOT / "b1_facts.json").read_bytes().decode("utf-8"))
+    assert len(facts_raw) == 1000, f"Expected 1000 pinned facts, got {len(facts_raw)}"
+    assert all(len(f["object"].strip()) > 0 for f in facts_raw), "All objects must be non-empty"
+    assert all(f["target_token_str"].startswith(" ") for f in facts_raw), "All target_token_str must have leading space"
+    tests_passed += 1
+    print("  Test 3.18 (Stage J Conventions)       : 1,000 facts object and target_token_str structure PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.19 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")

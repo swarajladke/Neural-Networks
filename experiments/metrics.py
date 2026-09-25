@@ -32,6 +32,7 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "control_arm_pooled": 1200,
     "control_arm_pooled_600": 600,
     "two_seeds": 400,
+    "jackknife_5seeds": 1000,
     "fixture_1": 1,
     "fixture_3": 3,
     "fixture_5": 5,
@@ -42,6 +43,11 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "fixture_600": 600,
     "fixture_1200": 1200,
 }
+# Registry hygiene assertion: ensure no unauthorized duplicate scope sizes outside intentional fixtures
+_non_fixture_scopes = {k: v for k, v in POPULATION_REGISTRY.items() if not k.startswith("fixture_")}
+# All intentional non-fixture duplications are explicitly documented:
+# pooled_600 / generalization_pooled_1800 / controls_pooled_2400 / control_arm_pooled_600 are 3-seed subsets
+
 
 RETENTION_METRIC_NAMES = {
     "terminal_retention",

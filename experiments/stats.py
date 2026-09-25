@@ -270,3 +270,183 @@ def bootstrap_proportion_difference(
     idx_lo = int(0.025 * n_boot)
     idx_hi = int(0.975 * n_boot)
     return diff, diffs[idx_lo], diffs[idx_hi]
+
+
+def exact_wilcoxon_floor(n: int) -> float:
+    """
+    Computes the exact minimum possible two-sided p-value for a Wilcoxon
+    signed-rank test with sample size n (full enumeration 2 / 2^n).
+    For n=6, floor is 2 / 64 = 0.03125.
+    """
+    if n < 1:
+        return 1.0
+    return 2.0 / float(1 << n)
+
+
+def fit_logistic_position_slope(
+    outcomes: Sequence[bool],
+    positions: Optional[Sequence[float]] = None,
+    max_iter: int = 50,
+    tol: float = 1e-6,
+    ridge: float = 1e-6
+) -> Dict[str, Any]:
+    """
+    Fits logistic regression of binary outcomes on normalized position:
+      log(p / (1 - p)) = beta_0 + beta_1 * u,  where u in [0, 1].
+    Uses Newton-Raphson with L2 ridge stabilization.
+    Returns:
+      {
+        "beta0": float,
+        "beta1": float,
+        "converged": bool,
+        "iterations": int,
+        "grad_norm": float
+      }
+    """
+    n = len(outcomes)
+    if n == 0:
+        raise ValueError("Cannot fit logistic regression on empty outcomes")
+
+    if positions is None:
+        if n == 1:
+            positions = [0.0]
+        else:
+            denom = float(n - 1)
+            positions = [i / denom for i in range(n)]
+    elif len(positions) != n:
+        raise ValueError(f"Length mismatch: {n} outcomes vs {len(positions)} positions")
+
+    y = [1.0 if v else 0.0 for v in outcomes]
+    y_mean = sum(y) / float(n)
+    clamped_mean = min(max(y_mean, 0.001), 0.999)
+    beta0 = math.log(clamped_mean / (1.0 - clamped_mean))
+    beta1 = 0.0
+
+    converged = False
+    final_grad_norm = 0.0
+    it_count = 0
+
+    for it in range(max_iter):
+        it_count = it + 1
+        # Compute probabilities p_i
+        g0 = -ridge * beta0
+        g1 = -ridge * beta1
+        h00 = ridge
+        h01 = 0.0
+        h11 = ridge
+
+        for yi, ui in zip(y, positions):
+            eta = beta0 + beta1 * ui
+            if eta > 30.0:
+                pi = 1.0 / (1.0 + math.exp(-30.0))
+            elif eta < -30.0:
+                pi = math.exp(-30.0) / (1.0 + math.exp(-30.0))
+            else:
+                pi = 1.0 / (1.0 + math.exp(-eta))
+
+            err = yi - pi
+            g0 += err
+            g1 += err * ui
+            wi = pi * (1.0 - pi)
+            h00 += wi
+            h01 += wi * ui
+            h11 += wi * ui * ui
+
+        final_grad_norm = math.sqrt(g0 * g0 + g1 * g1)
+        if final_grad_norm < tol:
+            converged = True
+            break
+
+        det = h00 * h11 - h01 * h01
+        if det < 1e-12:
+            s0 = g0 / max(h00, 1e-6)
+            s1 = g1 / max(h11, 1e-6)
+        else:
+            s0 = (h11 * g0 - h01 * g1) / det
+            s1 = (-h01 * g0 + h00 * g1) / det
+
+        step_norm = math.sqrt(s0 * s0 + s1 * s1)
+        if step_norm > 5.0:
+            scale = 5.0 / step_norm
+            s0 *= scale
+            s1 *= scale
+
+        beta0 += s0
+        beta1 += s1
+
+    return {
+        "beta0": beta0,
+        "beta1": beta1,
+        "converged": converged,
+        "iterations": it_count,
+        "grad_norm": final_grad_norm
+    }
+
+
+def cluster_bootstrap_slope_difference(
+    seeds_outcomes1: Sequence[Sequence[bool]],
+    seeds_outcomes2: Sequence[Sequence[bool]],
+    n_boot: int = 10000,
+    seed: int = 42
+) -> Dict[str, Any]:
+    """
+    Cluster bootstrap (resampling seeds with replacement) to evaluate
+    the difference in logistic position slopes:
+      Delta beta = beta_1(Arm1) - beta_1(Arm2)
+    Returns:
+      {
+        "diff_point": float,
+        "ci_lo": float,
+        "ci_hi": float,
+        "excludes_zero": bool,
+        "n_clusters": int,
+        "n_boot": int,
+        "rng_seed": seed
+      }
+    """
+    k = len(seeds_outcomes1)
+    if k != len(seeds_outcomes2):
+        raise ValueError(f"Cluster counts differ: {k} vs {len(seeds_outcomes2)}")
+    if k < 2:
+        raise ValueError(f"Need at least 2 clusters, got {k}")
+
+    seq_len = len(seeds_outcomes1[0])
+    u_vals = [i / float(seq_len - 1) for i in range(seq_len)] if seq_len > 1 else [0.0]
+
+    # Pre-compute point estimate on all pooled seeds
+    pool1 = [val for s in seeds_outcomes1 for val in s]
+    pool2 = [val for s in seeds_outcomes2 for val in s]
+    pos_pool = u_vals * k
+
+    fit1 = fit_logistic_position_slope(pool1, pos_pool)
+    fit2 = fit_logistic_position_slope(pool2, pos_pool)
+    diff_point = fit1["beta1"] - fit2["beta1"]
+
+    rng = random.Random(seed)
+    diffs = []
+
+    for _ in range(n_boot):
+        sample_indices = [rng.randint(0, k - 1) for _ in range(k)]
+        b_pool1 = [val for idx in sample_indices for val in seeds_outcomes1[idx]]
+        b_pool2 = [val for idx in sample_indices for val in seeds_outcomes2[idx]]
+
+        b_fit1 = fit_logistic_position_slope(b_pool1, pos_pool)
+        b_fit2 = fit_logistic_position_slope(b_pool2, pos_pool)
+        diffs.append(b_fit1["beta1"] - b_fit2["beta1"])
+
+    diffs.sort()
+    idx_lo = int(0.025 * n_boot)
+    idx_hi = int(0.975 * n_boot)
+    ci_lo = diffs[idx_lo]
+    ci_hi = diffs[idx_hi]
+    excludes_zero = (ci_lo > 0.0 and ci_hi > 0.0) or (ci_lo < 0.0 and ci_hi < 0.0)
+
+    return {
+        "diff_point": diff_point,
+        "ci_lo": ci_lo,
+        "ci_hi": ci_hi,
+        "excludes_zero": excludes_zero,
+        "n_clusters": k,
+        "n_boot": n_boot,
+        "rng_seed": seed
+    }

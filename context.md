@@ -114,13 +114,20 @@ Directive S0-7a conducted a rigorous mathematical and statistical audit of the r
    - Null 95th percentile across all conditions is $k=0$; null 99th percentile for Arm B is $k=30$.
    - One-sided p-value for Arm B: $p = 0.0008$.
    - Pre-registered decision rule: **PASSED**. Binding verdict: **VALID — RETENTION HORIZON SURVIVED NULL CALIBRATION**. The recency-gradient separation observed in Arm B is not an artifact of random sampling.
-4. **Statistical Machinery Corrections:**
+   - **Critical Scope of Permutation Test (Directive S0-7b §1.1):** The permutation test validates ONLY the existence of a recency gradient, not horizon magnitude or any ranking between arms. All five tested conditions passed the null calibration, and `r0_unconstrained_d0.0` passed more strongly ($p = 0.0001$) than `r1_causal_perstep_d0.0` ($p = 0.0008$). No between-arm comparison was performed in S0-6 or S0-7a.
+4. **Correction Notice on Multi-Token Object Target Disclosure (Directive S0-7b §3 & Amendment 1 §A):**
+   - The historical multi-token target object fraction disclosed across reports S0-2 through S0-6 was computed on bare object strings without leading space (`tokenizer.encode(f["object"].strip())`).
+   - In GPT-2 byte-pair encoding, bare strings lack the space character byte, causing word-initial entity words to be split into multiple tokens. In actual training and evaluation (`b1_inject.py` lines 72 and 93), prompt text is concatenated with an intervening space (`f"{edit_prompt} {object}"`), realizing the leading-space convention. Under this leading-space convention, object words tokenize with leading space, yielding a substantially lower multi-token fraction.
+   - Crucially, zero objects in `b1_facts.json` exceed the `max_new_tokens` ceiling of 5 (mean length = 1.36, max = 3). Greedy decoding with `max_new_tokens=5` did not truncate any targets.
+5. **Withdrawal of S0-6 Conclusions 2 and 3 (Directive S0-7b §8.3):**
+   - **S0-6 Conclusion 2 (Causal Projection Achieves Longest Horizon): WITHDRAWN.** Withdrawn on the grounds that between-arm horizon differences are smaller than measured flip margins (flipping 2 facts inside the window destroys the horizon), and no inferential between-arm comparison was performed.
+   - **S0-6 Conclusion 3 (Geometry Adds Value Beyond Magnitude): WITHDRAWN.** Withdrawn on the grounds that between-arm differences fall within noise and flip margins. Any between-arm slope difference demonstrated in Stage H3 of S0-7b represents a new empirical finding and does not retroactively rehabilitate S0-6 claims.
+6. **Statistical Machinery Corrections:**
    - **Proper Two-Proportion Test (D1):** Newcombe hybrid score intervals for the difference between the trailing window proportion and the negative control floor (`wrong_target`: 58/1200) strictly exclude zero for all conditions (Arm B diff: $+0.0306$, 95% CI $[+0.0096, +0.0528]$).
-   - **Exact Paired Inference (D2):** Exact Student's $t$ ($df=5$) and Wilcoxon signed-rank ($n=6, 2^6=64$) tests audited across 18 comparisons:
-     - Arm B vs Arm A Perplexity Claim: **SUPPORTED** under Student's $t$ ($t = -4.18, df = 5, \text{exact } p = 0.0087 < 0.01$). Under Wilcoxon signed-rank, $W=0.0 \implies \text{exact } p = 2/64 = 0.03125$, which exceeds the conservative $\alpha=0.01$ threshold because the minimum achievable p-value for $n=6$ is $0.03125$.
-   - **Generation Token Length Ceiling Audit (D3):** All 1,000 facts in `b1_facts.json` tokenized with GPT-2 tokenizer. Min length = 1, max length = 3, mean = 1.36 tokens. **0/1000 facts exceed 5 tokens (0.00%)**. Greedy decoding with `max_new_tokens=5` did not truncate any targets.
-5. **Serialization Gap Identified & Protocol Updated:**
-   - Analyses B4 (Seed jackknife), B5 (Per-seed $k$), and C1 (Control-arm $k$) are not computable from S0-6 artifacts because raw per-unit outcome vectors were not serialized.
+   - **Exact Paired Inference (D2):** Exact Student's $t$ with dynamic degrees of freedom ($df = \text{len}(\text{diffs}) - 1$) and Wilcoxon signed-rank ($n=6, 2^6=64$) tests audited across 18 comparisons:
+     - Arm B vs Arm A Perplexity Claim: **SUPPORTED** under Student's $t$ ($t = -4.18, df = 5, \text{exact } p = 0.0087 < 0.01$). Under Wilcoxon signed-rank, $W=0.0 \implies \text{exact } p = 2/64 = 0.03125$, which represents the exact theoretical floor for $n=6$.
+7. **Serialization Gap Identified & Protocol Updated:**
+   - Analyses B4 (Seed jackknife), B5 (Per-seed $k$), and C1 (Control-arm $k$) were not computable from S0-6 artifacts because raw per-unit outcome vectors were not serialized.
    - Added Rule 3.7 to `AGENTS.md` mandating raw per-unit boolean outcome vector serialization in all future results JSON artifacts.
 
 | Condition | Observed $k$ | Wilson Interval at $k$ | Signed Gap | Flips to Destroy | Flips to Extend +10 | Null P95 | Null P99 | Permutation $p$ | Two-Prop Newcombe 95% CI |
@@ -133,32 +140,37 @@ Directive S0-7a conducted a rigorous mathematical and statistical audit of the r
 
 ---
 
-## 7. Where the Research Goes Next (Upcoming Directives)
+## 7. Active Directive: Directive S0-7b Execution
 
-1. **Directive S0-7b (Conditional GPU Run):**
-   - Stage E: Weight-tying confound investigation (untied `lm_head` vs tied `wte` gradient dynamics).
-   - Re-emission of S0-6 runs with raw per-edit outcome vectors to unblock Analyses B4, B5, and C1.
-2. **Subspace Rank Scaling ($r > 1$):**
-   - All causal projection runs to date used rank $r=1$. Does expanding projection rank ($r \in \{2, 4, 8\}$) expand trailing separation depth beyond $k=150$ or cause representational collapse?
-3. **Joint Factorization (Margin + Causal Projection):**
-   - S0-6 and S0-7 evaluated Arm B strictly at $\delta=0.0$. Does combining causal projection with the optimal stopping margin ($\delta=1.0$) break through the $k=150$ horizon?
-4. **Intermediate Layer Routing & Associative Storage:**
-   - Overcome readout-layer gradient concentration (95.8%) by routing sequential updates to MLP / Key-Value projections to establish durable long-term retention for early-sequence edits ($k \le 50$).
+Directive S0-7b addresses all unresolved issues from S0-7a under the strict execution order:
+**Stage J -> Gate 0 -> Remainder of Stage F -> Stage G -> Stage H -> Stage I**
+
+1. **Stage J (Tokenization Audit):** Complete disclosure audit measuring object lengths and multi-token fractions under bare vs leading-space conventions at runtime without hardcoded literal percentages.
+2. **Gate 0 (Bit-Reproduction Positive Control):** Seed 0 of `r0_unconstrained_d0.0` re-run first, verifying exact match of optimizer steps (669), immediate efficacy (200/200), and terminal retention (8/200) with early abort protocol.
+3. **Stage F (Re-Emission):** Re-runs 4 intervention arms and 4 negative controls across 6 seeds ($N=1200$) emitting full Rule 3.7 raw boolean outcome vectors.
+4. **Stage G (Uncomputable Analyses):** G0 full-population reproduction, G1 B4 seed jackknife ($N=1000$), G2 B5 per-seed horizons ($N=200$), G3 C1 control horizons, and G4 completion of B2, B3, and C3 ($20 \times 6 = 120$ asserted tests).
+5. **Stage H (Estimator Repair & Between-Arm Test):** H1 maximal separating depth beside first-crossing $k$ (auditing S0-6 Conclusion 1); H2 position-resolved retention curves and first-50-edit retention vs floor; H3 paired seed-level logistic position slope test with dynamic degrees of freedom and exact Wilcoxon floor; H4 selection-corrected fixed-window ($k=100$) Newcombe test.
+6. **Stage I (Weight-Tying Confound):** Unties `lm_head.weight` from `transformer.wte.weight` with verified independent clone; runs untied cells on seeds 0..2 while reusing Stage F tied cells; evaluates Difference-in-Differences for WikiText-2 perplexity.
 
 ---
 
 ## 8. Active Codebase Organization
 
-- `experiments/b1_inject.py`: Primary injection experiment engine (strictly maintained $< 600$ lines, currently 597 lines).
-- `experiments/stats.py`: Standalone statistical engine (incomplete beta, exact Student $t$, exact Wilcoxon signed-rank, Newcombe intervals; zero SciPy dependency).
-- `experiments/horizon_audit.py`: Gate 0 reproduction, step ladders, flip margins, permutation nulls, ceiling audit.
+- `experiments/b1_inject.py`: Primary injection experiment engine (strictly maintained $< 600$ lines, currently 559 lines).
+- `experiments/stats.py`: Standalone statistical engine (incomplete beta, exact Student $t$, exact Wilcoxon signed-rank, Newcombe intervals, Newton-Raphson logistic regression, seed cluster bootstrap; zero SciPy dependency).
+- `experiments/stage_j.py`: Stage J tokenization disclosure audit engine (bare vs leading-space conventions on 1,000 facts).
+- `experiments/re_emission.py`: Empirical budget projection, Gate 0 early abort runner, and Stage F re-emission engine with Rule 3.7 raw vector serialization.
+- `experiments/s0_7b_audit.py`: Stage G and Stage H analysis engine (G0, B4 jackknife, B5 per-seed, C1 control horizons, G4 completion, H1 maximal depth, H2 position curves, H3 paired slope tests, H4 selection correction).
+- `experiments/weight_tying.py`: Stage I weight-tying confound runner with verified independent clones and WikiText-2 PPL diff-in-diffs.
+- `experiments/run_s0_7b.py`: Master orchestrator for Directive S0-7b.
+- `experiments/horizon_audit.py`: S0-7a horizon audit runner (maintained $< 600$ lines).
 - `experiments/run_s0_7a.py`: Master orchestrator for Directive S0-7a.
-- `experiments/metrics.py`: Mathematical metrics, Wilson score confidence intervals, and Provenance Guard 2.0.
+- `experiments/metrics.py`: Mathematical metrics, Wilson score confidence intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and `CausalSubspaceManager`.
-- `tests/test_metrics.py`: 105 pre-flight unit tests and AST literal scanner (covers numeric scanner, closed-form $t$, Wilcoxon full enumeration, Newcombe interval, operating point horizon, and 40-case match equivalence).
-- `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier.
-- `reports/`: Validated markdown reports (`S0-2.md`, `S0-3.md`, `S0-4.md`, `S0-5.md`, `S0-6.md`, `S0-7a.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`).
-- `s0_6_stdout.txt`, `s0_7a_stdout.txt`: Verbatim execution stdout logs.
+- `tests/test_metrics.py`: Pre-flight unit test suite (Tests 1.1-1.6, 2.1-2.4, 3.1-3.18) and AST literal scanner.
+- `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier supporting S0-2 through S0-7b.
+- `reports/`: Validated markdown reports (`S0-2.md`, `S0-3.md`, `S0-4.md`, `S0-5.md`, `S0-6.md`, `S0-7a.md`, `S0-7b.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`, `s0_7b.json`).
+- `s0_6_stdout.txt`, `s0_7a_stdout.txt`, `s0_7b_stdout.txt`: Verbatim execution stdout logs.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
 

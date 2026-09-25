@@ -525,9 +525,12 @@ def audit_paired_pvalues(s0_6_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     for item in paired_list:
         label = item["label"]
         metric = item["metric"]
-        st = item["stats"]
-        t_stat = st["t_stat"]
-        df = st.get("df", 5)
+        if "diffs" not in st:
+            raise ValueError(
+                f"Difference vector 'diffs' is absent from paired statistic '{label} / {metric}'. "
+                "Cannot derive degrees of freedom from data."
+            )
+        df = len(st["diffs"]) - 1
         w_stat = st["wilcoxon_stat"]
 
         t_pval = exact_student_t_pvalue(t_stat, df)
