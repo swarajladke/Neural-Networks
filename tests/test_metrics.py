@@ -793,9 +793,8 @@ def run_all_tests() -> int:
         s_i = idx % 6
         pos_i = 190 + (idx // 6)
         test_ladder[s_i][pos_i] = True
-    # Edits 180..189 remain False (0 successes)
-    # Distribute 35 successes across 6 seeds in edits 170..179
-    for idx in range(35):
+    # Distribute 11 successes across 6 seeds in edits 170..179 (total 26 successes across 170..199)
+    for idx in range(11):
         s_i = idx % 6
         pos_i = 170 + (idx // 6)
         test_ladder[s_i][pos_i] = True
