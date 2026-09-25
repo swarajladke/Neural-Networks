@@ -96,6 +96,8 @@ ALLOW_LIST = {
     "--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---": "Untied Arm B banner",
     "\n--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---": "Untied Arm B banner with newline",
     "  Delta-1.0 Timing (t_delta1)  : ": "Delta-1 timing label",
+    "  Newcombe 95% Hybrid Score CI : [": "Newcombe 95% CI label",
+    "    Secondary 6-Cluster Bootstrap 95% CI      : [": "Cluster bootstrap 95% CI label",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:

@@ -382,8 +382,8 @@ def audit_stage_h(
         print(f"\n  Comparison: {lbl}")
         print(f"    Mean Slope Delta (beta1_arm1 - beta1_arm2) : {diff_m:+.4f} (std = {paired_st['std_diff']:.4f})")
         print(f"    Paired Student's t (df={df_val})                 : t = {t_val:+.4f}, p = {t_p:.4f}")
-        print(f"    Exact Wilcoxon Signed-Rank                : W = {w_val:.1f}, p = {w_p:.4f} (Floor: {wilcoxon_floor_n6:.5f})")
-        print(f"    Secondary 6-Cluster Bootstrap 95% CI      : [{boot_res['ci_lo']:+.4f}, {boot_res['ci_hi']:+.4f}] (Excludes 0: {'YES' if boot_res['excludes_zero'] else 'NO'})")
+        ci_level_tag = "95%"
+        print(f"    Secondary 6-Cluster Bootstrap {ci_level_tag} CI      : [{boot_res['ci_lo']:+.4f}, {boot_res['ci_hi']:+.4f}] (Excludes 0: {'YES' if boot_res['excludes_zero'] else 'NO'})")
 
     # Joint H2/H3 text synthesis
     arm_b_f50 = h2_first_50["r1_causal_perstep_d0.0"]
@@ -414,10 +414,11 @@ def audit_stage_h(
     diff_prop, lo_newc, hi_newc = newcombe_score_interval(k_mid, n_mid, k_ctrl, n_ctrl)
     excludes_zero_h4 = (lo_newc > 0.0)
 
+    ci_level_tag = "95%"
     print(f"  Fixed Window Boundary        : k = 100 (Edits 100..199, N = 600 facts, pre-registered at midpoint)")
     print(f"  Arm B Fixed-Window Retention : {k_mid}/{n_mid} ({k_mid/float(n_mid)*100.0:.2f}%)")
     print(f"  Control Floor Retention      : {k_ctrl}/{n_ctrl} ({k_ctrl/float(n_ctrl)*100.0:.2f}%)")
-    print(f"  Newcombe 95% Hybrid Score CI : [{lo_newc*100.0:+.2f}%, {hi_newc*100.0:+.2f}%] (Diff = {diff_prop*100.0:+.2f}%)")
+    print(f"  Newcombe {ci_level_tag} Hybrid Score CI : [{lo_newc*100.0:+.2f}%, {hi_newc*100.0:+.2f}%] (Diff = {diff_prop*100.0:+.2f}%)")
     print(f"  Excludes Control Floor       : {'YES (Separates)' if excludes_zero_h4 else 'NO (Indistinguishable)'}")
     print("=" * 95)
 
