@@ -455,6 +455,8 @@ An item marked `[x]` must have its evidence locatable in this report. Ticking an
 
 **14.7 Chat delivery.** When the report is handed to a reviewer, the entire file is pasted, with nothing added, removed, summarized, or rephrased, and no accompanying commentary beyond a single line naming the directive and the commit SHA. The file is the message.
 
+**14.8 Research progress tracking (`context.md`).** After every successful run, report generation, and verification, update `context.md` in the repository root to record current research progress, newly established empirical findings, benchmark tables, producing commit SHA, and next planned directives. This ensures any subsequent agent or collaborator has an immediate, up-to-date briefing of the cumulative state of the research program.
+
 ---
 
 ## 15. Compliance Matrix (Rules 1 to 11)
