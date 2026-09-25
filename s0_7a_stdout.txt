@@ -1,0 +1,449 @@
+===================================================================================================================
+ DIRECTIVE S0-7a: AUDIT AND RECALIBRATION OF THE RETENTION HORIZON ESTIMATOR
+ MANDATE: S0-6 REPRODUCTION, FRAGILITY, PERMUTATION NULL, TWO-PROPORTION TESTS, CEILING AUDIT
+===================================================================================================================
+
+--- [Pre-Flight Test Suite Execution (Directive S0-7a)] ---
+====================================================================================================
+ PRE-FLIGHT TEST SUITE (Directive S0-5 Part 1): Metric Stubs & Provenance Guard 2.0
+====================================================================================================
+
+[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+  [Literal scanner] 0 violation(s) detected in b1_inject.py
+  AST Literal Scanner on b1_inject.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+  [Literal scanner] 0 violation(s) detected in run_s0_7a.py
+  AST Literal Scanner on run_s0_7a.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+  [Literal scanner] 0 violation(s) detected in horizon_audit.py
+  AST Literal Scanner on horizon_audit.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+  [Literal scanner] 0 violation(s) detected in stats.py
+  AST Literal Scanner on stats.py: PASSED (0 unlisted decimal/percent literals).
+
+[PART 1: Provenance Guard 2.0 (Directive S0-5 Part 1)]
+  Test 1.1 (Direct constructor call raises)   : Caught expected TypeError: Measurement cannot be constructed directly. Use Measurement.from_outcomes(...) to guarantee provenance (Directive S0-5 Part 1).
+  Test 1.2 (Missing mode raises)              : Caught expected TypeError: Execution mode must be explicitly declared as a non-empty string (e.g. 'eval_no_dropout')
+  Test 1.3 (Scope mismatch raises)            : Caught expected ValueError: Scope 'pooled' requires denominator 1200, got 33
+  Test 1.4 (Control-pool retention raises)    : Caught expected ValueError: Provenance violation: cannot construct retention measurement on control pool arm 'controls_pool'
+  Test 1.5 (Renderer round-trip)              : 33/600 (5.50%) [3.94%, 7.62%]
+
+[1.6 Loose-Variable Rate Formatting Grep Audit]
+  Test 1.6 (Loose-variable rate formatting)   : 0 violation(s) detected.
+
+[1.7 Principled Reversion Pattern Classifier Test (Directive S0-6)]
+  S0-5 Overlapping bins classification        : FLAT — NO DOSE RESPONSE DETECTED
+  Monotonic non-overlapping bins              : GRADED: Revert rate decreases progressively with increasing surviving fraction.
+
+[1.8 Paired Statistics Unit Test (df=5)]
+  Paired stats (mean diff=2.00, df=5, t=7.7460, W=0)
+
+[1.9 Monotone Retention Horizon Unit Test]
+  Monotone horizon search result              : horizon_k=20
+
+[PART 1.4: Surviving-Fraction & Alignment Independence Proof (Directive S0-5)]
+  Vector v1 (in span(u1)) -> SF = 0.0000 (tol=1e-4), Alignment = 1.0000 (tol=1e-4)
+  Vector v2 (in span(u2)) -> SF = 0.0000 (tol=1e-4), Alignment = 0.0000 (tol=1e-4)
+  Independence Proof: PASSED (SF and Alignment dissociate geometrically in rank-2 subspace).
+
+[PART 1.2: Orthonormality Assertion Audit]
+  Orthonormality Guard: PASSED (Orthonormal passes, non-orthonormal raises).
+
+[PART 1.6: Seven Synthetic Tests with Stated Tolerances]
+  Synthetic 1 (SF inside subspace)     : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 2 (SF orthogonal)          : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 3 (SF 45 deg)              : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Synthetic 4 (SF 3 of 4 unit in r=3)  : Expected 0.5000, Actual 0.5000 (tol=1e-4)
+  Synthetic 5 (Align parallel)         : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 6 (Align orthogonal)       : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 7 (Align 45 deg)           : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Pythagorean Projection Identity     : PASSED on synthetic test cases
+
+[A2.1 Immediate Efficacy vs Terminal Retention Disagreement Fixture]
+  Immediate Efficacy (all took)       : Expected (20, 20), Actual (20, 20) -> 20/20 (100.00%)
+  Terminal Retention (4 survived)     : Expected (4, 20), Actual (4, 20) -> 4/20 (20.00%)
+
+[A2.2 Immediate Efficacy Failure on Exhausted Max Steps]
+  Immediate Efficacy (1 exhausted)    : Expected (2, 3), Actual (2, 3) -> 2/3 (66.67%)
+
+[A2.3 Denominator Equality Across N in {1, 5, 12, 20}]
+  Denominator Assertion               : Strictly equals N for both metrics across N in [1, 5, 12, 20]
+
+[A3. Summary Statistic Reduction Test (S0-2 A3)]
+  Summary stats on incident list      : min=0.0, max=2.0, mean=0.7000
+
+[3.2 Generalization Metric Unit Tests]
+  Test 3.2 (20 facts, 2/3 correct)    : Expected (40, 60), Actual (40, 60) -> 40/60 (66.67%)
+
+[3.3 Retention Metrics Unit Tests on Hand-Counted Fixture]
+  Test 3.3a (Terminal/Raw Retention)  : Expected (3, 5), Actual (3, 5) -> 3/5 (60.00%)
+  Test 3.3b (Bound Retention)        : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+  Test 3.3c (Subj-Discrim Ret)       : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+
+[3.4 Stopping Rule Simulation Tests]
+  Test 3.4a (Terminates on match)     : Expected (3, True), Actual (3, True)
+  Test 3.4b (Terminates at step 1)    : Expected (1, True), Actual (1, True)
+  Test 3.4c (Runs to max_steps)       : Expected (15, False), Actual (15, False)
+  Test 3.4d (Falling loss no match)   : Expected (4, False), Actual (4, False)
+
+[3.5 Proven 12-Case Match & Normalization Equivalence Suite]
+  Test 3.5 (12-Case Equivalence)      : All 12 proven test cases PASSED identically.
+
+[3.6 Control Accounting & Impossible-Value Guard Tests]
+  Test 3.6a (Valid Control Pooling)   : Expanded Sum -> 0 + 1 + 0 + 2 = 3 over 20 + 20 + 20 + 20 = 80
+                                        Pooled Floor -> 3/80 (3.75%), Worst -> pre_edit_baseline: 2/20 (10.00%)
+
+[3.7 Wilson Score Confidence Interval Unit Tests]
+  Test 3.7a (Wilson k=4, n=20)         : lo=0.0807, hi=0.4160
+  Test 3.7b (Wilson k=0, n=20)         : lo=0.0000, hi=0.1611
+
+[3.8 N=200 Sequence Sampling Unit Tests]
+  Test 3.8a (N=200 seed=0 hash)        : 21eb027af79426e0... (200 facts)
+
+[3.9 Causal Subspace Orthogonal Projection Tests]
+  Test 3.9a (Orthogonality norm)       : 0.00000118 (Expected near zero)
+
+[3.10 Incomplete Beta & Exact Student t Distribution Tests (Directive S0-7a)]
+  Test 3.10 (Student t & Incomplete Beta): All closed-form and tabulated tests PASSED.
+
+[3.11 Exact Wilcoxon Signed-Rank Test Tests (Directive S0-7a)]
+  Test 3.11 (Exact Wilcoxon Signed-Rank): All exact full-enumeration tests PASSED.
+
+[3.12 Newcombe Hybrid Score Interval Unit Tests (Directive S0-7a)]
+  Test 3.12 (Newcombe Score Interval)  : Interval calculation PASSED.
+
+[3.13 Retention Horizon at Real Operating Point (Directive S0-7a D4)]
+  Test 3.13 (Real Operating Point)     : First-crossing stopping rule & re-separation discard PASSED.
+
+[3.14 Commit 4e16084 40-Case Full Equivalence Suite (Directive S0-7a D4)]
+  Test 3.14 (40-Case Equivalence)      : All 40 cases from commit 4e16084 PASSED identically.
+
+====================================================================================================
+ PRE-FLIGHT TEST SUMMARY: 105 tests run, 105 tests passed, 0 failures.
+====================================================================================================
+Pre-flight test suite PASSED: zero failures, AST literal scanner clean.
+
+===================================================================================================================
+ STAGE A — GATE 0: POSITIVE CONTROL HORIZON REPRODUCTION
+===================================================================================================================
+  Artifact Path           : /kaggle/working/Neural-Networks/experiments/results/s0_6.json
+  Artifact SHA-256        : 5bfc107955512261560b78d53e3b518f6d4dff8d80797e717e8a1696c5d98c73
+  Producing Commit SHA    : e9ede4e
+  Worst Negative Control  : wrong_target (58/1200)
+  Control Floor Interval  : [0.0376, 0.0620]
+  Gate 0 Status           : PASSED (Exact reproduction across all conditions)
+  Stage A Cumulative Time : 0.21 s
+
+===================================================================================================================
+ STAGE B — ANATOMY AND FRAGILITY OF THE K STATISTIC
+===================================================================================================================
+
+--- [Step Ladder: r1_causal_perstep_d0.0 (Selected Horizon k = 150)] ---
+-------------------------------------------------------------------------------------------------------------------
+k      | Matches        | Rate (Pct) | Wilson Interval          | Signed Gap   | Separates
+-------------------------------------------------------------------------------------------------------------------
+10     | 23/60          | 38.33      | [0.2709, 0.5098]         | +0.2089      | YES
+20     | 28/120         | 23.33      | [0.1667, 0.3166]         | +0.1047      | YES
+30     | 33/180         | 18.33      | [0.1336, 0.2463]         | +0.0717      | YES
+40     | 35/240         | 14.58      | [0.1068, 0.1961]         | +0.0448      | YES
+50     | 38/300         | 12.67      | [0.0937, 0.1691]         | +0.0317      | YES
+60     | 44/360         | 12.22      | [0.0923, 0.1601]         | +0.0303      | YES
+70     | 48/420         | 11.43      | [0.0873, 0.1483]         | +0.0253      | YES
+80     | 48/480         | 10.00      | [0.0763, 0.1301]         | +0.0143      | YES
+90     | 51/540         | 9.44       | [0.0726, 0.1221]         | +0.0106      | YES
+100    | 54/600         | 9.00       | [0.0696, 0.1156]         | +0.0077      | YES
+110    | 58/660         | 8.79       | [0.0686, 0.1119]         | +0.0066      | YES
+120    | 61/720         | 8.47       | [0.0665, 0.1073]         | +0.0045      | YES
+130    | 65/780         | 8.33       | [0.0659, 0.1048]         | +0.0039      | YES
+140    | 71/840         | 8.45       | [0.0676, 0.1053]         | +0.0056      | YES
+150    | 71/900         | 7.89       | [0.0630, 0.0983]         | +0.0010      | YES
+160    | 71/960         | 7.40       | [0.0590, 0.0923]         | -0.0029      | NO
+170    | 76/1020        | 7.45       | [0.0599, 0.0923]         | -0.0020      | NO
+180    | 78/1080        | 7.22       | [0.0583, 0.0892]         | -0.0037      | NO
+190    | 82/1140        | 7.19       | [0.0583, 0.0884]         | -0.0036      | NO
+200    | 85/1200        | 7.08       | [0.0576, 0.0868]         | -0.0043      | NO
+-------------------------------------------------------------------------------------------------------------------
+  Re-separation Detected : NO
+  Flips to Destroy k=150 : 2 matching fact(s) inside trailing window
+  Flips to Extend +10    : 4 fact(s) outside trailing window
+
+--- [Step Ladder: r0_unconstrained_d0.0 (Selected Horizon k = 120)] ---
+-------------------------------------------------------------------------------------------------------------------
+k      | Matches        | Rate (Pct) | Wilson Interval          | Signed Gap   | Separates
+-------------------------------------------------------------------------------------------------------------------
+10     | 23/60          | 38.33      | [0.2709, 0.5098]         | +0.2089      | YES
+20     | 29/120         | 24.17      | [0.1739, 0.3255]         | +0.1119      | YES
+30     | 33/180         | 18.33      | [0.1336, 0.2463]         | +0.0717      | YES
+40     | 35/240         | 14.58      | [0.1068, 0.1961]         | +0.0448      | YES
+50     | 38/300         | 12.67      | [0.0937, 0.1691]         | +0.0317      | YES
+60     | 40/360         | 11.11      | [0.0827, 0.1478]         | +0.0207      | YES
+70     | 44/420         | 10.48      | [0.0790, 0.1377]         | +0.0170      | YES
+80     | 46/480         | 9.58       | [0.0726, 0.1255]         | +0.0106      | YES
+90     | 49/540         | 9.07       | [0.0693, 0.1179]         | +0.0073      | YES
+100    | 51/600         | 8.50       | [0.0652, 0.1100]         | +0.0033      | YES
+110    | 56/660         | 8.48       | [0.0659, 0.1086]         | +0.0039      | YES
+120    | 59/720         | 8.19       | [0.0641, 0.1043]         | +0.0021      | YES
+130    | 61/780         | 7.82       | [0.0614, 0.0992]         | -0.0006      | NO
+140    | 66/840         | 7.86       | [0.0622, 0.0987]         | +0.0003      | YES
+150    | 66/900         | 7.33       | [0.0581, 0.0922]         | -0.0039      | NO
+160    | 67/960         | 6.98       | [0.0553, 0.0877]         | -0.0066      | NO
+170    | 71/1020        | 6.96       | [0.0556, 0.0869]         | -0.0064      | NO
+180    | 74/1080        | 6.85       | [0.0549, 0.0852]         | -0.0070      | NO
+190    | 77/1140        | 6.75       | [0.0544, 0.0836]         | -0.0076      | NO
+200    | 78/1200        | 6.50       | [0.0524, 0.0804]         | -0.0096      | NO
+-------------------------------------------------------------------------------------------------------------------
+  Re-separation Detected : YES
+  Re-separating k Values : [140]
+  First-Crossing Horizon : k = 120
+  Largest Separating k   : k = 140
+  Flips to Destroy k=120 : 2 matching fact(s) inside trailing window
+  Flips to Extend +10    : 1 fact(s) outside trailing window
+
+--- [Step Ladder: r0_unconstrained_d1.0 (Selected Horizon k = 140)] ---
+-------------------------------------------------------------------------------------------------------------------
+k      | Matches        | Rate (Pct) | Wilson Interval          | Signed Gap   | Separates
+-------------------------------------------------------------------------------------------------------------------
+10     | 20/60          | 33.33      | [0.2273, 0.4594]         | +0.1653      | YES
+20     | 26/120         | 21.67      | [0.1524, 0.2985]         | +0.0904      | YES
+30     | 30/180         | 16.67      | [0.1193, 0.2280]         | +0.0573      | YES
+40     | 33/240         | 13.75      | [0.0996, 0.1868]         | +0.0376      | YES
+50     | 36/300         | 12.00      | [0.0880, 0.1617]         | +0.0260      | YES
+60     | 40/360         | 11.11      | [0.0827, 0.1478]         | +0.0207      | YES
+70     | 44/420         | 10.48      | [0.0790, 0.1377]         | +0.0170      | YES
+80     | 45/480         | 9.38       | [0.0708, 0.1231]         | +0.0088      | YES
+90     | 47/540         | 8.70       | [0.0661, 0.1138]         | +0.0041      | YES
+100    | 49/600         | 8.17       | [0.0623, 0.1063]         | +0.0003      | YES
+110    | 55/660         | 8.33       | [0.0646, 0.1069]         | +0.0026      | YES
+120    | 59/720         | 8.19       | [0.0641, 0.1043]         | +0.0021      | YES
+130    | 62/780         | 7.95       | [0.0625, 0.1006]         | +0.0005      | YES
+140    | 67/840         | 7.98       | [0.0633, 0.1001]         | +0.0013      | YES
+150    | 67/900         | 7.44       | [0.0590, 0.0935]         | -0.0029      | NO
+160    | 68/960         | 7.08       | [0.0563, 0.0888]         | -0.0057      | NO
+170    | 73/1020        | 7.16       | [0.0573, 0.0890]         | -0.0047      | NO
+180    | 76/1080        | 7.04       | [0.0566, 0.0872]         | -0.0054      | NO
+190    | 79/1140        | 6.93       | [0.0560, 0.0855]         | -0.0060      | NO
+200    | 81/1200        | 6.75       | [0.0546, 0.0831]         | -0.0073      | NO
+-------------------------------------------------------------------------------------------------------------------
+  Re-separation Detected : NO
+  Flips to Destroy k=140 : 2 matching fact(s) inside trailing window
+  Flips to Extend +10    : 3 fact(s) outside trailing window
+
+--- [Step Ladder: r0_unconstrained_d3.0 (Selected Horizon k = 70)] ---
+-------------------------------------------------------------------------------------------------------------------
+k      | Matches        | Rate (Pct) | Wilson Interval          | Signed Gap   | Separates
+-------------------------------------------------------------------------------------------------------------------
+10     | 20/60          | 33.33      | [0.2273, 0.4594]         | +0.1653      | YES
+20     | 25/120         | 20.83      | [0.1453, 0.2895]         | +0.0833      | YES
+30     | 28/180         | 15.56      | [0.1099, 0.2156]         | +0.0479      | YES
+40     | 31/240         | 12.92      | [0.0925, 0.1775]         | +0.0305      | YES
+50     | 33/300         | 11.00      | [0.0794, 0.1505]         | +0.0174      | YES
+60     | 37/360         | 10.28      | [0.0755, 0.1385]         | +0.0135      | YES
+70     | 40/420         | 9.52       | [0.0707, 0.1271]         | +0.0087      | YES
+80     | 40/480         | 8.33       | [0.0618, 0.1115]         | -0.0002      | NO
+90     | 42/540         | 7.78       | [0.0581, 0.1035]         | -0.0039      | NO
+100    | 45/600         | 7.50       | [0.0565, 0.0989]         | -0.0055      | NO
+110    | 51/660         | 7.73       | [0.0593, 0.1002]         | -0.0027      | NO
+120    | 55/720         | 7.64       | [0.0592, 0.0981]         | -0.0028      | NO
+130    | 58/780         | 7.44       | [0.0580, 0.0949]         | -0.0040      | NO
+140    | 63/840         | 7.50       | [0.0591, 0.0948]         | -0.0029      | NO
+150    | 63/900         | 7.00       | [0.0551, 0.0886]         | -0.0069      | NO
+160    | 64/960         | 6.67       | [0.0526, 0.0842]         | -0.0094      | NO
+170    | 68/1020        | 6.67       | [0.0529, 0.0837]         | -0.0090      | NO
+180    | 71/1080        | 6.57       | [0.0524, 0.0821]         | -0.0095      | NO
+190    | 74/1140        | 6.49       | [0.0520, 0.0807]         | -0.0100      | NO
+200    | 75/1200        | 6.25       | [0.0502, 0.0776]         | -0.0118      | NO
+-------------------------------------------------------------------------------------------------------------------
+  Re-separation Detected : NO
+  Flips to Destroy k=70 : 5 matching fact(s) inside trailing window
+  Flips to Extend +10    : 1 fact(s) outside trailing window
+
+--- [Step Ladder: r0_unconstrained_d6.0 (Selected Horizon k = 70)] ---
+-------------------------------------------------------------------------------------------------------------------
+k      | Matches        | Rate (Pct) | Wilson Interval          | Signed Gap   | Separates
+-------------------------------------------------------------------------------------------------------------------
+10     | 20/60          | 33.33      | [0.2273, 0.4594]         | +0.1653      | YES
+20     | 25/120         | 20.83      | [0.1453, 0.2895]         | +0.0833      | YES
+30     | 28/180         | 15.56      | [0.1099, 0.2156]         | +0.0479      | YES
+40     | 31/240         | 12.92      | [0.0925, 0.1775]         | +0.0305      | YES
+50     | 33/300         | 11.00      | [0.0794, 0.1505]         | +0.0174      | YES
+60     | 37/360         | 10.28      | [0.0755, 0.1385]         | +0.0135      | YES
+70     | 40/420         | 9.52       | [0.0707, 0.1271]         | +0.0087      | YES
+80     | 40/480         | 8.33       | [0.0618, 0.1115]         | -0.0002      | NO
+90     | 42/540         | 7.78       | [0.0581, 0.1035]         | -0.0039      | NO
+100    | 44/600         | 7.33       | [0.0551, 0.0970]         | -0.0069      | NO
+110    | 50/660         | 7.58       | [0.0579, 0.0985]         | -0.0040      | NO
+120    | 54/720         | 7.50       | [0.0579, 0.0966]         | -0.0040      | NO
+130    | 57/780         | 7.31       | [0.0568, 0.0935]         | -0.0051      | NO
+140    | 62/840         | 7.38       | [0.0580, 0.0935]         | -0.0040      | NO
+150    | 62/900         | 6.89       | [0.0541, 0.0873]         | -0.0079      | NO
+160    | 63/960         | 6.56       | [0.0516, 0.0831]         | -0.0103      | NO
+170    | 67/1020        | 6.57       | [0.0521, 0.0826]         | -0.0099      | NO
+180    | 71/1080        | 6.57       | [0.0524, 0.0821]         | -0.0095      | NO
+190    | 75/1140        | 6.58       | [0.0528, 0.0817]         | -0.0092      | NO
+200    | 76/1200        | 6.33       | [0.0509, 0.0786]         | -0.0111      | NO
+-------------------------------------------------------------------------------------------------------------------
+  Re-separation Detected : NO
+  Flips to Destroy k=70 : 5 matching fact(s) inside trailing window
+  Flips to Extend +10    : 1 fact(s) outside trailing window
+
+--- [Audit of Analyses Dependent on Raw Per-Edit Outcomes] ---
+  B4. Seed Jackknife      : NOT COMPUTABLE — per-edit outcome vectors not serialized in S0-6
+                            Required keys: ['terminal_matches (per seed, per edit, 200 booleans x 6 seeds)']
+  B5. Per-Seed Horizon k  : NOT COMPUTABLE — per-edit outcome vectors not serialized in S0-6
+                            Required keys: ['terminal_matches (per seed, per edit, 200 booleans x 6 seeds)']
+  C1. Control-Arm Horizon : NOT COMPUTABLE — per-edit outcome vectors not serialized in S0-6
+                            Required keys: ['control_matches (per edit, 200 prompts x 6 seeds)']
+  Protocol Action         : As mandated by Amendment 1 §B, bounds/estimates are strictly suppressed.
+  Stage B Cumulative Time : 0.22 s
+
+===================================================================================================================
+ STAGE C — NULL CALIBRATION OF K AND MULTIPLICITY AUDIT
+===================================================================================================================
+  Per-Seed Match Parsing from s0_6_stdout.txt: SUCCESS
+
+--- [Recovered Per-Seed Terminal Retention Numerators] ---
+-------------------------------------------------------------------------------------------------------------------
+Condition                    | Per-Seed Counts (Seeds 0..5)     | Sum    | Committed
+-------------------------------------------------------------------------------------------------------------------
+r1_causal_perstep_d0.0       | [9, 13, 14, 16, 18, 15]          | 85     | 85    
+r1_magnitude_only_d0.0       | [8, 11, 17, 16, 17, 20]          | 89     | 89    
+r0_unconstrained_d0.0        | [8, 14, 11, 16, 16, 13]          | 78     | 78    
+r0_unconstrained_d1.0        | [13, 10, 10, 17, 18, 13]         | 81     | 81    
+r0_unconstrained_d3.0        | [15, 10, 10, 12, 17, 11]         | 75     | 75    
+r0_unconstrained_d6.0        | [15, 10, 10, 12, 20, 9]          | 76     | 76    
+-------------------------------------------------------------------------------------------------------------------
+
+  Executing 10,000 Monte Carlo Permutations per Condition (RNG Seed = 42)...
+
+--- [Null Calibration Table (10,000 Permutations, Alpha = 0.05)] ---
+-------------------------------------------------------------------------------------------------------------------
+Condition                  | Obs k  | Null Mean  | Null P95   | Null P99   | One-Sided p  | Separates Null
+-------------------------------------------------------------------------------------------------------------------
+r1_causal_perstep_d0.0     | 150    | 1.29       | 0          | 30         | 0.0008       | YES
+r0_unconstrained_d0.0      | 120    | 0.62       | 0          | 20         | 0.0001       | YES
+r0_unconstrained_d1.0      | 140    | 0.95       | 0          | 20         | 0.0003       | YES
+r0_unconstrained_d3.0      | 70     | 0.45       | 0          | 10         | 0.0003       | YES
+r0_unconstrained_d6.0      | 70     | 0.52       | 0          | 20         | 0.0007       | YES
+-------------------------------------------------------------------------------------------------------------------
+
+--- [Pre-Registered Decision Rule Evaluation (Directive S0-7 Amendment 1 §G)] ---
+  Tests Across S0-6 Sweep : 20 * 6 = 120 tests
+  Family-Wise False Pos   : 4.98 pct
+  Arm B Observed Horizon  : k = 150
+  Arm B Null 95th Pct     : k = 0
+  Arm B Null 99th Pct     : k = 30
+  Arm B One-Sided p-value : 0.0008
+  Decision Rule Status    : PASSED
+  BINDING VERDICT         : VALID — RETENTION HORIZON SURVIVED NULL CALIBRATION
+  Stage C Cumulative Time : 14.65 s
+
+===================================================================================================================
+ STAGE D — STATISTICAL MACHINERY CORRECTIONS AND CEILING AUDIT
+===================================================================================================================
+
+--- [D1. Two-Proportion Test vs Negative Control Floor (wrong_target: 58/1200)] ---
+-------------------------------------------------------------------------------------------------------------------
+Condition                  | Window     | Prop Diff  | Newcombe Interval        | Exclude Zero | Agree Legacy
+-------------------------------------------------------------------------------------------------------------------
+r1_causal_perstep_d0.0     | 71/900     | +0.0306    | [+0.0096, +0.0528]       | YES        | YES
+r0_unconstrained_d0.0      | 59/720     | +0.0336    | [+0.0111, +0.0584]       | YES        | YES
+r0_unconstrained_d1.0      | 67/840     | +0.0314    | [+0.0100, +0.0544]       | YES        | YES
+r0_unconstrained_d3.0      | 40/420     | +0.0469    | [+0.0188, +0.0805]       | YES        | YES
+r0_unconstrained_d6.0      | 40/420     | +0.0469    | [+0.0188, +0.0805]       | YES        | YES
+-------------------------------------------------------------------------------------------------------------------
+
+--- [D2. Paired Inference Exact P-Value Audit (df=5 across 6 seeds)] ---
+-------------------------------------------------------------------------------------------------------------------
+Comparison                         | Metric         | t-stat     | Exact t-p    | Wilcoxon W   | Exact W-p
+-------------------------------------------------------------------------------------------------------------------
+Arm B vs Arm A (delta=0)           | terminal_retention | 1.9415     | 0.1099       | 1.5          | 0.0625      
+Arm B vs Arm A (delta=0)           | perplexity     | -4.1784    | 0.0087       | 0.0          | 0.0312      
+Arm B vs Arm A (delta=0)           | locality_kl    | -1.0424    | 0.3450       | 7.0          | 0.5625      
+Arm B vs Arm F (delta=0)           | terminal_retention | -0.5976    | 0.5761       | 6.0          | 0.4375      
+Arm B vs Arm F (delta=0)           | perplexity     | -3.5338    | 0.0167       | 0.0          | 0.0312      
+Arm B vs Arm F (delta=0)           | locality_kl    | -0.9176    | 0.4009       | 5.0          | 0.3125      
+Arm F vs Arm A (delta=0)           | terminal_retention | 1.1608     | 0.2981       | 2.0          | 0.0938      
+Arm F vs Arm A (delta=0)           | perplexity     | -3.3697    | 0.0199       | 0.0          | 0.0312      
+Arm F vs Arm A (delta=0)           | locality_kl    | -0.8726    | 0.4228       | 7.0          | 0.5625      
+Arm A (delta=1) vs Arm A (delta=0) | terminal_retention | 0.4060     | 0.7015       | 5.5          | 0.3125      
+Arm A (delta=1) vs Arm A (delta=0) | perplexity     | 5.2835     | 0.0032       | 0.0          | 0.0312      
+Arm A (delta=1) vs Arm A (delta=0) | locality_kl    | 8.6418     | 0.0003       | 0.0          | 0.0312      
+Arm A (delta=3) vs Arm A (delta=0) | terminal_retention | -0.2962    | 0.7790       | 7.5          | 0.5625      
+Arm A (delta=3) vs Arm A (delta=0) | perplexity     | 4.3540     | 0.0073       | 0.0          | 0.0312      
+Arm A (delta=3) vs Arm A (delta=0) | locality_kl    | 10.2117    | 0.0002       | 0.0          | 0.0312      
+Arm A (delta=6) vs Arm A (delta=0) | terminal_retention | -0.1715    | 0.8706       | 9.5          | 0.8438      
+Arm A (delta=6) vs Arm A (delta=0) | perplexity     | 4.3281     | 0.0075       | 0.0          | 0.0312      
+Arm A (delta=6) vs Arm A (delta=0) | locality_kl    | 11.8879    | 0.0001       | 0.0          | 0.0312      
+  Arm B vs Arm A Perplexity Claim (alpha threshold = 0.01):
+    Student's t-test (df=5) : SUPPORTED (exact p = 0.008668)
+    Wilcoxon Signed-Rank    : NOT SUPPORTED at threshold (exact p = 0.031250, minimum achievable at n=6 is 2/64 = 0.03125)
+
+--- [D3. Generation Ceiling Audit (max_new_tokens = 5 vs b1_facts.json)] ---
+  Total Pinned Facts      : 1000
+  Object Token Length     : min = 1, max = 3, mean = 1.36
+  Objects Exceeding 5 Tok : 0/1000 (0.00 pct)
+  Affected Relations      : {}
+  Stage D Cumulative Time : 79.05 s
+
+===================================================================================================================
+ SERIALIZING RESULTS ARTIFACT
+===================================================================================================================
+  Artifact Written            : experiments/results/s0_7a.json
+  Total Compute Wall-Clock    : 79.05 s
+===================================================================================================================
+ DIRECTIVE S0-7a COMPLETE: AUDIT AND RECALIBRATION FINISHED
+===================================================================================================================
+SCRIPT_EXIT=0
