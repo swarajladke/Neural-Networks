@@ -2,7 +2,7 @@
 
 **Author:** Swaraj Ladke  
 **Repository:** `swarajladke/Neural-Networks`  
-**Last Updated:** September 25, 2026 (Reflecting Directive S0-6 completion, commit `733fa24`)
+**Last Updated:** September 25, 2026 (Reflecting Directive S0-7a completion, commit `e1286f1`)
 
 ---
 
@@ -31,14 +31,15 @@ The focus is physical learning mechanics, representation geometry, and causal is
 1. **No Measured Value May Be Typed in Source or Text:** Every reported number must be interpolated by format string at runtime from a committed results JSON carrying its producing commit SHA. AST literal scanners (`NUMERIC = re.compile(r"\d+\.\d+|\d+\s*%|%\s*\d+")`) descend into print statements and f-string literals to abort on typed measurements.
 2. **Provenance Guard 2.0:** The `Measurement` primitive cannot be instantiated via public constructor; it is constructible strictly via `Measurement.from_outcomes(outcomes, metric, arm, scope, input_set, mode)` with a module-private sentinel and a closed `POPULATION_REGISTRY`.
 3. **No Zero-Step Results:** A run is valid only if all seeds exit with code 0 and record nonzero optimizer steps and nonzero samples seen. A script that outputs a results table without computing gradients or loading data is fabrication.
-4. **Gate 0 (Positive Control):** Before measuring any new condition, the experiment must re-run and bit-reproduce known prior cells within stated tolerance. (e.g., S0-6 required exact reproduction of S0-5 pinned reference values: [669, 664, 656] steps, 1,989 total, 600/600 efficacy, 33/600 retention across seeds 0–2).
+4. **Gate 0 (Positive Control):** Before measuring any new condition, the experiment must re-run and bit-reproduce known prior cells within stated tolerance.
 5. **Efficacy Gate & Dual Retention Reporting:** No retention or quality metric may be reported from any condition whose pooled immediate injection efficacy is below 90.00%. If an intervention exhausts steps and fails the gate, dual retention reporting is mandatory:
    - **3a Conditional Retention:** Evaluated strictly on the subset of facts that successfully injected.
    - **3b Matched-Subset Comparison:** Evaluated on the unconstrained control arm over the exact identical fact subset.
 6. **Denominator Sum Assertions:** Denominators must equal the exact population the claim addresses. Any combined denominator must be computed as an expanded sum, printed (`20 + 20 + 20 + 20 = 80`), and asserted against the expected population.
 7. **Negative Control Floors:** Every retention claim must be reported against its own negative control floor, never against zero. The worst individual control must always be printed beside pooled figures.
 8. **Single-Artifact Reporting (AGENTS.md Section 14):** Reports are generated strictly by `python tools/make_report.py <directive>`, validated against strict formatting bans (no LaTeX `$`, no raw HTML, no mermaid, no hyperlinks), and verified byte-for-byte (`--verify`).
-9. **Structural Limit:** All primary experiment scripts must remain strictly under 600 lines (`experiments/b1_inject.py` is at 598 lines).
+9. **Structural Limit:** All primary experiment scripts must remain strictly under 600 lines (`experiments/b1_inject.py` is at 597 lines).
+10. **Raw Per-Unit Outcome Serialization (Rule 3.7):** Every count-based result must serialize raw per-unit boolean outcome vectors keyed by seed and within-sequence index into its results JSON.
 
 ---
 
@@ -79,9 +80,7 @@ Established empirical findings across 5 seeds:
 
 ---
 
-## 5. Current Benchmark: Directive S0-6 Empirical Results (Commit `733fa24`)
-
-Directive S0-6 tested the hypothesis that the 20-edit retention horizon (where edits 1–180 retain at $\le 4.44\%$ while edits 181–200 retain at $\approx 20\%$) is an artifact of the greedy zero-margin stopping rule ($\text{margin} = p(y^*) - \max_{j \ne y^*} p(j) \ge 0$).
+## 5. Prior Benchmark: Directive S0-6 Empirical Results (Commit `733fa24`)
 
 S0-6 executed a decoupled factor design sweeping margin $\delta \in \{0.0, 1.0, 3.0, 6.0\}$ in Arm A (`r0_unconstrained`) across 6 seeds (`SEEDS = [0, 1, 2, 3, 4, 5]`, $N=1200$ facts per condition, `max_steps = 100`), while evaluating Arm B (`r1_causal_perstep`) and Arm F (`r1_magnitude_only`) at $\delta = 0.0$ ($N=1200$).
 
@@ -95,47 +94,71 @@ S0-6 executed a decoupled factor design sweeping margin $\delta \in \{0.0, 1.0, 
 | `r1_causal_perstep_d0.0`| 1187/1200 (98.92%) | 85/1200 (7.08%) | 190/3600 (5.28%) | 2.9537 | **50.84** | **$k = 150$** | PASSED |
 | `r1_magnitude_only_d0.0`| 1197/1200 (99.75%) | 89/1200 (7.42%) | 216/3600 (6.00%) | 3.0053 | 56.01 | $k = 140$ | PASSED |
 
-### 5.2 Key Scientific Conclusions
-1. **Margin Scaling and Trailing Separation Depth:**
-   - Shifting from greedy zero-margin ($\delta=0.0$) to $\delta=1.0$ shifts the trailing separation depth from $k=120$ to $k=140$ with minor perplexity growth ($60.71 \to 71.52$). The statistic $k$ represents a trailing-window separation depth, not a count of surviving facts.
-   - Higher margins ($\delta=3.0, 6.0$) cause the trailing separation depth to collapse to $k=70$. Over-optimization degrades base network features, exploding WikiText-2 PPL to $103.26$ and $225.06$.
-   - At $\delta=6.0$, 329 edits exhausted 100 optimizer steps, causing immediate efficacy to fall to **72.58%** (failing Gate 4). Dual retention reporting:
-     - 3a Conditional Retention (successful edits): 55/871 (6.31% [4.88%, 8.13%])
-     - 3b Matched-Subset Comparison (Arm A $\delta=0$ on same facts): 61/871 (7.00% [5.49%, 8.89%])
-2. **Causal Projection and Perplexity Decoupling:**
-   - **Arm B (`r1_causal_perstep` at $\delta=0.0$)** exhibits trailing separation depth $k=150$ (remainder retention $14/300 = 4.67\%$). (Note: Audit S0-7 analyzes the fragility and null calibration of this boundary separation).
-   - Arm B preserved model capability best (**WikiText-2 PPL 50.84** vs Arm A's 60.71; paired $t = -4.18, df = 5, p = 0.0087$), confirming that causal projection decouples injection from general capability destruction.
-3. **Geometry vs Magnitude:**
-   - Magnitude control alone (Arm F) exhibits trailing separation depth $k=140$ and PPL 56.01.
-   - Causal projection (Arm B) achieves trailing separation depth $k=150$ and superior perplexity preservation ($50.84$), confirming geometric orthogonalization provides distinct protective value beyond step-size damping alone.
-4. **Accounting & Protocol Integrity:**
-   - Pre-flight test suite: 49/49 passed; AST literal scanner: 0 violations.
-   - Positive controls passed on seeds 0–2 for all three baseline arms.
-   - Total optimizer steps: 112,667 steps, closing to line-item attribution with **$\Delta = 0$**.
-   - Wall-clock budget: Projected 15,651.0 s, Actual 15,932.9 s ($\le 16,380.0$ s ceiling).
+---
+
+## 6. Current Benchmark: Directive S0-7a Audit and Recalibration (Commit `e1286f1`)
+
+Directive S0-7a conducted a rigorous mathematical and statistical audit of the retention horizon estimator $k$, its fragility, permutation null distribution, exact paired inference, and the evaluation ceiling.
+
+### 6.1 Key Empirical Findings & Recalibration Matrix
+1. **Mathematical Anatomy of the Horizon Statistic:**
+   - The estimator `compute_monotone_retention_horizon` does **not** count surviving facts or measure durable retention across earlier edits.
+   - It measures the **depth of a trailing recency window** $[200-k, 200)$ whose pooled Wilson lower bound strictly exceeds the control floor upper bound ([0.0376, 0.0620] from `wrong_target`: 58/1200) continuously up to the first failing step.
+   - It stops at the first failure and discards any later re-separating steps. In `r0_unconstrained_d0.0`, $k=130$ fails ($61/780 = 7.82\%$, Wilson lo $0.0614 < 0.0620$), but $k=140$ re-separates ($66/840 = 7.86\%$, Wilson lo $0.0622 > 0.0620$).
+2. **Extreme Boundary Fragility:**
+   - The reported horizon $k=150$ in Arm B (`r1_causal_perstep_d0.0`) separates from the control floor by only $+0.0010$ (Wilson interval: [0.0630, 0.0983] vs floor hi $0.0620$).
+   - **Flip Margin to Destroy $k=150$:** Exactly **2 matching facts** flipped to non-matches inside the trailing window of 900 observations collapses the horizon to $k=100$.
+   - **Flip Margin to Extend to $k=160$:** Only **4 facts** outside the window need to flip to match to extend the horizon.
+3. **Null Distribution and Pre-Registered Decision Rule:**
+   - 10,000 Monte Carlo permutations per condition (within-seed and pooled) evaluated the probability of observing $k \ge 150$ under the null hypothesis of uniform, order-independent retention.
+   - Null 95th percentile across all conditions is $k=0$; null 99th percentile for Arm B is $k=30$.
+   - One-sided p-value for Arm B: $p = 0.0008$.
+   - Pre-registered decision rule: **PASSED**. Binding verdict: **VALID — RETENTION HORIZON SURVIVED NULL CALIBRATION**. The recency-gradient separation observed in Arm B is not an artifact of random sampling.
+4. **Statistical Machinery Corrections:**
+   - **Proper Two-Proportion Test (D1):** Newcombe hybrid score intervals for the difference between the trailing window proportion and the negative control floor (`wrong_target`: 58/1200) strictly exclude zero for all conditions (Arm B diff: $+0.0306$, 95% CI $[+0.0096, +0.0528]$).
+   - **Exact Paired Inference (D2):** Exact Student's $t$ ($df=5$) and Wilcoxon signed-rank ($n=6, 2^6=64$) tests audited across 18 comparisons:
+     - Arm B vs Arm A Perplexity Claim: **SUPPORTED** under Student's $t$ ($t = -4.18, df = 5, \text{exact } p = 0.0087 < 0.01$). Under Wilcoxon signed-rank, $W=0.0 \implies \text{exact } p = 2/64 = 0.03125$, which exceeds the conservative $\alpha=0.01$ threshold because the minimum achievable p-value for $n=6$ is $0.03125$.
+   - **Generation Token Length Ceiling Audit (D3):** All 1,000 facts in `b1_facts.json` tokenized with GPT-2 tokenizer. Min length = 1, max length = 3, mean = 1.36 tokens. **0/1000 facts exceed 5 tokens (0.00%)**. Greedy decoding with `max_new_tokens=5` did not truncate any targets.
+5. **Serialization Gap Identified & Protocol Updated:**
+   - Analyses B4 (Seed jackknife), B5 (Per-seed $k$), and C1 (Control-arm $k$) are not computable from S0-6 artifacts because raw per-unit outcome vectors were not serialized.
+   - Added Rule 3.7 to `AGENTS.md` mandating raw per-unit boolean outcome vector serialization in all future results JSON artifacts.
+
+| Condition | Observed $k$ | Wilson Interval at $k$ | Signed Gap | Flips to Destroy | Flips to Extend +10 | Null P95 | Null P99 | Permutation $p$ | Two-Prop Newcombe 95% CI |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `r1_causal_perstep_d0.0` | **150** | [0.0630, 0.0983] | +0.0010 | **2** | 4 | 0 | 30 | **0.0008** | [+0.0096, +0.0528] |
+| `r0_unconstrained_d0.0`  | 120 | [0.0641, 0.1043] | +0.0021 | 2 | 1 | 0 | 20 | 0.0001 | [+0.0111, +0.0584] |
+| `r0_unconstrained_d1.0`  | 140 | [0.0633, 0.1001] | +0.0013 | 2 | 3 | 0 | 20 | 0.0003 | [+0.0100, +0.0544] |
+| `r0_unconstrained_d3.0`  | 70  | [0.0707, 0.1271] | +0.0087 | 5 | 1 | 0 | 10 | 0.0003 | [+0.0188, +0.0805] |
+| `r0_unconstrained_d6.0`  | 70  | [0.0707, 0.1271] | +0.0087 | 5 | 1 | 0 | 20 | 0.0007 | [+0.0188, +0.0805] |
 
 ---
 
-## 6. Where the Research Goes Next (Upcoming Directives)
+## 7. Where the Research Goes Next (Upcoming Directives)
 
-1. **Subspace Rank Scaling ($r > 1$):**
-   All experiments to date utilized rank $r=1$ projection. Does increasing subspace rank ($r \in \{2, 4, 8\}$) protect older memory trajectories beyond $k=150$, or does rank accumulation exhaust the 768-dimensional row space and impede new acquisition?
-2. **Joint Factorization (Margin + Causal Projection):**
-   S0-6 evaluated Arm B strictly at $\delta=0.0$. Does combining causal projection with the optimal stopping margin ($\delta=1.0$) break through the $k=150$ horizon without language degradation?
-3. **Layer Distribution & Internal Memory Consolidation:**
-   With 95.8% of gradient norm landing in the readout layer under unconstrained SGD, can targeted orthogonalization or projection into intermediate MLP / Key-Value layers provide an associative store that protects early-sequence facts (edits 1–50)?
+1. **Directive S0-7b (Conditional GPU Run):**
+   - Stage E: Weight-tying confound investigation (untied `lm_head` vs tied `wte` gradient dynamics).
+   - Re-emission of S0-6 runs with raw per-edit outcome vectors to unblock Analyses B4, B5, and C1.
+2. **Subspace Rank Scaling ($r > 1$):**
+   - All causal projection runs to date used rank $r=1$. Does expanding projection rank ($r \in \{2, 4, 8\}$) expand trailing separation depth beyond $k=150$ or cause representational collapse?
+3. **Joint Factorization (Margin + Causal Projection):**
+   - S0-6 and S0-7 evaluated Arm B strictly at $\delta=0.0$. Does combining causal projection with the optimal stopping margin ($\delta=1.0$) break through the $k=150$ horizon?
+4. **Intermediate Layer Routing & Associative Storage:**
+   - Overcome readout-layer gradient concentration (95.8%) by routing sequential updates to MLP / Key-Value projections to establish durable long-term retention for early-sequence edits ($k \le 50$).
 
 ---
 
-## 7. Active Codebase Organization
+## 8. Active Codebase Organization
 
-The repository has been restructured cleanly:
-- `experiments/b1_inject.py`: Primary injection experiment engine (strictly maintained $< 600$ lines).
+- `experiments/b1_inject.py`: Primary injection experiment engine (strictly maintained $< 600$ lines, currently 597 lines).
+- `experiments/stats.py`: Standalone statistical engine (incomplete beta, exact Student $t$, exact Wilcoxon signed-rank, Newcombe intervals; zero SciPy dependency).
+- `experiments/horizon_audit.py`: Gate 0 reproduction, step ladders, flip margins, permutation nulls, ceiling audit.
+- `experiments/run_s0_7a.py`: Master orchestrator for Directive S0-7a.
 - `experiments/metrics.py`: Mathematical metrics, Wilson score confidence intervals, and Provenance Guard 2.0.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and `CausalSubspaceManager`.
-- `tests/test_metrics.py`: 49 pre-flight unit tests and AST literal scanner.
+- `tests/test_metrics.py`: 105 pre-flight unit tests and AST literal scanner (covers numeric scanner, closed-form $t$, Wilcoxon full enumeration, Newcombe interval, operating point horizon, and 40-case match equivalence).
 - `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier.
-- `reports/`: Validated markdown reports (`S0-2.md`, `S0-3.md`, `S0-4.md`, `S0-5.md`, `S0-6.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`).
-- `s0_6_stdout.txt`: Verbatim execution stdout log.
+- `reports/`: Validated markdown reports (`S0-2.md`, `S0-3.md`, `S0-4.md`, `S0-5.md`, `S0-6.md`, `S0-7a.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`).
+- `s0_6_stdout.txt`, `s0_7a_stdout.txt`: Verbatim execution stdout logs.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
