@@ -286,9 +286,9 @@ def exact_wilcoxon_floor(n: int) -> float:
 def fit_logistic_position_slope(
     outcomes: Sequence[bool],
     positions: Optional[Sequence[float]] = None,
-    max_iter: int = 50,
-    tol: float = 1e-6,
-    ridge: float = 1e-6
+    max_iter: int = 100,
+    tol: float = 1e-4,
+    ridge: float = 1e-3
 ) -> Dict[str, Any]:
     """
     Fits logistic regression of binary outcomes on normalized position:
@@ -366,6 +366,12 @@ def fit_logistic_position_slope(
             s1 = (-h01 * g0 + h00 * g1) / det
 
         step_norm = math.sqrt(s0 * s0 + s1 * s1)
+        if step_norm < tol:
+            converged = True
+            beta0 += s0
+            beta1 += s1
+            break
+
         if step_norm > 5.0:
             scale = 5.0 / step_norm
             s0 *= scale
