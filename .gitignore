@@ -122,6 +122,7 @@ data/
 !predictions_phase_I_to_V.md
 !STATE_OF_RECORD.md
 !docs/AGENTS_v1_2026-08-16.md
+!context.md
 !reports/*.md
 !experiments/results/*.json
 !*s0*_stdout.txt
