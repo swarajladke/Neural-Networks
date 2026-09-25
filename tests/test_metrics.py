@@ -50,6 +50,13 @@ from experiments.metrics import (
     POPULATION_REGISTRY
 )
 from experiments.data import sample_200_facts
+from experiments.stats import (
+    regularized_incomplete_beta,
+    exact_student_t_pvalue,
+    exact_wilcoxon_signed_rank_pvalue,
+    newcombe_score_interval,
+    compute_paired_stats_with_pvalues
+)
 
 # ==============================================================================
 # AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
@@ -114,15 +121,21 @@ def run_all_tests() -> int:
     print("=" * 100)
     
     # --------------------------------------------------------------------------
-    # AST LITERAL SCANNER ON b1_inject.py
+    # AST LITERAL SCANNER ON b1_inject.py, run_s0_7a.py, horizon_audit.py
     # --------------------------------------------------------------------------
     print("\n[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]")
-    target_script = REPO_ROOT / "experiments" / "b1_inject.py"
-    if target_script.exists():
-        tests_run += 1
-        enforce_no_typed_literals(str(target_script))
-        print("  AST Literal Scanner: PASSED (0 unlisted decimal/percent literals).")
-        tests_passed += 1
+    target_scripts = [
+        REPO_ROOT / "experiments" / "b1_inject.py",
+        REPO_ROOT / "experiments" / "run_s0_7a.py",
+        REPO_ROOT / "experiments" / "horizon_audit.py",
+        REPO_ROOT / "experiments" / "stats.py"
+    ]
+    for ts in target_scripts:
+        if ts.exists():
+            tests_run += 1
+            enforce_no_typed_literals(str(ts))
+            print(f"  AST Literal Scanner on {ts.name}: PASSED (0 unlisted decimal/percent literals).")
+            tests_passed += 1
 
     # --------------------------------------------------------------------------
     # PART 1: PROVENANCE GUARD 2.0 (DIRECTIVE S0-5 PART 1)
@@ -582,7 +595,164 @@ def run_all_tests() -> int:
     tests_passed += 1
 
     # --------------------------------------------------------------------------
-    # 3.10 TEST SUITE SUMMARY
+    # 3.10 INCOMPLETE BETA & EXACT STUDENT T-DISTRIBUTION TESTS (DIRECTIVE S0-7a D-1)
+    # --------------------------------------------------------------------------
+    print("\n[3.10 Incomplete Beta & Exact Student t Distribution Tests (Directive S0-7a)]")
+    # Closed-form equivalence test for df=1: p = 1 - (2/pi)*arctan(|t|)
+    for t_val in [0.0, 0.5, 1.0, 2.0, 5.0, 10.0]:
+        tests_run += 1
+        exp_p = 1.0 - (2.0 / math.pi) * math.atan(abs(t_val))
+        act_p = exact_student_t_pvalue(t_val, df=1)
+        assert abs(act_p - exp_p) < 1e-11, f"df=1 mismatch at t={t_val}: act {act_p} != exp {exp_p}"
+        tests_passed += 1
+
+    # Tabulated critical points for df=5
+    # t = 2.570582 -> p = 0.05
+    # t = 4.032143 -> p = 0.01
+    # t = 6.868827 -> p = 0.001
+    crit_points_df5 = [
+        (2.570582, 0.05),
+        (4.032143, 0.01),
+        (6.868827, 0.001)
+    ]
+    for t_crit, p_crit in crit_points_df5:
+        tests_run += 1
+        p_act = exact_student_t_pvalue(t_crit, df=5)
+        assert abs(p_act - p_crit) < 1e-5, f"df=5 critical point mismatch at t={t_crit}: act {p_act} != exp {p_crit}"
+        tests_passed += 1
+    print("  Test 3.10 (Student t & Incomplete Beta): All closed-form and tabulated tests PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.11 EXACT WILCOXON SIGNED-RANK TEST ENUMERATION TESTS (DIRECTIVE S0-7a D-2)
+    # --------------------------------------------------------------------------
+    print("\n[3.11 Exact Wilcoxon Signed-Rank Test Tests (Directive S0-7a)]")
+    # n=6 with all positive differences: W = 0, p = 2 / 2^6 = 2/64 = 0.03125
+    pos_diffs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    w_stat, w_pval = exact_wilcoxon_signed_rank_pvalue(pos_diffs)
+    tests_run += 1
+    assert w_stat == 0.0, f"Expected W=0.0, got {w_stat}"
+    assert abs(w_pval - 0.03125) < 1e-9, f"Expected p=0.03125, got {w_pval}"
+    tests_passed += 1
+
+    # n=6 with one negative difference: diffs = [-1, 2, 3, 4, 5, 6], rank of -1 is 1 -> W = 1
+    diffs_w1 = [-1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    w_stat_1, w_pval_1 = exact_wilcoxon_signed_rank_pvalue(diffs_w1)
+    tests_run += 1
+    assert w_stat_1 == 1.0, f"Expected W=1.0, got {w_stat_1}"
+    # W <= 1 occurs for W=0 (2 configs) and W=1 (2 configs: rank 1 negative or rank 1 positive alone) -> 4/64 = 0.0625
+    assert abs(w_pval_1 - 0.0625) < 1e-9, f"Expected p=0.0625, got {w_pval_1}"
+    tests_passed += 1
+    print("  Test 3.11 (Exact Wilcoxon Signed-Rank): All exact full-enumeration tests PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.12 NEWCOMBE SCORE INTERVAL UNIT TESTS (DIRECTIVE S0-7a D-1)
+    # --------------------------------------------------------------------------
+    print("\n[3.12 Newcombe Hybrid Score Interval Unit Tests (Directive S0-7a)]")
+    # Trailing window (71/900) vs control (58/1200)
+    diff_val, newc_lo, newc_hi = newcombe_score_interval(71, 900, 58, 1200, conf=0.95)
+    tests_run += 1
+    assert 0.030 < diff_val < 0.031, f"Unexpected proportion difference: {diff_val}"
+    assert newc_lo < diff_val < newc_hi, f"Interval [{newc_lo}, {newc_hi}] does not bracket diff {diff_val}"
+    assert newc_lo > 0.0, f"Newcombe interval [{newc_lo}, {newc_hi}] unexpectedly includes zero"
+    tests_passed += 1
+    print("  Test 3.12 (Newcombe Score Interval)  : Interval calculation PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.13 RETENTION HORIZON AT REAL OPERATING POINT & NON-MONOTONICITY (DIRECTIVE S0-7a D4)
+    # --------------------------------------------------------------------------
+    print("\n[3.13 Retention Horizon at Real Operating Point (Directive S0-7a D4)]")
+    # Floor interval near measured wrong_target: (0.0376, 0.0619)
+    real_floor = (0.0376, 0.0619)
+    # Construct synthetic 6 seeds x 200 edits:
+    # Edits 190..199 (k=10 trailing): 8 matches out of 60 -> rate 13.33%, Wilson lo ~0.0691 > 0.0619 -> SEPARATES
+    # Edits 180..189 (k=20 trailing): 0 matches in this bin -> total matches 8 out of 120 -> rate 6.67%, Wilson lo ~0.0342 <= 0.0619 -> FAILS
+    # Edits 170..179 (k=30 trailing): 15 matches in this bin -> total matches 23 out of 180 -> rate 12.78%, Wilson lo ~0.0863 > 0.0619 -> RE-SEPARATES
+    synth_real = {s: [False] * 200 for s in range(6)}
+    # Add matches for k=10 (edits 190..199): 8 matches across seeds
+    # 2 matches in seed 0, 2 in seed 1, 1 in seeds 2..5
+    for s_idx, edit_idx in [(0, 192), (0, 198), (1, 191), (1, 195), (2, 193), (3, 194), (4, 196), (5, 197)]:
+        synth_real[s_idx][edit_idx] = True
+    # Edits 180..189: zero matches
+    # Edits 170..179: 15 matches across seeds
+    match_indices_170 = [
+        (0, 171), (0, 174), (0, 178),
+        (1, 172), (1, 175), (1, 179),
+        (2, 171), (2, 176),
+        (3, 173), (3, 177),
+        (4, 172), (4, 175),
+        (5, 171), (5, 174), (5, 178)
+    ]
+    for s_idx, edit_idx in match_indices_170:
+        synth_real[s_idx][edit_idx] = True
+
+    h_real = compute_monotone_retention_horizon(synth_real, real_floor, step_size=10, total_edits=200)
+    tests_run += 1
+    # Crucial property: first failure at k=20 halts the search, returning horizon_k = 10
+    # despite k=30 re-separating!
+    assert h_real["horizon_k"] == 10, f"Expected first-crossing horizon_k=10, got {h_real['horizon_k']}"
+    assert h_real["step_verdicts"][0]["k"] == 10 and h_real["step_verdicts"][0]["separates"] is True
+    assert h_real["step_verdicts"][1]["k"] == 20 and h_real["step_verdicts"][1]["separates"] is False
+    assert h_real["step_verdicts"][2]["k"] == 30 and h_real["step_verdicts"][2]["separates"] is True
+    tests_passed += 1
+    print("  Test 3.13 (Real Operating Point)     : First-crossing stopping rule & re-separation discard PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.14 COMMIT 4e16084 40-CASE FULL EQUIVALENCE SUITE (DIRECTIVE S0-7a D4)
+    # --------------------------------------------------------------------------
+    print("\n[3.14 Commit 4e16084 40-Case Full Equivalence Suite (Directive S0-7a D4)]")
+    cases_40 = [
+        (" oslo", "Rome", False, "oslo"),
+        (" oboe", "accordion", False, "oboe"),
+        (" oslo", "Cairo", False, "oslo"),
+        (" oslo", "Lisbon", False, "oslo"),
+        (" oslo", "Oslo", True, "oslo"),
+        (" photographer", "astronomer", False, "photographer"),
+        (" oslo", "Prague", False, "oslo"),
+        (" oslo", "Berlin", False, "oslo"),
+        (" photographer", "photographer", True, "photographer"),
+        (" oboe", "oboe", True, "oboe"),
+        (" Paris", "Paris", True, "paris"),
+        (" Tokyo", "Tokyo", True, "tokyo"),
+        (" Berlin", "Berlin", True, "berlin"),
+        (" Madrid", "Madrid", True, "madrid"),
+        (" Athens", "Athens", True, "athens"),
+        (" Cairo", "Cairo", True, "cairo"),
+        (" Dublin", "Dublin", True, "dublin"),
+        (" Vienna", "Vienna", True, "vienna"),
+        (" Warsaw", "Warsaw", True, "warsaw"),
+        (" Seoul", "Seoul", True, "seoul"),
+        (" Oslo, Oslo Oslo Oslo", "Oslo", True, "oslo"),
+        (" oboe.", "oboe", True, "oboe"),
+        (" Canberra on 23 April 1946", "Canberra", True, "canberra"),
+        (" photographer and astronomer. She", "photographer", True, "photographer"),
+        (" accordion. He plays", "accordion", True, "accordion"),
+        (" Rome.", "Rome", True, "rome"),
+        (" Rome", "Rome", True, "rome"),
+        (" Osloman", "Oslo", False, "osloman"),
+        (" Romeo", "Rome", False, "romeo"),
+        (" Cairo", "Canberra", False, "cairo"),
+        (" New Yorker", "New York", False, "new"),
+        (" New York, USA", "New York", True, "new"),
+        (" surgeon in London", "surgeon", True, "surgeon"),
+        (" violinist in the orchestra", "violinist", True, "violinist"),
+        (" pilot who flies", "pilot", True, "pilot"),
+        (" carpenter with tools", "carpenter", True, "carpenter"),
+        (" dentist in clinic", "dentist", True, "dentist"),
+        (" chef in restaurant", "chef", True, "chef"),
+        (" blacksmith at forge", "blacksmith", True, "blacksmith"),
+        (" gardener in park", "gardener", True, "gardener")
+    ]
+    for p_str, t_str, exp_match, exp_norm in cases_40:
+        tests_run += 1
+        m_act = check_match(p_str, t_str)
+        n_act = normalize_entity(p_str)
+        assert m_act == exp_match, f"check_match({p_str!r}, {t_str!r}): act {m_act} != exp {exp_match}"
+        assert n_act == exp_norm, f"normalize_entity({p_str!r}): act {n_act} != exp {exp_norm}"
+        tests_passed += 1
+    print("  Test 3.14 (40-Case Equivalence)      : All 40 cases from commit 4e16084 PASSED identically.")
+
+    # --------------------------------------------------------------------------
+    # 3.15 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")

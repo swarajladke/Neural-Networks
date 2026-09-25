@@ -86,7 +86,7 @@ Directive S0-6 tested the hypothesis that the 20-edit retention horizon (where e
 S0-6 executed a decoupled factor design sweeping margin $\delta \in \{0.0, 1.0, 3.0, 6.0\}$ in Arm A (`r0_unconstrained`) across 6 seeds (`SEEDS = [0, 1, 2, 3, 4, 5]`, $N=1200$ facts per condition, `max_steps = 100`), while evaluating Arm B (`r1_causal_perstep`) and Arm F (`r1_magnitude_only`) at $\delta = 0.0$ ($N=1200$).
 
 ### 5.1 Primary Deliverables Panel ($N=1200$ across 6 seeds)
-| Condition | Pooled Imm Efficacy | Terminal Retention | Gen (3xN) | Locality KL | WikiText-2 PPL | Monotone Horizon $k$ | Gate Status |
+| Condition | Pooled Imm Efficacy | Terminal Retention | Gen (3xN) | Locality KL | WikiText-2 PPL | Trailing Separation Depth $k$ | Gate Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `r0_unconstrained_d0.0` | 1200/1200 (100.00%) | 78/1200 (6.50%) | 203/3600 (5.64%) | 3.0666 | 60.71 | $k = 120$ | PASSED |
 | `r0_unconstrained_d1.0` | 1200/1200 (100.00%) | 81/1200 (6.75%) | 207/3600 (5.75%) | 3.4705 | 71.52 | **$k = 140$** | PASSED |
@@ -96,18 +96,18 @@ S0-6 executed a decoupled factor design sweeping margin $\delta \in \{0.0, 1.0, 
 | `r1_magnitude_only_d0.0`| 1197/1200 (99.75%) | 89/1200 (7.42%) | 216/3600 (6.00%) | 3.0053 | 56.01 | $k = 140$ | PASSED |
 
 ### 5.2 Key Scientific Conclusions
-1. **Margin Expansion & Collapse:**
-   - Shifting from greedy zero-margin ($\delta=0.0$) to $\delta=1.0$ expands the monotone retention horizon from $k=120$ to **$k=140$ edits** (+20 edits) with minor perplexity growth ($60.71 \to 71.52$).
-   - Higher margins ($\delta=3.0, 6.0$) cause the horizon to **collapse back to $k=70$ edits**. Over-optimization degrades base network features, exploding WikiText-2 PPL to $103.26$ and $225.06$.
+1. **Margin Scaling and Trailing Separation Depth:**
+   - Shifting from greedy zero-margin ($\delta=0.0$) to $\delta=1.0$ shifts the trailing separation depth from $k=120$ to $k=140$ with minor perplexity growth ($60.71 \to 71.52$). The statistic $k$ represents a trailing-window separation depth, not a count of surviving facts.
+   - Higher margins ($\delta=3.0, 6.0$) cause the trailing separation depth to collapse to $k=70$. Over-optimization degrades base network features, exploding WikiText-2 PPL to $103.26$ and $225.06$.
    - At $\delta=6.0$, 329 edits exhausted 100 optimizer steps, causing immediate efficacy to fall to **72.58%** (failing Gate 4). Dual retention reporting:
      - 3a Conditional Retention (successful edits): 55/871 (6.31% [4.88%, 8.13%])
      - 3b Matched-Subset Comparison (Arm A $\delta=0$ on same facts): 61/871 (7.00% [5.49%, 8.89%])
-2. **Causal Projection Establishes the Longest Horizon:**
-   - **Arm B (`r1_causal_perstep` at $\delta=0.0$)** achieved the longest monotone retention horizon observed to date: **$k=150$ edits** (remainder retention $14/300 = 4.67\%$, matching the control floor).
-   - Arm B preserved model capability best (**WikiText-2 PPL 50.84** vs Arm A's 60.71; paired $t = -4.18, df = 5, p < 0.01$).
+2. **Causal Projection and Perplexity Decoupling:**
+   - **Arm B (`r1_causal_perstep` at $\delta=0.0$)** exhibits trailing separation depth $k=150$ (remainder retention $14/300 = 4.67\%$). (Note: Audit S0-7 analyzes the fragility and null calibration of this boundary separation).
+   - Arm B preserved model capability best (**WikiText-2 PPL 50.84** vs Arm A's 60.71; paired $t = -4.18, df = 5, p = 0.0087$), confirming that causal projection decouples injection from general capability destruction.
 3. **Geometry vs Magnitude:**
-   - Magnitude control alone (Arm F) achieves $k=140$ edits and PPL 56.01.
-   - Causal projection (Arm B) provides an additional $+10$ edits of horizon ($k=150$) and superior perplexity preservation ($50.84$), confirming that geometric orthogonalization provides distinct protective value beyond step-size damping.
+   - Magnitude control alone (Arm F) exhibits trailing separation depth $k=140$ and PPL 56.01.
+   - Causal projection (Arm B) achieves trailing separation depth $k=150$ and superior perplexity preservation ($50.84$), confirming geometric orthogonalization provides distinct protective value beyond step-size damping alone.
 4. **Accounting & Protocol Integrity:**
    - Pre-flight test suite: 49/49 passed; AST literal scanner: 0 violations.
    - Positive controls passed on seeds 0–2 for all three baseline arms.

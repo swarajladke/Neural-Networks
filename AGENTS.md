@@ -115,6 +115,8 @@ the input-set name, its size, and its hash beside every result. *(Enforces: Sect
 withdrawn in place, with a reason and a superseding artifact. It is never silently left in a
 live file, and never quietly overwritten. *(Enforces: Section 13, Rule 3)*
 
+**3.7 Every count-based result must serialize raw per-unit outcome vectors.** Every experiment must serialize the raw per-unit boolean outcome vectors underlying every reported count-based measurement, keyed by seed and by within-sequence index, into its results JSON. Aggregated bins and pooled scalars are insufficient. A result whose per-unit outcomes are not serialized is not reproducible and may not be cited in a later directive. *(Enforces: Section 0 Prime Directive, Section 13, Rule 2, Rule 5 [R11])*
+
 ---
 
 ## 4. No carry-over, no fabrication

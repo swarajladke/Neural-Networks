@@ -31,6 +31,7 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "controls_pooled_2400": 2400,
     "control_arm_pooled": 1200,
     "control_arm_pooled_600": 600,
+    "two_seeds": 400,
     "fixture_1": 1,
     "fixture_3": 3,
     "fixture_5": 5,
@@ -292,7 +293,21 @@ def terminal_retention(
 
 # Maintain backward compatibility aliases
 raw_retention = terminal_retention
-efficacy = terminal_retention
+
+def efficacy(*args, **kwargs):
+    """
+    DEPRECATED (Directive S0-7 Audit Finding 10):
+    Aliasing efficacy to terminal_retention caused metric collision and provenance confusion.
+    Zero repository scripts call this alias. Emitting warning on use.
+    """
+    import warnings
+    warnings.warn(
+        "metrics.efficacy is deprecated: aliasing to terminal_retention causes metric collision. "
+        "Use immediate_efficacy(...) or terminal_retention(...) explicitly.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return terminal_retention(*args, **kwargs)
 
 
 def generalization(
