@@ -829,7 +829,7 @@ def run_all_tests() -> int:
 
     # Fixture 3: Flat slope (alternating outcomes)
     tests_run += 1
-    flat_data = [True, False] * 100
+    flat_data = [True, False] * 50 + [False, True] * 50
     fit_f = fit_logistic_position_slope(flat_data)
     assert fit_f["converged"] is True, "Fit should converge for flat slope"
     assert abs(fit_f["beta1"]) < 1e-3, f"Expected near-zero slope, got {fit_f['beta1']}"
