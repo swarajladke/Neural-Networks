@@ -135,7 +135,7 @@ def main():
 
         print(f"\n--- [Step Ladder: {cond} (Selected Horizon k = {sel_k})] ---")
         print(section_sep)
-        print(f"{'k':<6s} | {'Matches':<14s} | {'Rate (%)':<10s} | {'Wilson 95% Interval':<24s} | {'Signed Gap':<12s} | {'Separates'}")
+        print(f"{'k':<6s} | {'Matches':<14s} | {'Rate (Pct)':<10s} | {'Wilson Interval':<24s} | {'Signed Gap':<12s} | {'Separates'}")
         print(section_sep)
         for r in ladder:
             w_str = f"[{r['wilson_lo']:.4f}, {r['wilson_hi']:.4f}]"
@@ -227,7 +227,7 @@ def main():
     alpha_val = 0.05
     print(f"\n--- [Null Calibration Table (10,000 Permutations, Alpha = {alpha_val:.2f})] ---")
     print(section_sep)
-    print(f"{'Condition':<26s} | {'Obs k':<6s} | {'Null Mean':<10s} | {'Null 95%':<10s} | {'Null 99%':<10s} | {'One-Sided p':<12s} | {'Separates Null'}")
+    print(f"{'Condition':<26s} | {'Obs k':<6s} | {'Null Mean':<10s} | {'Null P95':<10s} | {'Null P99':<10s} | {'One-Sided p':<12s} | {'Separates Null'}")
     print(section_sep)
     for c in conditions_to_audit:
         nr = null_results[c]["within_seed"]
@@ -266,7 +266,7 @@ def main():
     two_prop_results = {}
     print("\n--- [D1. Two-Proportion Test vs Negative Control Floor (wrong_target: 58/1200)] ---")
     print(section_sep)
-    print(f"{'Condition':<26s} | {'Window':<10s} | {'Prop Diff':<10s} | {'Newcombe 95% Interval':<24s} | {'Exclude 0':<10s} | {'Agree Legacy'}")
+    print(f"{'Condition':<26s} | {'Window':<10s} | {'Prop Diff':<10s} | {'Newcombe Interval':<24s} | {'Exclude Zero':<10s} | {'Agree Legacy'}")
     print(section_sep)
     for c in conditions_to_audit:
         sel_k = gate_0_res["recomputed_horizons"][c]["horizon_k"]
