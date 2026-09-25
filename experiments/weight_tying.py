@@ -129,7 +129,8 @@ def run_stage_i_weight_tying(
     print("  are identical between reused Stage F cells and Stage I untied evaluation.")
 
     # 1. Run Untied Arm A (r0_unconstrained_d0.0 untied)
-    print("\n--- [Running Untied Arm A (r0_unconstrained_d0.0, seeds 0..2)] ---")
+    print()
+    print("--- [Running Untied Arm A (r0_unconstrained_d0.0, seeds 0..2)] ---")
     untied_a_results = {}
     for s in STAGE_I_SEEDS:
         configure_determinism(seed=s)
@@ -151,7 +152,8 @@ def run_stage_i_weight_tying(
         torch.cuda.empty_cache()
 
     # 2. Run Untied Arm B (r1_causal_perstep_d0.0 untied)
-    print("\n--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---")
+    print()
+    print("--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---")
     untied_b_results = {}
     for s in STAGE_I_SEEDS:
         configure_determinism(seed=s)

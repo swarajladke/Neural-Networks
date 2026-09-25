@@ -84,12 +84,18 @@ ALLOW_LIST = {
     ":4096:8": "cublas deterministic workspace configuration flag",
     " GATE 0: EARLY BIT-REPRODUCTION POSITIVE CONTROL (Seed 0, Arm A delta=0.0)": "Gate 0 title banner",
     "  Running Arm A (r0_unconstrained_d0.0 across 6 seeds)": "Arm A delta 0 banner",
+    "\n  Running Arm A (r0_unconstrained_d0.0 across 6 seeds)": "Arm A delta 0 banner with newline",
     "  Running Arm A (r0_unconstrained_d1.0 across 6 seeds)": "Arm A delta 1 banner",
+    "\n  Running Arm A (r0_unconstrained_d1.0 across 6 seeds)": "Arm A delta 1 banner with newline",
     "  Running Arm B (r1_causal_perstep_d0.0 across 6 seeds)": "Arm B banner",
+    "\n  Running Arm B (r1_causal_perstep_d0.0 across 6 seeds)": "Arm B banner with newline",
     "  Running Arm F (r1_magnitude_only_d0.0 across 6 seeds)": "Arm F banner",
+    "\n  Running Arm F (r1_magnitude_only_d0.0 across 6 seeds)": "Arm F banner with newline",
     "--- [Running Untied Arm A (r0_unconstrained_d0.0, seeds 0..2)] ---": "Untied Arm A banner",
+    "\n--- [Running Untied Arm A (r0_unconstrained_d0.0, seeds 0..2)] ---": "Untied Arm A banner with newline",
     "--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---": "Untied Arm B banner",
-    "  S0-6 Conclusion 1 Audit      : delta=1.0 max k ({max_k_d1}) vs delta=0.0 max k ({max_k_d0})": "Conclusion 1 condition label",
+    "\n--- [Running Untied Arm B (r1_causal_perstep_d0.0, seeds 0..2)] ---": "Untied Arm B banner with newline",
+    "  Delta-1.0 Timing (t_delta1)  : ": "Delta-1 timing label",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:

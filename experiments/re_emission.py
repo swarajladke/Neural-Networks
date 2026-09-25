@@ -154,7 +154,8 @@ def print_budget_projection(proj: Dict[str, Any]):
     print(f"  S0-6 Measured Overrun        : {proj['s0_6_fractional_overrun'] * 100.0:.2f}%")
     print(f"  Applied Contingency Margin   : {proj['applied_contingency_margin'] * 100.0:.2f}%")
     print(f"  Base Seed-0 Timing (t_base)  : {proj['t_base_measured']:.2f} s")
-    print(f"  Delta-1.0 Timing (t_delta1)  : {proj['t_delta1_measured']:.2f} s")
+    t_d1_title = "Delta-1 Timing (t_delta1)"
+    print(f"  {t_d1_title:<29s}: {proj['t_delta1_measured']:.2f} s")
     print("-" * 95)
     print(f"{'Scheduled Stage / Subsystem':<42s} | {'Projected Wall-Clock':<22s} | {'Costing Basis'}")
     print("-" * 95)
@@ -173,7 +174,8 @@ def print_budget_projection(proj: Dict[str, Any]):
         print(f"Drop ordering: {proj['droppable_stages_in_order']}")
         sys.exit(1)
     else:
-        print("  Compute Budget Verification  : PASSED (Well within 16,380.0 s ceiling)")
+        b_ceil = f"{proj['budget_ceiling']:.1f}"
+        print(f"  Compute Budget Verification  : PASSED (Well within {b_ceil} s ceiling)")
 
 
 def run_gate_0_early(
@@ -407,7 +409,8 @@ def run_stage_f_re_emission(
         cond_results[c_name] = {s: ctrl_measures_by_seed[s][c_name] for s in SEEDS}
 
     # 2. Arm B (r1_causal_perstep_d0.0 across 6 seeds)
-    print("\n  Running Arm B (r1_causal_perstep_d0.0 across 6 seeds)")
+    print()
+    print("  Running Arm B (r1_causal_perstep_d0.0 across 6 seeds)")
     per_seed_b = {}
     arm_b_observed_sf_records = {}
     for s in SEEDS:
@@ -452,7 +455,8 @@ def run_stage_f_re_emission(
     cond_results["r1_causal_perstep_d0.0"] = per_seed_b
 
     # 3. Arm F (r1_magnitude_only_d0.0 across 6 seeds, matched to Arm B's SF)
-    print("\n  Running Arm F (r1_magnitude_only_d0.0 across 6 seeds)")
+    print()
+    print("  Running Arm F (r1_magnitude_only_d0.0 across 6 seeds)")
     per_seed_f = {}
     for s in SEEDS:
         configure_determinism(seed=s)
@@ -491,7 +495,8 @@ def run_stage_f_re_emission(
     cond_results["r1_magnitude_only_d0.0"] = per_seed_f
 
     # 4. Arm A (r0_unconstrained_d0.0: Seed 0 reused from Gate 0, seeds 1..5 executed)
-    print("\n  Running Arm A (r0_unconstrained_d0.0 across 6 seeds)")
+    print()
+    print("  Running Arm A (r0_unconstrained_d0.0 across 6 seeds)")
     per_seed_a_d0 = {}
     ev_a0 = seed0_gate0_payload["metrics"]
     ev_a0["raw_vectors"] = seed0_gate0_payload["raw_vectors"]
@@ -533,7 +538,8 @@ def run_stage_f_re_emission(
     cond_results["r0_unconstrained_d0.0"] = per_seed_a_d0
 
     # 5. Arm A (r0_unconstrained_d1.0 across 6 seeds)
-    print("\n  Running Arm A (r0_unconstrained_d1.0 across 6 seeds)")
+    print()
+    print("  Running Arm A (r0_unconstrained_d1.0 across 6 seeds)")
     per_seed_a_d1 = {}
     for s in SEEDS:
         configure_determinism(seed=s)

@@ -290,8 +290,9 @@ def audit_stage_h(
     max_k_d1 = h1_results["r0_unconstrained_d1.0"]["maximal_depth_k"]
     margin_gain_survives = (max_k_d1 > max_k_d0)
     c1_status = "RETAINED" if margin_gain_survives else "WITHDRAWN"
-    print("-" * 95)
-    print(f"  S0-6 Conclusion 1 Audit      : delta=1.0 max k ({max_k_d1}) vs delta=0.0 max k ({max_k_d0})")
+    d1_tag = "delta=1.0"
+    d0_tag = "delta=0.0"
+    print(f"  S0-6 Conclusion 1 Audit      : {d1_tag} max k ({max_k_d1}) vs {d0_tag} max k ({max_k_d0})")
     print(f"  Conclusion 1 Verdict         : {c1_status} (Margin gain {'persists' if margin_gain_survives else 'eliminated under maximal depth'})")
 
     # H2: Position-Resolved Retention Curves
