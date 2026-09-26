@@ -269,9 +269,16 @@ def main():
 
     out_dir = REPO_ROOT / "experiments" / "results"
     out_dir.mkdir(parents=True, exist_ok=True)
+    def _json_fallback(o):
+        if hasattr(o, "pair"):
+            return o.pair
+        if hasattr(o, "tolist"):
+            return o.tolist()
+        raise TypeError(f"Object of type {type(o)} is not JSON serializable")
+
     out_file = out_dir / "s0_7b.json"
     with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(res_data, f, indent=2)
+        json.dump(res_data, f, indent=2, default=_json_fallback)
 
     print(f"\n  Artifact Written             : {out_file.relative_to(REPO_ROOT)}")
     print("\n" + "=" * 115)

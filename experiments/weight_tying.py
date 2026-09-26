@@ -235,13 +235,22 @@ def run_stage_i_weight_tying(
     print(f"  Stage I Verdict              : {verdict_str}")
     print("=" * 95)
 
+    def _clean_record(rec: Dict[str, Any]) -> Dict[str, Any]:
+        cleaned = {}
+        for k, v in rec.items():
+            if hasattr(v, "pair"):
+                cleaned[k] = v.pair
+            elif isinstance(v, (int, float, str, bool, list, dict)):
+                cleaned[k] = v
+        return cleaned
+
     return {
         "seeds": STAGE_I_SEEDS,
         "n_seeds": n_did,
         "cells": cell_records,
         "untied_results": {
-            "r0_unconstrained_d0.0": {s: untied_a_results[s] for s in STAGE_I_SEEDS},
-            "r1_causal_perstep_d0.0": {s: untied_b_results[s] for s in STAGE_I_SEEDS}
+            "r0_unconstrained_d0.0": {s: _clean_record(untied_a_results[s]) for s in STAGE_I_SEEDS},
+            "r1_causal_perstep_d0.0": {s: _clean_record(untied_b_results[s]) for s in STAGE_I_SEEDS}
         },
         "stats": {
             "mean_did": mean_did,

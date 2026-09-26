@@ -430,15 +430,19 @@ def cluster_bootstrap_slope_difference(
 
     rng = random.Random(seed)
     diffs = []
+    cache1: Dict[Tuple[int, ...], float] = {}
+    cache2: Dict[Tuple[int, ...], float] = {}
 
     for _ in range(n_boot):
         sample_indices = [rng.randint(0, k - 1) for _ in range(k)]
-        b_pool1 = [val for idx in sample_indices for val in seeds_outcomes1[idx]]
-        b_pool2 = [val for idx in sample_indices for val in seeds_outcomes2[idx]]
-
-        b_fit1 = fit_logistic_position_slope(b_pool1, pos_pool)
-        b_fit2 = fit_logistic_position_slope(b_pool2, pos_pool)
-        diffs.append(b_fit1["beta1"] - b_fit2["beta1"])
+        tup = tuple(sorted(sample_indices))
+        if tup not in cache1:
+            b_pool1 = [val for idx in tup for val in seeds_outcomes1[idx]]
+            cache1[tup] = fit_logistic_position_slope(b_pool1, pos_pool)["beta1"]
+        if tup not in cache2:
+            b_pool2 = [val for idx in tup for val in seeds_outcomes2[idx]]
+            cache2[tup] = fit_logistic_position_slope(b_pool2, pos_pool)["beta1"]
+        diffs.append(cache1[tup] - cache2[tup])
 
     diffs.sort()
     idx_lo = int(0.025 * n_boot)
