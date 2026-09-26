@@ -123,7 +123,12 @@ def main():
     print(f"  Device / PyTorch            : {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}) / {torch.__version__}")
 
     # Prepare seed sequences
-    sequences = {s: sample_200_facts(facts_1000, seed=s) for s in SEEDS}
+    sequences = {}
+    seed_sequence_hashes = {}
+    for s in SEEDS:
+        seq_facts, seq_h = sample_200_facts(facts_1000, seed=s)
+        sequences[s] = seq_facts
+        seed_sequence_hashes[s] = seq_h
 
     # 3. Empirical Budget Projection from S0-6
     s0_6_path = REPO_ROOT / "experiments" / "results" / "s0_6.json"
@@ -236,7 +241,8 @@ def main():
             "facts_json_sha256": facts_sha,
             "wikitext_slice_sha256": slice_sha,
             "weight_file_sha256": weight_sha,
-            "control_probes_sha256": ctrl_probe_sha
+            "control_probes_sha256": ctrl_probe_sha,
+            "seed_sequence_hashes": seed_sequence_hashes
         },
         "environment": {
             "torch": torch.__version__,
