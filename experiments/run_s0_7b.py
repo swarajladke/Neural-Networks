@@ -117,7 +117,7 @@ def main():
     assert slice_sha == "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7"
     print(f"  WikiText Slice SHA-256      : {slice_sha} (Verified)")
 
-    ppl_tied_baseline = evaluate_wikitext_perplexity(fresh_model, wikitext_slice, device)
+    ppl_tied_baseline = evaluate_wikitext_perplexity(fresh_model, wikitext_slice, slice_sha, device=device)
     print(f"  Pre-Edit WikiText-2 PPL     : {ppl_tied_baseline:.2f} (Pinned Baseline)")
     print(f"  Fresh Model Checksum        : {fresh_checksum:.8f}")
     print(f"  Device / PyTorch            : {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}) / {torch.__version__}")

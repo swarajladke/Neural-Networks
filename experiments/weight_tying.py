@@ -52,6 +52,7 @@ def make_untied_gpt2(
     pinned_revision: str,
     device: str,
     wikitext_slice: Any,
+    slice_sha: str,
     ppl_tied_baseline: float
 ) -> GPT2LMHeadModel:
     """
@@ -88,7 +89,7 @@ def make_untied_gpt2(
     )
 
     # Gate 5: Pre-edit WikiText-2 PPL equals tied baseline within float tolerance
-    ppl_untied = evaluate_wikitext_perplexity(model, wikitext_slice, device)
+    ppl_untied = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
     ppl_diff = abs(ppl_untied - ppl_tied_baseline)
     assert ppl_diff < 1e-4, (
         f"Untying Gate 5 FAILED: Pre-edit PPL mismatch: untied={ppl_untied:.4f} vs tied={ppl_tied_baseline:.4f}"
@@ -134,7 +135,7 @@ def run_stage_i_weight_tying(
     untied_a_results = {}
     for s in STAGE_I_SEEDS:
         configure_determinism(seed=s)
-        m_untied = make_untied_gpt2(model_name, pinned_revision, device, wikitext_slice, ppl_tied_baseline)
+        m_untied = make_untied_gpt2(model_name, pinned_revision, device, wikitext_slice, slice_sha, ppl_tied_baseline)
         subspace_unapp = CausalSubspaceManager(device=device)
         edit_res = []
         for f in sequences[s]:
@@ -157,7 +158,7 @@ def run_stage_i_weight_tying(
     untied_b_results = {}
     for s in STAGE_I_SEEDS:
         configure_determinism(seed=s)
-        m_untied = make_untied_gpt2(model_name, pinned_revision, device, wikitext_slice, ppl_tied_baseline)
+        m_untied = make_untied_gpt2(model_name, pinned_revision, device, wikitext_slice, slice_sha, ppl_tied_baseline)
         subspace_mgr = CausalSubspaceManager(device=device)
         edit_res = []
         for f in sequences[s]:
