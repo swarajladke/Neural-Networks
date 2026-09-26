@@ -37,7 +37,8 @@ from experiments.metrics import (
     Measurement,
     pool_controls,
     CONTROL_NAMES,
-    wilson_confidence_interval
+    wilson_confidence_interval,
+    format_wilson_rate
 )
 from tests.test_metrics import run_all_tests
 from experiments.b1_inject import (

@@ -279,27 +279,15 @@ def run_gate_0_early(
         sys.exit(1)
 
     seed0_payload = {
-        "metrics": ev_a0,
-        "edit_results": edit_res,
-        "first_update": first_upd,
-        "cum_applied": cum_applied,
-        "raw_vectors": {
-            "immediate_matches": imm_matches,
-            "terminal_matches": term_matches,
-            "steps_taken": steps_taken
-        }
+        "metrics": ev_a0, "edit_results": edit_res, "first_update": first_upd, "cum_applied": cum_applied,
+        "raw_vectors": {"immediate_matches": imm_matches, "terminal_matches": term_matches, "steps_taken": steps_taken}
     }
 
     gate_0_summary = {
-        "passed": exact_pass or fallback_pass,
-        "exact_match": exact_pass,
-        "observed_steps": obs_steps,
-        "reference_steps": ref_steps,
-        "observed_imm_eff": obs_imm,
-        "reference_imm_eff": ref_imm,
-        "observed_term_ret": obs_term,
-        "reference_term_ret": ref_term,
-        "diff_count": diff_count
+        "passed": exact_pass or fallback_pass, "exact_match": exact_pass,
+        "observed_steps": obs_steps, "reference_steps": ref_steps,
+        "observed_imm_eff": obs_imm, "reference_imm_eff": ref_imm,
+        "observed_term_ret": obs_term, "reference_term_ret": ref_term, "diff_count": diff_count
     }
 
     del m_arm, subspace_unapp
@@ -329,6 +317,12 @@ def run_stage_f_re_emission(
     print("\n" + "=" * 95)
     print(" STAGE F: RE-EMISSION RUN WITH RAW OUTCOME VECTOR SERIALIZATION")
     print("=" * 95)
+
+    ckpt_path = REPO_ROOT / "experiments" / "results" / "stage_f_checkpoint.pt"
+    if ckpt_path.exists():
+        print(f"\n[Stage F Checkpoint Found: Loading pre-computed Stage F results from {ckpt_path.name}]")
+        saved = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+        return saved["cond_results"], saved["structural_invariance"], saved["total_optimizer_steps"], saved["line_item_steps"]
 
     cond_results: Dict[str, Dict[int, Any]] = {}
     total_optimizer_steps_global = 0
@@ -582,5 +576,13 @@ def run_stage_f_re_emission(
         "first_updates": seed0_first_edit_updates,
         "cumulative_updates": seed0_cumulative_updates
     }
+
+    ckpt_path = REPO_ROOT / "experiments" / "results" / "stage_f_checkpoint.pt"
+    ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({
+        "cond_results": cond_results, "structural_invariance": structural_invariance,
+        "total_optimizer_steps": total_optimizer_steps_global, "line_item_steps": line_item_steps
+    }, ckpt_path)
+    print(f"\n[Stage F Checkpoint Saved: {ckpt_path.name}]")
 
     return cond_results, structural_invariance, total_optimizer_steps_global, line_item_steps
