@@ -26,6 +26,7 @@ from experiments.metrics import (
     compute_surviving_fraction, compute_alignment, assert_pythagorean_projection,
     assert_orthonormality, compute_paired_stats, compute_monotone_retention_horizon,
     classify_reversion_pattern, wilson_confidence_interval
+)
 # pre-flight test runner imported inside main() below
 
 SEEDS = [0, 1, 2, 3, 4, 5]
