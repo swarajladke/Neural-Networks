@@ -89,8 +89,8 @@ def run_fix_forward_audit(s0_7b_data: Dict[str, Any]) -> Dict[str, Any]:
     print("  S0-7a Pre-Flight Tests Run  : 105 tests (105 passed, 0 failures in s0_7a_stdout.txt)")
     print("  S0-7b Pre-Flight Tests Run  : 117 tests (117 passed, 0 failures in s0_7b_stdout.txt)")
     print("  Report Discrepancy Cause     : Template author typed '62' in make_report.py line 1720,")
-    print("                                violating AGENTS.md §3.1. Zero tests were removed;")
-    print("                                12 new tests were added (3.15, 3.16, 3.17, 3.18).")
+    print("                                violating AGENTS.md Section 3 Item 1. Zero tests were removed;")
+    print("                                new tests were added for S0-7b (Tests 3_15 through 3_18).")
     print("  Reconciliation Status        : VERIFIED (Suite grew monotonically from 105 to 117)")
 
     # 2. Omitted S0-7b Items
@@ -459,7 +459,7 @@ def main():
 
     # Print summary tables
     print("\n--- [Primary Endpoint Table: First-50-Edit Retention (N=300) vs Worst Control Floor] ---")
-    print(f"{'Condition':<30s} | {'First-50 Retention':<22s} | {'Floor (wrong_target)':<22s} | {'Newcombe 95% CI':<22s} | {'Separates':<10s}")
+    print(f"{'Condition':<30s} | {'First-50 Retention':<22s} | {'Floor (wrong_target)':<22s} | {'Newcombe Hybrid CI':<22s} | {'Separates':<10s}")
     print("-" * 115)
     for r in primary_table_rows:
         ret_s = f"{r['num']}/{r['den']} ({r['rate']*100.0:.2f}%) [{r['w_lo']*100.0:.2f}%, {r['w_hi']*100.0:.2f}%]"
@@ -469,7 +469,7 @@ def main():
         print(f"{r['arm']:<30s} | {ret_s:<22s} | {fl_s:<22s} | {ci_s:<22s} | {sep_s:<10s}")
 
     print("\n--- [Secondary Endpoint Table: First-50-Edit Paraphrase Generalization (N=900)] ---")
-    print(f"{'Condition':<30s} | {'First-50 Generalization':<22s} | {'Floor (wrong_target)':<22s} | {'Newcombe 95% CI':<22s} | {'Separates':<10s}")
+    print(f"{'Condition':<30s} | {'First-50 Generalization':<22s} | {'Floor (wrong_target)':<22s} | {'Newcombe Hybrid CI':<22s} | {'Separates':<10s}")
     print("-" * 115)
     for r in secondary_table_rows:
         gen_s = f"{r['num']}/{r['den']} ({r['rate']*100.0:.2f}%) [{r['w_lo']*100.0:.2f}%, {r['w_hi']*100.0:.2f}%]"
