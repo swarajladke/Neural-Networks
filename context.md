@@ -140,37 +140,64 @@ Directive S0-7a conducted a rigorous mathematical and statistical audit of the r
 
 ---
 
-## 7. Active Directive: Directive S0-7b Execution
+## 7. Directive S0-7b Benchmark Findings (Commit `f53a244`)
 
-Directive S0-7b addresses all unresolved issues from S0-7a under the strict execution order:
-**Stage J -> Gate 0 -> Remainder of Stage F -> Stage G -> Stage H -> Stage I**
+Directive S0-7b executed full-population re-emission on GPU ($N=1200$, 6 seeds, 24,398 optimizer steps, wall-clock 11,537.4 s) under exact Gate 0 bit-reproduction, serializing complete Rule 3.7 boolean outcome vectors.
 
-1. **Stage J (Tokenization Audit):** Complete disclosure audit measuring object lengths and multi-token fractions under bare vs leading-space conventions at runtime without hardcoded literal percentages.
-2. **Gate 0 (Bit-Reproduction Positive Control):** Seed 0 of `r0_unconstrained_d0.0` re-run first, verifying exact match of optimizer steps (669), immediate efficacy (200/200), and terminal retention (8/200) with early abort protocol.
-3. **Stage F (Re-Emission):** Re-runs 4 intervention arms and 4 negative controls across 6 seeds ($N=1200$) emitting full Rule 3.7 raw boolean outcome vectors.
-4. **Stage G (Uncomputable Analyses):** G0 full-population reproduction, G1 B4 seed jackknife ($N=1000$), G2 B5 per-seed horizons ($N=200$), G3 C1 control horizons, and G4 completion of B2, B3, and C3 ($20 \times 6 = 120$ asserted tests).
-5. **Stage H (Estimator Repair & Between-Arm Test):** H1 maximal separating depth beside first-crossing $k$ (auditing S0-6 Conclusion 1); H2 position-resolved retention curves and first-50-edit retention vs floor; H3 paired seed-level logistic position slope test with dynamic degrees of freedom and exact Wilcoxon floor; H4 selection-corrected fixed-window ($k=100$) Newcombe test.
-6. **Stage I (Weight-Tying Confound):** Unties `lm_head.weight` from `transformer.wte.weight` with verified independent clone; runs untied cells on seeds 0..2 while reusing Stage F tied cells; evaluates Difference-in-Differences for WikiText-2 perplexity.
+### 7.1 Empirical Outcomes & Status of Historical Claims
+1. **No Early Retention Above Negative Control Floor:**
+   - First-50-edit retention across all four arms overlapped the negative control floor (`wrong_target`: 58/1200, 4.83% [3.76%, 6.20%]). For Arm B (`r1_causal_perstep_d0.0`), first-50 retention was 14/300 (4.67% [2.80%, 7.68%]), statistically indistinguishable from background noise.
+2. **Formal Retirement of the Trailing-Window Horizon Statistic (AGENTS.md §1.7):**
+   - The trailing-window separation-depth statistic $k$ is formally retired. Per-seed estimates carried standard deviations exceeding their means, jackknife spans overlapped across all arms, the metric increases with sample size at fixed underlying retention, and boundary flip margins are 2 facts. It may NOT be used as a primary or secondary endpoint in any future directive.
+3. **S0-6 Conclusion 1 (Margin Expands Horizon): WITHDRAWN.**
+   - Under the maximal separating depth estimator $k_{\text{max}}$, unconstrained injection ($\delta=0.0$) attains $k_{\text{max}}=140$, matching margin-scaled injection ($\delta=1.0$) at $k_{\text{max}}=140$. The previously reported 20-edit advantage was an artifact of the first-crossing estimator stopping upon transient dips below threshold.
+4. **S0-6 Conclusions 2 & 3: WITHDRAWN UNCONDITIONALLY.**
+   - Between-arm differences are smaller than empirical flip margins, and between-arm logistic position slope testing showed no statistically significant difference between Arm B and Arm F ($t(5)=1.54, p=0.18$) or Arm A ($t(5)=-1.15, p=0.30$).
+5. **Surviving Findings:**
+   - **The Recency Gradient:** Recent-half retention (edits 100..199, $N=600$) strictly separates from the control floor in Arm B (54/600 = 9.00% vs 58/1200 = 4.83%, Newcombe 95% CI $[+1.72\%, +6.94\%]$).
+   - **Capability Preservation under Causal Projection:** Arm B preserves language modeling capability (WikiText-2 perplexity 50.84 vs 60.71 in Arm A, $t(5)=-4.18, p=0.0087$).
+   - **Weight-Tying Independence (Stage I):** Breaking the embedding tie leaves Arm A's perplexity damage intact (DiD $\Delta\Delta \text{PPL} = -0.8002 \pm 0.3023$, $t(2)=-4.5845, p=0.0444$), placing capability damage firmly on the output projection side.
+   - **Multi-Token Disclosure Correction:** Bare-string tokenization historically yielded 97.0% multi-token targets; greedy decoding with the leading-space convention actually realizes 30.8% multi-token targets, with zero exceeding the 5-token budget.
 
 ---
 
-## 8. Active Codebase Organization
+## 8. Active Directive: Directive S0-8 — Relocating the Write
 
-- `experiments/b1_inject.py`: Primary injection experiment engine (strictly maintained $< 600$ lines, currently 559 lines).
-- `experiments/stats.py`: Standalone statistical engine (incomplete beta, exact Student $t$, exact Wilcoxon signed-rank, Newcombe intervals, Newton-Raphson logistic regression, seed cluster bootstrap; zero SciPy dependency).
-- `experiments/stage_j.py`: Stage J tokenization disclosure audit engine (bare vs leading-space conventions on 1,000 facts).
-- `experiments/re_emission.py`: Empirical budget projection, Gate 0 early abort runner, and Stage F re-emission engine with Rule 3.7 raw vector serialization.
-- `experiments/s0_7b_audit.py`: Stage G and Stage H analysis engine (G0, B4 jackknife, B5 per-seed, C1 control horizons, G4 completion, H1 maximal depth, H2 position curves, H3 paired slope tests, H4 selection correction).
-- `experiments/weight_tying.py`: Stage I weight-tying confound runner with verified independent clones and WikiText-2 PPL diff-in-diffs.
-- `experiments/run_s0_7b.py`: Master orchestrator for Directive S0-7b.
-- `experiments/horizon_audit.py`: S0-7a horizon audit runner (maintained $< 600$ lines).
-- `experiments/run_s0_7a.py`: Master orchestrator for Directive S0-7a.
-- `experiments/metrics.py`: Mathematical metrics, Wilson score confidence intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
+**Research Question:** Does relocating the write target off the readout and into the feed-forward value projection produce fact retention that separates from the negative control floor over early-sequence edits?
+
+1. **Pre-Registered Primary Endpoint:**
+   - Fact retention over the first 50 edits, pooled across 6 seeds ($N=300$), compared against the worst individual negative control floor (`wrong_target`: 58/1200) by Newcombe hybrid score interval on the difference of two independent proportions. Strict positive separation ($CI_{\text{lo}} > 0$) is required for success.
+2. **Pre-Registered Secondary Endpoint:**
+   - Paraphrase generalization over the first 50 edits ($N=900$), compared against the same control floor by Newcombe hybrid score interval.
+3. **Arms & Frozen Readout:**
+   - Readout completely frozen: `lm_head.weight`, `transformer.wte.weight`, and `transformer.ln_f` (weight and bias) have `requires_grad=False`, with bitwise-zero parameter delta asserted and printed per seed.
+   - **Arm M-L:** Sequential rank-1 edit applied to `transformer.h.L.mlp.c_proj.weight` only, swept across three layers spanning depth: $L=1$ (early), $L=6$ (middle), $L=10$ (late).
+   - **Arm M-L-proj:** Rank-1 causal subspace orthogonal projection applied at the single best layer from the sweep, run conditionally ONLY IF a swept layer separates from floor on the primary endpoint.
+   - **Arm R-readout (Reference):** Reused `r0_unconstrained_d0.0` from `s0_7b.json` with asserted hyperparameter, seed-list, and sequence identity.
+4. **Controls:**
+   - Standing controls: `never_edited`, `random_direction_magnitude_matched`, `wrong_target`, `pre_edit_baseline`.
+   - New control: **`random_layer_magnitude_matched`**: rank-1 perturbation with identical write magnitude applied to `mlp.c_proj.weight` of a layer chosen uniformly at random per edit, excluding the swept layers.
+5. **Efficacy Gate & Dual Reporting:**
+   - Immediate efficacy evaluated first (90.00% gate). If an arm fails the gate, dual reporting is mandatory: 3a Conditional Retention (on successfully injected facts) and 3b Matched-Subset Comparison (against reference readout arm).
+
+---
+
+## 9. Active Codebase Organization
+
+- `experiments/s0_8_relocate.py`: Directive S0-8 engine (readout freeze, layer sweep M-L on `mlp.c_proj.weight`, M-L-proj, `random_layer_magnitude_matched` control, endpoints, and Rule 3.7 raw vector serialization).
+- `experiments/run_s0_8.py`: Master orchestrator for Directive S0-8 (Stage J/Defect fixes -> Gate 0 -> M-L Sweep -> M-L-proj if warranted -> Controls -> Capability).
+- `experiments/b1_inject.py`: Historical injection experiment engine (strictly maintained $< 600$ lines, currently 598 lines).
+- `experiments/stats.py`: Standalone statistical engine (minimum detectable effect, Newcombe intervals, exact Student $t$, exact Wilcoxon with combinatorial floor, logistic position slope).
+- `experiments/re_emission.py`: S0-7b Stage F re-emission engine.
+- `experiments/s0_7b_audit.py`: S0-7b Stage G/H analysis engine and fix-forward routines.
+- `experiments/weight_tying.py`: S0-7b Stage I weight-tying confound runner.
+- `experiments/stage_j.py`: Stage J tokenization disclosure audit engine.
+- `experiments/metrics.py`: Mathematical metrics, Wilson score intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and `CausalSubspaceManager`.
-- `tests/test_metrics.py`: Pre-flight unit test suite (Tests 1.1-1.6, 2.1-2.4, 3.1-3.18) and AST literal scanner.
-- `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier supporting S0-2 through S0-7b.
-- `reports/`: Validated markdown reports (`S0-2.md`, `S0-3.md`, `S0-4.md`, `S0-5.md`, `S0-6.md`, `S0-7a.md`, `S0-7b.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`, `s0_7b.json`).
+- `tests/test_metrics.py`: Pre-flight unit test suite and AST literal scanner.
+- `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier supporting S0-2 through S0-8.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-7b.md`, pending `S0-8.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`, `s0_7b.json`, pending `s0_8.json`).
 - `s0_6_stdout.txt`, `s0_7a_stdout.txt`, `s0_7b_stdout.txt`: Verbatim execution stdout logs.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
 

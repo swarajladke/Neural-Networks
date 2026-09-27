@@ -25,6 +25,10 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "generalization_per_seed": 600,
     "generalization_pooled": 3600,
     "generalization_pooled_1800": 1800,
+    "first50_per_seed": 50,
+    "first50_pooled": 300,
+    "first50_generalization_per_seed": 150,
+    "first50_generalization_pooled": 900,
     "recency_bin": 60,
     "revert_bin": 120,
     "controls_pooled": 4800,
@@ -759,6 +763,11 @@ def compute_monotone_retention_horizon(
     total_edits: int = 200
 ) -> Dict[str, Any]:
     """
+    DEPRECATED (Directive S0-8 Defect 6 / AGENTS.md Section 1.7):
+    The trailing-window separation-depth statistic k is formally retired as of Directive S0-8.
+    It is sample-size dependent, fragile to single boundary flips, and forbidden as a primary
+    or secondary endpoint. Preserved strictly for reproducing historical reports.
+
     Finds largest k in {10, 20, ..., total_edits} such that retention over
     edits (total_edits - k) ... total_edits is separable from the negative control
     floor by non-overlapping 95% Wilson intervals for EVERY k' <= k (first failure point).

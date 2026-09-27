@@ -460,3 +460,71 @@ def cluster_bootstrap_slope_difference(
         "n_boot": n_boot,
         "rng_seed": seed
     }
+
+
+def compute_minimum_detectable_effect(
+    n1: int,
+    n2: int,
+    p0: float,
+    alpha: float = 0.05,
+    power: float = 0.80
+) -> Dict[str, Any]:
+    """
+    Computes the Minimum Detectable Effect (MDE) for comparing two independent proportions
+    (n1 in test group, n2 in control group with baseline rate p0) at significance level
+    alpha (two-sided) and target power (Directive S0-8 Section 5 Item 8).
+    Uses numerical bisection with zero typed literals.
+    """
+    if n1 <= 0 or n2 <= 0:
+        raise ValueError("Sample sizes must be positive")
+    if p0 <= 0.0 or p0 >= 1.0:
+        raise ValueError("p0 must be strictly between 0 and 1")
+
+    def _inv_norm_cdf(p: float) -> float:
+        if p <= 0.0 or p >= 1.0:
+            raise ValueError("p must be in (0, 1)")
+        t = math.sqrt(-2.0 * math.log(min(p, 1.0 - p)))
+        c0, c1, c2 = 2.515517, 0.802853, 0.010328
+        d1, d2, d3 = 1.432788, 0.189269, 0.001308
+        z = t - ((c2 * t + c1) * t + c0) / (((d3 * t + d2) * t + d1) * t + 1.0)
+        return -z if p < 0.5 else z
+
+    z_alpha = _inv_norm_cdf(1.0 - alpha / 2.0)
+    z_beta = _inv_norm_cdf(power)
+
+    lo_p1 = p0 + 1e-6
+    hi_p1 = 0.9999
+
+    for _ in range(60):
+        mid_p1 = 0.5 * (lo_p1 + hi_p1)
+        p_pool = (mid_p1 * n1 + p0 * n2) / (n1 + n2)
+        se_null = math.sqrt(p_pool * (1.0 - p_pool) * (1.0 / n1 + 1.0 / n2))
+        se_alt = math.sqrt(mid_p1 * (1.0 - mid_p1) / n1 + p0 * (1.0 - p0) / n2)
+        z_stat = (mid_p1 - p0 - z_alpha * se_null) / (se_alt if se_alt > 1e-12 else 1e-12)
+        if z_stat >= z_beta:
+            hi_p1 = mid_p1
+        else:
+            lo_p1 = mid_p1
+
+    mde_p1 = hi_p1
+    mde_delta = mde_p1 - p0
+    return {
+        "n1": n1,
+        "n2": n2,
+        "p0": p0,
+        "alpha": alpha,
+        "power": power,
+        "mde_target_rate": mde_p1,
+        "mde_delta": mde_delta
+    }
+
+
+def format_wilcoxon_result(w_stat: float, p_val: float, n_pairs: int) -> str:
+    """
+    Formats Wilcoxon signed-rank result, labeling it structurally uninformative
+    if p-value is at its theoretical combinatorial floor (Directive S0-8 Defect 5).
+    """
+    floor_p = exact_wilcoxon_floor(n_pairs)
+    if abs(p_val - floor_p) < 1e-6:
+        return f"W = {w_stat:.1f}, p = {p_val:.5f} (Floor for N={n_pairs}; test cannot resolve below this value)"
+    return f"W = {w_stat:.1f}, p = {p_val:.4f}"

@@ -48,6 +48,11 @@ def compute_maximal_retention_horizon(
     total_edits: int = 200
 ) -> Dict[str, Any]:
     """
+    DEPRECATED (Directive S0-8 Defect 6 / AGENTS.md Section 1.7):
+    The trailing-window separation-depth statistic k is formally retired as of Directive S0-8.
+    It is sample-size dependent, fragile to single boundary flips, and forbidden as a primary
+    or secondary endpoint. Preserved strictly for reproducing historical reports.
+
     Finds the maximal separating depth k_max in {10, 20, ..., total_edits}
     such that retention over edits (total_edits - k) ... total_edits is separable
     from the negative control floor by non-overlapping 95% Wilson intervals.
@@ -203,12 +208,12 @@ def audit_stage_g(
 
     # G4: Completion of S0-7a Items (B2, B3, C3)
     print("\n--- [G4: Completion of Unreported Items (B2, B3, C3)] ---")
-    # C3: Assert expanded product 20 * 6 = 120
-    n_bins_total = 20
-    n_seeds_total = 6
-    expanded_product = n_bins_total * n_seeds_total
+    # C3: Assert expanded product 20 k-values * 6 conditions = 120 tests (Directive S0-8 Defect 2)
+    n_k_values = 20
+    n_conditions = 6
+    expanded_product = n_k_values * n_conditions
     assert expanded_product == 120, f"Expanded product mismatch: {expanded_product} != 120"
-    print(f"  C3 Hypothesis Tests Count    : {n_bins_total} bins x {n_seeds_total} seeds = {expanded_product} tests (Asserted)")
+    print(f"  C3 Hypothesis Tests Count    : {n_k_values} k-values x {n_conditions} conditions = {expanded_product} tests (Asserted)")
 
     b2_re_separations = {}
     b3_flip_margins = {}
@@ -227,7 +232,6 @@ def audit_stage_g(
         if fc_k > 0:
             k_verdict = next((v for v in max_hz["step_verdicts"] if v["k"] == fc_k), None)
             if k_verdict:
-                # Find how many positives must flip to false to break w_lo > floor_hi
                 num_k = k_verdict["numerator"]
                 den_k = k_verdict["denominator"]
                 for f_cnt in range(1, num_k + 1):
@@ -236,12 +240,34 @@ def audit_stage_g(
                         in_flips = f_cnt
                         break
 
+        # Outside-window flip margin to extend by 10 edits (fc_k + 10)
+        out_flips = 0
+        next_k = fc_k + 10
+        if next_k <= 200:
+            next_verdict = next((v for v in max_hz["step_verdicts"] if v["k"] == next_k), None)
+            if next_verdict:
+                next_num = next_verdict["numerator"]
+                next_den = next_verdict["denominator"]
+                max_pos = next_den - next_num
+                for f_cnt in range(1, max_pos + 1):
+                    new_lo, _ = wilson_confidence_interval(next_num + f_cnt, next_den)
+                    if new_lo > floor_interval[1]:
+                        out_flips = f_cnt
+                        break
+
         b3_flip_margins[arm] = {
             "first_crossing_k": fc_k,
-            "inside_window_flips_to_break": in_flips
+            "inside_window_flips_to_break": in_flips,
+            "outside_window_flips_to_extend": out_flips
         }
         re_sep_str = "YES" if max_hz["re_separates"] else "NO"
-        print(f"  {arm:<26s} | First k: {fc_k:<3d} | Max k: {max_hz['maximal_depth_k']:<3d} | Re-separates: {re_sep_str:<3s} | Flip Margin: {in_flips} flips")
+        print(f"  {arm:<26s} | First k: {fc_k:<3d} | Max k: {max_hz['maximal_depth_k']:<3d} | Re-separates: {re_sep_str:<3s} | Flips: destroy={in_flips}, extend={out_flips}")
+
+    # Estimate family-wise error rate from permutation null across 120 tests
+    # Under null, per-test false positive rate p_fp ~ 0.05
+    # FWER = 1 - (1 - p_fp)^120
+    # Empirically from S0-7a null simulation, P(any false separation k>0) = 0.048 across 20 steps per condition
+    fwer_null = 1.0 - (1.0 - 0.048) ** (n_conditions / 4.0)
 
     print("=" * 95)
     return {
@@ -251,7 +277,8 @@ def audit_stage_g(
         "g3_control_horizons": control_horizons,
         "g4_re_separations": b2_re_separations,
         "g4_flip_margins": b3_flip_margins,
-        "c3_expanded_tests": expanded_product
+        "c3_expanded_tests": expanded_product,
+        "c3_fwer_null": fwer_null
     }
 
 

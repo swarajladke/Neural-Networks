@@ -53,6 +53,14 @@ distinction between two metrics is an unmeasured distinction. *(Enforces: Sectio
 no I/O, no printing of results. A metric must be testable with a hand-built stub in
 milliseconds and no accelerator.
 
+**1.7 Retirement of the Trailing-Window Horizon Statistic.** The trailing-window separation-depth
+statistic (measuring the depth k of a trailing recency window whose Wilson lower bound exceeds
+the control floor) is formally retired as of Directive S0-8. It is sample-size dependent (increases
+with sample size at fixed underlying retention), highly fragile to single-fact flips, and conflates
+recency bias with capacity. It may NOT be used as a primary or secondary endpoint in any future
+directive. The implementation and tests are preserved strictly for reproducing historical reports;
+the underlying functions are marked deprecated. *(Enforces: Section 0 Prime Directive, Section 13, Rule 2, Rule 6 [R16])*
+
 ---
 
 ## 2. Thresholds and gates

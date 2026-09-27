@@ -60,9 +60,15 @@ from experiments.stats import (
     compute_paired_stats_with_pvalues,
     fit_logistic_position_slope,
     exact_wilcoxon_floor,
-    cluster_bootstrap_slope_difference
+    cluster_bootstrap_slope_difference,
+    compute_minimum_detectable_effect,
+    format_wilcoxon_result
 )
 from experiments.s0_7b_audit import compute_maximal_retention_horizon
+from experiments.s0_8_relocate import (
+    freeze_readout,
+    assert_readout_frozen
+)
 
 # ==============================================================================
 # AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
@@ -143,7 +149,7 @@ def run_all_tests() -> int:
     print("=" * 100)
     
     # --------------------------------------------------------------------------
-    # AST LITERAL SCANNER ON b1_inject.py, run_s0_7a.py, horizon_audit.py
+    # AST LITERAL SCANNER ON EXPERIMENT AND AUDIT MODULES
     # --------------------------------------------------------------------------
     print("\n[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]")
     target_scripts = [
@@ -155,7 +161,9 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "re_emission.py",
         REPO_ROOT / "experiments" / "weight_tying.py",
         REPO_ROOT / "experiments" / "s0_7b_audit.py",
-        REPO_ROOT / "experiments" / "run_s0_7b.py"
+        REPO_ROOT / "experiments" / "run_s0_7b.py",
+        REPO_ROOT / "experiments" / "s0_8_relocate.py",
+        REPO_ROOT / "experiments" / "run_s0_8.py"
     ]
     for ts in target_scripts:
         if ts.exists():
@@ -871,7 +879,71 @@ def run_all_tests() -> int:
     print("  Test 3.18 (Stage J Conventions)       : 1,000 facts object and target_token_str structure PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.19 TEST SUITE SUMMARY
+    # 3.19 TEST MINIMUM DETECTABLE EFFECT (DIRECTIVE S0-8 §5 ITEM 8)
+    # --------------------------------------------------------------------------
+    print("\n[3.19 Test Minimum Detectable Effect (Directive S0-8 §5 Item 8)]")
+    tests_run += 1
+    mde_test = compute_minimum_detectable_effect(n1=300, n2=1200, p0=0.0483, alpha=0.05, power=0.80)
+    assert mde_test["mde_delta"] > 0.0, "MDE delta must be positive"
+    assert mde_test["mde_target_rate"] > 0.0483, "MDE target rate must exceed baseline floor"
+    tests_passed += 1
+    print("  Test 3.19 (Minimum Detectable Effect) : Power=0.80, alpha=0.05 dynamic MDE computation PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.20 TEST READOUT FREEZE BITWISE ASSERTION (DIRECTIVE S0-8 §2)
+    # --------------------------------------------------------------------------
+    print("\n[3.20 Test Readout Freeze Bitwise Assertion (Directive S0-8 §2)]")
+    tests_run += 1
+    class DummyModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lm_head = torch.nn.Linear(10, 10, bias=False)
+            self.transformer = torch.nn.Module()
+            self.transformer.wte = torch.nn.Embedding(10, 10)
+            self.transformer.ln_f = torch.nn.LayerNorm(10)
+    dummy = DummyModel()
+    init_ro = freeze_readout(dummy)
+    assert not dummy.lm_head.weight.requires_grad
+    assert not dummy.transformer.wte.weight.requires_grad
+    assert not dummy.transformer.ln_f.weight.requires_grad
+    assert not dummy.transformer.ln_f.bias.requires_grad
+    assert_readout_frozen(dummy, init_ro, 0, "dummy_arm")
+    caught_freeze_violation = False
+    dummy.lm_head.weight.data[0, 0] += 0.01
+    try:
+        assert_readout_frozen(dummy, init_ro, 0, "dummy_arm")
+    except AssertionError:
+        caught_freeze_violation = True
+    assert caught_freeze_violation, "Readout modification must raise AssertionError"
+    tests_passed += 1
+    print("  Test 3.20 (Readout Freeze Assertion)  : Zero delta passes, non-zero delta raises PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.21 TEST S0-8 POPULATION SCOPES IN REGISTRY (DIRECTIVE S0-8 §6 ITEM 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.21 Test S0-8 Population Scopes in Registry (Directive S0-8 §6 Item 2)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("first50_per_seed") == 50
+    assert POPULATION_REGISTRY.get("first50_pooled") == 300
+    assert POPULATION_REGISTRY.get("first50_generalization_per_seed") == 150
+    assert POPULATION_REGISTRY.get("first50_generalization_pooled") == 900
+    tests_passed += 1
+    print("  Test 3.21 (S0-8 Population Scopes)    : first50 scopes 50, 300, 150, 900 verified in POPULATION_REGISTRY PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.22 TEST EXACT WILCOXON FLOOR LABELING (DIRECTIVE S0-8 §7 ITEM 5)
+    # --------------------------------------------------------------------------
+    print("\n[3.22 Test Exact Wilcoxon Floor Labeling (Directive S0-8 §7 Item 5)]")
+    tests_run += 1
+    w_str_floor = format_wilcoxon_result(0.0, 0.03125, 6)
+    assert "Floor for N=6" in w_str_floor, f"Expected floor label in {w_str_floor}"
+    w_str_reg = format_wilcoxon_result(3.0, 0.2000, 6)
+    assert "Floor for N=6" not in w_str_reg, f"Unexpected floor label in {w_str_reg}"
+    tests_passed += 1
+    print("  Test 3.22 (Wilcoxon Floor Labeling)   : Combinatorial floor labeled structurally uninformative PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.23 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
