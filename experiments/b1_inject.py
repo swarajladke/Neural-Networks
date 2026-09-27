@@ -26,8 +26,7 @@ from experiments.metrics import (
     compute_surviving_fraction, compute_alignment, assert_pythagorean_projection,
     assert_orthonormality, compute_paired_stats, compute_monotone_retention_horizon,
     classify_reversion_pattern, wilson_confidence_interval
-)
-from tests.test_metrics import run_all_tests
+# pre-flight test runner imported inside main() below
 
 SEEDS = [0, 1, 2, 3, 4, 5]
 MARGINS = [0.0, 1.0, 3.0, 6.0]
@@ -165,6 +164,7 @@ def main():
     print(" MANDATE: MARGIN SWEEP, MONOTONE STOPPING RULE, SIX SEEDS, HORIZON FINDER, PAIRED STATS")
     print("=" * 115)
     print("\n--- [Pre-Flight Test Suite Execution (Directive S0-6)] ---")
+    from tests.test_metrics import run_all_tests
     if run_all_tests() != 0:
         print("FATAL: Pre-flight test suite failed. Halting before compute."); sys.exit(1)
     print("\n--- [Environment Fingerprint & Input Hashes (Directive S0-6 Section 0)] ---")

@@ -65,10 +65,6 @@ from experiments.stats import (
     format_wilcoxon_result
 )
 from experiments.s0_7b_audit import compute_maximal_retention_horizon
-from experiments.s0_8_relocate import (
-    freeze_readout,
-    assert_readout_frozen
-)
 
 # ==============================================================================
 # AST LITERAL SCANNER (AGENTS.md Appendix C.2 / Directive S0-2 A4)
@@ -894,6 +890,7 @@ def run_all_tests() -> int:
     # --------------------------------------------------------------------------
     print("\n[3.20 Test Readout Freeze Bitwise Assertion (Directive S0-8 §2)]")
     tests_run += 1
+    from experiments.s0_8_relocate import freeze_readout, assert_readout_frozen
     class DummyModel(torch.nn.Module):
         def __init__(self):
             super().__init__()

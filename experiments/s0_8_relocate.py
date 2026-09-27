@@ -46,12 +46,63 @@ from experiments.stats import (
     compute_minimum_detectable_effect,
     format_wilcoxon_result
 )
-from experiments.b1_inject import (
-    greedy_predict,
-    get_next_token_log_probs,
-    project_orthogonal,
-    SEEDS
-)
+SEEDS = [0, 1, 2, 3, 4, 5]
+
+
+def configure_determinism(seed: int = 42, warn_only: bool = True):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    for sdp in ['enable_mem_efficient_sdp', 'enable_flash_sdp']:
+        if hasattr(torch.backends.cuda, sdp):
+            getattr(torch.backends.cuda, sdp)(False)
+    if hasattr(torch.backends.cuda, 'enable_math_sdp'):
+        torch.backends.cuda.enable_math_sdp(True)
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=warn_only)
+    except Exception as e:
+        print(f"Warning setting deterministic algorithms: {e}")
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+
+def project_orthogonal(v: torch.Tensor, Q: Optional[torch.Tensor]) -> torch.Tensor:
+    if Q is None or Q.numel() == 0:
+        return v
+    return v - torch.matmul(v, torch.matmul(Q, Q.T))
+
+
+def greedy_predict(
+    model: nn.Module,
+    tokenizer: Any,
+    prompt: str,
+    max_new_tokens: int = 5,
+    device: str = "cuda",
+    train_mode: bool = False
+) -> str:
+    model.eval() if not train_mode else model.train()
+    inp = tokenizer(prompt, return_tensors="pt").to(device)
+    with torch.no_grad():
+        out = model.generate(**inp, max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=tokenizer.eos_token_id)
+    return tokenizer.decode(out[0][inp.input_ids.shape[1]:], skip_special_tokens=True).strip()
+
+
+def get_next_token_log_probs(
+    model: nn.Module,
+    tokenizer: Any,
+    prompt: str,
+    device: str = "cuda",
+    train_mode: bool = False
+) -> torch.Tensor:
+    model.eval() if not train_mode else model.train()
+    inp = tokenizer(prompt, return_tensors="pt").to(device)
+    with torch.no_grad():
+        out = model(**inp)
+    logits = out.logits[0, -1, :]
+    return F.log_softmax(logits, dim=-1).cpu()
 
 # Chosen layers spanning depth: Layer 1 (early), Layer 6 (middle), Layer 10 (late)
 SWEPT_LAYERS = [1, 6, 10]

@@ -57,13 +57,11 @@ from experiments.stats import (
     compute_minimum_detectable_effect,
     format_wilcoxon_result
 )
-from experiments.b1_inject import (
-    configure_determinism,
-    greedy_predict,
-    SEEDS
-)
 from experiments.s0_8_relocate import (
     SWEPT_LAYERS,
+    SEEDS,
+    configure_determinism,
+    greedy_predict,
     freeze_readout,
     assert_readout_frozen,
     edit_fact_mlp_sgd,
