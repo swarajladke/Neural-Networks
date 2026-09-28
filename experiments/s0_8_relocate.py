@@ -178,6 +178,7 @@ def edit_fact_mlp_sgd(
     labels = input_ids.clone()
     labels[:, :prompt_len] = -100
 
+    primary_tok = input_ids[0, prompt_len].item()
     steps_taken = 0
     curr_pred = ""
     w_pre = target_param.data.clone()
@@ -187,6 +188,8 @@ def edit_fact_mlp_sgd(
             steps_taken += 1
             optimizer.zero_grad()
             out = model(input_ids, labels=labels)
+            p_logits = out.logits[0, prompt_len - 1, :]
+            top_tok = torch.argmax(p_logits).item()
             out.loss.backward()
             del out
 
@@ -194,10 +197,13 @@ def edit_fact_mlp_sgd(
                 target_param.grad.copy_(project_orthogonal(target_param.grad, Q_causal))
 
             optimizer.step()
-            curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
-            if check_match(curr_pred, fact["object"]):
-                break
+            if top_tok == primary_tok:
+                curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
+                if check_match(curr_pred, fact["object"]):
+                    break
 
+    if not curr_pred:
+        curr_pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
     immediate_match = check_match(curr_pred, fact["object"])
     delta_applied = (target_param.data - w_pre).detach()
     delta_norm = torch.linalg.norm(delta_applied).item()

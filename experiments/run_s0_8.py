@@ -317,6 +317,8 @@ def main():
                     max_steps=100, device=device
                 )
                 edit_res.append(res_e)
+                if (t_idx + 1) % 50 == 0:
+                    print(f"      [Progress] Arm {arm_name}, Seed {s}: edit {t_idx + 1} of 200 completed")
                 if L == 6:  # Focal layer for magnitude matching
                     focal_norms_by_seed[s].append(res_e["delta_norm"])
 
@@ -376,6 +378,8 @@ def main():
                 delta_target = res_e["delta_applied"].mean(dim=0)
                 subspace_mgr.add_update(delta_target)
                 edit_res.append(res_e)
+                if (t_idx + 1) % 50 == 0:
+                    print(f"      [Progress] Arm {arm_proj_name}, Seed {s}: edit {t_idx + 1} of 200 completed")
 
             assert_readout_frozen(model, init_ro, s, arm_proj_name)
             s_steps = sum(r["steps_taken"] for r in edit_res)
