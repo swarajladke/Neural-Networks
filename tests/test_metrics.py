@@ -950,11 +950,11 @@ def run_all_tests() -> int:
     # --------------------------------------------------------------------------
     print("\n[3.23 Test Closed-Form Rank-1 Key-Value Update (Directive S0-9)]")
     tests_run += 1
-    # Random key k (3072,) and weight W (3072, 768)
+    # Random key k (3072,) and weight W (3072, 768) in double precision
     rng_t = torch.Generator().manual_seed(42)
-    k_vec = torch.randn(3072, generator=rng_t)
-    W_mat = torch.randn(3072, 768, generator=rng_t)
-    v_star = torch.randn(768, generator=rng_t)
+    k_vec = torch.randn(3072, generator=rng_t, dtype=torch.float64)
+    W_mat = torch.randn(3072, 768, generator=rng_t, dtype=torch.float64)
+    v_star = torch.randn(768, generator=rng_t, dtype=torch.float64)
     # Closed form: Δ = outer(k, (v* - k W)) / (k^T k)
     lin_pred = torch.matmul(k_vec, W_mat)
     delta_v = v_star - lin_pred
