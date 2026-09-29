@@ -318,7 +318,7 @@ def main():
     print(f"  Projected Evals Wall-Clock       : {budget_proj['time_evals']:.2f} s")
     print(f"  Projected Overhead Wall-Clock    : {budget_proj['time_overhead']:.2f} s")
     print(f"  Total Raw Compute Time           : {budget_proj['raw_total_seconds']:.2f} s")
-    print(f"  Contingency Projection (1.20)    : {budget_proj['projected_total_seconds']:.2f} s (Ceiling: {budget_proj['ceiling_seconds']:.2f} s)")
+    print(f"  Contingency Budget Projection    : {budget_proj['projected_total_seconds']:.2f} s (Ceiling: {budget_proj['ceiling_seconds']:.2f} s)")
     assert not budget_proj["exceeds_budget"], f"Compute budget projection ({budget_proj['projected_total_seconds']:.2f}s) exceeds ceiling!"
     print("  Budget Reprojection Status       : PASSED (Under Compute Ceiling)\n")
 
