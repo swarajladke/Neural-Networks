@@ -101,6 +101,12 @@ ALLOW_LIST = {
     "  Delta-1.0 Timing (t_delta1)  : ": "Delta-1 timing label",
     "  Newcombe 95% Hybrid Score CI : [": "Newcombe 95% CI label",
     "    Secondary 6-Cluster Bootstrap 95% CI      : [": "Cluster bootstrap 95% CI label",
+    " MANDATE: STAGE P (PATH VERIF) -> STAGE W (LR GRID + CLOSED-FORM) -> 90% FEASIBILITY GATE": "S0-9 mandate banner",
+    "  Gate (>=90%)": "S0-9 table header",
+    "Gate (>=90%)": "S0-9 table header unpadded",
+    "--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---": "Gate 0 S0-9 banner",
+    "  Zero arms reached the 90.00% immediate efficacy gate. No negative controls triggered.\n": "S0-9 control notice",
+    "  Contingency Projection (1.2): ": "Contingency projection label",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:
@@ -940,7 +946,73 @@ def run_all_tests() -> int:
     print("  Test 3.22 (Wilcoxon Floor Labeling)   : Combinatorial floor labeled structurally uninformative PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.23 TEST SUITE SUMMARY
+    # 3.23 TEST CLOSED-FORM RANK-1 KEY-VALUE UPDATE MATHEMATICS (DIRECTIVE S0-9)
+    # --------------------------------------------------------------------------
+    print("\n[3.23 Test Closed-Form Rank-1 Key-Value Update (Directive S0-9)]")
+    tests_run += 1
+    # Random key k (3072,) and weight W (3072, 768)
+    rng_t = torch.Generator().manual_seed(42)
+    k_vec = torch.randn(3072, generator=rng_t)
+    W_mat = torch.randn(3072, 768, generator=rng_t)
+    v_star = torch.randn(768, generator=rng_t)
+    # Closed form: Δ = outer(k, (v* - k W)) / (k^T k)
+    lin_pred = torch.matmul(k_vec, W_mat)
+    delta_v = v_star - lin_pred
+    delta_W = torch.outer(k_vec, delta_v) / torch.dot(k_vec, k_vec)
+    new_output = torch.matmul(k_vec, W_mat + delta_W)
+    max_err = torch.max(torch.abs(new_output - v_star)).item()
+    assert max_err < 1e-5, f"Rank-1 closed-form error too high: {max_err}"
+    tests_passed += 1
+    print(f"  Test 3.23 (Closed-Form Rank-1 Math)   : k(W + Δ) == v* with max error {max_err:.2e} PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.24 TEST SUBJECT LAST TOKEN INDEX FINDER (DIRECTIVE S0-9)
+    # --------------------------------------------------------------------------
+    print("\n[3.24 Test Subject Last Token Index Finder (Directive S0-9)]")
+    tests_run += 1
+    class DummyTokenizer:
+        def encode(self, text: str) -> List[int]:
+            return [hash(w) % 1000 for w in text.strip().split()]
+    d_tok = DummyTokenizer()
+    from experiments.s0_9_writability import get_subject_last_token_idx
+    # Prompt starting with subject
+    p_start = "Ada Lovelace was born in London"
+    s_start = "Ada Lovelace"
+    idx_start = get_subject_last_token_idx(d_tok, p_start, s_start)
+    assert idx_start == 1, f"Expected idx 1 for 2-word subject, got {idx_start}"
+    # Prompt with subject in middle
+    p_mid = "The capital of France is"
+    s_mid = "France"
+    idx_mid = get_subject_last_token_idx(d_tok, p_mid, s_mid)
+    assert idx_mid == 3, f"Expected idx 3 for France in 'The capital of France is', got {idx_mid}"
+    tests_passed += 1
+    print("  Test 3.24 (Subject Last Token Finder) : Prefix and middle subjects mapped correctly PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.25 TEST S0-9 POPULATION REGISTRY SCOPES (DIRECTIVE S0-9 §4 ITEM 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.25 Test S0-9 Population Registry Scopes (Directive S0-9)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_9_single_edit") == 100
+    assert POPULATION_REGISTRY.get("s0_9_stage_p") == 20
+    tests_passed += 1
+    print("  Test 3.25 (S0-9 Registry Scopes)      : s0_9_single_edit=100, s0_9_stage_p=20 registered PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.26 TEST FLOOR VERDICT STRING DERIVATION (DIRECTIVE S0-9 §4 ITEM 6)
+    # --------------------------------------------------------------------------
+    print("\n[3.26 Test Floor Verdict String Derivation (Directive S0-9 §4 Item 6)]")
+    tests_run += 1
+    from tools.make_report import compute_floor_verdict_str
+    assert compute_floor_verdict_str(0.05, 0.01, 0.10) == "ABOVE"
+    assert compute_floor_verdict_str(-0.05, -0.10, -0.01) == "BELOW"
+    assert compute_floor_verdict_str(-0.01, -0.05, 0.03) == "AT"
+    assert compute_floor_verdict_str(0.01, -0.02, 0.04) == "AT"
+    tests_passed += 1
+    print("  Test 3.26 (Floor Verdict Derivation)  : ABOVE, AT, BELOW correctly partitioned PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.27 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")

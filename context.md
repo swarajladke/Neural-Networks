@@ -161,24 +161,33 @@ Directive S0-7b executed full-population re-emission on GPU ($N=1200$, 6 seeds, 
 
 ---
 
-## 8. Active Directive: Directive S0-8 — Relocating the Write
+## 8. Directive S0-8 Empirical Findings (Commit `4f293e9` / `3522df6`)
 
-**Research Question:** Does relocating the write target off the readout and into the feed-forward value projection produce fact retention that separates from the negative control floor over early-sequence edits?
+Directive S0-8 relocated the sequential rank-1 write target off the readout and into the feed-forward value projection `transformer.h.L.mlp.c_proj.weight` ($L \in \{1, 6, 10\}$) under a completely frozen readout (asserted bitwise-zero parameter delta across all seeds on `lm_head.weight`, `transformer.wte.weight`, and `transformer.ln_f`).
 
-1. **Pre-Registered Primary Endpoint:**
-   - Fact retention over the first 50 edits, pooled across 6 seeds ($N=300$), compared against the worst individual negative control floor (`wrong_target`: 58/1200) by Newcombe hybrid score interval on the difference of two independent proportions. Strict positive separation ($CI_{\text{lo}} > 0$) is required for success.
-2. **Pre-Registered Secondary Endpoint:**
-   - Paraphrase generalization over the first 50 edits ($N=900$), compared against the same control floor by Newcombe hybrid score interval.
-3. **Arms & Frozen Readout:**
-   - Readout completely frozen: `lm_head.weight`, `transformer.wte.weight`, and `transformer.ln_f` (weight and bias) have `requires_grad=False`, with bitwise-zero parameter delta asserted and printed per seed.
-   - **Arm M-L:** Sequential rank-1 edit applied to `transformer.h.L.mlp.c_proj.weight` only, swept across three layers spanning depth: $L=1$ (early), $L=6$ (middle), $L=10$ (late).
-   - **Arm M-L-proj:** Rank-1 causal subspace orthogonal projection applied at the single best layer from the sweep, run conditionally ONLY IF a swept layer separates from floor on the primary endpoint.
-   - **Arm R-readout (Reference):** Reused `r0_unconstrained_d0.0` from `s0_7b.json` with asserted hyperparameter, seed-list, and sequence identity.
-4. **Controls:**
-   - Standing controls: `never_edited`, `random_direction_magnitude_matched`, `wrong_target`, `pre_edit_baseline`.
-   - New control: **`random_layer_magnitude_matched`**: rank-1 perturbation with identical write magnitude applied to `mlp.c_proj.weight` of a layer chosen uniformly at random per edit, excluding the swept layers.
-5. **Efficacy Gate & Dual Reporting:**
-   - Immediate efficacy evaluated first (90.00% gate). If an arm fails the gate, dual reporting is mandatory: 3a Conditional Retention (on successfully injected facts) and 3b Matched-Subset Comparison (against reference readout arm).
+### Established State as of S0-8:
+1. **Readout Editing Null:** Readout editing (`lm_head.weight`, tied to `wte`) produced no early-sequence retention above the `wrong_target` floor, and no paraphrase generalization above floor.
+2. **MLP Write Inefficacy:** S0-8 moved a rank-1 SGD write to `transformer.h.L.mlp.c_proj.weight`, $L \in \{1, 6, 10\}$, readout frozen and asserted. Immediate efficacy was 20/1200 (1.67%), 7/1200 (0.58%), and 1/1200 (0.08%) for $L = 1, 6, 10$, and every edit exhausted `max_steps=100`. **The site was not writable under that optimizer and budget.** No retention or generalization conclusion is drawn from S0-8, because retention from arms below the 90.00% efficacy gate is not reportable (AGENTS.md §11.5).
+3. **No Positive Control at New Write Site:** S0-8 had no positive control at the new write site. Whether the failure is a physical property of the site or an algorithmic defect in the write path is unknown.
+4. **Compute Overrun:** S0-8 took 16,637.48 s against a 7,820 s projection and exceeded the compute ceiling (16,380.0 s).
+
+---
+
+## 9. Active Directive: Directive S0-9 — Writability of the Mid-Layer MLP Value Projection: Positive Control First
+
+**Objective:** Positive control first. Establish whether any write procedure at `mlp.c_proj` at some layer can achieve at least 90.00% immediate efficacy on the pinned facts (single edit, fresh model each time) before any sequential or retention experiment.
+
+1. **Question Q1 (Positive Control):** Can any write procedure at `mlp.c_proj` at some layer achieve at least 90.00% immediate efficacy on the pinned facts, single edit, fresh model each time?
+2. **Question Q2 (Conditional on Q1):** Is a closed-form key-value write, as opposed to iterative SGD, sufficient to reach the gate?
+3. **Stage P (Path Verification):** Seed 0, first 20 facts, fresh model per fact at $L=6$:
+   - Forward hook on `mlp.c_proj` input; record key $k$ at subject's final token position, and output $v$.
+   - Assert `c_proj.weight.requires_grad=True` and gradient is nonzero and finite for edit loss; print norm.
+   - Apply single large, unconstrained step at $L=6$ and confirm target log-prob increases; print before/after log-prob per fact.
+   - Assert edited weight differs from original (reporting delta norm). Stop if target log-prob does not rise for any of the 20.
+4. **Stage W (Writability Sweep):** Single-edit, fresh model per fact, 100 facts (25 per relation, pinned ordering), Seed 0 across layers $L \in \{1, 3, 6, 9, 11\}$ (subject to budget pruning: 1, 11, 3):
+   - **Arm W1 (Iterative Rank-1 SGD):** 3 pre-declared learning rates spanning two orders of magnitude around S0-8 rate ($3.0\times 10^{-5}, 3.0\times 10^{-4}, 3.0\times 10^{-3}$).
+   - **Arm W2 (Closed-Form Rank-1 Key-Value Update):** $\Delta = \frac{k^T (v^* - k W)}{k^T k}$, optimizing $v^*$ with L2 penalty ($\lambda=0.5$) toward original $v$.
+5. **Measurements & Reporting:** Immediate efficacy (num/den, Wilson interval), mean steps, WikiText-2 PPL, Locality KL on control probes ($N=200$, asserted non-zero if PPL moves). 90.00% feasibility gate applied. Negative control `wrong_target` evaluated alongside for any arm reaching gate. No retention, generalization, or horizon endpoint measured.
 
 ---
 

@@ -29,6 +29,8 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "first50_pooled": 300,
     "first50_generalization_per_seed": 150,
     "first50_generalization_pooled": 900,
+    "s0_9_single_edit": 100,
+    "s0_9_stage_p": 20,
     "recency_bin": 60,
     "revert_bin": 120,
     "controls_pooled": 4800,
