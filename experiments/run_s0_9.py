@@ -40,6 +40,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from experiments.data import (
     generate_synthetic_facts,
+    sample_200_facts,
     load_wikitext2_slice,
     evaluate_wikitext_perplexity
 )
@@ -235,7 +236,8 @@ def main():
     # Reproduce seed 0 edit sequence on readout
     configure_determinism(seed=0)
     model.load_state_dict(base_state_dict)
-    seq0_facts = facts_1000[:200]
+    seq0_facts, seq0_sha = sample_200_facts(facts_1000, seed=0)
+    assert seq0_sha == "21eb027af79426e0f70c61b1c0b25e3a2a169e1bb5f004bebf6eb99d59de8162"
     g0_steps = 0
     g0_imm_matches = []
     for f in seq0_facts:
