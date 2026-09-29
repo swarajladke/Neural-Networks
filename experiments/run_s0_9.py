@@ -282,7 +282,7 @@ def main():
 
     # Eval timing on declared perplexity subset and locality probes
     t0_ppl = time.time()
-    _ = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device, max_sequences=N_PPL_SUBSET_SEQS)
+    subset_baseline_ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device, max_sequences=N_PPL_SUBSET_SEQS)
     t_eval_ppl_m = time.time() - t0_ppl
 
     t0_loc = time.time()
@@ -377,7 +377,7 @@ def main():
             model.load_state_dict(base_state_dict)
             # Evaluate capability after a representative edit
             _ = edit_fact_mlp_sgd_rate(model, tokenizer, stage_w_facts[0], layer_idx=layer_l, lr=lr_val, max_steps=100, device=device)
-            cap_res = evaluate_capability_and_locality(model, fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device=device)
+            cap_res = evaluate_capability_and_locality(model, fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device=device, baseline_ppl=subset_baseline_ppl)
 
             m_imm = Measurement.from_outcomes(imm_outcomes, metric="immediate_efficacy", arm=arm_name, scope="s0_9_single_edit", input_set="facts_100", mode="eval_no_dropout")
             passed_gate = (m_imm.pct >= 90.0)
@@ -430,7 +430,7 @@ def main():
 
         model.load_state_dict(base_state_dict)
         _ = edit_fact_mlp_closed_form(model, tokenizer, stage_w_facts[0], layer_idx=layer_l, max_steps=W2_MAX_STEPS, lr_v=W2_LR_V, lambda_l2=W2_LAMBDA_L2, device=device)
-        cap_res_w2 = evaluate_capability_and_locality(model, fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device=device)
+        cap_res_w2 = evaluate_capability_and_locality(model, fresh_model, tokenizer, template_prior_controls, wikitext_slice, slice_sha, device=device, baseline_ppl=subset_baseline_ppl)
 
         m_imm_w2 = Measurement.from_outcomes(w2_imm, metric="immediate_efficacy", arm=arm_name_w2, scope="s0_9_single_edit", input_set="facts_100", mode="eval_no_dropout")
         passed_gate_w2 = (m_imm_w2.pct >= 90.0)

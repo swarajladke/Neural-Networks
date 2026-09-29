@@ -2356,6 +2356,7 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
     stage_w_table = "\n".join(w_lines)
 
     neg_ctrls = data.get("negative_controls", {})
+    ctrls_gate = data.get("controls_for_gate_arms", {})
     ctrl_lines = []
     if neg_ctrls:
         for c_name, c_dict in neg_ctrls.items():

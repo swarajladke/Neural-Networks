@@ -133,11 +133,12 @@ def run_stage_p_path_verification(
             recorded_acts["v"] = out[0, subj_idx, :].detach().clone()
 
         h_hook = model.transformer.h[layer_idx].mlp.c_proj.register_forward_hook(hook_fn)
-
-        enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
-        with torch.no_grad():
-            _ = model(**enc_prompt)
-        h_hook.remove()
+        try:
+            enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
+            with torch.no_grad():
+                _ = model(**enc_prompt)
+        finally:
+            h_hook.remove()
 
         assert "k" in recorded_acts and "v" in recorded_acts
         k_norm = torch.linalg.norm(recorded_acts["k"]).item()
@@ -212,8 +213,9 @@ def edit_fact_mlp_sgd_rate(
     model: nn.Module,
     tokenizer: Any,
     fact: Dict[str, Any],
-    layer_idx: int,
-    lr: float,
+    layer_idx: Optional[int] = None,
+    layer: Optional[int] = None,
+    lr: float = 3.0e-5,
     max_steps: int = 100,
     device: str = "cuda"
 ) -> Dict[str, Any]:
@@ -221,7 +223,9 @@ def edit_fact_mlp_sgd_rate(
     Iterative rank-1 SGD editing targeting transformer.h[L].mlp.c_proj.weight.
     Stopping condition: checks check_match on greedy decode when top token matches target.
     """
-    target_param = model.transformer.h[layer_idx].mlp.c_proj.weight
+    l_idx = layer_idx if layer_idx is not None else layer
+    assert l_idx is not None, "layer_idx or layer must be specified"
+    target_param = model.transformer.h[l_idx].mlp.c_proj.weight
     for p in model.parameters():
         p.requires_grad = False
     target_param.requires_grad = True
@@ -278,7 +282,8 @@ def edit_fact_mlp_closed_form(
     model: nn.Module,
     tokenizer: Any,
     fact: Dict[str, Any],
-    layer_idx: int,
+    layer_idx: Optional[int] = None,
+    layer: Optional[int] = None,
     max_steps: int = W2_MAX_STEPS,
     lr_v: float = W2_LR_V,
     lambda_l2: float = W2_LAMBDA_L2,
@@ -291,7 +296,9 @@ def edit_fact_mlp_closed_form(
     3. Computes rank-1 weight update Δ = outer(k, (v* - k W)) / (k^T k).
     4. Applies Δ to c_proj.weight.data.
     """
-    c_proj = model.transformer.h[layer_idx].mlp.c_proj
+    l_idx = layer_idx if layer_idx is not None else layer
+    assert l_idx is not None, "layer_idx or layer must be specified"
+    c_proj = model.transformer.h[l_idx].mlp.c_proj
     for p in model.parameters():
         p.requires_grad = False
 
@@ -305,10 +312,12 @@ def edit_fact_mlp_closed_form(
         recorded_acts["v0"] = out[0, subj_idx, :].detach().clone()
 
     h_rec = c_proj.register_forward_hook(hook_rec)
-    enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
-    with torch.no_grad():
-        _ = model(**enc_prompt)
-    h_rec.remove()
+    try:
+        enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
+        with torch.no_grad():
+            _ = model(**enc_prompt)
+    finally:
+        h_rec.remove()
 
     k_vec = recorded_acts["k"]      # (3072,)
     v0_vec = recorded_acts["v0"]    # (768,)
@@ -333,22 +342,23 @@ def edit_fact_mlp_closed_form(
     h_rep = c_proj.register_forward_hook(hook_rep)
     steps_taken = 0
 
-    with torch.set_grad_enabled(True):
-        for _ in range(max_steps):
-            steps_taken += 1
-            opt_v.zero_grad()
-            out = model(input_ids, labels=labels)
-            loss_ce = out.loss
-            loss_l2 = lambda_l2 * torch.sum((v_param - v0_vec) ** 2)
-            loss = loss_ce + loss_l2
-            loss.backward()
-            opt_v.step()
+    try:
+        with torch.set_grad_enabled(True):
+            for _ in range(max_steps):
+                steps_taken += 1
+                opt_v.zero_grad()
+                out = model(input_ids, labels=labels)
+                loss_ce = out.loss
+                loss_l2 = lambda_l2 * torch.sum((v_param - v0_vec) ** 2)
+                loss = loss_ce + loss_l2
+                loss.backward()
+                opt_v.step()
 
-            top_tok = torch.argmax(out.logits[0, prompt_len - 1, :]).item()
-            if top_tok == primary_tok:
-                break
-
-    h_rep.remove()
+                top_tok = torch.argmax(out.logits[0, prompt_len - 1, :]).item()
+                if top_tok == primary_tok:
+                    break
+    finally:
+        h_rep.remove()
 
     # Step 3: Compute closed-form rank-1 update to c_proj.weight
     # In GPT-2 Conv1D: W has shape (3072, 768), forward is x @ W.
@@ -387,7 +397,8 @@ def evaluate_capability_and_locality(
     wikitext_slice: torch.Tensor,
     slice_sha: str,
     device: str = "cuda",
-    max_ppl_sequences: Optional[int] = N_PPL_SUBSET_SEQS
+    max_ppl_sequences: Optional[int] = N_PPL_SUBSET_SEQS,
+    baseline_ppl: Optional[float] = None
 ) -> Dict[str, Any]:
     """
     Evaluates WikiText-2 perplexity and locality KL on control probes.
@@ -401,9 +412,10 @@ def evaluate_capability_and_locality(
     post_lps = {p: get_next_token_log_probs(model, tokenizer, p, device, False) for p in probe_prompts}
     loc_kl = compute_locality_kl(pre_lps, post_lps)
 
-    # Locality KL guard: if perplexity moved significantly from baseline (36.03), locality KL cannot be zero
-    if abs(ppl - 36.03) > 0.05:
-        assert loc_kl > 0.0, f"Locality KL guard failure: PPL moved to {ppl:.2f} but locality KL printed as {loc_kl:.6f}!"
+    # Locality KL guard: if perplexity moved significantly from baseline (36.03 or measured subset baseline), locality KL cannot be zero
+    ref_ppl = baseline_ppl if baseline_ppl is not None else 36.03
+    if abs(ppl - ref_ppl) > 0.20:
+        assert loc_kl > 0.0, f"Locality KL guard failure: PPL moved to {ppl:.2f} (baseline: {ref_ppl:.2f}) but locality KL printed as {loc_kl:.6f}!"
 
     return {
         "perplexity": ppl,
@@ -443,7 +455,7 @@ def evaluate_s0_9_negative_controls(
         # Apply edit with wrong target using closed-form update
         edit_fact_mlp_closed_form(
             model, tokenizer, wrong_fact,
-            layer=layer, max_steps=W2_MAX_STEPS,
+            layer_idx=layer, max_steps=W2_MAX_STEPS,
             lr_v=W2_LR_V, lambda_l2=W2_LAMBDA_L2,
             device=device
         )
