@@ -185,28 +185,39 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
    - Apply single large, unconstrained step at $L=6$ and confirm target log-prob increases; print before/after log-prob per fact.
    - Assert edited weight differs from original (reporting delta norm). Stop if target log-prob does not rise for any of the 20.
 4. **Stage W (Writability Sweep):** Single-edit, fresh model per fact, 100 facts (25 per relation, pinned ordering), Seed 0 across layers $L \in \{1, 3, 6, 9, 11\}$ (subject to budget pruning: 1, 11, 3):
-   - **Arm W1 (Iterative Rank-1 SGD):** 3 pre-declared learning rates spanning two orders of magnitude around S0-8 rate ($3.0\times 10^{-5}, 3.0\times 10^{-4}, 3.0\times 10^{-3}$).
+   - **Arm W1 (Iterative Rank-1 SGD):** 3 pre-declared learning rates derived dynamically from S0-8 artifact (`experiments/results/s0_8.json`: $3.0\times 10^{-5}, 3.0\times 10^{-4}, 3.0\times 10^{-3}$, not typed in source).
    - **Arm W2 (Closed-Form Rank-1 Key-Value Update):** $\Delta = \frac{k^T (v^* - k W)}{k^T k}$, optimizing $v^*$ with L2 penalty ($\lambda=0.5$) toward original $v$.
-5. **Measurements & Reporting:** Immediate efficacy (num/den, Wilson interval), mean steps, WikiText-2 PPL, Locality KL on control probes ($N=200$, asserted non-zero if PPL moves). 90.00% feasibility gate applied. Negative control `wrong_target` evaluated alongside for any arm reaching gate. No retention, generalization, or horizon endpoint measured.
+5. **Pilot Cycle Timing & Budget Reprojection:**
+   - Single-fact pilot edit + eval + reload cycle measured at runtime.
+   - Reloads, steps, and evals reported and projected separately.
+   - Declared perplexity subset: 100 sequences (51,200 tokens) of WikiText-2 per evaluated fact.
+   - Contingency budget factor 1.20 against 16,380.0 s ceiling. If exceeded, layers pruned in order: 1, 11, 3.
+6. **Pre-Flight Test Suite Reconciliation (127 Tests):**
+   - S0-7b: 117 tests.
+   - S0-8: 123 tests (117 + 2 AST scanner targets for `s0_8_relocate.py` & `run_s0_8.py` + 4 unit tests 3.19–3.22). S0-8.md initially undercounted this as 121 by omitting the 2 scanner tests.
+   - S0-9: Exactly 4 named new tests (Test 3.23 closed-form math, Test 3.24 subject token index, Test 3.25 registry scopes with `wrong_target_paraphrase`, Test 3.26 floor verdict derivation), yielding $123 + 4 = \mathbf{127}$ tests.
+7. **Negative Controls & Paraphrase Floor Resolution:**
+   - S0-8 secondary endpoint had no valid floor because no paraphrase-context `wrong_target` control existed (AGENTS.md Rule 5 [R11]).
+   - S0-9 evaluates both `wrong_target` (100 canonical prompts) and `wrong_target_paraphrase` (300 paraphrase prompts across same 100 facts) as dedicated floors.
+8. **Measurements & Reporting:** Immediate efficacy (num/den, Wilson interval), mean steps, WikiText-2 PPL, Locality KL on control probes ($N=200$, asserted non-zero if PPL moves). 90.00% feasibility gate applied. Standard casing `S0-8` and `S0-9`. No retention, generalization, or horizon endpoint measured in S0-9.
 
 ---
 
-## 9. Active Codebase Organization
+## 10. Active Codebase Organization
 
-- `experiments/s0_8_relocate.py`: Directive S0-8 engine (readout freeze, layer sweep M-L on `mlp.c_proj.weight`, M-L-proj, `random_layer_magnitude_matched` control, endpoints, and Rule 3.7 raw vector serialization).
-- `experiments/run_s0_8.py`: Master orchestrator for Directive S0-8 (Stage J/Defect fixes -> Gate 0 -> M-L Sweep -> M-L-proj if warranted -> Controls -> Capability).
-- `experiments/b1_inject.py`: Historical injection experiment engine (strictly maintained $< 600$ lines, currently 598 lines).
-- `experiments/stats.py`: Standalone statistical engine (minimum detectable effect, Newcombe intervals, exact Student $t$, exact Wilcoxon with combinatorial floor, logistic position slope).
-- `experiments/re_emission.py`: S0-7b Stage F re-emission engine.
-- `experiments/s0_7b_audit.py`: S0-7b Stage G/H analysis engine and fix-forward routines.
-- `experiments/weight_tying.py`: S0-7b Stage I weight-tying confound runner.
-- `experiments/stage_j.py`: Stage J tokenization disclosure audit engine.
-- `experiments/metrics.py`: Mathematical metrics, Wilson score intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
-- `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and `CausalSubspaceManager`.
-- `tests/test_metrics.py`: Pre-flight unit test suite and AST literal scanner.
-- `tools/make_report.py`: AGENTS.md §14 single-artifact report generator and byte-verifier supporting S0-2 through S0-8.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-7b.md`, pending `S0-8.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json`, `s0_6.json`, `s0_7a.json`, `s0_7b.json`, pending `s0_8.json`).
-- `s0_6_stdout.txt`, `s0_7a_stdout.txt`, `s0_7b_stdout.txt`: Verbatim execution stdout logs.
+- `experiments/s0_9_writability.py`: Directive S0-9 engine (path verification, iterative SGD, closed-form key-value update, negative controls, and capability eval).
+- `experiments/run_s0_9.py`: Master orchestrator for Directive S0-9 (pre-flight 127 tests -> AST scanner -> pilot cycle reprojection -> Gate 0 bit reproduction -> Stage P -> Stage W -> negative controls).
+- `experiments/s0_8_relocate.py`: Directive S0-8 engine.
+- `experiments/run_s0_8.py`: Master orchestrator for Directive S0-8.
+- `experiments/b1_inject.py`: Historical injection experiment engine (< 600 lines).
+- `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
+- `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
+- `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
+- `tests/test_metrics.py`: Pre-flight unit test suite (127 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-9.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-8.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_8.json`).
+- `s0_8_stdout.txt`: Verbatim execution stdout log for S0-8.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
 

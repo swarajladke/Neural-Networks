@@ -65,34 +65,37 @@ from experiments.s0_9_writability import (
     W2_LR_V,
     W2_LAMBDA_L2,
     CANDIDATE_LAYERS,
+    N_PPL_SUBSET_SEQS,
     get_subject_last_token_idx,
     run_stage_p_path_verification,
     edit_fact_mlp_sgd_rate,
     edit_fact_mlp_closed_form,
-    evaluate_capability_and_locality
+    evaluate_capability_and_locality,
+    evaluate_s0_9_negative_controls
 )
 from tests.test_metrics import run_all_tests, enforce_no_typed_literals
 
 
-def compute_s0_9_budget_projection(candidate_layers: List[int]) -> Dict[str, Any]:
+def reproject_s0_9_budget_from_cycle(
+    candidate_layers: List[int],
+    t_reload: float,
+    t_sgd_step: float,
+    t_cf_edit: float,
+    t_eval_ppl: float,
+    t_eval_loc: float,
+    ppl_subset_seqs: int,
+    ceiling_seconds: float = 16380.0,
+    contingency_factor: float = 1.20
+) -> Dict[str, Any]:
     """
-    Derives budget projection from S0-8 per-step timing (0.04657 s/step).
-    Applies 20% contingency margin against compute ceiling (16,380.0 s).
-    If projection exceeds ceiling, cuts layers in pre-declared order: 1, 11, 3.
+    Reprojects budget from a measured single edit+eval+reload pilot cycle.
+    Separates reloads, steps, and evals.
+    Prunes candidate layers in declared order: 1, 11, 3 if contingency projection exceeds ceiling.
     """
-    cost_per_step = 0.04657  # Derived from S0-8: 16,637.48 s / 357,254 steps
-    cost_per_closed_step = 0.025
-    cost_ppl_eval = 4.5
-    cost_locality_eval = 0.035
-
     n_facts = 100
     sgd_rates_count = len(W1_LR_GRID)  # 3
     closed_form_count = 1             # 1
-    total_arms_per_layer = sgd_rates_count + closed_form_count  # 4
-    n_cap_eval_facts = 10  # 10 representative facts evaluated for capability per condition
-
-    ceiling_seconds = 16380.0
-    contingency_factor = 1.20
+    total_arms = sgd_rates_count + closed_form_count  # 4
     prune_order = [1, 11, 3]
 
     active_layers = list(candidate_layers)
@@ -100,17 +103,24 @@ def compute_s0_9_budget_projection(candidate_layers: List[int]) -> Dict[str, Any
 
     while True:
         n_layers = len(active_layers)
-        sgd_steps = n_layers * sgd_rates_count * n_facts * 100
-        sgd_time = sgd_steps * cost_per_step
 
-        closed_steps = n_layers * closed_form_count * n_facts * W2_MAX_STEPS
-        closed_time = closed_steps * cost_per_closed_step
+        # 1. Reloads: 1 reload per fact edit
+        total_reloads = n_layers * total_arms * n_facts
+        time_reloads = total_reloads * t_reload
 
-        cap_evals = n_layers * total_arms_per_layer * n_cap_eval_facts
-        cap_time = cap_evals * cost_ppl_eval + (n_layers * total_arms_per_layer * n_facts * cost_locality_eval)
+        # 2. Steps: SGD steps (up to 100 per edit) + Closed-form optimization
+        sgd_total_steps = n_layers * sgd_rates_count * n_facts * 100
+        sgd_time = sgd_total_steps * t_sgd_step
+        cf_time = n_layers * closed_form_count * n_facts * t_cf_edit
+        time_steps = sgd_time + cf_time
 
-        stage_p_time = 20 * (cost_per_step + 0.1)
-        raw_total = sgd_time + closed_time + cap_time + stage_p_time + 120.0  # +120s setup/gate 0
+        # 3. Evals: Per-condition capability evaluation (PPL + Locality KL)
+        total_evals = n_layers * total_arms
+        time_evals = total_evals * (t_eval_ppl + t_eval_loc)
+
+        # Overhead: Setup, Gate 0 (200 facts), Stage P (20 facts), Negative controls (100 facts)
+        time_overhead = 120.0 + (200 * 0.05) + (20 * (t_sgd_step * 20 + t_reload)) + (100 * (t_cf_edit + t_reload))
+        raw_total = time_reloads + time_steps + time_evals + time_overhead
         proj_total = raw_total * contingency_factor
 
         if proj_total <= ceiling_seconds or not prune_order:
@@ -122,9 +132,18 @@ def compute_s0_9_budget_projection(candidate_layers: List[int]) -> Dict[str, Any
             pruned_layers.append(to_prune)
 
     return {
-        "cost_per_step": cost_per_step,
         "active_layers": active_layers,
         "pruned_layers": pruned_layers,
+        "t_reload": t_reload,
+        "t_sgd_step": t_sgd_step,
+        "t_cf_edit": t_cf_edit,
+        "t_eval_ppl": t_eval_ppl,
+        "t_eval_loc": t_eval_loc,
+        "ppl_subset_seqs": ppl_subset_seqs,
+        "time_reloads": time_reloads,
+        "time_steps": time_steps,
+        "time_evals": time_evals,
+        "time_overhead": time_overhead,
         "raw_total_seconds": raw_total,
         "projected_total_seconds": proj_total,
         "ceiling_seconds": ceiling_seconds,
@@ -237,18 +256,71 @@ def main():
     assert gate_0_exact, "Gate 0 Bit-Reproduction Failure!"
     print("  Gate 0 Status               : EXACT MATCH CONFIRMED (PASSED)\n")
 
-    # 4. Budget Projection & Layer Pruning
-    print("--- [Budget Projection & Layer Pruning Assertion (Directive S0-9 Section 5)] ---")
-    budget_proj = compute_s0_9_budget_projection(CANDIDATE_LAYERS)
-    print(f"  Measured Step Cost (S0-8)   : {budget_proj['cost_per_step']:.5f} s/step")
-    print(f"  Candidate Layers            : {CANDIDATE_LAYERS}")
-    print(f"  Active Layers for Stage W   : {budget_proj['active_layers']}")
+    # 4. Measured Pilot Cycle & Budget Reprojection (Directive S0-9 Section 5)
+    print("--- [Pilot Cycle Timing & Budget Reprojection (Directive S0-9)] ---")
+    pilot_fact = facts_1000[200]
+
+    # Reload timing
+    t0_rel = time.time()
+    model.load_state_dict(base_state_dict)
+    t_reload_m = time.time() - t0_rel
+
+    # SGD step timing (measure single edit on layer 6)
+    t0_sgd = time.time()
+    pilot_sgd_res = edit_fact_mlp_sgd_rate(model, tokenizer, pilot_fact, layer_idx=6, lr=W1_LR_GRID[0], max_steps=100, device=device)
+    t_sgd_tot = time.time() - t0_sgd
+    pilot_sgd_steps = max(1, pilot_sgd_res["steps_taken"])
+    t_sgd_step_m = t_sgd_tot / pilot_sgd_steps
+
+    # Closed-form edit timing
+    model.load_state_dict(base_state_dict)
+    t0_cf = time.time()
+    _ = edit_fact_mlp_closed_form(model, tokenizer, pilot_fact, layer_idx=6, max_steps=W2_MAX_STEPS, lr_v=W2_LR_V, lambda_l2=W2_LAMBDA_L2, device=device)
+    t_cf_edit_m = time.time() - t0_cf
+
+    # Eval timing on declared perplexity subset and locality probes
+    t0_ppl = time.time()
+    _ = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device, max_sequences=N_PPL_SUBSET_SEQS)
+    t_eval_ppl_m = time.time() - t0_ppl
+
+    t0_loc = time.time()
+    probe_prompts = [c["prompt"] for c in template_prior_controls]
+    pre_lps = {p: get_next_token_log_probs(fresh_model, tokenizer, p, device, False) for p in probe_prompts}
+    post_lps = {p: get_next_token_log_probs(model, tokenizer, p, device, False) for p in probe_prompts}
+    _ = compute_locality_kl(pre_lps, post_lps)
+    t_eval_loc_m = time.time() - t0_loc
+
+    # Reset model back to base state
+    model.load_state_dict(base_state_dict)
+
+    print(f"  Pilot Cycle Measured Reload Time : {t_reload_m:.4f} s/reload")
+    print(f"  Pilot Cycle Measured SGD Step    : {t_sgd_step_m:.5f} s/step ({pilot_sgd_steps} steps took {t_sgd_tot:.3f} s)")
+    print(f"  Pilot Cycle Measured Closed-Form : {t_cf_edit_m:.3f} s/edit")
+    print(f"  Pilot Cycle Measured Eval Time   : {t_eval_ppl_m + t_eval_loc_m:.3f} s (PPL subset: {t_eval_ppl_m:.3f} s, Locality: {t_eval_loc_m:.3f} s)")
+    print(f"  Declared Perplexity Subset       : {N_PPL_SUBSET_SEQS} sequences ({N_PPL_SUBSET_SEQS * 512} tokens) from pinned slice {slice_sha[:8]}")
+
+    budget_proj = reproject_s0_9_budget_from_cycle(
+        CANDIDATE_LAYERS,
+        t_reload=t_reload_m,
+        t_sgd_step=t_sgd_step_m,
+        t_cf_edit=t_cf_edit_m,
+        t_eval_ppl=t_eval_ppl_m,
+        t_eval_loc=t_eval_loc_m,
+        ppl_subset_seqs=N_PPL_SUBSET_SEQS
+    )
+
+    print(f"  Candidate Layers                 : {CANDIDATE_LAYERS}")
+    print(f"  Active Layers for Stage W        : {budget_proj['active_layers']}")
     if budget_proj["pruned_layers"]:
-        print(f"  Pruned Layers (Budget Guard): {budget_proj['pruned_layers']} (Cut in pre-declared order: 1, 11, 3)")
-    print(f"  Projected Raw Compute Time  : {budget_proj['raw_total_seconds']:.2f} s")
-    print(f"  Contingency Projection (1.2): {budget_proj['projected_total_seconds']:.2f} s (Ceiling: {budget_proj['ceiling_seconds']:.2f} s)")
+        print(f"  Pruned Layers (Budget Guard)     : {budget_proj['pruned_layers']} (Cut in pre-declared order: 1, 11, 3)")
+    print(f"  Projected Reload Wall-Clock      : {budget_proj['time_reloads']:.2f} s")
+    print(f"  Projected Steps Wall-Clock       : {budget_proj['time_steps']:.2f} s")
+    print(f"  Projected Evals Wall-Clock       : {budget_proj['time_evals']:.2f} s")
+    print(f"  Projected Overhead Wall-Clock    : {budget_proj['time_overhead']:.2f} s")
+    print(f"  Total Raw Compute Time           : {budget_proj['raw_total_seconds']:.2f} s")
+    print(f"  Contingency Projection (1.20)    : {budget_proj['projected_total_seconds']:.2f} s (Ceiling: {budget_proj['ceiling_seconds']:.2f} s)")
     assert not budget_proj["exceeds_budget"], f"Compute budget projection ({budget_proj['projected_total_seconds']:.2f}s) exceeds ceiling!"
-    print("  Budget Projection Status    : PASSED (Under Compute Ceiling)\n")
+    print("  Budget Reprojection Status       : PASSED (Under Compute Ceiling)\n")
 
     # 5. Stage P: Path Verification (L=6, 20 facts, fresh model per fact)
     stage_p_res = run_stage_p_path_verification(model, tokenizer, facts_1000[:20], base_state_dict, device=device)
@@ -391,37 +463,41 @@ def main():
         stage_w_results[arm_name_w2] = w2_row
         print(f"    -> ImmEff={m_imm_w2.numerator}/{m_imm_w2.denominator} ({m_imm_w2.pct:.2f}%) [{m_imm_w2.wilson_low*100.0:.2f}%, {m_imm_w2.wilson_high*100.0:.2f}%] | Steps={mean_st_w2:.1f} | PPL={cap_res_w2['perplexity']:.2f} | LocKL={cap_res_w2['locality_kl']:.4f} | Gate: {'PASSED' if passed_gate_w2 else 'FAILED'}\n")
 
-    # 7. Negative Control Evaluation for Arms at Gate
-    print("--- [Negative Control Evaluation (wrong_target on Arms at Gate)] ---")
-    ctrl_results = {}
-    if arms_at_gate:
-        rng_ctrl = random.Random(0)
-        # Create wrong_target facts for the 100 facts
-        wrong_facts = [{**f, "object": rng_ctrl.choice([c["object"] for c in facts_1000 if c["relation"] == f["relation"] and normalize_entity(c["object"]) != normalize_entity(f["object"])])} for f in stage_w_facts]
+    # 7. Negative Control Evaluation (Directive S0-9 §7)
+    print("--- [Negative Control Evaluation: wrong_target & wrong_target_paraphrase] ---")
+    ctrl_eval = evaluate_s0_9_negative_controls(
+        base_state_dict=base_state_dict,
+        model=model,
+        tokenizer=tokenizer,
+        facts_100=stage_w_facts,
+        facts_pool=facts_1000,
+        layer=6,
+        device=device,
+        seed=42
+    )
+    m_wrong = ctrl_eval["wrong_target"]
+    m_wrong_para = ctrl_eval["wrong_target_paraphrase"]
+    print(f"  Negative Control wrong_target            : {format_wilson_rate(m_wrong)} (100 canonical prompts)")
+    print(f"  Negative Control wrong_target_paraphrase : {format_wilson_rate(m_wrong_para)} (300 paraphrase prompts)")
 
-        for arm_name, layer_l, arm_type, lr_val in arms_at_gate:
-            print(f"  Evaluating wrong_target control for {arm_name}...")
-            ctrl_imm = []
-            for fw in wrong_facts:
-                model.load_state_dict(base_state_dict)
-                if arm_type == "sgd":
-                    res = edit_fact_mlp_sgd_rate(model, tokenizer, fw, layer_idx=layer_l, lr=lr_val, max_steps=100, device=device)
-                else:
-                    res = edit_fact_mlp_closed_form(model, tokenizer, fw, layer_idx=layer_l, max_steps=W2_MAX_STEPS, lr_v=W2_LR_V, lambda_l2=W2_LAMBDA_L2, device=device)
-                ctrl_imm.append(res["immediate_match"])
-
-            m_ctrl = Measurement.from_outcomes(ctrl_imm, metric="wrong_target", arm=f"{arm_name}_wrong_target", scope="s0_9_single_edit", input_set="facts_100", mode="eval_no_dropout")
-            ctrl_results[arm_name] = {
-                "num": m_ctrl.numerator,
-                "den": m_ctrl.denominator,
-                "rate": m_ctrl.rate,
-                "w_lo": m_ctrl.wilson_low,
-                "w_hi": m_ctrl.wilson_high,
-                "raw_vectors": ctrl_imm
-            }
-            print(f"    wrong_target ImmEff: {m_ctrl.numerator}/{m_ctrl.denominator} ({m_ctrl.pct:.2f}%) [{m_ctrl.wilson_low*100.0:.2f}%, {m_ctrl.wilson_high*100.0:.2f}%]")
-    else:
-        print("  Zero arms reached the 90.00% immediate efficacy gate. No negative controls triggered.\n")
+    ctrl_results = {
+        "wrong_target": {
+            "num": m_wrong.numerator,
+            "den": m_wrong.denominator,
+            "rate": m_wrong.rate,
+            "w_lo": m_wrong.wilson_low,
+            "w_hi": m_wrong.wilson_high,
+            "raw_vectors": ctrl_eval["raw_canonical_outcomes"]
+        },
+        "wrong_target_paraphrase": {
+            "num": m_wrong_para.numerator,
+            "den": m_wrong_para.denominator,
+            "rate": m_wrong_para.rate,
+            "w_lo": m_wrong_para.wilson_low,
+            "w_hi": m_wrong_para.wilson_high,
+            "raw_vectors": ctrl_eval["raw_paraphrase_outcomes"]
+        }
+    }
 
     # 8. Summary Table & Machine-Readable Artifact
     print("\n===============================================================================================")
@@ -470,6 +546,7 @@ def main():
         },
         "stage_p": stage_p_res,
         "stage_w_table": writability_table_rows,
+        "negative_controls": ctrl_results,
         "controls_for_gate_arms": ctrl_results,
         "accounting": {
             "total_optimizer_steps": total_optimizer_steps,

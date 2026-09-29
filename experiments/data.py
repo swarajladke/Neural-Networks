@@ -192,13 +192,14 @@ def load_wikitext2_slice(tokenizer: Any, num_sequences: int = 1000, seq_len: int
     return tensor_slice, hashlib.sha256(tensor_slice.numpy().tobytes()).hexdigest()
 
 
-def evaluate_wikitext_perplexity(model: nn.Module, wikitext_slice: torch.Tensor, slice_hash: str, pinned_hash: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7", batch_size: int = 4, device: str = "cuda") -> float:
+def evaluate_wikitext_perplexity(model: nn.Module, wikitext_slice: torch.Tensor, slice_hash: str, pinned_hash: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7", batch_size: int = 4, device: str = "cuda", max_sequences: Optional[int] = None) -> float:
     assert slice_hash == pinned_hash, f"Perplexity calculation blocked: slice hash mismatch ({slice_hash} != {pinned_hash})"
     model.eval()
+    eval_slice = wikitext_slice[:max_sequences] if max_sequences is not None else wikitext_slice
     total_loss, total_tokens = 0.0, 0
     with torch.no_grad():
-        for i in range(0, wikitext_slice.shape[0], batch_size):
-            batch = wikitext_slice[i:i + batch_size].to(device)
+        for i in range(0, eval_slice.shape[0], batch_size):
+            batch = eval_slice[i:i + batch_size].to(device)
             labels = batch.clone()
             outputs = model(batch, labels=labels)
             cnt = batch.numel()
@@ -209,3 +210,4 @@ def evaluate_wikitext_perplexity(model: nn.Module, wikitext_slice: torch.Tensor,
     if math.isnan(mean_loss) or math.isinf(mean_loss): return float("inf")
     try: return math.exp(mean_loss)
     except OverflowError: return float("inf")
+

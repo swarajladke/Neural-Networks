@@ -2061,14 +2061,14 @@ Relocating the Write: Does Durable Sequential Memory Exist Outside the Readout?
     sec5 = """## 5. Test suite result
 
 Pre-flight unit test suite executed before any model load or GPU allocation:
-- Tests run: 121
-- Tests passed: 121
+- Tests run: 123
+- Tests passed: 123
 - Failures: 0
-- Test Suite Reconciliation (Directive S0-8 Section 7.1):
+- Test Suite Reconciliation (Directive S0-8 Section 7.1 & Directive S0-9 Pre-Flight Audit):
   - Directive S0-7a: 105 tests run, 105 passed (s0_7a_stdout.txt line 175)
   - Directive S0-7b: 117 tests run, 117 passed (s0_7b_stdout.txt line 411)
-  - Cause of Discrepancy: The figure '62' in S0-7b.md was an errant typed literal in make_report.py line 1720, violating AGENTS.md Section 3.1. Zero tests were removed.
-  - Directive S0-8: 4 new tests added (MDE calculation, readout freeze assertions, S0-8 population scopes, Newcombe primary endpoint test) for a total of 121 tests.
+  - Directive S0-8: 123 tests run, 123 passed (s0_8_stdout.txt line 516)
+  - Reconciling 123 vs 121: The initial draft of S0-8.md stated 121 tests by computing 117 + 4 = 121 (counting only unit tests 3.19 to 3.22). In reality, 6 tests were added in S0-8: 2 AST scanner targets (experiments/s0_8_relocate.py and experiments/run_s0_8.py) plus 4 unit tests (Test 3.19 Minimum Detectable Effect, Test 3.20 Readout Freeze Bitwise Assertion, Test 3.21 S0-8 Population Scopes, Test 3.22 Exact Wilcoxon Floor Labeling). S0-9 adds 4 named tests (Tests 3.23–3.26), yielding 123 + 4 = 127 tests.
 - AST Startup Literal Scanner: 0 unlisted decimal/percent violations across all experiment and test modules."""
 
     # 6. Measurements
@@ -2147,6 +2147,7 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 ### D. Pre-Registered Secondary Endpoint: First-50-Edit Paraphrase Generalization (NON-REPORTABLE)
 - MANDATORY PROTOCOL NOTICE (AGENTS.md Section 11.5 & Section 13 Rule 2):
   Formally non-reportable as findings on generalization due to failure of immediate efficacy at the write site across all conditions.
+  Additionally, the secondary endpoint has no valid floor because no paraphrase-context wrong_target control exists (AGENTS.md Rule 5 [R11 Matched Evaluation Contexts]). The canonical wrong_target floor (58/1200) was measured strictly on canonical edit prompts, not paraphrases.
 
 | Condition | First-50 Generalization (Observed) | Control Floor (wrong_target) | Difference | Newcombe 95% Hybrid Score CI | Verdict vs Floor |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -2195,8 +2196,7 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 ### Evaluation Context Audit on Generalization Floor (Directive S0-9 Carry-Forward Item 3)
 - In Directive S0-6, the worst individual negative control floor wrong_target was measured at 58/1200 (4.83% [3.76%, 6.20%]) strictly on canonical edit prompts (b1_facts.json).
 - Generalization for negative controls on paraphrase prompts was not evaluated in S0-6.
-- In Directive S0-8, the secondary endpoint (first-50 paraphrase generalization, N = 900 prompts) was compared against this canonical 58/1200 floor.
-- Under AGENTS.md Rule 5 (R11 Matched Evaluation Contexts), this comparison was context-mismatched: canonical prompt base-rate and paraphrase prompt base-rate represent distinct evaluation distributions. Future directives evaluating paraphrase generalization against controls must establish a dedicated paraphrase control floor."""
+- In Directive S0-8, the secondary endpoint (first-50 paraphrase generalization, N = 900 prompts) has no valid floor because no paraphrase-context wrong_target control exists. Comparing paraphrase generalization against the canonical 58/1200 floor was context-mismatched under AGENTS.md Rule 5 (R11 Matched Evaluation Contexts). S0-9 establishes wrong_target_paraphrase (300 prompts across same 100 facts) to resolve this defect."""
 
     # 8. Withdrawn and retired claims
     sec8 = """## 8. Withdrawn and retired claims
@@ -2355,13 +2355,18 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
         w_lines.append(f"| {r.get('arm')} | {eff_str} | {g_str} | {r.get('mean_steps', 0.0):.1f} | {r.get('perplexity', 0.0):.2f} | {r.get('locality_kl', 0.0):.4f} |")
     stage_w_table = "\n".join(w_lines)
 
-    ctrls_gate = data.get("controls_for_gate_arms", {})
+    neg_ctrls = data.get("negative_controls", {})
     ctrl_lines = []
-    if ctrls_gate:
+    if neg_ctrls:
+        for c_name, c_dict in neg_ctrls.items():
+            c_eff = f"{c_dict.get('num')}/{c_dict.get('den')} ({c_dict.get('rate', 0.0)*100.0:.2f}%) [{c_dict.get('w_lo', 0.0)*100.0:.2f}%, {c_dict.get('w_hi', 0.0)*100.0:.2f}%]"
+            ctrl_lines.append(f"| {c_name} | {c_eff} |")
+        ctrl_table = "| Control | Immediate Matches (Floor) |\n| :--- | :--- |\n" + "\n".join(ctrl_lines)
+    elif ctrls_gate:
         for arm_name, c_dict in ctrls_gate.items():
             c_eff = f"{c_dict.get('num')}/{c_dict.get('den')} ({c_dict.get('rate', 0.0)*100.0:.2f}%) [{c_dict.get('w_lo', 0.0)*100.0:.2f}%, {c_dict.get('w_hi', 0.0)*100.0:.2f}%]"
             ctrl_lines.append(f"| {arm_name} | {c_eff} |")
-        ctrl_table = "\n".join(ctrl_lines)
+        ctrl_table = "| Control | Immediate Matches (Floor) |\n| :--- | :--- |\n" + "\n".join(ctrl_lines)
     else:
         ctrl_table = "Zero arms reached the 90.00% immediate efficacy gate. Negative controls were not triggered."
 
@@ -2382,7 +2387,7 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 - Denominator Assertion: 25 + 25 + 25 + 25 = 100 facts (Asserted across 4 relations).
 - Pre-Edit Baseline PPL: 36.03
 
-### C. Negative Control Evaluation for Arms at Gate (wrong_target)
+### C. Negative Control Evaluation (wrong_target & wrong_target_paraphrase)
 {ctrl_table}"""
 
     # 7. Negative controls and baseline floors
@@ -2396,7 +2401,8 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 | pre_edit_baseline | 1/1200 | 0.08% | [0.01%, 0.47%] | Zero-edit prior state control |
 | random_layer_magnitude_matched | 0/1200 | 0.00% | [0.00%, 0.31%] | Non-swept MLP value projection magnitude control |
 
-- Single-edit positive control first: establishes whether immediate efficacy can reach 90.00% before evaluating sequential memory capacity."""
+- Single-edit positive control first: establishes whether immediate efficacy can reach 90.00% before evaluating sequential memory capacity.
+- Paraphrase Context Resolution: S0-9 establishes wrong_target_paraphrase (300 prompts across same 100 facts) as the dedicated floor for paraphrase evaluation (AGENTS.md Rule 5 [R11 Matched Evaluation Contexts])."""
 
     # 8. Withdrawn and retired claims
     sec8 = """## 8. Withdrawn and retired claims

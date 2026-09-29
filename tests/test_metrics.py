@@ -995,8 +995,9 @@ def run_all_tests() -> int:
     tests_run += 1
     assert POPULATION_REGISTRY.get("s0_9_single_edit") == 100
     assert POPULATION_REGISTRY.get("s0_9_stage_p") == 20
+    assert POPULATION_REGISTRY.get("s0_9_wrong_target_paraphrase") == 300
     tests_passed += 1
-    print("  Test 3.25 (S0-9 Registry Scopes)      : s0_9_single_edit=100, s0_9_stage_p=20 registered PASSED.")
+    print("  Test 3.25 (S0-9 Registry Scopes)      : s0_9_single_edit=100, s0_9_stage_p=20, s0_9_wrong_target_paraphrase=300 registered PASSED.")
 
     # --------------------------------------------------------------------------
     # 3.26 TEST FLOOR VERDICT STRING DERIVATION (DIRECTIVE S0-9 §4 ITEM 6)

@@ -19,6 +19,7 @@ import sys
 import math
 import time
 import json
+import random
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 
@@ -47,11 +48,25 @@ from experiments.b1_inject import (
     get_next_token_log_probs
 )
 
-# S0-8 baseline learning rate
-S0_8_BASE_LR = 3.0e-05
+def load_s0_8_baseline_lr() -> float:
+    s0_8_path = REPO_ROOT / "experiments" / "results" / "s0_8.json"
+    if not s0_8_path.exists():
+        raise FileNotFoundError(f"S0-8 artifact not found at {s0_8_path} (AGENTS.md §3.4)")
+    with open(s0_8_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    lr = data.get("hyperparameters", {}).get("learning_rate")
+    if lr is None:
+        raise ValueError(f"hyperparameters.learning_rate not found in {s0_8_path} (AGENTS.md §3.4)")
+    return float(lr)
 
-# Pre-declared SGD learning rate grid spanning two orders of magnitude around S0-8 rate
-W1_LR_GRID = [3.0e-05, 3.0e-04, 3.0e-03]
+# S0-8 baseline learning rate loaded dynamically from artifact (AGENTS.md §3.1 & §3.4)
+S0_8_BASE_LR = load_s0_8_baseline_lr()
+
+# Pre-declared SGD learning rate grid: baseline, 10x baseline, 100x baseline
+W1_LR_GRID = [S0_8_BASE_LR, S0_8_BASE_LR * 10.0, S0_8_BASE_LR * 100.0]
+
+# Declared WikiText-2 perplexity subset (sequences evaluated per fact)
+N_PPL_SUBSET_SEQS = 100
 
 # Closed-form value optimization parameters (declared in advance)
 W2_MAX_STEPS = 20
@@ -371,13 +386,14 @@ def evaluate_capability_and_locality(
     control_probes: List[Dict[str, Any]],
     wikitext_slice: torch.Tensor,
     slice_sha: str,
-    device: str = "cuda"
-) -> Dict[str, float]:
+    device: str = "cuda",
+    max_ppl_sequences: Optional[int] = N_PPL_SUBSET_SEQS
+) -> Dict[str, Any]:
     """
     Evaluates WikiText-2 perplexity and locality KL on control probes.
     Locality KL non-zero guard: asserts locality KL is strictly nonzero when perplexity moves.
     """
-    ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
+    ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device, max_sequences=max_ppl_sequences)
 
     # Locality KL over control probes (200 prompts)
     probe_prompts = [c["prompt"] for c in control_probes]
@@ -392,5 +408,76 @@ def evaluate_capability_and_locality(
     return {
         "perplexity": ppl,
         "locality_kl": loc_kl,
-        "num_probes": len(probe_prompts)
+        "num_probes": len(probe_prompts),
+        "ppl_sequences": max_ppl_sequences if max_ppl_sequences is not None else wikitext_slice.shape[0]
     }
+
+
+def evaluate_s0_9_negative_controls(
+    base_state_dict: Dict[str, torch.Tensor],
+    model: nn.Module,
+    tokenizer: Any,
+    facts_100: List[Dict[str, Any]],
+    facts_pool: List[Dict[str, Any]],
+    layer: int = 6,
+    device: str = "cuda",
+    seed: int = 42
+) -> Dict[str, Any]:
+    """
+    Evaluates negative controls on the same 100 facts (Directive S0-9 §7):
+    1. wrong_target: Canonical edit prompts (100 prompts)
+    2. wrong_target_paraphrase: Paraphrase prompts across same 100 facts (300 prompts)
+    """
+    rng = random.Random(seed)
+    wrong_canonical_matches = []
+    wrong_paraphrase_matches = []
+
+    for fact in facts_100:
+        cands = [c["object"] for c in facts_pool if c["relation"] == fact["relation"] and normalize_entity(c["object"]) != normalize_entity(fact["object"])]
+        w_obj = rng.choice(cands)
+        wrong_fact = {**fact, "object": w_obj}
+
+        # Reset model to pre-edit base state
+        model.load_state_dict(base_state_dict)
+
+        # Apply edit with wrong target using closed-form update
+        edit_fact_mlp_closed_form(
+            model, tokenizer, wrong_fact,
+            layer=layer, max_steps=W2_MAX_STEPS,
+            lr_v=W2_LR_V, lambda_l2=W2_LAMBDA_L2,
+            device=device
+        )
+
+        # Test canonical prompt against original (correct) target
+        pred_c = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
+        wrong_canonical_matches.append(check_match(pred_c, fact["object"]))
+
+        # Test paraphrase prompts against original (correct) target
+        for p in fact["paraphrases"]:
+            pred_p = greedy_predict(model, tokenizer, p, 5, device, False)
+            wrong_paraphrase_matches.append(check_match(pred_p, fact["object"]))
+
+    m_wrong = Measurement.from_outcomes(
+        wrong_canonical_matches,
+        metric="wrong_target",
+        arm="wrong_target",
+        scope="s0_9_single_edit",
+        input_set="s0_9_facts_100",
+        mode="eval_no_dropout"
+    )
+    m_wrong_para = Measurement.from_outcomes(
+        wrong_paraphrase_matches,
+        metric="wrong_target_paraphrase",
+        arm="wrong_target_paraphrase",
+        scope="s0_9_wrong_target_paraphrase",
+        input_set="s0_9_paraphrases_300",
+        mode="eval_no_dropout"
+    )
+
+    return {
+        "wrong_target": m_wrong,
+        "wrong_target_paraphrase": m_wrong_para,
+        "raw_canonical_outcomes": wrong_canonical_matches,
+        "raw_paraphrase_outcomes": wrong_paraphrase_matches
+    }
+

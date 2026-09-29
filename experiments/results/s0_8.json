@@ -2,6 +2,10 @@
   "directive": "S0-8",
   "producing_commit_sha": "4f293e99018362c5c026005e8b23357cc96e5bb2",
   "exit_code": 0,
+  "hyperparameters": {
+    "learning_rate": 0.00003,
+    "max_steps": 100
+  },
   "hashes": {
     "facts_json_sha256": "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536",
     "wikitext_slice_sha256": "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7",

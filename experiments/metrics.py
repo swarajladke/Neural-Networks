@@ -31,6 +31,7 @@ POPULATION_REGISTRY: Dict[str, int] = {
     "first50_generalization_pooled": 900,
     "s0_9_single_edit": 100,
     "s0_9_stage_p": 20,
+    "s0_9_wrong_target_paraphrase": 300,
     "recency_bin": 60,
     "revert_bin": 120,
     "controls_pooled": 4800,
