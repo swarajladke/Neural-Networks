@@ -2480,6 +2480,10 @@ def generate_report(directive_id: str, verify_only: bool = False) -> Path:
     d_norm = directive_id.lower().replace("-", "_")
     results_path = REPO_ROOT / "experiments" / "results" / f"{d_norm}.json"
     stdout_path = REPO_ROOT / f"{d_norm}_stdout.txt"
+    if not stdout_path.exists():
+        alt_stdout = REPO_ROOT / f"run_{d_norm}_stdout.txt"
+        if alt_stdout.exists():
+            stdout_path = alt_stdout
 
     if not results_path.exists():
         sys.exit(f"Artifact Error: Results JSON not found at {results_path}")
