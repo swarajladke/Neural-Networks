@@ -66,6 +66,29 @@ RETENTION_METRIC_NAMES = {
 }
 
 
+def wilson_confidence_interval(k: int, n: int, confidence: float = 0.95) -> Tuple[float, float]:
+    """
+    Computes the two-sided Wilson score confidence interval for a binomial proportion.
+    k: number of successes (0 <= k <= n)
+    n: sample size (n > 0)
+    confidence: confidence level (default 0.95, z ~ 1.95996)
+    Returns (lower_bound, upper_bound) as floats in [0.0, 1.0].
+    """
+    if n <= 0:
+        raise ValueError(f"Wilson interval requires n > 0, got {n}")
+    if k < 0 or k > n:
+        raise ValueError(f"Wilson interval requires 0 <= k <= n, got k={k}, n={n}")
+    z = 1.959963984540054
+    p_hat = float(k) / float(n)
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    center = (p_hat + z2 / (2.0 * n)) / denom
+    margin = (z / denom) * math.sqrt((p_hat * (1.0 - p_hat) / n) + (z2 / (4.0 * n * n)))
+    lo = max(0.0, center - margin)
+    hi = min(1.0, center + margin)
+    return (lo, hi)
+
+
 class Measurement:
     """
     A count-based measurement that cannot be reported without its denominator.
@@ -178,6 +201,20 @@ class Measurement:
     @property
     def pct(self) -> float:
         return 100.0 * self.numerator / self.denominator
+
+    @property
+    def rate(self) -> float:
+        return float(self.numerator) / float(self.denominator)
+
+    @property
+    def wilson_low(self) -> float:
+        lo, _ = wilson_confidence_interval(self.numerator, self.denominator)
+        return lo
+
+    @property
+    def wilson_high(self) -> float:
+        _, hi = wilson_confidence_interval(self.numerator, self.denominator)
+        return hi
 
     @property
     def pair(self) -> Tuple[int, int]:
@@ -452,28 +489,6 @@ def compute_summary_stats(values: List[float]) -> Dict[str, float]:
         "mean": sum(values) / len(values)
     }
 
-
-def wilson_confidence_interval(k: int, n: int, confidence: float = 0.95) -> Tuple[float, float]:
-    """
-    Computes the two-sided Wilson score confidence interval for a binomial proportion.
-    k: number of successes (0 <= k <= n)
-    n: sample size (n > 0)
-    confidence: confidence level (default 0.95, z ~ 1.95996)
-    Returns (lower_bound, upper_bound) as floats in [0.0, 1.0].
-    """
-    if n <= 0:
-        raise ValueError(f"Wilson interval requires n > 0, got {n}")
-    if k < 0 or k > n:
-        raise ValueError(f"Wilson interval requires 0 <= k <= n, got k={k}, n={n}")
-    z = 1.959963984540054
-    p_hat = float(k) / float(n)
-    z2 = z * z
-    denom = 1.0 + z2 / n
-    center = (p_hat + z2 / (2.0 * n)) / denom
-    margin = (z / denom) * math.sqrt((p_hat * (1.0 - p_hat) / n) + (z2 / (4.0 * n * n)))
-    lo = max(0.0, center - margin)
-    hi = min(1.0, center + margin)
-    return (lo, hi)
 
 
 def format_wilson_rate(measurement: Any, confidence: float = 0.95) -> str:

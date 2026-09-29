@@ -26,6 +26,7 @@ import time
 import json
 import random
 import hashlib
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
 
@@ -518,10 +519,16 @@ def main():
 
     actual_wall_clock = time.time() - global_start_time
 
+    producing_commit = "DIRTY"
+    try:
+        producing_commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    except Exception:
+        pass
+
     # Construct results artifact
     results_artifact = {
         "directive": "S0-9",
-        "producing_commit_sha": s0_7b_data.get("producing_commit_sha", "PENDING_COMMIT"),
+        "producing_commit_sha": producing_commit,
         "exit_code": 0,
         "hashes": {
             "facts_json_sha256": facts_sha,
