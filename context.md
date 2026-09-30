@@ -202,22 +202,60 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 
 ---
 
-## 10. Active Codebase Organization
+---
 
-- `experiments/s0_9_writability.py`: Directive S0-9 engine (path verification, iterative SGD, closed-form key-value update, negative controls, and capability eval).
-- `experiments/run_s0_9.py`: Master orchestrator for Directive S0-9 (pre-flight 127 tests -> AST scanner -> pilot cycle reprojection -> Gate 0 bit reproduction -> Stage P -> Stage W -> negative controls).
+## 10. Active Directive: Directive S0-10 — Reach the Gate, Repair the Closed-Form Write, Then Sequential Retention at the Writable Site
+
+**Objective:**
+- Q1. Does any write procedure at `mlp.c_proj` reach 90.00% single-edit immediate efficacy, with locality KL reported?
+- Q2. Why did the closed-form write fail?
+- Q3 (conditional on Q1). At the best gate-passing cell, does sequential editing produce first-50-edit retention and first-50-edit paraphrase generalization above their matched negative control floors?
+
+### Pipeline Architecture:
+1. **Stage 0 (Fixes before measurement):**
+   - Measure unedited model perplexity on exact declared 100-sequence subset; rekey locality KL guard to it.
+   - Assert parameter-sum fingerprint and `c_proj.weight` SHA-256 byte hashes after every state restore.
+   - Reconcile test suite to 131 tests (+4 new unit tests 3.27–3.30).
+   - Re-label Arm W1 as full-gradient matrix SGD across active prompt positions.
+   - Hyperparameter provenance from `experiments/results/s0_8.json`.
+   - Gate 0 exact bit reproduction of seed 0 of `r0_unconstrained_d0.0` (669 steps, 200/200 imm eff, 8/200 term ret).
+2. **Stage D (Closed-Form Write Diagnostic, 20 Facts, L=6):**
+   - Per-fact $v^*$ optimization trace, direct hook patch test at subject's last token with zero weight change.
+   - Conv1D weight error check ($k(W+\Delta)+b - v^*$) diagnosing S0-9 omission of bias $b$.
+   - Failure classification: (a) Optimization failure, (b) Write defect, (c) Propagation failure.
+   - Pre-declared repair grid ($\lambda \in \{0.0, 0.05, 0.5\}$, steps $\in \{20, 100\}$).
+3. **Stage W (Reach the Gate, 100 Facts, Seed 0, L in {1, 3, 6}):**
+   - W1-extended: lr in $\{3\times 10^{-3}, 1\times 10^{-2}, 3\times 10^{-2}\}$, step caps in $\{100, 300\}$.
+   - W2-repaired: best Stage D setting on layers {1, 3, 6}.
+   - Feasibility gate $\ge 90.00\%$; matched controls run for gate passers with that cell's exact procedure.
+   - Pre-registered selection rule: lowest locality KL, breaking ties by lowest subset PPL change. Stop if none pass.
+4. **Stage S (Sequential Retention at Writable Site, Conditional):**
+   - Readout frozen and asserted bitwise zero across 6 seeds (200 sequential edits each).
+   - Primary endpoint: First-50-edit terminal retention (pooled $N=300$) vs worst canonical control.
+   - Secondary endpoint: First-50-edit paraphrase generalization (pooled $N=900$) vs worst paraphrase control.
+   - Minimum detectable effect (MDE) computed and printed before endpoints.
+
+---
+
+## 11. Active Codebase Organization
+
+- `experiments/s0_10_repair.py`: Directive S0-10 engine (restore verification, diagnostic, repaired closed-form, fullgrad SGD, capability/locality, sequential execution).
+- `experiments/run_s0_10.py`: Master orchestrator for Directive S0-10.
+- `experiments/s0_9_writability.py`: Directive S0-9 engine.
+- `experiments/run_s0_9.py`: Master orchestrator for Directive S0-9.
 - `experiments/s0_8_relocate.py`: Directive S0-8 engine.
 - `experiments/run_s0_8.py`: Master orchestrator for Directive S0-8.
 - `experiments/b1_inject.py`: Historical injection experiment engine (< 600 lines).
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (127 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-9.
+- `tests/test_metrics.py`: Pre-flight unit test suite (131 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-10.
 - `reports/`: Validated markdown reports (`S0-2.md` through `S0-9.md`).
 - `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_9.json`).
 - `s0_9_stdout.txt`: Verbatim execution stdout log for S0-9.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
 
 
 

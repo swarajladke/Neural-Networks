@@ -102,11 +102,14 @@ ALLOW_LIST = {
     "  Newcombe 95% Hybrid Score CI : [": "Newcombe 95% CI label",
     "    Secondary 6-Cluster Bootstrap 95% CI      : [": "Cluster bootstrap 95% CI label",
     " MANDATE: STAGE P (PATH VERIF) -> STAGE W (LR GRID + CLOSED-FORM) -> 90% FEASIBILITY GATE": "S0-9 mandate banner",
-    "  Gate (>=90%)": "S0-9 table header",
-    "Gate (>=90%)": "S0-9 table header unpadded",
-    "--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---": "Gate 0 S0-9 banner",
+    " MANDATE: STAGE D (DIAGNOSTIC) -> STAGE W (LR GRID) -> 90% GATE -> STAGE S (RETENTION)": "S0-10 mandate banner",
+    "  Gate (>=90%)": "S0-9/S0-10 table header",
+    "Gate (>=90%)": "S0-9/S0-10 table header unpadded",
+    "--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---": "Gate 0 banner",
     "  Zero arms reached the 90.00% immediate efficacy gate. No negative controls triggered.\n": "S0-9 control notice",
+    "  Zero cells reached the 90.00% immediate efficacy gate. Stage S halted per protocol.\n": "S0-10 gate halt notice",
     "  Contingency Projection (1.2): ": "Contingency projection label",
+    "  Contingency Projection (1.25): ": "S0-10 contingency projection label",
 }
 
 def _format_spec_node_ids(call: ast.Call) -> set:
@@ -1013,7 +1016,101 @@ def run_all_tests() -> int:
     print("  Test 3.26 (Floor Verdict Derivation)  : ABOVE, AT, BELOW correctly partitioned PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.27 TEST SUITE SUMMARY
+    # 3.27 TEST CONV1D KEY-VALUE UPDATE WITH BIAS INCLUSION (DIRECTIVE S0-10)
+    # --------------------------------------------------------------------------
+    print("\n[3.27 Test Conv1D Key-Value Update with Bias Math (Directive S0-10)]")
+    tests_run += 1
+    rng_t10 = torch.Generator().manual_seed(42)
+    k_v = torch.randn(3072, generator=rng_t10, dtype=torch.float64)
+    W_m = torch.randn(3072, 768, generator=rng_t10, dtype=torch.float64)
+    b_v = torch.randn(768, generator=rng_t10, dtype=torch.float64)
+    v_target = torch.randn(768, generator=rng_t10, dtype=torch.float64)
+    v_orig = torch.matmul(k_v, W_m) + b_v
+    # Repaired closed form: delta_w = outer(k, v_target - v_orig) / (k^T k)
+    delta_w = torch.outer(k_v, v_target - v_orig) / torch.dot(k_v, k_v)
+    repaired_out = torch.matmul(k_v, W_m + delta_w) + b_v
+    err_rep = torch.max(torch.abs(repaired_out - v_target)).item()
+    assert err_rep < 1e-5, f"Repaired Conv1D key-value error too high: {err_rep}"
+    # Unrepaired (S0-9 omission of bias): delta_w_s09 = outer(k, v_target - k@W) / (k^T k)
+    delta_w_s09 = torch.outer(k_v, v_target - torch.matmul(k_v, W_m)) / torch.dot(k_v, k_v)
+    unrep_out = torch.matmul(k_v, W_m + delta_w_s09) + b_v
+    err_s09 = torch.max(torch.abs(unrep_out - v_target)).item()
+    # Unrepaired output equals v_target + b_v, so error is ||b_v||_inf > 0.1
+    assert err_s09 > 0.1, f"Expected uncorrected update to have non-zero bias error, got {err_s09}"
+    tests_passed += 1
+    print(f"  Test 3.27 (Conv1D KV Update with Bias): Repaired error={err_rep:.2e} (<1e-5), Unrepaired error={err_s09:.3f} PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.28 TEST FAILURE CLASSIFICATION PARTITIONING (DIRECTIVE S0-10 §3)
+    # --------------------------------------------------------------------------
+    print("\n[3.28 Test Failure Classification Partitioning (Directive S0-10 §3)]")
+    tests_run += 1
+    def classify_test_case(patched_match: bool, post_write_match: bool) -> str:
+        if not patched_match:
+            return "A_OPTIMIZATION_FAILURE"
+        elif patched_match and not post_write_match:
+            return "B_WRITE_DEFECT"
+        elif patched_match and post_write_match:
+            return "SUCCESS"
+        return "C_PROPAGATION_FAILURE"
+    assert classify_test_case(False, False) == "A_OPTIMIZATION_FAILURE"
+    assert classify_test_case(False, True) == "A_OPTIMIZATION_FAILURE"
+    assert classify_test_case(True, False) == "B_WRITE_DEFECT"
+    assert classify_test_case(True, True) == "SUCCESS"
+    tests_passed += 1
+    print("  Test 3.28 (Failure Classification)    : Partitioning into optimization failure, write defect, success PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.29 TEST STATE RESTORE VERIFICATION GUARD (DIRECTIVE S0-10 §2 ITEM 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.29 Test State Restore Verification Guard (Directive S0-10 §2 Item 2)]")
+    tests_run += 1
+    from experiments.s0_10_repair import verify_state_restore
+    class DummyMLP(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.c_proj = torch.nn.Linear(10, 10)
+    class DummyH(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.mlp = DummyMLP()
+    class DummyTransformer(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.h = torch.nn.ModuleList([DummyH() for _ in range(12)])
+    class DummyGPT2(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.transformer = DummyTransformer()
+    d_model = DummyGPT2()
+    f_sum = sum(p.sum().item() for p in d_model.parameters())
+    f_hashes = {6: hashlib.sha256(d_model.transformer.h[6].mlp.c_proj.weight.data.cpu().numpy().tobytes()).hexdigest()}
+    # Clean check passes
+    verify_state_restore(d_model, f_sum, f_hashes)
+    # Mutated check raises AssertionError
+    d_model.transformer.h[6].mlp.c_proj.weight.data[0, 0] += 0.01
+    caught_restore_error = False
+    try:
+        verify_state_restore(d_model, f_sum, f_hashes)
+    except AssertionError:
+        caught_restore_error = True
+    assert caught_restore_error, "FAIL: verify_state_restore failed to catch mutated weight!"
+    tests_passed += 1
+    print("  Test 3.29 (Restore Verification Guard): Fresh state passes, mutated weight raises AssertionError PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.30 TEST S0-10 POPULATION REGISTRY SCOPES (DIRECTIVE S0-10 §2 ITEM 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.30 Test S0-10 Population Registry Scopes (Directive S0-10)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_10_single_edit") == 100
+    assert POPULATION_REGISTRY.get("s0_10_stage_d") == 20
+    assert POPULATION_REGISTRY.get("s0_10_wrong_target_paraphrase") == 300
+    tests_passed += 1
+    print("  Test 3.30 (S0-10 Registry Scopes)     : s0_10_single_edit=100, s0_10_stage_d=20, s0_10_wrong_target_paraphrase=300 registered PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.31 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
