@@ -198,6 +198,7 @@ def main():
 
     print("\n--- [Pilot Cycle Timing & Budget Reprojection] ---")
     pilot_t = measure_pilot_cycle_timing(model, tokenizer, facts_1000[0], base_state_dict, wikitext_slice, slice_sha, template_prior_controls, device)
+    verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
     verified_restores += 2
     proj_sec = (21 * 100 * (pilot_t["t_sgd_step"] * 150 + pilot_t["t_reload"]) + 21 * (pilot_t["t_eval_ppl"] + pilot_t["t_eval_loc"]) + 500.0) * 1.25
     print(f"  Pilot SGD Step Time         : {pilot_t['t_sgd_step']:.4f} s/step")
@@ -345,12 +346,12 @@ def main():
         p_ret = pooled_first50_term / 300.0
         p_para = pooled_first50_para / 900.0
 
-        ci_term = newcombe_score_interval(pooled_first50_term, 300, 58, 1200)
-        v_term = compute_floor_verdict_str(ci_term["diff"], ci_term["ci_lo"], ci_term["ci_hi"])
+        diff_term, ci_lo_term, ci_hi_term = newcombe_score_interval(pooled_first50_term, 300, 58, 1200)
+        v_term = compute_floor_verdict_str(diff_term, ci_lo_term, ci_hi_term)
 
         # Paraphrase floor from S0-9: 1/300
-        ci_para = newcombe_score_interval(pooled_first50_para, 900, 1, 300)
-        v_para = compute_floor_verdict_str(ci_para["diff"], ci_para["ci_lo"], ci_para["ci_hi"])
+        diff_para, ci_lo_para, ci_hi_para = newcombe_score_interval(pooled_first50_para, 900, 1, 300)
+        v_para = compute_floor_verdict_str(diff_para, ci_lo_para, ci_hi_para)
 
         stage_s_data = {
             "selected_cell": selected_cell["arm"],
@@ -358,12 +359,12 @@ def main():
             "seeds": stage_s_seeds,
             "primary_endpoint": {
                 "num": pooled_first50_term, "den": 300, "rate": p_ret,
-                "diff": ci_term["diff"], "ci_lo": ci_term["ci_lo"], "ci_hi": ci_term["ci_hi"],
+                "diff": diff_term, "ci_lo": ci_lo_term, "ci_hi": ci_hi_term,
                 "verdict": v_term
             },
             "secondary_endpoint": {
                 "num": pooled_first50_para, "den": 900, "rate": p_para,
-                "diff": ci_para["diff"], "ci_lo": ci_para["ci_lo"], "ci_hi": ci_para["ci_hi"],
+                "diff": diff_para, "ci_lo": ci_lo_para, "ci_hi": ci_hi_para,
                 "verdict": v_para
             }
         }

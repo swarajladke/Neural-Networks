@@ -275,6 +275,8 @@ def run_stage_d_diagnostic(
             if eff_pct > best_eff:
                 best_eff, best_setting = eff_pct, {"lambda_l2": l_val, "max_steps": s_val}
 
+    model.load_state_dict(base_state_dict)
+    verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
     print(f"  Best Stage D Setting: lambda={best_setting['lambda_l2']}, steps={best_setting['max_steps']} (Efficacy: {best_eff:.1f}%)\n")
     return {
         "diagnostic_rows": diag_rows,
