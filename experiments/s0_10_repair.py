@@ -324,7 +324,16 @@ def evaluate_s0_10_negative_controls(
 
     m_wrong = Measurement.from_outcomes(wrong_c_matches, metric="wrong_target", arm="wrong_target", scope="s0_10_single_edit", input_set="s0_10_facts_100", mode="eval_no_dropout")
     m_wrong_para = Measurement.from_outcomes(wrong_p_matches, metric="wrong_target_paraphrase", arm="wrong_target_paraphrase", scope="s0_10_wrong_target_paraphrase", input_set="s0_10_paraphrases_300", mode="eval_no_dropout")
-    return {"wrong_target": m_wrong, "wrong_target_paraphrase": m_wrong_para, "raw_canonical_outcomes": wrong_c_matches, "raw_paraphrase_outcomes": wrong_p_matches}
+    return {
+        "wrong_target": {
+            "num": m_wrong.numerator, "den": m_wrong.denominator, "rate": m_wrong.rate,
+            "w_lo": m_wrong.wilson_low, "w_hi": m_wrong.wilson_high, "raw_vectors": wrong_c_matches
+        },
+        "wrong_target_paraphrase": {
+            "num": m_wrong_para.numerator, "den": m_wrong_para.denominator, "rate": m_wrong_para.rate,
+            "w_lo": m_wrong_para.wilson_low, "w_hi": m_wrong_para.wilson_high, "raw_vectors": wrong_p_matches
+        }
+    }
 
 
 def execute_stage_s_seed(

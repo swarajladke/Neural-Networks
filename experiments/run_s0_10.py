@@ -159,7 +159,7 @@ def main():
 
     print("")
     print("--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---")
-    facts_seed0 = sample_200_facts(facts_1000, seed=0)
+    facts_seed0, seed0_hash = sample_200_facts(facts_1000, seed=0)
     g0_opt = torch.optim.SGD([model.lm_head.weight], lr=s0_8_lr)
     g0_steps = 0
     g0_imm = []
@@ -325,7 +325,7 @@ def main():
 
         stage_s_seeds = []
         for s_idx in range(6):
-            facts_s = sample_200_facts(facts_1000, seed=s_idx)
+            facts_s, s_hash = sample_200_facts(facts_1000, seed=s_idx)
             s_res = execute_stage_s_seed(
                 seed=s_idx, facts_200=facts_s, model=model, tokenizer=tokenizer,
                 fresh_model=fresh_model, base_state_dict=base_state_dict,
