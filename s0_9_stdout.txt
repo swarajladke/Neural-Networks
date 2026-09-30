@@ -1,0 +1,818 @@
+===================================================================================================================
+ DIRECTIVE S0-9: WRITABILITY OF THE MID-LAYER MLP VALUE PROJECTION — POSITIVE CONTROL FIRST
+ MANDATE: STAGE P (PATH VERIF) -> STAGE W (LR GRID + CLOSED-FORM) -> 90% FEASIBILITY GATE
+===================================================================================================================
+
+--- [Pre-Flight Unit Test Suite Execution] ---
+====================================================================================================
+ PRE-FLIGHT TEST SUITE (Directive S0-5 Part 1): Metric Stubs & Provenance Guard 2.0
+====================================================================================================
+
+[AST Startup Literal Scanner Audit (AGENTS.md C.2 / S0-2 A4)]
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in b1_inject.py
+  AST Literal Scanner on b1_inject.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in run_s0_7a.py
+  AST Literal Scanner on run_s0_7a.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in horizon_audit.py
+  AST Literal Scanner on horizon_audit.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in stats.py
+  AST Literal Scanner on stats.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in stage_j.py
+  AST Literal Scanner on stage_j.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in re_emission.py
+  AST Literal Scanner on re_emission.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in weight_tying.py
+  AST Literal Scanner on weight_tying.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in s0_7b_audit.py
+  AST Literal Scanner on s0_7b_audit.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in run_s0_7b.py
+  AST Literal Scanner on run_s0_7b.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in s0_8_relocate.py
+  AST Literal Scanner on s0_8_relocate.py: PASSED (0 unlisted decimal/percent literals).
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in run_s0_8.py
+  AST Literal Scanner on run_s0_8.py: PASSED (0 unlisted decimal/percent literals).
+
+[PART 1: Provenance Guard 2.0 (Directive S0-5 Part 1)]
+  Test 1.1 (Direct constructor call raises)   : Caught expected TypeError: Measurement cannot be constructed directly. Use Measurement.from_outcomes(...) to guarantee provenance (Directive S0-5 Part 1).
+  Test 1.2 (Missing mode raises)              : Caught expected TypeError: Execution mode must be explicitly declared as a non-empty string (e.g. 'eval_no_dropout')
+  Test 1.3 (Scope mismatch raises)            : Caught expected ValueError: Scope 'pooled' requires denominator 1200, got 33
+  Test 1.4 (Control-pool retention raises)    : Caught expected ValueError: Provenance violation: cannot construct retention measurement on control pool arm 'controls_pool'
+  Test 1.5 (Renderer round-trip)              : 33/600 (5.50%) [3.94%, 7.62%]
+
+[1.6 Loose-Variable Rate Formatting Grep Audit]
+  Test 1.6 (Loose-variable rate formatting)   : 0 violation(s) detected.
+
+[1.7 Principled Reversion Pattern Classifier Test (Directive S0-6)]
+  S0-5 Overlapping bins classification        : FLAT — NO DOSE RESPONSE DETECTED
+  Monotonic non-overlapping bins              : GRADED: Revert rate decreases progressively with increasing surviving fraction.
+
+[1.8 Paired Statistics Unit Test (df=5)]
+  Paired stats (mean diff=2.00, df=5, t=7.7460, W=0)
+
+[1.9 Monotone Retention Horizon Unit Test]
+  Monotone horizon search result              : horizon_k=20
+
+[PART 1.4: Surviving-Fraction & Alignment Independence Proof (Directive S0-5)]
+  Vector v1 (in span(u1)) -> SF = 0.0000 (tol=1e-4), Alignment = 1.0000 (tol=1e-4)
+  Vector v2 (in span(u2)) -> SF = 0.0000 (tol=1e-4), Alignment = 0.0000 (tol=1e-4)
+  Independence Proof: PASSED (SF and Alignment dissociate geometrically in rank-2 subspace).
+
+[PART 1.2: Orthonormality Assertion Audit]
+  Orthonormality Guard: PASSED (Orthonormal passes, non-orthonormal raises).
+
+[PART 1.6: Seven Synthetic Tests with Stated Tolerances]
+  Synthetic 1 (SF inside subspace)     : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 2 (SF orthogonal)          : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 3 (SF 45 deg)              : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Synthetic 4 (SF 3 of 4 unit in r=3)  : Expected 0.5000, Actual 0.5000 (tol=1e-4)
+  Synthetic 5 (Align parallel)         : Expected 1.0000, Actual 1.0000 (tol=1e-4)
+  Synthetic 6 (Align orthogonal)       : Expected 0.0000, Actual 0.0000 (tol=1e-4)
+  Synthetic 7 (Align 45 deg)           : Expected 0.7071, Actual 0.7071 (tol=1e-3)
+  Pythagorean Projection Identity     : PASSED on synthetic test cases
+
+[A2.1 Immediate Efficacy vs Terminal Retention Disagreement Fixture]
+  Immediate Efficacy (all took)       : Expected (20, 20), Actual (20, 20) -> 20/20 (100.00%)
+  Terminal Retention (4 survived)     : Expected (4, 20), Actual (4, 20) -> 4/20 (20.00%)
+
+[A2.2 Immediate Efficacy Failure on Exhausted Max Steps]
+  Immediate Efficacy (1 exhausted)    : Expected (2, 3), Actual (2, 3) -> 2/3 (66.67%)
+
+[A2.3 Denominator Equality Across N in {1, 5, 12, 20}]
+  Denominator Assertion               : Strictly equals N for both metrics across N in [1, 5, 12, 20]
+
+[A3. Summary Statistic Reduction Test (S0-2 A3)]
+  Summary stats on incident list      : min=0.0, max=2.0, mean=0.7000
+
+[3.2 Generalization Metric Unit Tests]
+  Test 3.2 (20 facts, 2/3 correct)    : Expected (40, 60), Actual (40, 60) -> 40/60 (66.67%)
+
+[3.3 Retention Metrics Unit Tests on Hand-Counted Fixture]
+  Test 3.3a (Terminal/Raw Retention)  : Expected (3, 5), Actual (3, 5) -> 3/5 (60.00%)
+  Test 3.3b (Bound Retention)        : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+  Test 3.3c (Subj-Discrim Ret)       : Expected (2, 5), Actual (2, 5) -> 2/5 (40.00%)
+
+[3.4 Stopping Rule Simulation Tests]
+  Test 3.4a (Terminates on match)     : Expected (3, True), Actual (3, True)
+  Test 3.4b (Terminates at step 1)    : Expected (1, True), Actual (1, True)
+  Test 3.4c (Runs to max_steps)       : Expected (15, False), Actual (15, False)
+  Test 3.4d (Falling loss no match)   : Expected (4, False), Actual (4, False)
+
+[3.5 Proven 12-Case Match & Normalization Equivalence Suite]
+  Test 3.5 (12-Case Equivalence)      : All 12 proven test cases PASSED identically.
+
+[3.6 Control Accounting & Impossible-Value Guard Tests]
+  Test 3.6a (Valid Control Pooling)   : Expanded Sum -> 0 + 1 + 0 + 2 = 3 over 20 + 20 + 20 + 20 = 80
+                                        Pooled Floor -> 3/80 (3.75%), Worst -> pre_edit_baseline: 2/20 (10.00%)
+
+[3.7 Wilson Score Confidence Interval Unit Tests]
+  Test 3.7a (Wilson k=4, n=20)         : lo=0.0807, hi=0.4160
+  Test 3.7b (Wilson k=0, n=20)         : lo=0.0000, hi=0.1611
+
+[3.8 N=200 Sequence Sampling Unit Tests]
+  Test 3.8a (N=200 seed=0 hash)        : 21eb027af79426e0... (200 facts)
+
+[3.9 Causal Subspace Orthogonal Projection Tests]
+  Test 3.9a (Orthogonality norm)       : 0.00000118 (Expected near zero)
+
+[3.10 Incomplete Beta & Exact Student t Distribution Tests (Directive S0-7a)]
+  Test 3.10 (Student t & Incomplete Beta): All closed-form and tabulated tests PASSED.
+
+[3.11 Exact Wilcoxon Signed-Rank Test Tests (Directive S0-7a)]
+  Test 3.11 (Exact Wilcoxon Signed-Rank): All exact full-enumeration tests PASSED.
+
+[3.12 Newcombe Hybrid Score Interval Unit Tests (Directive S0-7a)]
+  Test 3.12 (Newcombe Score Interval)  : Interval calculation PASSED.
+
+[3.13 Retention Horizon at Real Operating Point (Directive S0-7a D4)]
+  Test 3.13 (Real Operating Point)     : First-crossing stopping rule & re-separation discard PASSED.
+
+[3.14 Commit 4e16084 40-Case Full Equivalence Suite (Directive S0-7a D4)]
+  Test 3.14 (40-Case Equivalence)      : All 40 cases from commit 4e16084 PASSED identically.
+
+[3.15 Test Maximal-Depth Estimator (Directive S0-7b H1)]
+  Test 3.15 (Maximal-Depth Estimator)   : First-crossing k=10, Maximal-depth k=30, Re-separation PASSED.
+
+[3.16 Test Logistic Slope Fit against Known Synthetic Fixtures (Directive S0-7b H3)]
+  Test 3.16 (Logistic Slope Fixtures)   : Positive, negative, and flat fixtures PASSED.
+
+[3.17 Test Paired Seed-Level Inference & Wilcoxon Floor (Directive S0-7b H3)]
+  Test 3.17 (Paired Inference & Floor)  : Dynamic df=5 derivation and exact Wilcoxon floor PASSED.
+
+[3.18 Test Stage J Tokenization Conventions (Directive S0-7b Stage J)]
+  Test 3.18 (Stage J Conventions)       : 1,000 facts object and target_token_str structure PASSED.
+
+[3.19 Test Minimum Detectable Effect (Directive S0-8 §5 Item 8)]
+  Test 3.19 (Minimum Detectable Effect) : Power=0.80, alpha=0.05 dynamic MDE computation PASSED.
+
+[3.20 Test Readout Freeze Bitwise Assertion (Directive S0-8 §2)]
+    [Frozen Readout Assertion] Seed 0 dummy_arm: lm_head=0.0, wte=0.0, ln_f.w=0.0, ln_f.b=0.0 (Bitwise Zero Verified)
+  Test 3.20 (Readout Freeze Assertion)  : Zero delta passes, non-zero delta raises PASSED.
+
+[3.21 Test S0-8 Population Scopes in Registry (Directive S0-8 §6 Item 2)]
+  Test 3.21 (S0-8 Population Scopes)    : first50 scopes 50, 300, 150, 900 verified in POPULATION_REGISTRY PASSED.
+
+[3.22 Test Exact Wilcoxon Floor Labeling (Directive S0-8 §7 Item 5)]
+  Test 3.22 (Wilcoxon Floor Labeling)   : Combinatorial floor labeled structurally uninformative PASSED.
+
+[3.23 Test Closed-Form Rank-1 Key-Value Update (Directive S0-9)]
+  Test 3.23 (Closed-Form Rank-1 Math)   : k(W + Δ) == v* with max error 4.62e-13 PASSED.
+
+[3.24 Test Subject Last Token Index Finder (Directive S0-9)]
+  Test 3.24 (Subject Last Token Finder) : Prefix and middle subjects mapped correctly PASSED.
+
+[3.25 Test S0-9 Population Registry Scopes (Directive S0-9)]
+  Test 3.25 (S0-9 Registry Scopes)      : s0_9_single_edit=100, s0_9_stage_p=20, s0_9_wrong_target_paraphrase=300 registered PASSED.
+
+[3.26 Test Floor Verdict String Derivation (Directive S0-9 §4 Item 6)]
+  Test 3.26 (Floor Verdict Derivation)  : ABOVE, AT, BELOW correctly partitioned PASSED.
+
+====================================================================================================
+ PRE-FLIGHT TEST SUMMARY: 127 tests run, 127 tests passed, 0 failures.
+====================================================================================================
+  Pre-Flight Test Suite Status : PASSED (Zero Failures)
+
+--- [AST Startup Literal Scanner Audit] ---
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 banner
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in s0_9_writability.py
+  [Literal scanner] Allow-list:
+    '================================': table rule border line
+    '--------------------------------': table rule separator line
+    '================================': test suite banner border line
+    '--------------------------------': test suite section separator line
+    '--------------------------------': historical comparison table separator line
+    '================================': line-item step attribution border line
+    '--------------------------------': cell comparison table separator line
+    '================================': cell comparison table border line
+    '--------------------------------': sweep comparison table separator line
+    '================================': sweep comparison table border line
+    '================================': diagnostic table border line
+    '--------------------------------': diagnostic table separator line
+    ':4096:8': cublas deterministic workspace configuration flag
+    ' GATE 0: EARLY BIT-REPRODUCTION ': Gate 0 title banner
+    '  Running Arm A (r0_unconstraine': Arm A delta 0 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 0 banner with newline
+    '  Running Arm A (r0_unconstraine': Arm A delta 1 banner
+    '\n  Running Arm A (r0_unconstrain': Arm A delta 1 banner with newline
+    '  Running Arm B (r1_causal_perst': Arm B banner
+    '\n  Running Arm B (r1_causal_pers': Arm B banner with newline
+    '  Running Arm F (r1_magnitude_on': Arm F banner
+    '\n  Running Arm F (r1_magnitude_o': Arm F banner with newline
+    '--- [Running Untied Arm A (r0_un': Untied Arm A banner
+    '\n--- [Running Untied Arm A (r0_u': Untied Arm A banner with newline
+    '--- [Running Untied Arm B (r1_ca': Untied Arm B banner
+    '\n--- [Running Untied Arm B (r1_c': Untied Arm B banner with newline
+    '  Delta-1.0 Timing (t_delta1)  :': Delta-1 timing label
+    '  Newcombe 95% Hybrid Score CI :': Newcombe 95% CI label
+    '    Secondary 6-Cluster Bootstra': Cluster bootstrap 95% CI label
+    ' MANDATE: STAGE P (PATH VERIF) -': S0-9 mandate banner
+    '  Gate (>=90%)': S0-9 table header
+    'Gate (>=90%)': S0-9 table header unpadded
+    '--- [Gate 0: Historical Baseline': Gate 0 S0-9 bannerWarning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+    '  Zero arms reached the 90.00% i': S0-9 control notice
+    '  Contingency Projection (1.2): ': Contingency projection label
+  [Literal scanner] 0 violation(s) detected in run_s0_9.py
+  AST Literal Scanner         : 0 unlisted violations detected across modules
+
+--- [Environment Fingerprint & Input Hashes] ---
+  Pinned Facts SHA-256        : 285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536 (Verified)
+  Synthetic Facts Agreement   : 1,000/1,000 facts match pinned file field-by-field
+  Control-Probe Set SHA-256   : 8f4ffa6b18d63531c898a6b2bf97d8b4a83d7038a54b9748bf77862178213887 (Verified 200 prompts)
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1608.83it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+Generating test split: 100%|██████████| 4358/4358 [00:00<00:00, 45749.10 examples/s]
+Generating train split: 100%|██████████| 36718/36718 [00:00<00:00, 529510.20 examples/s]
+Generating validation split: 100%|██████████| 3760/3760 [00:00<00:00, 451982.78 examples/s]
+Token indices sequence length is longer than the specified maximum sequence length for this model (538693 > 1024). Running this sequence through the model will result in indexing errors
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+  PyTorch / Transformers      : 2.10.0+cu128 / 5.0.0
+  Device / Accelerator        : cuda (Tesla T4)
+  Pinned Model Revision       : 607a30d783dfa663caf39e06633721c8d4cfcd7e
+  WikiText Slice SHA-256      : 3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7 (Verified)
+  Fresh Model Checksum        : -62119.87976855
+  Pre-Edit Baseline PPL       : 36.03 (Reference: 36.03)
+
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 1664.42it/s, Materializing param=transformer.wte.weight]
+GPT2LMHeadModel LOAD REPORT from: gpt2
+Key                  | Status     |  | 
+---------------------+------------+--+-
+h.{0...11}.attn.bias | UNEXPECTED |  | 
+
+Notes:
+- UNEXPECTED	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.
+--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---
+  Gate 0 Observed Steps       : 669 (Reference: 669)
+  Gate 0 Observed Imm Efficacy: 200/200 (Reference: 200/200)
+  Gate 0 Observed Term Ret    : 8/200 (Reference: 8/200)
+  Gate 0 Status               : EXACT MATCH CONFIRMED (PASSED)
+
+--- [Pilot Cycle Timing & Budget Reprojection (Directive S0-9)] ---
+  Pilot Cycle Measured Reload Time : 0.0046 s/reload
+  Pilot Cycle Measured SGD Step    : 0.03442 s/step (100 steps took 3.442 s)
+  Pilot Cycle Measured Closed-Form : 0.980 s/edit
+  Pilot Cycle Measured Eval Time   : 15.810 s (PPL subset: 6.506 s, Locality: 9.304 s)
+  Declared Perplexity Subset       : 100 sequences (51200 tokens) from pinned slice 3fd93350
+  Candidate Layers                 : [1, 3, 6, 9, 11]
+  Active Layers for Stage W        : [1, 3, 6, 9, 11]
+  Projected Reload Wall-Clock      : 9.21 s
+  Projected Steps Wall-Clock       : 5652.55 s
+  Projected Evals Wall-Clock       : 316.20 s
+  Projected Overhead Wall-Clock    : 242.36 s
+  Total Raw Compute Time           : 6220.32 s
+  Contingency Budget Projection    : 7464.39 s (Ceiling: 16380.00 s)
+  Budget Reprojection Status       : PASSED (Under Compute Ceiling)
+
+
+--- [Stage P: Write-Path Verification (L=6, 20 Facts, Fresh Model Each)] ---
+  Fact 00 | Subj: Corwin Vane      | ||k||=9.77 | ||grad||=6.067818 | LogP: -6.1500 -> -5.7899 (Δ=+0.3602) | ||ΔW||=0.060678
+  Fact 01 | Subj: Emrys Carrington | ||k||=10.43 | ||grad||=7.084945 | LogP: -7.8280 -> -7.3119 (Δ=+0.5161) | ||ΔW||=0.070849
+  Fact 02 | Subj: Marlen Vandell   | ||k||=10.48 | ||grad||=5.460103 | LogP: -6.6432 -> -6.3437 (Δ=+0.2995) | ||ΔW||=0.054601
+  Fact 03 | Subj: Emrys Belmont    | ||k||=10.12 | ||grad||=5.629365 | LogP: -6.2856 -> -5.9741 (Δ=+0.3115) | ||ΔW||=0.056294
+  Fact 04 | Subj: Kaelor Odham     | ||k||=9.66 | ||grad||=7.089313 | LogP: -9.0606 -> -8.5568 (Δ=+0.5038) | ||ΔW||=0.070893
+  Fact 05 | Subj: Janox Verrico    | ||k||=9.93 | ||grad||=6.634308 | LogP: -6.8485 -> -6.4129 (Δ=+0.4356) | ||ΔW||=0.066343
+  Fact 06 | Subj: Daxen Blythe     | ||k||=11.86 | ||grad||=7.107859 | LogP: -8.9657 -> -8.4707 (Δ=+0.4950) | ||ΔW||=0.071079
+  Fact 07 | Subj: Elowen Pendelton | ||k||=9.25 | ||grad||=6.579973 | LogP: -6.7674 -> -6.3408 (Δ=+0.4266) | ||ΔW||=0.065800
+  Fact 08 | Subj: Doran Sinclair   | ||k||=8.82 | ||grad||=7.090262 | LogP: -7.9893 -> -7.5057 (Δ=+0.4836) | ||ΔW||=0.070903
+  Fact 09 | Subj: Theron Sinclair  | ||k||=8.78 | ||grad||=5.087438 | LogP: -5.6838 -> -5.4252 (Δ=+0.2587) | ||ΔW||=0.050874
+  Fact 10 | Subj: Hadrian Pendelto | ||k||=9.99 | ||grad||=10.820323 | LogP: -8.9179 -> -7.8436 (Δ=+1.0743) | ||ΔW||=0.108203
+  Fact 11 | Subj: Zarek Waverly    | ||k||=9.82 | ||grad||=7.466588 | LogP: -7.8818 -> -7.3428 (Δ=+0.5390) | ||ΔW||=0.074666
+  Fact 12 | Subj: Vesper Mercer    | ||k||=8.87 | ||grad||=6.603791 | LogP: -7.8373 -> -7.3974 (Δ=+0.4399) | ||ΔW||=0.066038
+  Fact 13 | Subj: Brynna Waverly   | ||k||=10.11 | ||grad||=5.525451 | LogP: -7.6121 -> -7.3044 (Δ=+0.3078) | ||ΔW||=0.055255
+  Fact 14 | Subj: Kaelen Winter    | ||k||=9.05 | ||grad||=6.460752 | LogP: -8.5320 -> -8.1206 (Δ=+0.4114) | ||ΔW||=0.064608
+  Fact 15 | Subj: Kaelor Ashford   | ||k||=9.43 | ||grad||=7.154395 | LogP: -7.8616 -> -7.3634 (Δ=+0.4982) | ||ΔW||=0.071544
+  Fact 16 | Subj: Faelan Blackwood | ||k||=9.19 | ||grad||=6.477752 | LogP: -9.3325 -> -8.9148 (Δ=+0.4177) | ||ΔW||=0.064778
+  Fact 17 | Subj: Vaelin Morvath   | ||k||=9.56 | ||grad||=6.990564 | LogP: -7.6437 -> -7.1603 (Δ=+0.4833) | ||ΔW||=0.069906
+  Fact 18 | Subj: Doran Sterling   | ||k||=8.98 | ||grad||=6.992717 | LogP: -9.1345 -> -8.6565 (Δ=+0.4780) | ||ΔW||=0.069927
+  Fact 19 | Subj: Jorah Odham      | ||k||=9.64 | ||grad||=9.588917 | LogP: -9.8321 -> -8.9536 (Δ=+0.8785) | ||ΔW||=0.095889
+--- [Stage P: All 20 Facts Verified. Write Path at L=6 Confirmed Operable] ---
+
+--- [Stage W: Writability Sweep (100 Facts, Seed 0)] ---
+  Facts Selected              : 25 + 25 + 25 + 25 = 100 facts (Asserted)
+  S0-8 Baseline Learning Rate : 3.0e-05
+  W1 Evaluated Learning Rates : [3e-05, 0.00030000000000000003, 0.003]
+  W2 Closed-Form L2 Penalty   : lambda = 0.5
+
+==================== Layer 1 Writability Evaluation ====================
+  Running W1_SGD_L1_lr3e-05 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0001 | Gate: FAILED
+  Running W1_SGD_L1_lr3e-04 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.88 | LocKL=0.0041 | Gate: FAILED
+  Running W1_SGD_L1_lr3e-03 (100 single-edit facts)...
+    -> ImmEff=80/100 (80.00%) [71.12%, 86.66%] | Steps=57.7 | PPL=33.90 | LocKL=0.0195 | Gate: FAILED
+  Running W2_ClosedForm_L1 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=20.0 | PPL=33.87 | LocKL=0.0003 | Gate: FAILED
+
+==================== Layer 3 Writability Evaluation ====================
+  Running W1_SGD_L3_lr3e-05 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0001 | Gate: FAILED
+  Running W1_SGD_L3_lr3e-04 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.90 | LocKL=0.0050 | Gate: FAILED
+  Running W1_SGD_L3_lr3e-03 (100 single-edit facts)...
+    -> ImmEff=79/100 (79.00%) [70.02%, 85.83%] | Steps=58.5 | PPL=33.94 | LocKL=0.0215 | Gate: FAILED
+  Running W2_ClosedForm_L3 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=20.0 | PPL=33.84 | LocKL=0.0002 | Gate: FAILED
+
+==================== Layer 6 Writability Evaluation ====================
+  Running W1_SGD_L6_lr3e-05 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0001 | Gate: FAILED
+  Running W1_SGD_L6_lr3e-04 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.88 | LocKL=0.0043 | Gate: FAILED
+  Running W1_SGD_L6_lr3e-03 (100 single-edit facts)...
+    -> ImmEff=75/100 (75.00%) [65.70%, 82.45%] | Steps=60.6 | PPL=33.92 | LocKL=0.0220 | Gate: FAILED
+  Running W2_ClosedForm_L6 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=20.0 | PPL=33.94 | LocKL=0.0004 | Gate: FAILED
+
+==================== Layer 9 Writability Evaluation ====================
+  Running W1_SGD_L9_lr3e-05 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0000 | Gate: FAILED
+  Running W1_SGD_L9_lr3e-04 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.86 | LocKL=0.0001 | Gate: FAILED
+  Running W1_SGD_L9_lr3e-03 (100 single-edit facts)...
+    -> ImmEff=22/100 (22.00%) [15.00%, 31.07%] | Steps=93.7 | PPL=33.81 | LocKL=0.0072 | Gate: FAILED
+  Running W2_ClosedForm_L9 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=20.0 | PPL=33.98 | LocKL=0.0006 | Gate: FAILED
+
+==================== Layer 11 Writability Evaluation ====================
+  Running W1_SGD_L11_lr3e-05 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0000 | Gate: FAILED
+  Running W1_SGD_L11_lr3e-04 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=100.0 | PPL=33.87 | LocKL=0.0001 | Gate: FAILED
+  Running W1_SGD_L11_lr3e-03 (100 single-edit facts)...
+    -> ImmEff=25/100 (25.00%) [17.55%, 34.30%] | Steps=93.6 | PPL=33.89 | LocKL=0.0059 | Gate: FAILED
+  Running W2_ClosedForm_L11 (100 single-edit facts)...
+    -> ImmEff=0/100 (0.00%) [0.00%, 3.70%] | Steps=20.0 | PPL=33.89 | LocKL=0.0001 | Gate: FAILED
+
+--- [Negative Control Evaluation: wrong_target & wrong_target_paraphrase] ---
+  Negative Control wrong_target            : 0/100 (0.00%) [0.00%, 3.70%] (100 canonical prompts)
+  Negative Control wrong_target_paraphrase : 1/300 (0.33%) [0.06%, 1.86%] (300 paraphrase prompts)
+
+===============================================================================================
+ DIRECTIVE S0-9 EMPIRICAL WRITABILITY SUMMARY TABLE
+===============================================================================================
+===================================================================================================================
+Condition                  | Immediate Efficacy (N=100)       | Steps   | Wiki PPL  | Loc KL   | Gate (>=90%)
+-------------------------------------------------------------------------------------------------------------------
+W1_SGD_L1_lr3e-05          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0001   | FAILED
+W1_SGD_L1_lr3e-04          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.88     | 0.0041   | FAILED
+W1_SGD_L1_lr3e-03          | 80/100 (80.00%) [71.12%, 86.66%] | 57.7    | 33.90     | 0.0195   | FAILED
+W2_ClosedForm_L1           | 0/100 (0.00%) [0.00%, 3.70%]     | 20.0    | 33.87     | 0.0003   | FAILED
+W1_SGD_L3_lr3e-05          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0001   | FAILED
+W1_SGD_L3_lr3e-04          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.90     | 0.0050   | FAILED
+W1_SGD_L3_lr3e-03          | 79/100 (79.00%) [70.02%, 85.83%] | 58.5    | 33.94     | 0.0215   | FAILED
+W2_ClosedForm_L3           | 0/100 (0.00%) [0.00%, 3.70%]     | 20.0    | 33.84     | 0.0002   | FAILED
+W1_SGD_L6_lr3e-05          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0001   | FAILED
+W1_SGD_L6_lr3e-04          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.88     | 0.0043   | FAILED
+W1_SGD_L6_lr3e-03          | 75/100 (75.00%) [65.70%, 82.45%] | 60.6    | 33.92     | 0.0220   | FAILED
+W2_ClosedForm_L6           | 0/100 (0.00%) [0.00%, 3.70%]     | 20.0    | 33.94     | 0.0004   | FAILED
+W1_SGD_L9_lr3e-05          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0000   | FAILED
+W1_SGD_L9_lr3e-04          | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.86     | 0.0001   | FAILED
+W1_SGD_L9_lr3e-03          | 22/100 (22.00%) [15.00%, 31.07%] | 93.7    | 33.81     | 0.0072   | FAILED
+W2_ClosedForm_L9           | 0/100 (0.00%) [0.00%, 3.70%]     | 20.0    | 33.98     | 0.0006   | FAILED
+W1_SGD_L11_lr3e-05         | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0000   | FAILED
+W1_SGD_L11_lr3e-04         | 0/100 (0.00%) [0.00%, 3.70%]     | 100.0   | 33.87     | 0.0001   | FAILED
+W1_SGD_L11_lr3e-03         | 25/100 (25.00%) [17.55%, 34.30%] | 93.6    | 33.89     | 0.0059   | FAILED
+W2_ClosedForm_L11          | 0/100 (0.00%) [0.00%, 3.70%]     | 20.0    | 33.89     | 0.0001   | FAILED
+===================================================================================================================
+
+  Artifact Written             : /kaggle/working/Neural-Networks/experiments/results/s0_9.json
+===================================================================================================================
+ DIRECTIVE S0-9 COMPLETE: WRITABILITY EVALUATION EXECUTED
+===================================================================================================================
+SCRIPT_EXIT=0

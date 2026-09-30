@@ -173,33 +173,32 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 
 ---
 
-## 9. Active Directive: Directive S0-9 — Writability of the Mid-Layer MLP Value Projection: Positive Control First
+## 9. Directive S0-9 Empirical Findings (Completed)
 
 **Objective:** Positive control first. Establish whether any write procedure at `mlp.c_proj` at some layer can achieve at least 90.00% immediate efficacy on the pinned facts (single edit, fresh model each time) before any sequential or retention experiment.
 
-1. **Question Q1 (Positive Control):** Can any write procedure at `mlp.c_proj` at some layer achieve at least 90.00% immediate efficacy on the pinned facts, single edit, fresh model each time?
-2. **Question Q2 (Conditional on Q1):** Is a closed-form key-value write, as opposed to iterative SGD, sufficient to reach the gate?
-3. **Stage P (Path Verification):** Seed 0, first 20 facts, fresh model per fact at $L=6$:
-   - Forward hook on `mlp.c_proj` input; record key $k$ at subject's final token position, and output $v$.
-   - Assert `c_proj.weight.requires_grad=True` and gradient is nonzero and finite for edit loss; print norm.
-   - Apply single large, unconstrained step at $L=6$ and confirm target log-prob increases; print before/after log-prob per fact.
-   - Assert edited weight differs from original (reporting delta norm). Stop if target log-prob does not rise for any of the 20.
-4. **Stage W (Writability Sweep):** Single-edit, fresh model per fact, 100 facts (25 per relation, pinned ordering), Seed 0 across layers $L \in \{1, 3, 6, 9, 11\}$ (subject to budget pruning: 1, 11, 3):
-   - **Arm W1 (Iterative Rank-1 SGD):** 3 pre-declared learning rates derived dynamically from S0-8 artifact (`experiments/results/s0_8.json`: $3.0\times 10^{-5}, 3.0\times 10^{-4}, 3.0\times 10^{-3}$, not typed in source).
-   - **Arm W2 (Closed-Form Rank-1 Key-Value Update):** $\Delta = \frac{k^T (v^* - k W)}{k^T k}$, optimizing $v^*$ with L2 penalty ($\lambda=0.5$) toward original $v$.
-5. **Pilot Cycle Timing & Budget Reprojection:**
-   - Single-fact pilot edit + eval + reload cycle measured at runtime.
-   - Reloads, steps, and evals reported and projected separately.
-   - Declared perplexity subset: 100 sequences (51,200 tokens) of WikiText-2 per evaluated fact.
-   - Contingency budget factor 1.20 against 16,380.0 s ceiling. If exceeded, layers pruned in order: 1, 11, 3.
-6. **Pre-Flight Test Suite Reconciliation (127 Tests):**
-   - S0-7b: 117 tests.
-   - S0-8: 123 tests (117 + 2 AST scanner targets for `s0_8_relocate.py` & `run_s0_8.py` + 4 unit tests 3.19–3.22). S0-8.md initially undercounted this as 121 by omitting the 2 scanner tests.
-   - S0-9: Exactly 4 named new tests (Test 3.23 closed-form math, Test 3.24 subject token index, Test 3.25 registry scopes with `wrong_target_paraphrase`, Test 3.26 floor verdict derivation), yielding $123 + 4 = \mathbf{127}$ tests.
-7. **Negative Controls & Paraphrase Floor Resolution:**
-   - S0-8 secondary endpoint had no valid floor because no paraphrase-context `wrong_target` control existed (AGENTS.md Rule 5 [R11]).
-   - S0-9 evaluates both `wrong_target` (100 canonical prompts) and `wrong_target_paraphrase` (300 paraphrase prompts across same 100 facts) as dedicated floors.
-8. **Measurements & Reporting:** Immediate efficacy (num/den, Wilson interval), mean steps, WikiText-2 PPL, Locality KL on control probes ($N=200$, asserted non-zero if PPL moves). 90.00% feasibility gate applied. Standard casing `S0-8` and `S0-9`. No retention, generalization, or horizon endpoint measured in S0-9.
+### Established State as of S0-9:
+1. **Gate 0 Exact Bit-Reproduction:**
+   - Seed 0 fact sequence sampled using `sample_200_facts(facts_1000, seed=0)`.
+   - Re-confirmed exact historical baseline: 669 optimizer steps, 200/200 immediate efficacy, 8/200 terminal retention. Status: PASSED.
+2. **Stage P (Write-Path Verification):**
+   - All 20 facts at Layer 6 verified operable on fresh model states with nonzero finite gradients ($||\nabla W|| \in [5.087, 10.820]$) and strictly positive log-probability gains under unconstrained gradient step ($\Delta \text{LogP} \in [+0.2586, +1.0743]$). Status: PASSED.
+3. **Stage W (Writability Sweep across 100 Facts):**
+   - **W1 SGD at $\text{lr}=3.0\times 10^{-5}$ (S0-8 baseline):** 0/100 (0.00%) immediate efficacy across all layers ($L \in \{1, 3, 6, 9, 11\}$). Reproduces S0-8 write-inefficacy finding.
+   - **W1 SGD at $\text{lr}=3.0\times 10^{-4}$ (10x baseline):** 0/100 (0.00%) immediate efficacy across all layers.
+   - **W1 SGD at $\text{lr}=3.0\times 10^{-3}$ (100x baseline):**
+     - $L=1$: 80/100 (80.00%) [71.12%, 86.66%], steps = 57.7, PPL = 33.90, LocKL = 0.0195
+     - $L=3$: 79/100 (79.00%) [70.02%, 85.83%], steps = 58.5, PPL = 33.94, LocKL = 0.0215
+     - $L=6$: 75/100 (75.00%) [65.70%, 82.45%], steps = 60.6, PPL = 33.92, LocKL = 0.0220
+     - $L=9$: 22/100 (22.00%) [15.00%, 31.07%], steps = 93.7, PPL = 33.81, LocKL = 0.0072
+     - $L=11$: 25/100 (25.00%) [17.55%, 34.30%], steps = 93.6, PPL = 33.89, LocKL = 0.0059
+   - **W2 Closed-Form Key-Value Update ($\lambda=0.5, \text{lr}_v=0.1, 20\text{ steps}$):** 0/100 (0.00%) immediate efficacy across all swept layers.
+4. **Feasibility Gate ($\ge 90.00\%$ Immediate Efficacy):**
+   - **Result:** FAILED across all arms and layers. Maximum observed efficacy was 80.00% ($L=1$ at $\text{lr}=3\times 10^{-3}$).
+5. **Negative Control Evaluation (wrong_target & wrong_target_paraphrase):**
+   - `wrong_target` (100 canonical prompts): 0/100 (0.00%) [0.00%, 3.70%].
+   - `wrong_target_paraphrase` (300 paraphrase prompts): 1/300 (0.33%) [0.06%, 1.86%].
+6. **Pre-Flight Test Suite:** 127 tests run, 127 passed, 0 failures. AST literal scanner: 0 unlisted violations.
 
 ---
 
@@ -215,9 +214,10 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
 - `tests/test_metrics.py`: Pre-flight unit test suite (127 tests) and AST literal scanner.
 - `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-9.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-8.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_8.json`).
-- `s0_8_stdout.txt`: Verbatim execution stdout log for S0-8.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-9.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_9.json`).
+- `s0_9_stdout.txt`: Verbatim execution stdout log for S0-9.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
 
 
