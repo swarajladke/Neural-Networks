@@ -27,7 +27,7 @@ from experiments.metrics import (
     wilson_confidence_interval, format_wilson_rate, compute_locality_kl
 )
 from experiments.b1_inject import (
-    configure_determinism, greedy_predict, get_next_token_log_probs
+    configure_determinism, greedy_predict, get_next_token_log_probs, edit_fact_sgd
 )
 from experiments.stats import (
     compute_minimum_detectable_effect, newcombe_score_interval
@@ -159,30 +159,17 @@ def main():
 
     print("")
     print("--- [Gate 0: Historical Baseline Re-Confirmation (Seed 0 of r0_unconstrained_d0.0)] ---")
+    configure_determinism(seed=0)
+    model.load_state_dict(base_state_dict)
     facts_seed0, seed0_hash = sample_200_facts(facts_1000, seed=0)
-    g0_opt = torch.optim.SGD([model.lm_head.weight], lr=s0_8_lr)
+    assert seed0_hash == "21eb027af79426e0f70c61b1c0b25e3a2a169e1bb5f004bebf6eb99d59de8162"
     g0_steps = 0
     g0_imm = []
-    with torch.set_grad_enabled(True):
-        for f in facts_seed0:
-            prompt_enc = tokenizer(f["edit_prompt"], return_tensors="pt")
-            p_len = prompt_enc.input_ids.shape[1]
-            full_enc = tokenizer(f"{f['edit_prompt']} {f['object']}", return_tensors="pt").to(device)
-            inp_ids = full_enc.input_ids
-            lbls = inp_ids.clone()
-            lbls[:, :p_len] = -100
-            p_tok = inp_ids[0, p_len].item()
-            for _ in range(100):
-                g0_steps += 1
-                g0_opt.zero_grad()
-                out = model(inp_ids, labels=lbls)
-                if torch.argmax(out.logits[0, p_len - 1, :]).item() == p_tok:
-                    c_p = greedy_predict(model, tokenizer, f["edit_prompt"], 5, device, False)
-                    if check_match(c_p, f["object"]):
-                        out.loss.backward(); g0_opt.step(); break
-                out.loss.backward(); g0_opt.step()
-            c_p = greedy_predict(model, tokenizer, f["edit_prompt"], 5, device, False)
-            g0_imm.append(check_match(c_p, f["object"]))
+    for f in facts_seed0:
+        res = edit_fact_sgd(model, tokenizer, f, lr=s0_8_lr, max_steps=100, delta=0.0, device=device, train_mode=False, arm_mode="r0_unconstrained")
+        g0_steps += res["steps_taken"]
+        g0_imm.append(res["immediate_match"])
+
     g0_preds = [greedy_predict(model, tokenizer, f["edit_prompt"], 5, device, False) for f in facts_seed0]
     g0_term = [check_match(p, f["object"]) for p, f in zip(g0_preds, facts_seed0)]
     g0_imm_n, g0_term_n = sum(1 for x in g0_imm if x), sum(1 for x in g0_term if x)
@@ -194,6 +181,7 @@ def main():
 
     model.load_state_dict(base_state_dict)
     verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
+    configure_determinism(seed=42)
     verified_restores = 1
 
     print("\n--- [Pilot Cycle Timing & Budget Reprojection] ---")
