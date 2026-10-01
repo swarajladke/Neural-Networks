@@ -2,7 +2,7 @@
 
 **Author:** Swaraj Ladke  
 **Repository:** `swarajladke/Neural-Networks`  
-**Last Updated:** September 25, 2026 (Reflecting Directive S0-7a completion, commit `e1286f1`)
+**Last Updated:** October 1, 2026 (Reflecting Directive S0-10 completion, commit `99d3335`)
 
 ---
 
@@ -204,36 +204,22 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 
 ---
 
-## 10. Active Directive: Directive S0-10 — Reach the Gate, Repair the Closed-Form Write, Then Sequential Retention at the Writable Site
+## 10. Established State as of Directive S0-10 (Commit `99d3335`)
 
-**Objective:**
-- Q1. Does any write procedure at `mlp.c_proj` reach 90.00% single-edit immediate efficacy, with locality KL reported?
-- Q2. Why did the closed-form write fail?
-- Q3 (conditional on Q1). At the best gate-passing cell, does sequential editing produce first-50-edit retention and first-50-edit paraphrase generalization above their matched negative control floors?
-
-### Pipeline Architecture:
-1. **Stage 0 (Fixes before measurement):**
-   - Measure unedited model perplexity on exact declared 100-sequence subset; rekey locality KL guard to it.
-   - Assert parameter-sum fingerprint and `c_proj.weight` SHA-256 byte hashes after every state restore.
-   - Reconcile test suite to 131 tests (+4 new unit tests 3.27–3.30).
-   - Re-label Arm W1 as full-gradient matrix SGD across active prompt positions.
-   - Hyperparameter provenance from `experiments/results/s0_8.json`.
-   - Gate 0 exact bit reproduction of seed 0 of `r0_unconstrained_d0.0` (669 steps, 200/200 imm eff, 8/200 term ret).
-2. **Stage D (Closed-Form Write Diagnostic, 20 Facts, L=6):**
-   - Per-fact $v^*$ optimization trace, direct hook patch test at subject's last token with zero weight change.
-   - Conv1D weight error check ($k(W+\Delta)+b - v^*$) diagnosing S0-9 omission of bias $b$.
-   - Failure classification: (a) Optimization failure, (b) Write defect, (c) Propagation failure.
-   - Pre-declared repair grid ($\lambda \in \{0.0, 0.05, 0.5\}$, steps $\in \{20, 100\}$).
-3. **Stage W (Reach the Gate, 100 Facts, Seed 0, L in {1, 3, 6}):**
-   - W1-extended: lr in $\{3\times 10^{-3}, 1\times 10^{-2}, 3\times 10^{-2}\}$, step caps in $\{100, 300\}$.
-   - W2-repaired: best Stage D setting on layers {1, 3, 6}.
-   - Feasibility gate $\ge 90.00\%$; matched controls run for gate passers with that cell's exact procedure.
-   - Pre-registered selection rule: lowest locality KL, breaking ties by lowest subset PPL change. Stop if none pass.
-4. **Stage S (Sequential Retention at Writable Site, Conditional):**
-   - Readout frozen and asserted bitwise zero across 6 seeds (200 sequential edits each).
-   - Primary endpoint: First-50-edit terminal retention (pooled $N=300$) vs worst canonical control.
-   - Secondary endpoint: First-50-edit paraphrase generalization (pooled $N=900$) vs worst paraphrase control.
-   - Minimum detectable effect (MDE) computed and printed before endpoints.
+1. **Gate 0 Exact Bit-Reproduction:** Seed 0 of `r0_unconstrained_d0.0` reproduced identically at 669 steps, 200/200 immediate efficacy, 8/200 terminal retention.
+2. **Q1 — MLP Writability Feasibility Gate:**
+   - Multiple write procedures at `transformer.h.L.mlp.c_proj.weight` surpassed the 90.00% immediate efficacy feasibility gate across layers 1, 3, and 6.
+   - At L1, full-gradient matrix SGD reached 98.00% (lr 3e-3, cap 300) and 100.00% (lr 1e-2 and 3e-2). Repaired closed-form write reached 97.00% (mean 13.3 steps).
+   - Pre-registered selection rule (minimum Locality KL, breaking ties with delta PPL) selected **`W2_Repaired_L1`** (`LocKL = 0.0482`, `Delta PPL = +0.12`).
+3. **Q2 — Closed-Form Write Diagnostic (Stage D):**
+   - In S0-9, closed-form writing achieved 0% efficacy because `Conv1D` bias was omitted from the rank-1 update math ($k(W+\Delta) \ne v^*$ in the presence of $b$, residual error 1.046).
+   - $v^*$ optimization required 100 optimization steps with $L_2$ regularization $\lambda = 0.0$ to achieve 95.0% immediate efficacy on 20 facts.
+4. **Q3 — Sequential Retention at Writable Site (Stage S):**
+   - Conducted across 6 independent seeds x 200 sequential edits with bitwise-zero frozen readout verified on all seeds.
+   - **Primary Endpoint (First-50 Terminal Retention, Pooled N=300):** 6/300 (2.00%) vs `wrong_target` floor 58/1200 (4.83%). Difference: -2.83%, Newcombe 95% Hybrid Score CI: [-4.57%, -0.30%]. Verdict: **BELOW** floor.
+   - **Secondary Endpoint (First-50 Paraphrase Generalization, Pooled N=900):** 10/900 (1.11%) vs `wrong_target_paraphrase` floor 1/300 (0.33%). Difference: +0.78%, Newcombe 95% Hybrid Score CI: [-0.83%, +1.74%]. Verdict: **AT** floor (spanning zero).
+   - **Perplexity Degradation:** Sequential rank-1 MLP value updates caused severe global representation drift, with full-slice perplexity exploding to 623 – 12,331 (vs unedited baseline 33.87).
+   - **Conclusion:** While mid-layer MLP value projections are writable with high immediate efficacy and low single-edit perturbation, **unconstrained sequential rank-1 updates do not sustain retention above matched negative controls and suffer severe cumulative drift**.
 
 ---
 
@@ -251,9 +237,9 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
 - `tests/test_metrics.py`: Pre-flight unit test suite (131 tests) and AST literal scanner.
 - `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-10.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-9.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_9.json`).
-- `s0_9_stdout.txt`: Verbatim execution stdout log for S0-9.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-10.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_10.json`).
+- `s0_10_stdout.txt`: Verbatim execution stdout log for S0-10.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
 
 
