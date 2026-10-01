@@ -15,8 +15,11 @@ import hashlib
 from typing import Dict, List, Tuple, Any, Optional
 import torch
 import torch.nn as nn
-from experiments.metrics import Measurement, check_match, greedy_predict, normalize_entity
-from experiments.data import evaluate_wikitext_perplexity, N_PPL_SUBSET_SEQS
+from experiments.metrics import Measurement, check_match, normalize_entity
+from experiments.b1_inject import greedy_predict
+from experiments.data import evaluate_wikitext_perplexity
+
+N_PPL_SUBSET_SEQS = 100
 
 
 def load_wikitext2_key_sample(tokenizer: Any, num_sequences: int = 100, seq_len: int = 512) -> Tuple[torch.Tensor, str]:

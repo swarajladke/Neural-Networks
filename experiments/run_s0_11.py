@@ -28,27 +28,30 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from experiments.metrics import (
-    configure_determinism,
     check_match,
-    greedy_predict,
-    get_next_token_log_probs,
     compute_locality_kl,
     Measurement,
     wilson_confidence_interval,
-    newcombe_score_interval,
-    compute_mde,
     POPULATION_REGISTRY
+)
+from experiments.stats import (
+    newcombe_score_interval,
+    compute_minimum_detectable_effect
+)
+from experiments.b1_inject import (
+    configure_determinism,
+    greedy_predict,
+    get_next_token_log_probs,
+    edit_fact_sgd
 )
 from experiments.data import (
     generate_synthetic_facts,
     sample_200_facts,
     load_wikitext2_slice,
-    evaluate_wikitext_perplexity,
-    N_PPL_SUBSET_SEQS
+    evaluate_wikitext_perplexity
 )
-from experiments.b1_inject import edit_fact_sgd
-from experiments.s0_9_writability import edit_fact_mlp_fullgrad_sgd
 from experiments.s0_10_repair import (
+    edit_fact_mlp_fullgrad_sgd,
     verify_state_restore,
     evaluate_s0_10_capability_and_locality
 )
@@ -59,7 +62,8 @@ from experiments.s0_11_constraints import (
     edit_fact_mlp_cov,
     edit_fact_mlp_null,
     SequentialNullTracker,
-    evaluate_procedure_matched_controls
+    evaluate_procedure_matched_controls,
+    N_PPL_SUBSET_SEQS
 )
 
 SESSION_CEILING_SEC = 23400.0
@@ -247,7 +251,7 @@ def run_s0_11_master():
     verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
 
     # Pre-registered MDE & E0 Criteria
-    mde_info = compute_mde(n1=300, n2=1200, p0=0.0483, alpha=0.05, power=0.80)
+    mde_info = compute_minimum_detectable_effect(n1=300, n2=1200, p0=0.0483, alpha=0.05, power=0.80)
     gate_thresh = 90.0
     print("\n--- [Pre-Registered Thresholds & Statistical Power] ---")
     print(f"  E0 Capability Survival Ceiling : PPL <= {full_slice_baseline_ref * PPL_SURVIVAL_MULTIPLE:.2f} ({PPL_SURVIVAL_MULTIPLE:.1f}x baseline {full_slice_baseline_ref:.2f})")
