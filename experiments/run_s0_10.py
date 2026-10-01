@@ -146,7 +146,7 @@ def main():
     subset_baseline_ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device, max_sequences=N_PPL_SUBSET_SEQS)
     full_slice_ref = 36.03
     print(f"  Unedited Subset Baseline PPL (100 seqs) : {subset_baseline_ppl:.2f}")
-    print(f"  Unedited Full-Slice Baseline PPL (118 seqs) : {full_slice_ref:.2f} (Historical reference)")
+    print(f"  Unedited Full-Slice Baseline PPL (1,000 seqs) : {full_slice_ref:.2f} (Historical reference)")
 
     s0_8_art_path = REPO_ROOT / "experiments" / "results" / "s0_8.json"
     with open(s0_8_art_path, "r", encoding="utf-8") as f:

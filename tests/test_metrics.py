@@ -967,7 +967,7 @@ def run_all_tests() -> int:
     max_err = torch.max(torch.abs(new_output - v_star)).item()
     assert max_err < 1e-5, f"Rank-1 closed-form error too high: {max_err}"
     tests_passed += 1
-    print(f"  Test 3.23 (Closed-Form Rank-1 Math)   : k(W + Δ) == v* with max error {max_err:.2e} PASSED.")
+    print(f"  Test 3.23 (Closed-Form Rank-1 Math)   : k(W + Delta) == v* with max error {max_err:.2e} PASSED.")
 
     # --------------------------------------------------------------------------
     # 3.24 TEST SUBJECT LAST TOKEN INDEX FINDER (DIRECTIVE S0-9)
@@ -1111,7 +1111,71 @@ def run_all_tests() -> int:
     print("  Test 3.30 (S0-10 Registry Scopes)     : s0_10_single_edit=100, s0_10_stage_d=20, s0_10_wrong_target_paraphrase=300 registered PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.31 TEST SUITE SUMMARY
+    # 3.31 TEST STAGE C COVARIANCE & NULL SPACE PROJECTOR MATH (DIRECTIVE S0-11 §3)
+    # --------------------------------------------------------------------------
+    print("\n[3.31 Test Stage C Covariance & Null Space Projector Math (Directive S0-11 §3)]")
+    tests_run += 1
+    from experiments.s0_11_constraints import compute_null_space_projector
+    rng_t11 = torch.Generator().manual_seed(42)
+    # Construct synthetic key matrix with known low-rank dominant space + small noise
+    # K: 200 samples of dimension 64
+    d_test = 64
+    k_synth = torch.randn(200, d_test, generator=rng_t11, dtype=torch.float32)
+    # Damp bottom 16 dimensions to create distinct null space
+    k_synth[:, :16] *= 0.001
+    c_synth = torch.matmul(k_synth.t(), k_synth) / 200.0
+    p_info = compute_null_space_projector(c_synth, rel_threshold=0.01)
+    p_0_test = p_info["p_0"]
+    # 1. Projector is symmetric: P_0 == P_0^T
+    sym_err = torch.max(torch.abs(p_0_test - p_0_test.t())).item()
+    assert sym_err < 1e-6, f"Projector P_0 not symmetric: error {sym_err}"
+    # 2. Projector is idempotent: P_0^2 == P_0
+    p0_sq = torch.matmul(p_0_test, p_0_test)
+    idem_err = torch.max(torch.abs(p0_sq - p_0_test)).item()
+    assert idem_err < 1e-5, f"Projector P_0 not idempotent: error {idem_err}"
+    # 3. Preserved null space dimension > 0
+    assert p_info["null_dim"] > 0, "Expected non-zero null dimension"
+    tests_passed += 1
+    print(f"  Test 3.31 (Covariance & P_0 Math)     : Symmetric err={sym_err:.2e}, Idempotent err={idem_err:.2e}, null_dim={p_info['null_dim']}/{d_test} PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.32 TEST ARM A-NULL INCREMENTAL ORTHOGONALITY & TOLERANCE GUARD (DIRECTIVE S0-11 §4)
+    # --------------------------------------------------------------------------
+    print("\n[3.32 Test Arm A-null Incremental Key Orthogonality & Guard (Directive S0-11 §4)]")
+    tests_run += 1
+    from experiments.s0_11_constraints import SequentialNullTracker
+    tracker = SequentialNullTracker(p_0=p_0_test, tolerance=1e-4, device="cpu")
+    # Simulate 5 sequential edits
+    keys_seq = [torch.randn(d_test, generator=rng_t11, dtype=torch.float32) for _ in range(5)]
+    v_seq = [torch.randn(32, generator=rng_t11, dtype=torch.float32) for _ in range(5)]
+    for step_t, (kt, vt) in enumerate(zip(keys_seq, v_seq)):
+        ut, _ = tracker.compute_update_direction(kt, c_synth, ridge_val=1e-3)
+        delta_wt = torch.outer(ut, vt)
+        max_err = tracker.register_and_assert(kt, delta_wt, vt)
+        # Immediate efficacy condition: kt * delta_wt == vt
+        pred_vt = torch.matmul(kt, delta_wt)
+        eff_err = torch.max(torch.abs(pred_vt - vt)).item()
+        assert eff_err < 1e-4, f"Step {step_t}: immediate efficacy violated, error={eff_err}"
+        if step_t > 0:
+            assert max_err <= 1e-4, f"Step {step_t}: max previous key violation {max_err} exceeds tolerance"
+    tests_passed += 1
+    print(f"  Test 3.32 (A-null Incremental Guard)  : 5 sequential edits verified with max previous-key violation {tracker.max_observed_violation:.2e} <= 1e-4 PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.33 TEST S0-11 POPULATION REGISTRY SCOPES (DIRECTIVE S0-11 §6 ITEM 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.33 Test S0-11 Population Registry Scopes (Directive S0-11 §6 Item 2)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_11_matched_canonical") == 50
+    assert POPULATION_REGISTRY.get("s0_11_matched_canonical_pooled") == 300
+    assert POPULATION_REGISTRY.get("s0_11_matched_paraphrase") == 150
+    assert POPULATION_REGISTRY.get("s0_11_matched_paraphrase_pooled") == 900
+    assert POPULATION_REGISTRY.get("s0_11_key_sample") == 100
+    tests_passed += 1
+    print("  Test 3.33 (S0-11 Registry Scopes)     : s0_11_matched_canonical=50, pooled=300, paraphrase=150, pooled=900, key_sample=100 registered PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.34 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
