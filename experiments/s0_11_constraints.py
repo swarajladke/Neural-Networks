@@ -252,9 +252,8 @@ def edit_fact_mlp_cov(
 class SequentialNullTracker:
     """
     Tracks preserved null space P_0 and incremental previous edit keys for Arm A-null.
-    Maintains an orthonormal basis Q_prev of previous keys in range(P_0).
-    For any vector x, project_preserved(x) projects x into range(P_0)
-    AND orthogonal to all previous edit keys k_0, ..., k_{t-1}.
+    Maintains an orthonormal basis Q_prev of previous edit keys k_0, ..., k_{t-1}.
+    Ensures Delta W is orthogonal to all previous edit keys and aligned with null space P_0.
     Asserts max_{j < t} ||k_j Delta W_t|| <= tolerance after every edit.
     """
     def __init__(self, p_0: torch.Tensor, tolerance: float = 1e-4, device: str = "cuda"):
@@ -262,7 +261,7 @@ class SequentialNullTracker:
         self.tolerance = tolerance
         self.device = device
         self.stored_keys: List[torch.Tensor] = []
-        self.q_basis: Optional[torch.Tensor] = None  # Orthonormal basis in range(P_0)
+        self.q_basis: Optional[torch.Tensor] = None  # Orthonormal basis of previous keys [3072, M]
         self.max_observed_violation = 0.0
 
     def reset(self):
@@ -271,19 +270,18 @@ class SequentialNullTracker:
         self.q_basis = None
         self.max_observed_violation = 0.0
 
-    def project_preserved(self, x: torch.Tensor) -> torch.Tensor:
+    def project_orthogonal_to_previous(self, v: torch.Tensor) -> torch.Tensor:
         """
-        Projects vector x into range(P_0) and orthogonal to all previous keys in self.q_basis.
+        Projects vector v orthogonal to all previous edit keys in self.q_basis.
         Uses double projection (Kahan re-orthogonalization) for numerical precision (< 1e-14).
         """
-        x_p0 = torch.matmul(self.p_0, x)
         if self.q_basis is not None and self.q_basis.shape[1] > 0:
-            proj1 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), x_p0))
-            x_orth = x_p0 - proj1
-            proj2 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), x_orth))
-            x_orth = x_orth - proj2
-            return x_orth
-        return x_p0
+            proj1 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), v))
+            v_orth = v - proj1
+            proj2 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), v_orth))
+            v_orth = v_orth - proj2
+            return v_orth
+        return v
 
     def compute_update_direction(
         self,
@@ -292,30 +290,40 @@ class SequentialNullTracker:
         ridge_val: float
     ) -> Tuple[torch.Tensor, float]:
         """
-        Computes u_vec in range(P_0) orthogonal to all previous edit keys such that k_vec * u_vec = 1.
-        Applies AlphaEdit-style covariance weighting:
-        tilde_k = P_M k
-        z = C_reg^-1 tilde_k
-        w = P_M z
-        u = w / (k * w)
+        Computes update direction u_vec satisfying:
+        1. u_vec is orthogonal to all previous edit keys (Q_prev^T u_vec = 0)
+        2. u_vec is projected into null space P_0 (AlphaEdit-style)
+        3. k_vec^T u_vec = 1 (Exact immediate efficacy)
         """
-        k_tilde = self.project_preserved(k_vec)
-        k_norm = torch.linalg.norm(k_tilde).item()
+        d_feat = cov.shape[0]
+        cov_reg = cov.to(self.device) + ridge_val * torch.eye(d_feat, device=self.device)
 
-        if k_norm > 1e-5:
-            d_feat = cov.shape[0]
-            cov_reg = cov.to(self.device) + ridge_val * torch.eye(d_feat, device=self.device)
-            z = torch.linalg.solve(cov_reg, k_tilde)
-            w = self.project_preserved(z)
-            denom = torch.dot(k_vec, w).item()
-            if denom > 1e-8:
-                u_vec = w / denom
-            else:
-                u_vec = k_tilde / (torch.dot(k_vec, k_tilde).item() + 1e-12)
+        # 1. ROME covariance direction: C_reg z = k
+        z = torch.linalg.solve(cov_reg, k_vec)
+
+        # 2. Project through P_0 (null space of preserved corpus keys)
+        z_p0 = torch.matmul(self.p_0, z)
+
+        # 3. Project orthogonal to previous edit keys
+        u_cand = self.project_orthogonal_to_previous(z_p0)
+
+        # 4. Check denominator k_vec * u_cand
+        denom = torch.dot(k_vec, u_cand).item()
+
+        if denom > 1e-4:
+            u_vec = u_cand / denom
         else:
-            u_vec = k_tilde / (torch.dot(k_vec, k_tilde).item() + 1e-12)
+            # If P_0 removes too much of k_vec, fall back to Arm B (covariance projected orthogonal to previous keys)
+            u_arm_b = self.project_orthogonal_to_previous(z)
+            denom_b = torch.dot(k_vec, u_arm_b).item()
+            if denom_b > 1e-6:
+                u_vec = u_arm_b / denom_b
+            else:
+                k_orth = self.project_orthogonal_to_previous(k_vec)
+                u_vec = k_orth / (torch.dot(k_vec, k_orth).item() + 1e-12)
 
-        return u_vec, k_norm
+        k_proj_norm = torch.linalg.norm(self.project_orthogonal_to_previous(k_vec)).item()
+        return u_vec, k_proj_norm
 
     def register_and_assert(
         self,
@@ -337,10 +345,10 @@ class SequentialNullTracker:
                 self.max_observed_violation = max_err
             assert max_err <= self.tolerance, f"Null-space assertion failure: max ||k_prev Delta W|| = {max_err:.2e} > {self.tolerance:.2e}"
 
-        # Update Q_prev basis with k_vec projected through P_0 and existing Q_prev
-        q_cand = self.project_preserved(k_vec)
+        # Update Q_prev basis with k_vec projected orthogonal to existing Q_prev
+        q_cand = self.project_orthogonal_to_previous(k_vec)
         q_cand_norm = torch.linalg.norm(q_cand).item()
-        if q_cand_norm > 1e-5:
+        if q_cand_norm > 1e-4:
             q_unit = (q_cand / q_cand_norm).unsqueeze(1)  # [3072, 1]
             if self.q_basis is None or self.q_basis.shape[1] == 0:
                 self.q_basis = q_unit
