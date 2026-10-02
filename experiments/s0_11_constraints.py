@@ -432,8 +432,13 @@ def evaluate_procedure_matched_controls(
             pred_p = greedy_predict(model, tokenizer, p, 5, device, False)
             wrong_p_matches.append(check_match(pred_p, fact["object"]))
 
-    m_c = Measurement.from_outcomes(wrong_c_matches, metric="wrong_target", arm="matched_control", scope="s0_11_matched_canonical", input_set="facts_first50", mode="eval_no_dropout")
-    m_p = Measurement.from_outcomes(wrong_p_matches, metric="wrong_target_paraphrase", arm="matched_control", scope="s0_11_matched_paraphrase", input_set="paraphrases_150", mode="eval_no_dropout")
+    c_scope = "s0_11_matched_canonical_pooled" if len(wrong_c_matches) == 300 else "s0_11_matched_canonical"
+    c_input_set = "facts_first50_pooled" if len(wrong_c_matches) == 300 else "facts_first50"
+    p_scope = "s0_11_matched_paraphrase_pooled" if len(wrong_p_matches) == 900 else "s0_11_matched_paraphrase"
+    p_input_set = "paraphrases_900_pooled" if len(wrong_p_matches) == 900 else "paraphrases_150"
+
+    m_c = Measurement.from_outcomes(wrong_c_matches, metric="wrong_target", arm="matched_control", scope=c_scope, input_set=c_input_set, mode="eval_no_dropout")
+    m_p = Measurement.from_outcomes(wrong_p_matches, metric="wrong_target_paraphrase", arm="matched_control", scope=p_scope, input_set=p_input_set, mode="eval_no_dropout")
 
     return {
         "canonical": {
