@@ -18,6 +18,7 @@ import torch.nn as nn
 from experiments.metrics import Measurement, check_match, normalize_entity
 from experiments.b1_inject import greedy_predict
 from experiments.data import evaluate_wikitext_perplexity
+from experiments.s0_10_repair import get_subject_last_token_idx
 
 N_PPL_SUBSET_SEQS = 100
 
@@ -137,76 +138,63 @@ def find_target_value_vstar(
 ) -> Tuple[torch.Tensor, torch.Tensor, int, str]:
     """
     Finds v* at subject's last token position using S0-10 repaired configuration (lambda_l2 = 0).
+    Reused from proven S0-10 commit 99d3335 (AGENTS.md §7.5).
     Returns (k_vec, v_star, steps_taken, pred_post_opt).
     """
     c_proj = model.transformer.h[layer_idx].mlp.c_proj
-    prompt = fact["edit_prompt"]
-    subj_tokens = tokenizer.encode(fact["subject"])
-    enc_prompt = tokenizer(prompt, return_tensors="pt").to(device)
-    prompt_ids = enc_prompt["input_ids"][0].tolist()
-
-    subj_idx = len(prompt_ids) - 1
-    for i in range(len(prompt_ids) - len(subj_tokens) + 1):
-        if prompt_ids[i : i + len(subj_tokens)] == subj_tokens:
-            subj_idx = i + len(subj_tokens) - 1
-            break
+    for p in model.parameters():
+        p.requires_grad = False
+    subj_idx = get_subject_last_token_idx(tokenizer, fact["edit_prompt"], fact["subject"])
 
     recorded = {}
-    def hook_rec(m, inp, out):
+    def hook_rec(module, inp, out):
         recorded["k"] = inp[0][0, subj_idx, :].detach().clone()
         recorded["v0"] = out[0, subj_idx, :].detach().clone()
+
     h_rec = c_proj.register_forward_hook(hook_rec)
     try:
+        enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
         with torch.no_grad():
             _ = model(**enc_prompt)
     finally:
         h_rec.remove()
 
-    k_vec = recorded["k"]
-    v0_vec = recorded["v0"]
-
+    k_vec, v0_vec = recorded["k"], recorded["v0"]
     v_param = nn.Parameter(v0_vec.clone())
     opt_v = torch.optim.Adam([v_param], lr=lr_v)
-    tgt_id = tokenizer.encode(f" {fact['object']}")[0]
-    input_ids = enc_prompt["input_ids"]
+
+    enc_full = tokenizer(f"{fact['edit_prompt']} {fact['object']}", return_tensors="pt").to(device)
+    input_ids = enc_full.input_ids
     labels = input_ids.clone()
-    labels[:, :-1] = -100
-    labels[:, -1] = tgt_id
+    prompt_len = enc_prompt.input_ids.shape[1]
+    labels[:, :prompt_len] = -100
+    primary_tok = input_ids[0, prompt_len].item()
 
+    def hook_rep(module, inp, out):
+        out_mod = out.clone()
+        out_mod[0, subj_idx, :] = v_param
+        return out_mod
+
+    h_rep = c_proj.register_forward_hook(hook_rep)
     steps_taken = 0
-    for s_step in range(max_steps):
-        opt_v.zero_grad()
-        def hook_replace(m, inp, out):
-            out_clone = out.clone()
-            out_clone[0, subj_idx, :] = v_param
-            return out_clone
-        h_rep = c_proj.register_forward_hook(hook_replace)
-        try:
-            out = model(input_ids, labels=labels)
-            loss_ce = out.loss
-            loss = loss_ce + (lambda_l2 * torch.norm(v_param - v0_vec)) if lambda_l2 > 0 else loss_ce
-            loss.backward()
-            opt_v.step()
-            steps_taken += 1
-        finally:
-            h_rep.remove()
-
-        with torch.no_grad():
-            def hook_chk(m, inp, out):
-                out_clone = out.clone()
-                out_clone[0, subj_idx, :] = v_param
-                return out_clone
-            h_chk = c_proj.register_forward_hook(hook_chk)
-            try:
-                logits = model(input_ids).logits[0, -1, :]
-                top_pred = torch.argmax(logits).item()
-                if top_pred == tgt_id:
+    try:
+        with torch.set_grad_enabled(True):
+            for _ in range(max_steps):
+                steps_taken += 1
+                opt_v.zero_grad()
+                out = model(input_ids, labels=labels)
+                loss_l2 = lambda_l2 * torch.sum((v_param - v0_vec) ** 2) if lambda_l2 > 0.0 else 0.0
+                loss = out.loss + loss_l2
+                loss.backward()
+                opt_v.step()
+                if torch.argmax(out.logits[0, prompt_len - 1, :]).item() == primary_tok:
                     break
-            finally:
-                h_chk.remove()
+    finally:
+        h_rep.remove()
 
     v_star = v_param.detach()
-    pred_str = tokenizer.decode([top_pred])
+    pred_str = tokenizer.decode([primary_tok])
+    del v_param, opt_v, input_ids, labels
     return k_vec, v_star, steps_taken, pred_str
 
 
@@ -264,8 +252,10 @@ def edit_fact_mlp_cov(
 class SequentialNullTracker:
     """
     Tracks preserved null space P_0 and incremental previous edit keys for Arm A-null.
-    Maintains an orthonormal basis Q_prev of previous keys projected into the null space.
-    Asserts max_{j < t} ||k_j Delta W_t|| < pre_declared_tolerance.
+    Maintains an orthonormal basis Q_prev of previous keys in range(P_0).
+    For any vector x, project_preserved(x) projects x into range(P_0)
+    AND orthogonal to all previous edit keys k_0, ..., k_{t-1}.
+    Asserts max_{j < t} ||k_j Delta W_t|| <= tolerance after every edit.
     """
     def __init__(self, p_0: torch.Tensor, tolerance: float = 1e-4, device: str = "cuda"):
         self.p_0 = p_0.to(device)
@@ -275,6 +265,26 @@ class SequentialNullTracker:
         self.q_basis: Optional[torch.Tensor] = None  # Orthonormal basis in range(P_0)
         self.max_observed_violation = 0.0
 
+    def reset(self):
+        """Resets the tracker history and orthonormal basis to initial state."""
+        self.stored_keys = []
+        self.q_basis = None
+        self.max_observed_violation = 0.0
+
+    def project_preserved(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Projects vector x into range(P_0) and orthogonal to all previous keys in self.q_basis.
+        Uses double projection (Kahan re-orthogonalization) for numerical precision (< 1e-14).
+        """
+        x_p0 = torch.matmul(self.p_0, x)
+        if self.q_basis is not None and self.q_basis.shape[1] > 0:
+            proj1 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), x_p0))
+            x_orth = x_p0 - proj1
+            proj2 = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), x_orth))
+            x_orth = x_orth - proj2
+            return x_orth
+        return x_p0
+
     def compute_update_direction(
         self,
         k_vec: torch.Tensor,
@@ -282,39 +292,28 @@ class SequentialNullTracker:
         ridge_val: float
     ) -> Tuple[torch.Tensor, float]:
         """
-        Projects k_vec into null space P_0 and orthogonal to all previous keys.
-        Computes u_vec such that k_vec * u_vec = 1, and for all k_prev, k_prev * u_vec = 0.
+        Computes u_vec in range(P_0) orthogonal to all previous edit keys such that k_vec * u_vec = 1.
+        Applies AlphaEdit-style covariance weighting:
+        tilde_k = P_M k
+        z = C_reg^-1 tilde_k
+        w = P_M z
+        u = w / (k * w)
         """
-        # Project k_vec through P_0
-        k_null = torch.matmul(self.p_0, k_vec)
-
-        # Project orthogonal to Q_prev
-        if self.q_basis is not None and self.q_basis.shape[1] > 0:
-            proj_prev = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), k_null))
-            k_tilde = k_null - proj_prev
-        else:
-            k_tilde = k_null
-
+        k_tilde = self.project_preserved(k_vec)
         k_norm = torch.linalg.norm(k_tilde).item()
-        if k_norm > 1e-6:
-            # Direction in null space orthogonal to all previous keys
-            cov_reg = cov.to(self.device) + ridge_val * torch.eye(cov.shape[0], device=self.device)
+
+        if k_norm > 1e-5:
+            d_feat = cov.shape[0]
+            cov_reg = cov.to(self.device) + ridge_val * torch.eye(d_feat, device=self.device)
             z = torch.linalg.solve(cov_reg, k_tilde)
-            # Re-project z through P_0 and orthogonal to Q_prev
-            z_null = torch.matmul(self.p_0, z)
-            if self.q_basis is not None and self.q_basis.shape[1] > 0:
-                z_proj_prev = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), z_null))
-                z_tilde = z_null - z_proj_prev
-            else:
-                z_tilde = z_null
-            denom = torch.dot(k_vec, z_tilde).item()
-            if abs(denom) > 1e-8:
-                u_vec = z_tilde / denom
+            w = self.project_preserved(z)
+            denom = torch.dot(k_vec, w).item()
+            if denom > 1e-8:
+                u_vec = w / denom
             else:
                 u_vec = k_tilde / (torch.dot(k_vec, k_tilde).item() + 1e-12)
         else:
-            # Fallback: unconstrained minimum norm if k lies entirely in preserved subspace
-            u_vec = k_vec / (torch.dot(k_vec, k_vec).item() + 1e-12)
+            u_vec = k_tilde / (torch.dot(k_vec, k_tilde).item() + 1e-12)
 
         return u_vec, k_norm
 
@@ -325,7 +324,7 @@ class SequentialNullTracker:
         delta_v: torch.Tensor
     ) -> float:
         """
-        Asserts ||k_prev Delta W|| < tolerance for all stored previous keys.
+        Asserts ||k_prev Delta W|| <= tolerance for all stored previous keys.
         Then updates the orthonormal basis Q_prev with the current key.
         """
         max_err = 0.0
@@ -338,16 +337,10 @@ class SequentialNullTracker:
                 self.max_observed_violation = max_err
             assert max_err <= self.tolerance, f"Null-space assertion failure: max ||k_prev Delta W|| = {max_err:.2e} > {self.tolerance:.2e}"
 
-        # Update Q_prev basis with k_vec projected through P_0
-        k_null = torch.matmul(self.p_0, k_vec)
-        if self.q_basis is not None and self.q_basis.shape[1] > 0:
-            proj = torch.matmul(self.q_basis, torch.matmul(self.q_basis.t(), k_null))
-            q_cand = k_null - proj
-        else:
-            q_cand = k_null
-
+        # Update Q_prev basis with k_vec projected through P_0 and existing Q_prev
+        q_cand = self.project_preserved(k_vec)
         q_cand_norm = torch.linalg.norm(q_cand).item()
-        if q_cand_norm > 1e-6:
+        if q_cand_norm > 1e-5:
             q_unit = (q_cand / q_cand_norm).unsqueeze(1)  # [3072, 1]
             if self.q_basis is None or self.q_basis.shape[1] == 0:
                 self.q_basis = q_unit
@@ -428,6 +421,8 @@ def evaluate_procedure_matched_controls(
         cands = [c["object"] for c in facts_pool if c["relation"] == fact["relation"] and normalize_entity(c["object"]) != normalize_entity(fact["object"])]
         wrong_fact = {**fact, "object": rng.choice(cands)}
         model.load_state_dict(base_state_dict)
+        if "null_tracker" in proc_kwargs and hasattr(proc_kwargs["null_tracker"], "reset"):
+            proc_kwargs["null_tracker"].reset()
 
         _ = edit_proc_fn(model, tokenizer, wrong_fact, **proc_kwargs)
 

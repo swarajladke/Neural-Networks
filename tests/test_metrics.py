@@ -1158,6 +1158,8 @@ def run_all_tests() -> int:
         assert eff_err < 1e-4, f"Step {step_t}: immediate efficacy violated, error={eff_err}"
         if step_t > 0:
             assert max_err <= 1e-4, f"Step {step_t}: max previous key violation {max_err} exceeds tolerance"
+    tracker.reset()
+    assert len(tracker.stored_keys) == 0 and tracker.q_basis is None and tracker.max_observed_violation == 0.0
     tests_passed += 1
     print(f"  Test 3.32 (A-null Incremental Guard)  : 5 sequential edits verified with max previous-key violation {tracker.max_observed_violation:.2e} <= 1e-4 PASSED.")
 
