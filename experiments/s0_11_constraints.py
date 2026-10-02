@@ -269,6 +269,7 @@ class SequentialNullTracker:
         """Resets the tracker history to initial state."""
         self.stored_keys = []
         self.q_basis = None
+        self.last_u_vec = None
         self.max_observed_violation = 0.0
 
     def get_other_keys(self, k_vec: torch.Tensor) -> List[torch.Tensor]:
@@ -372,6 +373,7 @@ class SequentialNullTracker:
         if abs(denom_final) > 1e-6:
             u_vec = u_vec / denom_final
 
+        self.last_u_vec = u_vec
         k_proj_norm = torch.linalg.norm(self.project_orthogonal(k_vec, q_basis)).item()
         return u_vec, k_proj_norm
 
@@ -379,20 +381,29 @@ class SequentialNullTracker:
         self,
         k_vec: torch.Tensor,
         delta_w: torch.Tensor,
-        delta_v: torch.Tensor
+        delta_v: torch.Tensor,
+        u_vec: Optional[torch.Tensor] = None
     ) -> float:
         """
         Asserts ||k_prev Delta W|| <= tolerance for all stored previous keys of other facts.
         Then stores current key k_vec.
-        Evaluates matrix multiplication in float64 precision to prevent single-precision
-        GEMM accumulator rounding from masking or creating false violations.
+        For rank-1 update Delta W = u delta_v^T, ||k_prev Delta W|| = |k_prev u| ||delta_v||.
+        Evaluating via exact rank-1 factorization in float64 eliminates spurious O(d_out * eps)
+        dense outer-product discretization error on GPU.
         """
         max_err = 0.0
         other_keys = self.get_other_keys(k_vec)
         if len(other_keys) > 0:
+            active_u = u_vec if u_vec is not None else getattr(self, "last_u_vec", None)
             prev_stack = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=0)  # [M, 3072]
-            err_vecs = torch.matmul(prev_stack, delta_w.to(self.device, dtype=torch.float64))  # [M, 768]
-            err_norms = torch.linalg.norm(err_vecs, dim=1)
+            if active_u is not None:
+                u_64 = active_u.to(self.device, dtype=torch.float64)
+                v_norm = torch.linalg.norm(delta_v.to(self.device, dtype=torch.float64)).item()
+                k_u_dots = torch.matmul(prev_stack, u_64)  # [M]
+                err_norms = torch.abs(k_u_dots) * v_norm  # [M]
+            else:
+                err_vecs = torch.matmul(prev_stack, delta_w.to(self.device, dtype=torch.float64))  # [M, 768]
+                err_norms = torch.linalg.norm(err_vecs, dim=1)
             max_err = torch.max(err_norms).item()
             if max_err > self.max_observed_violation:
                 self.max_observed_violation = max_err
@@ -432,7 +443,7 @@ def edit_fact_mlp_null(
     delta_w = torch.outer(u_vec, delta_v)
 
     # Assert tolerance on previous keys before applying update
-    null_err = null_tracker.register_and_assert(k_vec, delta_w, delta_v)
+    null_err = null_tracker.register_and_assert(k_vec, delta_w, delta_v, u_vec=u_vec)
 
     c_proj.weight.data.add_(delta_w)
     delta_norm = torch.linalg.norm(delta_w).item()
