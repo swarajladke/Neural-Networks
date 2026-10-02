@@ -273,42 +273,54 @@ class SequentialNullTracker:
 
     def get_other_keys(self, k_vec: torch.Tensor) -> List[torch.Tensor]:
         """
-        Returns all stored previous keys that are distinct from k_vec (cosine similarity < 0.999).
-        If the current fact re-edits a previously edited subject, the previous key for that same
-        subject is excluded from the preservation constraint so it can be updated.
+        Returns all stored previous keys that are distinct from k_vec and mutually distinct
+        (cosine similarity < 0.999). If a subject was re-edited, earlier collinear keys are
+        superseded by the latest key to prevent rank-deficiency in the QR basis.
         """
         if not self.stored_keys:
             return []
         k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
-        other = []
-        for prev_k in self.stored_keys:
+        other: List[torch.Tensor] = []
+        other_units: List[torch.Tensor] = []
+        for prev_k in reversed(self.stored_keys):
             prev_unit = prev_k.to(self.device) / (torch.linalg.norm(prev_k) + 1e-12)
-            cos_sim = torch.dot(k_unit, prev_unit).item()
-            if cos_sim < 0.999:
-                other.append(prev_k)
+            cos_curr = torch.dot(k_unit, prev_unit).item()
+            if cos_curr < 0.999:
+                is_duplicate = False
+                for u in other_units:
+                    if torch.dot(prev_unit, u).item() >= 0.999:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    other.append(prev_k)
+                    other_units.append(prev_unit)
+        other.reverse()
         return other
 
     def get_orthogonal_basis_for_others(self, other_keys: List[torch.Tensor]) -> Optional[torch.Tensor]:
         """
-        Computes thin QR orthonormal basis Q for other_keys on self.device.
+        Computes thin QR orthonormal basis Q for other_keys in float64 precision on self.device.
         Takes < 1 ms on GPU for M <= 200.
         """
         if not other_keys:
             return None
-        k_mat = torch.stack([k.to(self.device) for k in other_keys], dim=1)  # [3072, M]
+        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=1)  # [3072, M]
         q_basis, _ = torch.linalg.qr(k_mat)  # [3072, M]
         return q_basis
 
     def project_orthogonal(self, v: torch.Tensor, q_basis: Optional[torch.Tensor]) -> torch.Tensor:
         """
-        Projects vector v orthogonal to q_basis using double projection (Kahan re-orthogonalization).
+        Projects vector v orthogonal to q_basis using double projection (Kahan re-orthogonalization)
+        in float64 precision.
         """
         if q_basis is not None and q_basis.shape[1] > 0:
-            proj1 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v))
-            v_orth = v - proj1
+            v_orig_dtype = v.dtype
+            v_64 = v.to(torch.float64)
+            proj1 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_64))
+            v_orth = v_64 - proj1
             proj2 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_orth))
             v_orth = v_orth - proj2
-            return v_orth
+            return v_orth.to(v_orig_dtype)
         return v
 
     def compute_update_direction(
@@ -354,6 +366,12 @@ class SequentialNullTracker:
                 k_orth = self.project_orthogonal(k_vec, q_basis)
                 u_vec = k_orth / (torch.dot(k_vec, k_orth).item() + 1e-12)
 
+        # Final re-projection of u_vec to enforce exact orthogonality after scalar operations
+        u_vec = self.project_orthogonal(u_vec, q_basis)
+        denom_final = torch.dot(k_vec, u_vec).item()
+        if abs(denom_final) > 1e-6:
+            u_vec = u_vec / denom_final
+
         k_proj_norm = torch.linalg.norm(self.project_orthogonal(k_vec, q_basis)).item()
         return u_vec, k_proj_norm
 
@@ -366,12 +384,14 @@ class SequentialNullTracker:
         """
         Asserts ||k_prev Delta W|| <= tolerance for all stored previous keys of other facts.
         Then stores current key k_vec.
+        Evaluates matrix multiplication in float64 precision to prevent single-precision
+        GEMM accumulator rounding from masking or creating false violations.
         """
         max_err = 0.0
         other_keys = self.get_other_keys(k_vec)
         if len(other_keys) > 0:
-            prev_stack = torch.stack([k.to(self.device) for k in other_keys], dim=0)  # [M, 3072]
-            err_vecs = torch.matmul(prev_stack, delta_w)  # [M, 768]
+            prev_stack = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=0)  # [M, 3072]
+            err_vecs = torch.matmul(prev_stack, delta_w.to(self.device, dtype=torch.float64))  # [M, 768]
             err_norms = torch.linalg.norm(err_vecs, dim=1)
             max_err = torch.max(err_norms).item()
             if max_err > self.max_observed_violation:
