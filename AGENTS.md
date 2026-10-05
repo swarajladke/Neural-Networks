@@ -182,7 +182,7 @@ forbids.
 
 **5.7 Kaggle execution commands must always include a fresh clone.** Whenever providing run
 commands for remote execution on Kaggle, always formulate them to perform a fresh `git clone`
-(e.g., `rm -rf Neural-Networks && git clone https://github.com/swarajladke/Neural-Networks.git && cd Neural-Networks`)
+(e.g., `%%bash` notebook cell format: `rm -rf Neural-Networks && git clone https://github.com/swarajladke/Neural-Networks.git && cd Neural-Networks`)
 instead of relying on an existing directory or `git pull`. This guarantees execution against
 a clean, pinned checkout of the remote repository and prevents contamination from stale or
 untracked local files.
@@ -288,7 +288,7 @@ a sample was small, say so in the same breath as the result.
 
 **9.8 Kaggle execution commands must always clone.** Whenever presenting execution commands
 for Kaggle, always provide the command with a fresh clone (`git clone https://github.com/swarajladke/Neural-Networks.git`)
-per Section 5.7, ensuring a clean and reproducible working tree.
+per Section 5.7, formatted with `%%bash` for Kaggle notebook cells, ensuring a clean and reproducible working tree.
 
 ---
 
