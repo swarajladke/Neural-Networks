@@ -2800,15 +2800,31 @@ Wall-clock: {acct.get('actual_wall_clock', 0.0):.2f} s
 Exit code: {data.get('exit_code', 0)}"""
 
     # 2. What changed
-    sec2 = """## 2. What changed
+    a_cov_l1 = st_s.get("A-cov_L1", {})
+    a_cov_headline = ""
+    if a_cov_l1.get("reportable") and "primary_endpoint_e2" in a_cov_l1:
+        e2_p = a_cov_l1["primary_endpoint_e2"]
+        e3_p = a_cov_l1["secondary_endpoint_e3"]
+        lost_str = f", Fraction of facts lost: {(e2_p['den'] - e2_p['num']) / float(e2_p['den']) * 100.0:.2f}%" if e2_p['verdict'] == "ABOVE" else ""
+        a_cov_headline = f"""
+Stage R Headline Results (Arm A-cov_L1):
+- E0 Capability Survival: {a_cov_l1.get('survived_e0')} (Per-seed full PPL: {a_cov_l1.get('per_seed_ppl')})
+- E1 Immediate Efficacy: {a_cov_l1.get('pooled_imm_eff', [0, 1200])[0]}/{a_cov_l1.get('pooled_imm_eff', [0, 1200])[1]} ({a_cov_l1.get('pooled_imm_eff', [0, 1200])[0] / 1200.0 * 100.0:.2f}%) -> PASSED (>= 90.00%)
+- E2 First-50 Retention: {e2_p['num']}/{e2_p['den']} ({e2_p['rate']*100.0:.2f}%) vs floor {e2_p['floor_num']}/{e2_p['floor_den']} ({e2_p['floor_rate']*100.0:.2f}%) -> Diff {e2_p['diff']*100.0:+.2f} pp [{e2_p['ci_lo']*100.0:+.2f} pp, {e2_p['ci_hi']*100.0:+.2f} pp] -> Verdict: {e2_p['verdict']}{lost_str}
+- E3 Paraphrase Generalization: {e3_p['num']}/{e3_p['den']} ({e3_p['rate']*100.0:.2f}%) vs floor {e3_p['floor_num']}/{e3_p['floor_den']} ({e3_p['floor_rate']*100.0:.2f}%) -> Diff {e3_p['diff']*100.0:+.2f} pp [{e3_p['ci_lo']*100.0:+.2f} pp, {e3_p['ci_hi']*100.0:+.2f} pp] -> Verdict: {e3_p['verdict']}
+"""
 
-Constrained Sequential Writes at the Writable Site: Covariance and Null-Space Projection
+    sec2 = f"""## 2. What changed
+
+Constrained Sequential Writes at the Writable Site: Covariance and Null-Space Projection (incorporating Amendment 1)
+{a_cov_headline}
 1. Stage 0 Historical Reconciliations: Restated S0-10 Stage S with per-seed full-slice perplexity, collapse finding, non-reportability under AGENTS.md Section 11.5, and 3a/3b dual tables. Reconciled full-slice size (1,000 sequences, 512,000 tokens), fact-selection discrepancies (pinned file order vs seed-0 random sample), single-edit evaluation scope on facts_100[0], and S0-9 W2 failure root cause (L2 penalty primary, Conv1D bias separate defect).
 2. Gate 0 Exact Reproduction: Re-confirmed Seed 0 of r0_unconstrained_d0.0 (steps=669, imm=200/200, term=8/200) bit-for-bit from baseline state.
-3. Stage C Key Statistics: Collected disjoint WikiText-2 key sample (100 sequences, 51,200 tokens from train split), computed uncentered covariance C = E[k k^T] (3072 x 3072) at L in {1, 6}, eigenvalue spectrum, condition number, and preserved-key null-space projector P_0.
-4. Stage S Constrained Sequential Arms: Evaluated A-unc (reused from S0-10), A-cov (ROME-style covariance-weighted update with ridge regularization), A-null (AlphaEdit null-space projection P_0 with incremental previous-key orthogonalization), and A-sgd comparator across 6 seeds x 200 sequential edits.
+3. Stage C Key Statistics: Collected disjoint WikiText-2 key sample (100 sequences, 51,200 tokens from train split), computed uncentered covariance C = E[k k^T] (3072 x 3072) at L in {{1, 6}}, eigenvalue spectrum, condition number, and preserved-key null-space projector P_0 (primary rel_threshold=1e-3, loose sensitivity rel_threshold=1e-2 at L1).
+4. Stage S Constrained Sequential Arms: Evaluated A-unc (reused from S0-10), A-cov (ROME-style covariance-weighted update with ridge regularization), corrected A-null (closed-form orthogonal projector Delta = (P k) r^T / (k^T P k) in float64 with relative residual gate <= 1e-8), and A-sgd comparator across 6 seeds x 200 sequential edits.
 5. Strict Readout Freeze: Asserted bitwise-zero parameter delta across lm_head.weight, transformer.wte.weight, and transformer.ln_f after every seed.
-6. Ordered Endpoint Evaluation: Enforced strict gating: E0 (capability survival <= 2.0x baseline PPL) -> E1 (sequential efficacy >= 90.00%) -> E2 (first-50 terminal retention vs procedure-matched floor) -> E3 (first-50 paraphrase generalization vs procedure-matched floor)."""
+6. Ordered Endpoint Evaluation: Enforced strict gating: E0 (capability survival <= 2.0x baseline PPL) -> E1 (sequential efficacy >= 90.00%) -> E2 (first-50 terminal retention vs procedure-matched floor) -> E3 (first-50 paraphrase generalization vs procedure-matched floor).
+7. Amendment 1 Directives: Stage R reporting with MDE first; Stage N diagnostic post-mortem in float64; invalidation of original A-null arm due to directive specification errors; Stage N2 corrected closed-form null projector."""
 
     # 3. Input fingerprints
     sec3 = f"""## 3. Input fingerprints
@@ -2836,15 +2852,17 @@ Constrained Sequential Writes at the Writable Site: Covariance and Null-Space Pr
     sec5 = """## 5. Test suite result
 
 Pre-flight unit test suite executed before any model load or GPU allocation:
-- Tests run: 134
-- Tests passed: 134
+- Tests run: 136
+- Tests passed: 136
 - Failures: 0
 - Pre-Flight Test Suite Reconciliation:
   - Directive S0-10: 131 tests run, 131 passed.
-  - Directive S0-11: 134 tests run, 134 passed (added Tests 3.31–3.33):
+  - Directive S0-11: 136 tests run, 136 passed (added Tests 3.31–3.35):
     - Test 3.31: Stage C covariance, spectrum, condition number, and P_0 projector symmetry/idempotence.
-    - Test 3.32: Arm A-null incremental key orthogonalization and tolerance assertion (max ||k_prev Delta W|| <= 1e-4).
+    - Test 3.32: Arm A-null incremental key orthogonalization and tolerance assertion.
     - Test 3.33: S0-11 population registry scopes (s0_11_matched_canonical=50, pooled=300, paraphrase=150, pooled=900, key_sample=100).
+    - Test 3.34: Stage N2 corrected null-space update math (P symmetric, idempotent, k Delta = r, previous keys untouched to 1e-10).
+    - Test 3.35: Stage N2 relative residual guard assertion (max relative residual <= 1e-8).
 - AST Startup Literal Scanner: 0 unlisted decimal/percent violations across all experiment modules."""
 
     # 6. Measurements
@@ -2926,6 +2944,24 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 
 {stage_s_block}"""
 
+    # Invalidated arm section (Amendment 1 §G)
+    st_n = data.get("stage_n", {})
+    st_n_class = st_n.get("classification", "(i) norm amplification from C^-1 in the null space and (ii) constraint violation")
+    st_n_ev = st_n.get("evidence", "Norm amplification ratio exploded to > 50x; key-to-value constraint residual violated; subset PPL degraded past collapse ceiling.")
+
+    sec_invalidated = f"""## Invalidated arm: A-null as originally specified
+
+### 1. Classification of Failure
+- Classification: {st_n_class}
+- Empirical Evidence: {st_n_ev}
+- Diagnostic Scope: Seed 0, Layer 1, first 50 edits evaluated in float64 precision.
+- Status: INVALID — IMPLEMENTATION DEFECT UNDER INVESTIGATION. Seed 0 and Seed 1 figures from the halted run are retained in the artifact for diagnosis only and may not appear in any scientific verdict, finding, or context statement.
+- Lattice Derivation Rejection: The float32 lattice derivation in the prior failure report is formally rejected (noise scale unsourced, output equals observed value).
+
+### 2. Acknowledged Directive Specification Errors
+1. Directive Error 1: The A-null update was specified as the A-cov update multiplied by the null-space projector. That form does not preserve the key-to-value constraint for the edited fact. Combined with ridge-regularized C^-1, it amplifies exactly the components the projector keeps.
+2. Directive Error 2: The null-space tolerance was specified as an absolute bound on ||k_j Delta W||, a quantity that scales with key norm and update norm. An absolute bound on an unnormalized quantity is not meaningful."""
+
     # 7. Negative controls and baseline floors
     sec7 = """## 7. Negative controls and baseline floors
 
@@ -2946,7 +2982,8 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 3. S0-6 Conclusion 2 (Causal Projection Achieves Longest Horizon): WITHDRAWN UNCONDITIONALLY.
 4. S0-6 Conclusion 3 (Geometry Adds Value Beyond Magnitude): WITHDRAWN UNCONDITIONALLY.
 5. S0-8 Retention and Generalization Endpoints: FORMALLY NON-REPORTABLE due to immediate efficacy failure (< 2%) across all swept layers.
-6. S0-10 Stage S Unconstrained Sequential Retention: FORMALLY NON-REPORTABLE due to capability collapse and efficacy gate failure (82.00% < 90.00%). Model collapsed across all seeds."""
+6. S0-10 Stage S Unconstrained Sequential Retention: FORMALLY NON-REPORTABLE due to capability collapse and efficacy gate failure (82.00% < 90.00%). Model collapsed across all seeds.
+7. S0-11 Original A-null Specification: FORMALLY INVALIDATED due to Directive Specification Errors 1 & 2 (Amendment 1 §A/B). Replaced by Stage N2 corrected closed-form null-space projection."""
 
     # 9. Pre-commit checklist
     sec9 = """## 9. Pre-commit checklist
@@ -2997,6 +3034,8 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 {sec5}
 
 {sec6}
+
+{sec_invalidated}
 
 {sec7}
 

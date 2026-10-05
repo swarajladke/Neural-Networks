@@ -102,11 +102,12 @@ def compute_null_space_projector(
     retained_energy_frac = (null_energy / total_energy) if total_energy > 0 else 0.0
 
     if null_dim > 0:
-        v_null = evecs[:, null_mask]  # [3072, null_dim]
+        v_null = evecs[:, null_mask]  # [3072, null_dim] in float64
         p_0 = torch.matmul(v_null, v_null.t()).to(torch.float32)
     else:
         # Fallback to empty null space projector
-        p_0 = torch.zeros((3072, 3072), dtype=torch.float32)
+        v_null = torch.zeros((cov.shape[0], 0), dtype=torch.float64)
+        p_0 = torch.zeros((cov.shape[0], cov.shape[0]), dtype=torch.float32)
 
     cov_sha = hashlib.sha256(cov.numpy().tobytes()).hexdigest()
     p0_sha = hashlib.sha256(p_0.numpy().tobytes()).hexdigest()
@@ -115,6 +116,7 @@ def compute_null_space_projector(
         "cov": cov,
         "cov_sha256": cov_sha,
         "p_0": p_0,
+        "v_null": v_null,
         "p0_sha256": p0_sha,
         "evals": evals.to(torch.float32).tolist(),
         "lambda_max": l_max,
@@ -251,11 +253,8 @@ def edit_fact_mlp_cov(
 
 class SequentialNullTracker:
     """
-    Tracks preserved null space P_0 and incremental previous edit keys for Arm A-null.
-    Maintains stored previous keys k_0, ..., k_{t-1}.
-    For each edit, projects update direction orthogonal to all other distinct previous edit keys,
-    and into the null space P_0 of preserved corpus keys (AlphaEdit-style).
-    Asserts max_{j < t, k_j != k_t} ||k_j Delta W_t|| <= tolerance after every edit.
+    [DEPRECATED per S0-11 Amendment 1 §A — Preserved for Historical Tests]
+    Original as-executed A-null tracker.
     """
     def __init__(self, p_0: torch.Tensor, tolerance: float = 1e-4, device: str = "cuda"):
         self.p_0 = p_0.to(device)
@@ -266,185 +265,244 @@ class SequentialNullTracker:
         self.max_observed_violation = 0.0
 
     def reset(self):
-        """Resets the tracker history to initial state."""
         self.stored_keys = []
         self.q_basis = None
         self.last_u_vec = None
         self.max_observed_violation = 0.0
 
     def get_other_keys(self, k_vec: torch.Tensor) -> List[torch.Tensor]:
-        """
-        Returns all stored previous keys that are distinct from k_vec and mutually distinct
-        (cosine similarity < 0.999). If a subject was re-edited, earlier collinear keys are
-        superseded by the latest key to prevent rank-deficiency in the QR basis.
-        """
         if not self.stored_keys:
             return []
         k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
-        other: List[torch.Tensor] = []
-        other_units: List[torch.Tensor] = []
+        other, other_units = [], []
         for prev_k in reversed(self.stored_keys):
             prev_unit = prev_k.to(self.device) / (torch.linalg.norm(prev_k) + 1e-12)
-            cos_curr = torch.dot(k_unit, prev_unit).item()
-            if cos_curr < 0.999:
-                is_duplicate = False
-                for u in other_units:
-                    if torch.dot(prev_unit, u).item() >= 0.999:
-                        is_duplicate = True
-                        break
-                if not is_duplicate:
+            if torch.dot(k_unit, prev_unit).item() < 0.999:
+                if not any(torch.dot(prev_unit, u).item() >= 0.999 for u in other_units):
                     other.append(prev_k)
                     other_units.append(prev_unit)
         other.reverse()
         return other
 
     def get_orthogonal_basis_for_others(self, other_keys: List[torch.Tensor]) -> Optional[torch.Tensor]:
-        """
-        Computes thin QR orthonormal basis Q for other_keys in float64 precision on self.device.
-        Takes < 1 ms on GPU for M <= 200.
-        """
         if not other_keys:
             return None
-        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=1)  # [3072, M]
-        q_basis, _ = torch.linalg.qr(k_mat)  # [3072, M]
+        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=1)
+        q_basis, _ = torch.linalg.qr(k_mat)
         return q_basis
 
     def project_orthogonal(self, v: torch.Tensor, q_basis: Optional[torch.Tensor]) -> torch.Tensor:
-        """
-        Projects vector v orthogonal to q_basis using double projection (Kahan re-orthogonalization)
-        in float64 precision.
-        """
         if q_basis is not None and q_basis.shape[1] > 0:
             v_orig_dtype = v.dtype
             v_64 = v.to(torch.float64)
-            proj1 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_64))
-            v_orth = v_64 - proj1
-            proj2 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_orth))
-            v_orth = v_orth - proj2
-            return v_orth.to(v_orig_dtype)
+            p1 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_64))
+            v_orth = v_64 - p1
+            p2 = torch.matmul(q_basis, torch.matmul(q_basis.t(), v_orth))
+            return (v_orth - p2).to(v_orig_dtype)
         return v
 
-    def compute_update_direction(
-        self,
-        k_vec: torch.Tensor,
-        cov: torch.Tensor,
-        ridge_val: float
-    ) -> Tuple[torch.Tensor, float]:
-        """
-        Computes update direction u_vec satisfying:
-        1. u_vec is orthogonal to all other previous edit keys (Q_other^T u_vec = 0)
-        2. u_vec is projected into null space P_0 (AlphaEdit-style)
-        3. k_vec^T u_vec = 1 (Exact immediate efficacy)
-        """
+    def compute_update_direction(self, k_vec: torch.Tensor, cov: torch.Tensor, ridge_val: float) -> Tuple[torch.Tensor, float]:
         other_keys = self.get_other_keys(k_vec)
         q_basis = self.get_orthogonal_basis_for_others(other_keys)
         self.q_basis = q_basis
-
         d_feat = cov.shape[0]
         cov_reg = cov.to(self.device) + ridge_val * torch.eye(d_feat, device=self.device)
-
-        # 1. ROME covariance direction: C_reg z = k
         z = torch.linalg.solve(cov_reg, k_vec)
-
-        # 2. Project through P_0 (null space of preserved corpus keys)
         z_p0 = torch.matmul(self.p_0, z)
-
-        # 3. Project orthogonal to other previous edit keys
         u_cand = self.project_orthogonal(z_p0, q_basis)
-
-        # 4. Check denominator k_vec * u_cand
         denom = torch.dot(k_vec, u_cand).item()
-
         if denom > 1e-4:
             u_vec = u_cand / denom
         else:
-            # If P_0 removes too much of k_vec, fall back to Arm B (covariance projected orthogonal to previous keys)
             u_arm_b = self.project_orthogonal(z, q_basis)
             denom_b = torch.dot(k_vec, u_arm_b).item()
-            if denom_b > 1e-6:
-                u_vec = u_arm_b / denom_b
-            else:
-                k_orth = self.project_orthogonal(k_vec, q_basis)
-                u_vec = k_orth / (torch.dot(k_vec, k_orth).item() + 1e-12)
-
-        # Final re-projection of u_vec to enforce exact orthogonality after scalar operations
+            u_vec = u_arm_b / denom_b if denom_b > 1e-6 else k_vec / (torch.dot(k_vec, k_vec).item() + 1e-12)
         u_vec = self.project_orthogonal(u_vec, q_basis)
         denom_final = torch.dot(k_vec, u_vec).item()
         if abs(denom_final) > 1e-6:
             u_vec = u_vec / denom_final
-
         self.last_u_vec = u_vec
         k_proj_norm = torch.linalg.norm(self.project_orthogonal(k_vec, q_basis)).item()
         return u_vec, k_proj_norm
 
-    def register_and_assert(
-        self,
-        k_vec: torch.Tensor,
-        delta_w: torch.Tensor,
-        delta_v: torch.Tensor,
-        u_vec: Optional[torch.Tensor] = None
-    ) -> float:
-        """
-        Asserts ||k_prev Delta W|| <= tolerance for all stored previous keys of other facts.
-        Then stores current key k_vec.
-        For rank-1 update Delta W = u delta_v^T, ||k_prev Delta W|| = |k_prev u| ||delta_v||.
-        Evaluating via exact rank-1 factorization in float64 eliminates spurious O(d_out * eps)
-        dense outer-product discretization error on GPU.
-        """
+    def register_and_assert(self, k_vec: torch.Tensor, delta_w: torch.Tensor, delta_v: torch.Tensor, u_vec: Optional[torch.Tensor] = None) -> float:
         max_err = 0.0
         other_keys = self.get_other_keys(k_vec)
         if len(other_keys) > 0:
             active_u = u_vec if u_vec is not None else getattr(self, "last_u_vec", None)
-            prev_stack = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=0)  # [M, 3072]
+            prev_stack = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=0)
             if active_u is not None:
                 u_64 = active_u.to(self.device, dtype=torch.float64)
                 v_norm = torch.linalg.norm(delta_v.to(self.device, dtype=torch.float64)).item()
-                k_u_dots = torch.matmul(prev_stack, u_64)  # [M]
-                err_norms = torch.abs(k_u_dots) * v_norm  # [M]
+                err_norms = torch.abs(torch.matmul(prev_stack, u_64)) * v_norm
             else:
-                err_vecs = torch.matmul(prev_stack, delta_w.to(self.device, dtype=torch.float64))  # [M, 768]
+                err_vecs = torch.matmul(prev_stack, delta_w.to(self.device, dtype=torch.float64))
                 err_norms = torch.linalg.norm(err_vecs, dim=1)
             max_err = torch.max(err_norms).item()
             if max_err > self.max_observed_violation:
                 self.max_observed_violation = max_err
             assert max_err <= self.tolerance, f"Null-space assertion failure: max ||k_prev Delta W|| = {max_err:.2e} > {self.tolerance:.2e}"
-
         self.stored_keys.append(k_vec.detach().cpu())
         return max_err
 
 
-def edit_fact_mlp_null(
+class CorrectedSequentialNullTracker:
+    """
+    Directive S0-11 Amendment 1 Stage N2:
+    Corrected Sequential Null-Space Projector Tracker.
+    Maintains P = P_0 \cap (span(k_0, ..., k_{t-1}))^\perp in float64.
+    Update rule: Delta = (P k) r^T / (k^T P k), where r = v* - W k - b.
+    Pre-registered check: max relative residual <= 1e-8 in float64 before casting.
+    """
+    def __init__(self, v_null: torch.Tensor, rel_threshold: float = 1e-3, device: str = "cuda"):
+        self.v_null = v_null.to(device, dtype=torch.float64)
+        self.rel_threshold = rel_threshold
+        self.device = device
+        self.stored_keys: List[torch.Tensor] = []
+        self.q_k: Optional[torch.Tensor] = None
+        self.rho_history: List[float] = []
+        self.max_relative_residual = 0.0
+        self.max_applied_residual = 0.0
+
+    def reset(self):
+        self.stored_keys = []
+        self.q_k = None
+        self.rho_history = []
+        self.max_relative_residual = 0.0
+        self.max_applied_residual = 0.0
+
+    def get_other_keys(self, k_vec: torch.Tensor) -> List[torch.Tensor]:
+        if not self.stored_keys:
+            return []
+        k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
+        other, other_units = [], []
+        for prev_k in reversed(self.stored_keys):
+            prev_unit = prev_k / (torch.linalg.norm(prev_k) + 1e-12)
+            if torch.dot(k_unit, prev_unit).item() < 0.999:
+                if not any(torch.dot(prev_unit, u).item() >= 0.999 for u in other_units):
+                    other.append(prev_k)
+                    other_units.append(prev_unit)
+        other.reverse()
+        return other
+
+    def update_basis(self, other_keys: List[torch.Tensor]):
+        if not other_keys or self.v_null.shape[1] == 0:
+            self.q_k = None
+            return
+        k_mat = torch.stack(other_keys, dim=1)
+        c_mat = torch.matmul(self.v_null.t(), k_mat)
+        q_basis, r_mat = torch.linalg.qr(c_mat)
+        diag_r = torch.abs(torch.diag(r_mat))
+        valid_cols = diag_r > 1e-10 * (diag_r[0] if diag_r.numel() > 0 else 1.0)
+        self.q_k = q_basis[:, valid_cols] if valid_cols.any() else None
+
+    def project_k(self, k_64: torch.Tensor) -> Tuple[torch.Tensor, float]:
+        if self.v_null.shape[1] == 0:
+            return torch.zeros_like(k_64), 0.0
+        c = torch.matmul(self.v_null.t(), k_64)
+        if self.q_k is not None and self.q_k.shape[1] > 0:
+            p1 = torch.matmul(self.q_k, torch.matmul(self.q_k.t(), c))
+            c_orth = c - p1
+            p2 = torch.matmul(self.q_k, torch.matmul(self.q_k.t(), c_orth))
+            c_orth = c_orth - p2
+        else:
+            c_orth = c
+        p_k = torch.matmul(self.v_null, c_orth)
+        denom = torch.dot(k_64, k_64).item() + 1e-12
+        rho = torch.dot(c_orth, c_orth).item() / denom
+        return p_k, rho
+
+    def compute_update(self, k_vec: torch.Tensor, r_vec: torch.Tensor, preserved_sample_keys: Optional[List[torch.Tensor]] = None) -> Dict[str, Any]:
+        k_64 = k_vec.to(self.device, dtype=torch.float64)
+        r_64 = r_vec.to(self.device, dtype=torch.float64)
+        other_keys = self.get_other_keys(k_64)
+        self.update_basis(other_keys)
+        p_k, rho = self.project_k(k_64)
+        self.rho_history.append(rho)
+        k_p_k = torch.dot(k_64, p_k).item()
+
+        if k_p_k > 1e-12:
+            delta_64 = torch.outer(p_k, r_64) / k_p_k
+        else:
+            p_cand = p_k if torch.linalg.norm(p_k) > 1e-12 else k_64
+            denom = torch.dot(k_64, p_cand).item() + 1e-12
+            delta_64 = torch.outer(p_cand, r_64) / denom
+
+        delta_norm_2 = torch.linalg.norm(delta_64, ord=2).item() + 1e-12
+
+        # 1. Pre-registered Relative Residual Check in float64 before casting
+        max_rel_res = 0.0
+        if len(other_keys) > 0:
+            for prev_k in other_keys:
+                k_norm = torch.linalg.norm(prev_k).item() + 1e-12
+                proj_val = abs(torch.dot(prev_k, p_k).item())
+                err_norm = (proj_val * torch.linalg.norm(r_64).item()) / (k_p_k + 1e-12)
+                rel_res = err_norm / (k_norm * delta_norm_2)
+                if rel_res > max_rel_res:
+                    max_rel_res = rel_res
+
+        if preserved_sample_keys:
+            for kp in preserved_sample_keys:
+                kp_64 = kp.to(self.device, dtype=torch.float64)
+                kp_norm = torch.linalg.norm(kp_64).item() + 1e-12
+                proj_val = abs(torch.dot(kp_64, p_k).item())
+                err_norm = (proj_val * torch.linalg.norm(r_64).item()) / (k_p_k + 1e-12)
+                rel_res = err_norm / (kp_norm * delta_norm_2)
+                if rel_res > max_rel_res:
+                    max_rel_res = rel_res
+
+        if max_rel_res > self.max_relative_residual:
+            self.max_relative_residual = max_rel_res
+
+        assert max_rel_res <= 1e-8, f"Corrected A-null relative residual gate failure: {max_rel_res:.2e} > 1.00e-08"
+
+        # 2. Applied residual after casting to float32 (descriptive only, no gate)
+        delta_f32 = delta_64.to(torch.float32)
+        applied_norm_2 = torch.linalg.norm(delta_f32, ord=2).item() + 1e-12
+        max_applied_res = 0.0
+        if len(other_keys) > 0:
+            for prev_k in other_keys:
+                pk_f32 = prev_k.to(torch.float32)
+                pk_norm = torch.linalg.norm(pk_f32).item() + 1e-12
+                out_err = torch.linalg.norm(torch.matmul(pk_f32, delta_f32)).item()
+                app_res = out_err / (pk_norm * applied_norm_2)
+                if app_res > max_applied_res:
+                    max_applied_res = app_res
+        if max_applied_res > self.max_applied_residual:
+            self.max_applied_residual = max_applied_res
+
+        self.stored_keys.append(k_64.detach())
+        return {
+            "delta_f32": delta_f32,
+            "rho": rho,
+            "relative_residual": max_rel_res,
+            "applied_residual": max_applied_res
+        }
+
+
+def edit_fact_mlp_null_corrected(
     model: nn.Module,
     tokenizer: Any,
     fact: Dict[str, Any],
-    cov: torch.Tensor,
-    null_tracker: SequentialNullTracker,
+    null_tracker: CorrectedSequentialNullTracker,
     layer_idx: int,
+    preserved_sample_keys: Optional[List[torch.Tensor]] = None,
     max_steps: int = 100,
     lr_v: float = 0.1,
-    ridge_factor: float = 1e-3,
     device: str = "cuda"
 ) -> Dict[str, Any]:
     """
-    Arm A-null: Covariance update projected into null space P_0 + incremental previous keys.
-    Asserts max_{j < t} ||k_j Delta W_t|| < tolerance.
+    Directive S0-11 Amendment 1 Stage N2: Corrected A-null update.
+    Delta = (P k) r^T / (k^T P k), where r = v* - W k - b.
+    Maintains P in float64. Casts Delta to float32 only when writing weight.
     """
     c_proj = model.transformer.h[layer_idx].mlp.c_proj
     k_vec, v_star, steps_taken, _ = find_target_value_vstar(model, tokenizer, fact, layer_idx, max_steps, lr_v, 0.0, device)
-
     v0 = torch.addmm(c_proj.bias.data, k_vec.unsqueeze(0), c_proj.weight.data).squeeze(0)
-    delta_v = v_star - v0
+    r_vec = v_star - v0
 
-    d_feat = cov.shape[0]
-    tr_cov = float(torch.trace(cov).item())
-    ridge_val = ridge_factor * (tr_cov / float(d_feat))
-
-    u_vec, k_proj_norm = null_tracker.compute_update_direction(k_vec, cov, ridge_val)
-    delta_w = torch.outer(u_vec, delta_v)
-
-    # Assert tolerance on previous keys before applying update
-    null_err = null_tracker.register_and_assert(k_vec, delta_w, delta_v, u_vec=u_vec)
-
+    res = null_tracker.compute_update(k_vec, r_vec, preserved_sample_keys)
+    delta_w = res["delta_f32"]
     c_proj.weight.data.add_(delta_w)
     delta_norm = torch.linalg.norm(delta_w).item()
 
@@ -455,8 +513,9 @@ def edit_fact_mlp_null(
         "immediate_match": imm_match,
         "delta_norm": delta_norm,
         "pred": curr_pred,
-        "null_err": null_err,
-        "k_proj_norm": k_proj_norm
+        "rho": res["rho"],
+        "relative_residual": res["relative_residual"],
+        "applied_residual": res["applied_residual"]
     }
 
 

@@ -1177,7 +1177,83 @@ def run_all_tests() -> int:
     print("  Test 3.33 (S0-11 Registry Scopes)     : s0_11_matched_canonical=50, pooled=300, paraphrase=150, pooled=900, key_sample=100 registered PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.34 TEST SUITE SUMMARY
+    # 3.34 TEST STAGE N2 CORRECTED NULL PROJECTOR MATH (AMENDMENT 1 §E)
+    # --------------------------------------------------------------------------
+    print("\n[3.34 Test Stage N2 Corrected Null Projector Math (Amendment 1 §E)]")
+    tests_run += 1
+    from experiments.s0_11_constraints import CorrectedSequentialNullTracker
+    v_null_test = p_info["v_null"].to(dtype=torch.float64)
+    corr_tracker = CorrectedSequentialNullTracker(v_null=v_null_test, rel_threshold=0.01, device="cpu")
+
+    # 1. P is symmetric and idempotent on synthetic state
+    p_k_basis = []
+    for i in range(d_test):
+        ei = torch.zeros(d_test, dtype=torch.float64)
+        ei[i] = 1.0
+        p_ei, _ = corr_tracker.project_k(ei)
+        p_k_basis.append(p_ei)
+    p_mat = torch.stack(p_k_basis, dim=1)  # [d_test, d_test]
+    sym_diff = torch.max(torch.abs(p_mat - p_mat.t())).item()
+    assert sym_diff < 1e-12, f"P not symmetric: {sym_diff}"
+    p_sq_diff = torch.max(torch.abs(torch.matmul(p_mat, p_mat) - p_mat)).item()
+    assert p_sq_diff < 1e-12, f"P not idempotent: {p_sq_diff}"
+
+    # 2. Sequential edits: verify k Delta = r, previous keys = 0, preserved keys = 0 to 1e-10
+    k_synth_pres = [k_synth[i].to(dtype=torch.float64) for i in range(10)]
+    seq_keys = [torch.randn(d_test, generator=rng_t11, dtype=torch.float64) for _ in range(5)]
+    r_targets = [torch.randn(32, generator=rng_t11, dtype=torch.float64) for _ in range(5)]
+
+    for t_step, (kt, rt) in enumerate(zip(seq_keys, r_targets)):
+        res_t = corr_tracker.compute_update(kt, rt, preserved_sample_keys=None)
+        # In float64: Delta_64 = (P kt) rt^T / (kt^T P kt)
+        p_kt, _ = corr_tracker.project_k(kt)
+        denom_t = torch.dot(kt, p_kt).item()
+        delta_64_t = torch.outer(p_kt, rt) / denom_t
+
+        # Check k Delta == r to 1e-10
+        kt_delta = torch.matmul(kt, delta_64_t)
+        err_kt = torch.max(torch.abs(kt_delta - rt)).item()
+        assert err_kt < 1e-10, f"Step {t_step}: kt Delta != r error={err_kt}"
+
+        # Check previous edit keys touched to 1e-10
+        if t_step > 0:
+            for prev_idx, prev_k in enumerate(seq_keys[:t_step]):
+                prev_delta = torch.matmul(prev_k, delta_64_t)
+                err_prev = torch.max(torch.abs(prev_delta)).item()
+                assert err_prev < 1e-10, f"Step {t_step}: prev key {prev_idx} touched, error={err_prev}"
+
+        # Check relative residual <= 1e-8
+        assert res_t["relative_residual"] <= 1e-8, f"Step {t_step}: relative residual exceeded gate"
+
+    corr_tracker.reset()
+    assert len(corr_tracker.stored_keys) == 0 and corr_tracker.q_k is None
+    tests_passed += 1
+    print(f"  Test 3.34 (Stage N2 Corrected Null Math) : P symmetric err={sym_diff:.2e}, idempotent err={p_sq_diff:.2e}, kDelta=r err={err_kt:.2e} < 1e-10 PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.35 TEST STAGE N2 RELATIVE RESIDUAL GUARD (AMENDMENT 1 §E)
+    # --------------------------------------------------------------------------
+    print("\n[3.35 Test Stage N2 Relative Residual Guard (Amendment 1 §E)]")
+    tests_run += 1
+    guard_caught = False
+    try:
+        # Construct an artificial update with huge artificial residual
+        fake_tracker = CorrectedSequentialNullTracker(v_null=v_null_test, rel_threshold=0.01, device="cpu")
+        k_bad = torch.randn(d_test, dtype=torch.float64)
+        r_bad = torch.randn(32, dtype=torch.float64)
+        # Artificially inject a non-null key into stored_keys to create a simulated violation
+        fake_tracker.stored_keys = [k_bad.clone()]
+        # Force a compute with nonzero projection onto stored_keys
+        _ = fake_tracker.compute_update(k_bad, r_bad)
+    except AssertionError as e:
+        if "gate failure" in str(e):
+            guard_caught = True
+    assert guard_caught, "Expected AssertionError on relative residual gate violation"
+    tests_passed += 1
+    print("  Test 3.35 (Stage N2 Residual Guard)   : Caught expected relative residual gate failure AssertionError PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.36 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
