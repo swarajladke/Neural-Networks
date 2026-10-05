@@ -347,7 +347,7 @@ class SequentialNullTracker:
 
 
 class CorrectedSequentialNullTracker:
-    """
+    r"""
     Directive S0-11 Amendment 1 Stage N2:
     Corrected Sequential Null-Space Projector Tracker.
     Maintains P = P_0 \cap (span(k_0, ..., k_{t-1}))^\perp in float64.
