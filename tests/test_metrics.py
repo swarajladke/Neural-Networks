@@ -1237,14 +1237,12 @@ def run_all_tests() -> int:
     tests_run += 1
     guard_caught = False
     try:
-        # Construct an artificial update with huge artificial residual
         fake_tracker = CorrectedSequentialNullTracker(v_null=v_null_test, rel_threshold=0.01, device="cpu")
-        k_bad = torch.randn(d_test, dtype=torch.float64)
-        r_bad = torch.randn(32, dtype=torch.float64)
-        # Artificially inject a non-null key into stored_keys to create a simulated violation
-        fake_tracker.stored_keys = [k_bad.clone()]
-        # Force a compute with nonzero projection onto stored_keys
-        _ = fake_tracker.compute_update(k_bad, r_bad)
+        k_test = torch.randn(d_test, dtype=torch.float64)
+        r_test = torch.randn(32, dtype=torch.float64)
+        p_k_viol, _ = fake_tracker.project_k(k_test)
+        k_violating = p_k_viol.clone() if torch.linalg.norm(p_k_viol) > 1e-6 else torch.randn(d_test, dtype=torch.float64)
+        _ = fake_tracker.compute_update(k_test, r_test, preserved_sample_keys=[k_violating])
     except AssertionError as e:
         if "gate failure" in str(e):
             guard_caught = True
