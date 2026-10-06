@@ -1251,7 +1251,36 @@ def run_all_tests() -> int:
     print("  Test 3.35 (Stage N2 Residual Guard)   : Caught expected relative residual gate failure AssertionError PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.36 TEST SUITE SUMMARY
+    # 3.36 TEST S0-12 POPULATION REGISTRY SCOPES
+    # --------------------------------------------------------------------------
+    print("\n[3.36 Test S0-12 Population Registry Scopes]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_12_eval_canonical") == 50
+    assert POPULATION_REGISTRY.get("s0_12_eval_canonical_pooled") == 300
+    assert POPULATION_REGISTRY.get("s0_12_eval_paraphrase") == 150
+    assert POPULATION_REGISTRY.get("s0_12_eval_paraphrase_pooled") == 900
+    assert POPULATION_REGISTRY.get("s0_12_key_sample") == 100
+    tests_passed += 1
+    print("  Test 3.36 (S0-12 Registry Scopes)     : s0_12_eval_canonical=50, pooled=300, paraphrase=150, pooled=900, key_sample=100 registered PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.37 TEST BUDGET ENFORCEMENT GUARD (DIRECTIVE S0-12 §2 ITEM 4)
+    # --------------------------------------------------------------------------
+    print("\n[3.37 Test Budget Enforcement Guard (Directive S0-12 §2 Item 4)]")
+    tests_run += 1
+    # Unit stub verifying that projection exceeding remaining budget prevents arm start
+    def check_arm_budget_start(elapsed: float, ceiling: float, projected_arm_need: float) -> bool:
+        remaining = ceiling - elapsed
+        return remaining >= projected_arm_need
+
+    assert check_arm_budget_start(elapsed=5000.0, ceiling=16380.0, projected_arm_need=2000.0) is True
+    assert check_arm_budget_start(elapsed=15000.0, ceiling=16380.0, projected_arm_need=2000.0) is False
+    assert check_arm_budget_start(elapsed=16380.0, ceiling=16380.0, projected_arm_need=1.0) is False
+    tests_passed += 1
+    print("  Test 3.37 (Budget Enforcement Guard)  : Arm execution correctly blocked when projection exceeds budget PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.38 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")

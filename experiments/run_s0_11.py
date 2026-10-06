@@ -256,6 +256,7 @@ def run_s0_11_master():
     stage_n_res = run_stage_n_diagnostic(
         model, tokenizer, base_state_dict, facts_seed0,
         stage_c_info[1]["cov"], stage_c_info[1]["p_0"],
+        key_sample_tensor,
         wikitext_slice, slice_sha, subset_baseline_ppl,
         fresh_checksum, fresh_c_proj_hashes, device=device
     )

@@ -1,7 +1,7 @@
 {
   "directive": "S0-11",
   "amendment": "Amendment 1",
-  "producing_commit_sha": "CANONICAL_RUN",
+  "producing_commit_sha": "07cb7eedf7517196ca66187eb94d300c50fe343f",
   "exit_code": 0,
   "hashes": {
     "facts_json_sha256": "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536",

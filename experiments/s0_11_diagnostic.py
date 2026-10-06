@@ -48,6 +48,7 @@ def run_stage_n_diagnostic(
     facts_seed0: List[Dict[str, Any]],
     cov: torch.Tensor,
     p_0: torch.Tensor,
+    key_sample_tensor: torch.Tensor,
     wikitext_slice: List[Dict[str, torch.Tensor]],
     slice_sha: str,
     subset_baseline_ppl: float,
@@ -69,12 +70,34 @@ def run_stage_n_diagnostic(
     cov_64 = cov.to(device, dtype=torch.float64)
     p0_64 = p_0.to(device, dtype=torch.float64)
 
-    # Sanity check projector orientation: ||P_0 k_pres|| << ||k_pres||
+    # Preserved Key Projector Check on real preserved keys from disjoint key sample
     pres_norm_ratios = []
-    mean_pres_r = 0.0
+    if key_sample_tensor is not None:
+        model.eval()
+        with torch.no_grad():
+            # Check up to 10 sequences from key sample
+            sub_sample = key_sample_tensor[:10].to(device)
+            recorded = {}
+            def hook_fn(m, inp, out):
+                recorded["k"] = inp[0].detach()
+            handle = c_proj.register_forward_hook(hook_fn)
+            try:
+                _ = model(sub_sample)
+            finally:
+                handle.remove()
+            k_pres_all = recorded["k"].reshape(-1, 3072).to(torch.float64)  # [N_tokens, 3072]
+            p0_k_pres = torch.matmul(k_pres_all, p0_64.t())
+            k_norms = torch.linalg.norm(k_pres_all, dim=-1)
+            p0_norms = torch.linalg.norm(p0_k_pres, dim=-1)
+            valid_mask = k_norms > 1e-12
+            ratios = (p0_norms[valid_mask] / k_norms[valid_mask]).tolist()
+            pres_norm_ratios.extend(ratios)
 
-    print(f"  [Preserved Key Projector Check] Mean ||P_0 k_pres|| / ||k_pres|| = {mean_pres_r:.4e}")
-    projector_orientation_correct = True
+    mean_pres_r = (sum(pres_norm_ratios) / len(pres_norm_ratios)) if pres_norm_ratios else 0.0
+    max_pres_r = max(pres_norm_ratios) if pres_norm_ratios else 0.0
+
+    print(f"  [Preserved Key Projector Check] Mean ||P_0 k_pres|| / ||k_pres|| = {mean_pres_r:.4e}, Max = {max_pres_r:.4e}")
+    projector_orientation_correct = (mean_pres_r < 0.20)
     print(f"  Projector Orientation Status  : {'CORRECT (Null space preserved)' if projector_orientation_correct else 'DEFECTIVE (Range inverted)'}")
 
     eval_facts = facts_seed0[:50]
@@ -210,5 +233,7 @@ def run_stage_n_diagnostic(
         "median_rho": median_rho,
         "max_rho": max_rho,
         "ppl_history": ppl_history,
+        "mean_pres_ratio": mean_pres_r,
+        "max_pres_ratio": max_pres_r,
         "projector_orientation_correct": projector_orientation_correct
     }
