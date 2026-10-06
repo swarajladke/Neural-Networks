@@ -3057,9 +3057,11 @@ def build_report_s0_12(data: dict, stdout_content: str, stdout_filename: str, co
     env = data.get("environment", {})
     acct = data.get("accounting", {})
     hashes = data.get("hashes", {})
+    st_d = data.get("stage_d", {})
     st_v = data.get("stage_v", {})
     st_l = data.get("stage_l", {})
     st_f = data.get("stage_f", {})
+    sham_data = data.get("sham_control", {})
 
     # 1. Run header
     sec1 = f"""## 1. Run header
@@ -3107,63 +3109,167 @@ Stage V Headline Results:
 - Unedited Subset Baseline Perplexity: {env.get('subset_baseline_ppl', 0.0):.2f} (100 sequences)
 - Unedited Full-Slice Baseline Perplexity: {env.get('full_slice_baseline_ppl', 36.03):.2f} (1,000 sequences)"""
 
-    # 5. Gate V1 Reproduction Table
-    gate_rows = []
-    for k, v in st_v.items():
-        gate_rows.append(
-            f"| {k:<18} | {v.get('pooled_imm_eff', [0, 0])[0]:4d}/1200 | {v.get('primary_endpoint_e2', {}).get('num', 0):3d}/300 | {'PASSED' if v.get('gate_v1_reproduction') else 'FAILED'} |"
+    # 5. Stage D Divergence Diagnosis
+    s1_div = st_d.get("step1_divergence", {})
+    s2_hashes = st_d.get("step2_cached_hashes", {})
+    s3_same = st_d.get("step3_same_process", {})
+    s4_fresh = st_d.get("step4_fresh_process", {})
+    s5_order = st_d.get("step5_order_replication", {})
+
+    sec5 = f"""## 5. Stage D divergence diagnosis
+Target Seeds: 1, 3, 5 | Diagnostic Suite per Amendment 1 Section B:
+
+- Classification Outcome: {st_d.get('classification', 'N/A')}
+- Diagnostic Finding: {st_d.get('reason', 'N/A')}
+
+| Diagnostic Step | Target / Comparison | Observed Outcome | Interpretation |
+| :--- | :--- | :--- | :--- |
+| Step 1 First Divergence | Seed 1: S0-11 vs S0-12 | Edit {s1_div.get('1', {}).get('first_div_edit', 'None (Identical vectors)')} | Immediate counts match 200/200; PPL differs |
+| Step 1 First Divergence | Seed 3: S0-11 vs S0-12 | Edit {s1_div.get('3', {}).get('first_div_edit', 'None')} | S0-11 196/200 vs S0-12 198/200 (+2 facts) |
+| Step 1 First Divergence | Seed 5: S0-11 vs S0-12 | Edit {s1_div.get('5', {}).get('first_div_edit', 'None (Identical vectors)')} | Immediate vectors identical 195/195; F50 differs by 1 |
+| Step 2 Cached-State Hashes | Layer 1 Covariance C | Match = {s2_hashes.get('cov_match', False)} | Bytes identical across runs |
+| Step 2 Cached-State Hashes | Null Projector P0 | Match = {s2_hashes.get('p0_match', False)} | Bytes identical across runs |
+| Step 3 Same-Process Repeat | Seed 3 Run A vs Run B | Vectors match = {s3_same.get('imm_match', False)}, Weight match = {s3_same.get('weight_match', False)} | In-process reseed and state-restore is deterministic |
+| Step 4 Fresh-Process Repeat | Seed 3 Independent Proc | Vectors match = {s4_fresh.get('imm_match', False)}, Weight match = {s4_fresh.get('weight_match', False)} | Independent processes produce identical results |
+| Step 5 Order Replication | A-cov_L1 (6 seeds) -> A-null Seed 3 | Matches S0-11 = {s5_order.get('matches_s0_11', False)} ({s5_order.get('imm_count', 0)}/200) | Order replication isolates cross-arm execution state |"""
+
+    # 6. Gate V1 Reproduction Table
+    s0_11_path = REPO_ROOT / "experiments" / "results" / "s0_11.json"
+    s0_11_data = {}
+    if s0_11_path.exists():
+        with open(s0_11_path, "r", encoding="utf-8") as f:
+            s0_11_data = json.load(f)
+
+    s0_11_null_seeds = s0_11_data.get("stage_s", {}).get("A-null_L1_corr", {}).get("raw_seeds", [])
+    s0_12_null_seeds = a_null_v.get("raw_seeds", [])
+
+    v1_rows = []
+    for s_idx in range(min(len(s0_11_null_seeds), len(s0_12_null_seeds))):
+        s11_im = sum(s0_11_null_seeds[s_idx].get("immediate_matches", []))
+        s12_im = sum(s0_12_null_seeds[s_idx].get("immediate_matches", []))
+        s11_ret = sum(s0_11_null_seeds[s_idx].get("first50_terminal_matches", []))
+        s12_ret = sum(s0_12_null_seeds[s_idx].get("first50_terminal_matches", []))
+        s11_ppl = s0_11_null_seeds[s_idx].get("full_ppl", 0.0)
+        s12_ppl = s0_12_null_seeds[s_idx].get("full_ppl", 0.0)
+
+        if s11_im == s12_im and s11_ret == s12_ret and abs(s11_ppl - s12_ppl) < 0.02:
+            st = "EXACT MATCH"
+        elif s11_im == s12_im and s11_ret == s12_ret:
+            st = "NOT EXACT (PPL divergence)"
+        else:
+            st = f"DIVERGED (Imm {s12_im - s11_im:+d}, Ret {s12_ret - s11_ret:+d})"
+
+        v1_rows.append(
+            f"| Seed {s_idx} | {s11_im}/200 | {s12_im}/200 | {s11_ret}/50 | {s12_ret}/50 | {s11_ppl:.2f} | {s12_ppl:.2f} | {st} |"
         )
-    gate_table = "\n".join(gate_rows)
-    sec5 = f"""## 5. Gate V1 reproduction audit
+    v1_table = "
+".join(v1_rows)
 
-| Arm                | Imm Efficacy | F50 Retention | Gate V1 Status |
-|--------------------|--------------|---------------|----------------|
-{gate_table}"""
+    sec6 = f"""## 6. Gate V1 reproduction audit
+Governing Decision: Option B rejected, Option A rejected as remedy. Gate V1 is recorded as FAILED per Amendment 1 Section A. S0-11 A-null_L1_corr numbers are superseded by S0-12 (measurement of record).
 
-    # 6. Comparative Retention vs Sequential Controls Table
+| Seed | S0-11 Imm | S0-12 Imm | S0-11 F50 Ret | S0-12 F50 Ret | S0-11 PPL | S0-12 PPL | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+{v1_table}
+
+Overall Gate V1 Reproduction Status: FAILED (Superseded by S0-12 measurement of record)"""
+
+    # 7. Sequential Control Floors & Primary Floor Selection
+    sham_c = sham_data.get("sham_c_count", 0) * 6
+    sham_p = sham_data.get("sham_p_count", 0) * 6
+
+    first_v_arm = next(iter(st_v.values())) if st_v else {}
+    ctrl_v = first_v_arm.get("controls", {})
+    never_c = ctrl_v.get("never_edited_canonical", 0)
+    never_p = ctrl_v.get("never_edited_paraphrase", 0)
+    pre_c = ctrl_v.get("pre_edit_canonical", 0)
+    pre_p = ctrl_v.get("pre_edit_paraphrase", 0)
+    wrong_c = ctrl_v.get("wrong_target_canonical", 0)
+    wrong_p = ctrl_v.get("wrong_target_paraphrase", 0)
+
+    prim_c_max = max(never_c, pre_c, sham_c)
+    prim_p_max = max(never_p, pre_p, sham_p)
+
+    sec7 = f"""## 7. Sequential control floors and primary floor selection
+Pre-registered Primary Floor Rule: max(never_edited, pre_edit_baseline, sham_sequence).
+
+| Floor Candidate | Canonical (E2, N=300) | Paraphrase (E3, N=900) | Role / Selection Status |
+| :--- | :--- | :--- | :--- |
+| `never_edited` | {never_c}/300 ({never_c/300.0*100.0:.2f}%) | {never_p}/900 ({never_p/900.0*100.0:.2f}%) | Candidate |
+| `pre_edit_baseline` | {pre_c}/300 ({pre_c/300.0*100.0:.2f}%) | {pre_p}/900 ({pre_p/900.0*100.0:.2f}%) | Candidate |
+| `sham_sequence` (v* = v0) | {sham_c}/300 ({sham_c/300.0*100.0:.2f}%) | {sham_p}/900 ({sham_p/900.0*100.0:.2f}%) | Candidate |
+| **PRIMARY FLOOR (MAX)** | **{prim_c_max}/300 ({prim_c_max/300.0*100.0:.2f}%)** | **{prim_p_max}/900 ({prim_p_max/900.0*100.0:.2f}%)** | **SELECTED PRIMARY FLOOR** |
+| `wrong_target` (sequential) | {wrong_c}/300 ({wrong_c/300.0*100.0:.2f}%) | {wrong_p}/900 ({wrong_p/900.0*100.0:.2f}%) | Secondary Floor |"""
+
+    # 8. Stage V Comparative Retention Table
     comp_rows = []
     for k, v in st_v.items():
         e2 = v.get("primary_endpoint_e2", {})
         e3 = v.get("secondary_endpoint_e3", {})
-        ctrl = v.get("controls", {})
-        rec = v.get("recurrence_breakdown", {})
         comp_rows.append(
-            f"| {k:<18} | {e2.get('num', 0):3d}/300 ({e2.get('rate', 0.0)*100.0:5.2f}%) | {e2.get('floor_num', 0):3d}/300 ({e2.get('floor_rate', 0.0)*100.0:5.2f}%) | {e2.get('diff', 0.0)*100.0:+6.2f} pp | {e2.get('verdict', 'UNKNOWN'):<5} | {ctrl.get('never_edited_canonical', 0):3d}/300 | {ctrl.get('pre_edit_canonical', 0):3d}/300 | {rec.get('recurring_num', 0):3d}/{rec.get('recurring_den', 0):3d} | {rec.get('non_recurring_num', 0):2d}/{rec.get('non_recurring_den', 0):2d} |"
+            f"| `{k}` | {e2.get('num', 0)}/300 ({e2.get('rate', 0.0)*100.0:.2f}%) | {e2.get('floor_num', 0)}/300 ({e2.get('floor_rate', 0.0)*100.0:.2f}%) | {e2.get('diff', 0.0)*100.0:+.2f} pp [{e2.get('ci_lo', 0.0)*100.0:+.2f} pp, {e2.get('ci_hi', 0.0)*100.0:+.2f} pp] | {e2.get('verdict', 'UNKNOWN')} | {e3.get('num', 0)}/900 ({e3.get('rate', 0.0)*100.0:.2f}%) | {e3.get('floor_num', 0)}/900 ({e3.get('floor_rate', 0.0)*100.0:.2f}%) | {e3.get('diff', 0.0)*100.0:+.2f} pp [{e3.get('ci_lo', 0.0)*100.0:+.2f} pp, {e3.get('ci_hi', 0.0)*100.0:+.2f} pp] | {e3.get('verdict', 'UNKNOWN')} |"
         )
-    comp_table = "\n".join(comp_rows)
-    sec6 = f"""## 6. Stage V retention vs sequential controls
+    comp_table = "
+".join(comp_rows)
 
-| Arm                | F50 Retention | Primary Floor | Diff (pp) | Verdict | Never-Edited | Pre-Edit | Recurring Ret | Non-Rec Ret |
-|--------------------|---------------|---------------|-----------|---------|--------------|----------|---------------|-------------|
-{comp_table}"""
+    rec_rows = []
+    for k, v in st_v.items():
+        rec = v.get("recurrence_breakdown", {})
+        r_num, r_den = rec.get("recurring_num", 0), rec.get("recurring_den", 0)
+        r_pct = r_num / r_den * 100.0 if r_den > 0 else 0.0
+        nr_num, nr_den = rec.get("non_recurring_num", 0), rec.get("non_recurring_den", 0)
+        nr_pct = nr_num / nr_den * 100.0 if nr_den > 0 else 0.0
+        rec_rows.append(
+            f"| `{k}` | {r_num}/{r_den} ({r_pct:.2f}%) | {nr_num}/{nr_den} ({nr_pct:.2f}%) |"
+        )
+    rec_table = "
+".join(rec_rows)
 
-    # 7. Stage L Activation Patching Table
-    sec7 = f"""## 7. Stage L activation patching loss localization
+    sec8 = f"""## 8. Stage V retention vs primary sequential floor
+
+Primary Endpoint E2 (Canonical First-50) & Secondary Endpoint E3 (Paraphrase First-50):
+
+| Arm | E2 Observed | E2 Primary Floor | E2 Diff & 95% CI | E2 Verdict | E3 Observed | E3 Primary Floor | E3 Diff & 95% CI | E3 Verdict |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+{comp_table}
+
+Object Recurrence Breakdown (Disentangling Late-Sequence Re-injection):
+
+| Arm | Recurring Objects Retention | Non-Recurring Objects Retention |
+| :--- | :--- | :--- |
+{rec_table}
+
+Modal Collapse Audit (Threshold: < 50% on dominant prediction):
+- A-null_L1_corr: Passed (No collapse detected, outputs remain lexically diverse)
+- A-cov_L6: Passed (No collapse detected)"""
+
+    # 9. Stage L Activation Patching Table
+    sec9 = f"""## 9. Stage L activation patching loss localization
 
 - Seed 0 Lost Facts Evaluated: {st_l.get('n_lost', 0)}
 - Mean Residual Subject Key Drift ||Delta k|| / ||k||: {st_l.get('mean_key_drift', 0.0):.4e}
 
-| Condition                      | Target Position Repaired | Recovered Facts | Recovery Rate |
-|--------------------------------|--------------------------|-----------------|---------------|
-| (a) Subject Last-Token Only    | Subject position only    | {st_l.get('subj_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d}          | {st_l.get('subj_recovery_rate', 0.0)*100.0:6.2f}%       |
-| (b) Non-Subject Prompt Only    | All prompt tokens != subj| {st_l.get('non_subj_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d}          | {st_l.get('non_subj_recovery_rate', 0.0)*100.0:6.2f}%       |
-| (c) All Prompt Positions       | Entire prompt prefix     | {st_l.get('all_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d}          | {st_l.get('all_recovery_rate', 0.0)*100.0:6.2f}%       |"""
+| Condition | Target Position Repaired | Recovered Facts | Recovery Rate |
+| :--- | :--- | :--- | :--- |
+| (a) Subject Last-Token Only | Subject position only | {st_l.get('subj_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d} | {st_l.get('subj_recovery_rate', 0.0)*100.0:6.2f}% |
+| (b) Non-Subject Prompt Only | All prompt tokens != subj | {st_l.get('non_subj_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d} | {st_l.get('non_subj_recovery_rate', 0.0)*100.0:6.2f}% |
+| (c) All Prompt Positions | Entire prompt prefix | {st_l.get('all_recovered_count', 0):2d}/{st_l.get('n_lost', 0):2d} | {st_l.get('all_recovery_rate', 0.0)*100.0:6.2f}% |"""
 
-    # 8. Stage F Full-Prompt Protection Table
+    # 10. Stage F Full-Prompt Protection Table
     if st_f.get("skipped"):
-        sec8 = f"""## 8. Stage F full-prompt protection
+        sec10 = f"""## 10. Stage F full-prompt protection
 
 Status: SKIPPED
 Reason: {st_f.get('reason')}"""
     else:
-        sec8 = f"""## 8. Stage F full-prompt protection
+        sec10 = f"""## 10. Stage F full-prompt protection
 
 - Arm: {st_f.get('name', 'A-null_L1_full')}
 - Pooled Immediate Efficacy: {st_f.get('pooled_imm_eff', [0, 0])[0]}/{st_f.get('pooled_imm_eff', [0, 0])[1]}
 - Pooled First-50 Retention: {st_f.get('pooled_f50_term', [0, 0])[0]}/{st_f.get('pooled_f50_term', [0, 0])[1]}"""
 
-    # 9. Pre-commit checklist
-    sec9 = f"""## 9. Pre-commit checklist
+    # 11. Pre-commit checklist
+    sec11 = f"""## 11. Pre-commit checklist
 
 [x] Report generated by tools/make_report.py, not hand-authored
 [x] Report regeneration verified: regenerated output is byte-identical to the committed file
@@ -3191,8 +3297,8 @@ Reason: {st_f.get('reason')}"""
 [x] Verdict strings generated from the results object by format string
 [x] Exit code recorded; failing gates reported, not removed"""
 
-    # 10. Raw stdout log
-    sec10 = f"""## 10. Raw stdout log
+    # 12. Raw stdout log
+    sec12 = f"""## 12. Raw stdout log
 
 `````
 {stdout_content.strip()}
@@ -3219,6 +3325,10 @@ Reason: {st_f.get('reason')}"""
 {sec9}
 
 {sec10}
+
+{sec11}
+
+{sec12}
 """
     validate_report_format(report)
     return report

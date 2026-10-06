@@ -40,7 +40,8 @@ from experiments.metrics import (
     compute_locality_kl,
     Measurement,
     wilson_confidence_interval,
-    POPULATION_REGISTRY
+    POPULATION_REGISTRY,
+    normalize_entity
 )
 from experiments.stats import (
     newcombe_score_interval,
@@ -75,10 +76,13 @@ from experiments.s0_11_constraints import (
 )
 from experiments.s0_12_localization import (
     evaluate_s0_12_sequential_controls,
+    evaluate_sham_sequence_control,
+    check_modal_collapse,
     run_stage_l_patching,
     FullPromptSequentialNullTracker,
     edit_fact_mlp_null_full_prompt
 )
+from experiments.s0_12_diagnosis import run_stage_d_diagnosis
 
 SESSION_CEILING_SEC = 23400.0
 COMPUTE_CEILING_SEC = 16380.0
@@ -220,6 +224,34 @@ def run_s0_12_master():
     total_samples = 0
     measured_arm_times = {}
 
+    # Stage D: Divergence Diagnosis (Amendment 1 §B)
+    print("\n--- [Stage D: Divergence Diagnosis (Seeds 1, 3, 5)] ---")
+    diag_res = run_stage_d_diagnosis(
+        model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
+        facts_1000, cov_1, p_info_l1["v_null"], wikitext_slice, slice_sha, s0_11_data, device=device
+    )
+    results_payload["stage_d"] = diag_res
+    save_incremental_artifact(out_json_path, results_payload)
+
+    # Evaluate sham_sequence control arm on Seed 0 (Amendment 1 §D)
+    print("\n--- [Evaluating Sham Sequence Control Arm (Seed 0, v* = v0)] ---")
+    facts_seed0, _ = sample_200_facts(facts_1000, seed=0)
+    sham_eval = evaluate_sham_sequence_control(
+        model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
+        facts_seed0, p_info_l1["v_null"], layer_idx=1, device=device
+    )
+    sham_c_count = sham_eval["sham_c_count"]
+    sham_p_count = sham_eval["sham_p_count"]
+    print(f"  Sham Canonical Floor        : {sham_c_count}/50 ({sham_c_count / 50.0 * 100.0:.2f}%)")
+    print(f"  Sham Paraphrase Floor       : {sham_p_count}/150 ({sham_p_count / 150.0 * 100.0:.2f}%)")
+    results_payload["sham_control"] = sham_eval
+    save_incremental_artifact(out_json_path, results_payload)
+
+    # Comparator Rule: Primary floor is max(never_edited, pre_edit_baseline, sham_sequence)
+    # Scaled to N=300 and N=900
+    sham_c_scaled = sham_c_count * 6
+    sham_p_scaled = sham_p_count * 6
+
     # Stage V Arms: A-null_L1_corr and A-cov_L6
     v_arms = [
         {"name": "A-null_L1_corr", "type": "null_corr", "layer": 1, "v_null": p_info_l1["v_null"]},
@@ -242,6 +274,7 @@ def run_s0_12_master():
 
         arm_seed_records = []
         arm_ctrl_records = []
+        all_arm_preds = []
         for s_idx in ACTIVE_SEEDS:
             configure_determinism(seed=s_idx)
             model.load_state_dict(base_state_dict)
@@ -273,6 +306,7 @@ def run_s0_12_master():
             # Evaluate sequential terminal retention on first 50 facts
             term_preds = [greedy_predict(model, tokenizer, f["edit_prompt"], 5, device, False) for f in facts_seq[:50]]
             term_matches = [check_match(p, f["object"]) for p, f in zip(term_preds, facts_seq[:50])]
+            all_arm_preds.extend(term_preds)
 
             # Evaluate paraphrase retention on first 50 facts
             para_matches = []
@@ -313,7 +347,14 @@ def run_s0_12_master():
         pooled_f50_term = sum(sum(r["first50_terminal_matches"]) for r in arm_seed_records)
         pooled_f50_para = sum(sum(r["first50_paraphrase_matches"]) for r in arm_seed_records)
 
-        # Gate V1 Reproduction Check vs S0-11 bit-for-bit
+        # Modal Collapse Audit (§3)
+        collapsed, dom_token, dom_frac = check_modal_collapse(all_arm_preds)
+        print(f"\n--- [Modal-Collapse Audit: {arm_name}] ---")
+        print(f"  Top Dominant Output  : '{dom_token}' ({dom_frac*100.0:.2f}%)")
+        print(f"  Modal Collapse Status: {'COLLAPSED (>= 50% identical)' if collapsed else 'HEALTHY (Diverse predictions)'}")
+        assert not collapsed, f"Modal collapse detected on arm {arm_name}: {dom_frac*100.0:.1f}% on '{dom_token}'"
+
+        # Gate V1 Reproduction Audit (Amendment 1 §A: Recorded as FAILED / superseded by S0-12)
         s0_11_arm = s0_11_data["stage_s"].get(arm_name, {})
         ref_imm = s0_11_arm.get("pooled_imm_eff", [None])[0]
         ref_f50 = s0_11_arm.get("primary_endpoint_e2", {}).get("num")
@@ -321,8 +362,7 @@ def run_s0_12_master():
         print(f"  Immediate Efficacy : Observed {pooled_imm}/1200 | Reference {ref_imm}/1200")
         print(f"  First-50 Retention : Observed {pooled_f50_term}/300 | Reference {ref_f50}/300")
         gate_v1_pass = (pooled_imm == ref_imm and pooled_f50_term == ref_f50)
-        print(f"  Gate V1 Status     : {'PASSED (Bit-for-bit match)' if gate_v1_pass else 'FAILED / DIVERGED'}")
-        assert gate_v1_pass, f"Gate V1 reproduction failure for {arm_name}"
+        print(f"  Gate V1 Status     : {'EXACT MATCH' if gate_v1_pass else 'FAILED / DIVERGED (Superseded by S0-12 per Amendment 1 §A)'}")
 
         # Pool sequential control floors
         wrong_c_total = sum(sum(1 for x in c["wrong_target_canonical"] if x) for c in arm_ctrl_records)
@@ -330,9 +370,20 @@ def run_s0_12_master():
         never_c_total = sum(sum(1 for x in c["never_edited_canonical"] if x) for c in arm_ctrl_records)
         never_p_total = sum(sum(1 for x in c["never_edited_paraphrase"] if x) for c in arm_ctrl_records)
 
-        # Comparator Rule: Primary floor is max(never_edited, pre_edit_baseline)
-        prim_c_floor = max(never_c_total, pre_c_k)
-        prim_p_floor = max(never_p_total, pre_p_k)
+        # Amendment 1 §D: Primary floor = max(never_edited, pre_edit_baseline, sham_sequence)
+        prim_c_candidates = {
+            "never_edited": never_c_total,
+            "pre_edit_baseline": pre_c_k,
+            "sham_sequence": sham_c_scaled
+        }
+        prim_p_candidates = {
+            "never_edited": never_p_total,
+            "pre_edit_baseline": pre_p_k,
+            "sham_sequence": sham_p_scaled
+        }
+
+        prim_c_name, prim_c_floor = max(prim_c_candidates.items(), key=lambda item: item[1])
+        prim_p_name, prim_p_floor = max(prim_p_candidates.items(), key=lambda item: item[1])
 
         d_term, lo_term, hi_term = newcombe_score_interval(pooled_f50_term, 300, prim_c_floor, 300)
         d_para, lo_para, hi_para = newcombe_score_interval(pooled_f50_para, 900, prim_p_floor, 900)
@@ -354,8 +405,12 @@ def run_s0_12_master():
                     nonrec_tot += 1
                     if tm: nonrec_ret += 1
 
-        print(f"\n--- [Comparative Retention vs Sequential Controls] ---")
-        print(f"  Primary Floor (Max of Controls) : Canonical {prim_c_floor}/300, Paraphrase {prim_p_floor}/900")
+        print(f"\n--- [Comparative Retention vs Sequential Controls (Amendment 1 §D)] ---")
+        print(f"  Candidate Canonical Floors      : never_edited={never_c_total}/300, pre_edit={pre_c_k}/300, sham={sham_c_scaled}/300")
+        print(f"  Primary Canonical Floor Used    : {prim_c_name} = {prim_c_floor}/300 ({prim_c_floor/300.0*100.0:.2f}%)")
+        print(f"  Candidate Paraphrase Floors     : never_edited={never_p_total}/900, pre_edit={pre_p_k}/900, sham={sham_p_scaled}/900")
+        print(f"  Primary Paraphrase Floor Used   : {prim_p_name} = {prim_p_floor}/900 ({prim_p_floor/900.0*100.0:.2f}%)")
+        print(f"  Secondary Floor (wrong_target)  : Canonical {wrong_c_total}/300, Paraphrase {wrong_p_total}/900")
         print(f"  E2 Terminal Retention Verdict   : {pooled_f50_term}/300 vs {prim_c_floor}/300 (Diff {d_term*100.0:+.2f} pp, Verdict: {v_term})")
         print(f"  E3 Paraphrase Retention Verdict : {pooled_f50_para}/900 vs {prim_p_floor}/900 (Diff {d_para*100.0:+.2f} pp, Verdict: {v_para})")
         print(f"  Object Recurrence Breakdown     : Recurring {rec_ret}/{rec_tot} ({rec_ret/rec_tot*100.0:.2f}%) | Non-recurring {nonrec_ret}/{nonrec_tot} ({nonrec_ret/nonrec_tot*100.0:.2f}%)")

@@ -82,6 +82,80 @@ def evaluate_s0_12_sequential_controls(
     }
 
 
+def evaluate_sham_sequence_control(
+    model: nn.Module,
+    tokenizer: Any,
+    base_state_dict: Dict[str, torch.Tensor],
+    fresh_checksum: float,
+    fresh_c_proj_hashes: Dict[int, str],
+    facts_seq: List[Dict[str, Any]],
+    v_null: torch.Tensor,
+    layer_idx: int = 1,
+    device: str = "cuda"
+) -> Dict[str, Any]:
+    """
+    Evaluates sham_sequence control arm on Seed 0 (200 sequential edits with v* = v0, i.e. r = 0).
+    Under pure noise injection / zero new target, measures how many first-50 facts match.
+    """
+    from experiments.s0_10_repair import verify_state_restore
+    model.load_state_dict(base_state_dict)
+    verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
+
+    c_proj = model.transformer.h[layer_idx].mlp.c_proj
+    tracker = CorrectedSequentialNullTracker(v_null, rel_threshold=1e-3, device=device)
+
+    for fact in facts_seq:
+        subj_idx = get_subject_last_token_idx(tokenizer, fact["edit_prompt"], fact["subject"])
+        enc_prompt = tokenizer(fact["edit_prompt"], return_tensors="pt").to(device)
+        recorded = {}
+        def hook_rec(m, inp, out):
+            recorded["k"] = inp[0][0, subj_idx, :].detach().clone()
+            recorded["v0"] = out[0, subj_idx, :].detach().clone()
+        h_rec = c_proj.register_forward_hook(hook_rec)
+        try:
+            with torch.no_grad():
+                _ = model(**enc_prompt)
+        finally:
+            h_rec.remove()
+
+        k_vec = recorded["k"]
+        # Sham update: v* = v0 -> r = 0
+        r_vec = torch.zeros_like(recorded["v0"])
+        res = tracker.compute_update(k_vec, r_vec)
+        c_proj.weight.data.add_(res["delta_f32"])
+
+    # Score terminal retention on first 50 facts
+    c_matches, p_matches = [], []
+    for fact in facts_seq[:50]:
+        pred_c = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
+        c_matches.append(check_match(pred_c, fact["object"]))
+        for p in fact["paraphrases"]:
+            pred_p = greedy_predict(model, tokenizer, p, 5, device, False)
+            p_matches.append(check_match(pred_p, fact["object"]))
+
+    return {
+        "sham_canonical": c_matches,
+        "sham_paraphrase": p_matches,
+        "sham_c_count": sum(1 for x in c_matches if x),
+        "sham_p_count": sum(1 for x in p_matches if x)
+    }
+
+
+def check_modal_collapse(preds: List[str]) -> Tuple[bool, str, float]:
+    """
+    Checks if model output collapsed onto a single recurring token/string.
+    Returns (is_collapsed, dominant_prediction, dominant_fraction).
+    """
+    from collections import Counter
+    if not preds:
+        return False, "", 0.0
+    counts = Counter(preds)
+    top_str, top_cnt = counts.most_common(1)[0]
+    frac = top_cnt / float(len(preds))
+    is_collapsed = frac >= 0.50
+    return is_collapsed, top_str, frac
+
+
 def run_stage_l_patching(
     model: nn.Module,
     base_model: nn.Module,

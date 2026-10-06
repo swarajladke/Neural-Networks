@@ -1280,7 +1280,22 @@ def run_all_tests() -> int:
     print("  Test 3.37 (Budget Enforcement Guard)  : Arm execution correctly blocked when projection exceeds budget PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.38 TEST SUITE SUMMARY
+    # 3.38 TEST MODAL-COLLAPSE CHECK (DIRECTIVE S0-12 AMENDMENT 1)
+    # --------------------------------------------------------------------------
+    print("\n[3.38 Test Modal-Collapse Check (Directive S0-12 Amendment 1)]")
+    tests_run += 1
+    from experiments.s0_12_localization import check_modal_collapse
+    coll_preds = ["token_a"] * 55 + ["token_b"] * 45
+    is_coll, dom, frac = check_modal_collapse(coll_preds)
+    assert is_coll is True and dom == "token_a" and abs(frac - 0.55) < 1e-6
+    div_preds = [f"token_{i}" for i in range(100)]
+    is_coll_d, dom_d, frac_d = check_modal_collapse(div_preds)
+    assert is_coll_d is False and abs(frac_d - 0.01) < 1e-6
+    tests_passed += 1
+    print("  Test 3.38 (Modal-Collapse Check)      : Collapse correctly detected at majority threshold and rejected on diverse set PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.39 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
