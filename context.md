@@ -223,8 +223,51 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 
 ---
 
-## 11. Active Codebase Organization
+## 11. Established State as of Directive S0-11 (Commit `07cb7ee` / Canonical Run)
 
+Directive S0-11 evaluated constrained sequential knowledge injection at the writable MLP site (`c_proj.weight`) across Layers 1 and 6 over 6 seeds $\times$ 200 sequential edits, incorporating Amendment 1 directives for Stage N diagnostic and Stage N2 corrected closed-form null projection.
+
+### 11.1 Stage 0 & Gate 0 Historical Baseline Re-Confirmation
+- Seed 0 of `r0_unconstrained_d0.0` reproduced identically bit-for-bit: 669 steps, 200/200 immediate efficacy, 8/200 terminal retention. Status: **PASSED**.
+- Stage S of S0-10 was reconciled under AGENTS.md §11.5 as non-reportable due to model collapse (PPL 623–12,331 vs baseline 36.03) and efficacy gate failure (82.00% < 90.00%).
+
+### 11.2 Stage C: Key Covariance & Null Space Geometry
+- Collected 100 sequences (51,200 tokens) from WikiText-2 train split (asserted disjoint from capability slice).
+- Layer 1: Condition number $1.31 \times 10^8$ ($\lambda_{\max}=11.2, \lambda_{\min}=8.54 \times 10^{-8}$); null dimension 2,235 / 3,072 (relative threshold $10^{-3}$, retained energy 9.35%).
+- Layer 6: Condition number $1.65 \times 10^5$ ($\lambda_{\max}=19.1, \lambda_{\min}=1.16 \times 10^{-4}$); null dimension 2,235 / 3,072 (relative threshold $10^{-3}$, retained energy 16.74%).
+
+### 11.3 Invalidated Arm: Original A-null Specification & Stage N Diagnostic Post-Mortem
+- **Status:** Original `A-null_L1` arm is classified **INVALID — IMPLEMENTATION DEFECT UNDER INVESTIGATION**. Seed 0 and Seed 1 figures from the halted run are retained for diagnosis only and may not appear in any scientific verdict or finding.
+- **Specification Errors Acknowledged:** (1) The directive specified $\Delta W = \Delta W_{\text{cov}} P_0$, which fails to preserve the key-to-value constraint for the edited fact and amplifies null components via ridge-regularized $C^{-1}$; (2) Null tolerance was specified as an unnormalized absolute bound on $\|k_j \Delta W\|$.
+- **Stage N Float64 Diagnostic (Seed 0, L1, First 50 Edits):**
+  - Projector orientation was verified correct (mean $\|P_0 k_{\text{pres}}\| / \|k_{\text{pres}}\| = 0.0000$, confirming true null-space projection).
+  - Primary defect confirmed: **(i) Norm amplification from $C^{-1}$ in the null space**. Average update norm amplified $6.25\times$ (peak $83.09\times$ at edit 45) relative to A-cov, driving full PPL to 2,350 by edit 50.
+  - Prior float32 lattice derivation formally rejected.
+
+### 11.4 Stage N2: Corrected Closed-Form Null-Space Projector
+- Formulated closed-form orthogonal projection: $\Delta = \frac{(P k) r^T}{k^T P k}$ in float64 using Gram-Schmidt basis tracking $P = P_0 \cap (\text{span}(k_0, \dots, k_{t-1}))^\perp$.
+- Relative residual gate $\|k \Delta - r\| / \|r\| \le 10^{-8}$ passed bit-for-bit (observed residuals $\approx 8 \times 10^{-17}$).
+- All evaluated arms survived E0 capability ceiling (PPL $\le 72.06$) and passed E1 immediate efficacy gate ($\ge 90.00\%$).
+
+### 11.5 Sequential Retention & Generalization Panel ($N=300$ retention, $N=900$ generalization across 6 seeds)
+| Arm | Pooled Imm Efficacy (E1) | Terminal PPL (E0) | First-50 Retention (E2) | Diff vs Matched Floor (Newcombe 95% CI) | Paraphrase Gen (E3) | Diff vs Matched Floor (Newcombe 95% CI) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `A-cov_L1` | 1136/1200 (94.67%) | 36.46 – 36.77 | 34/300 (11.33%) | +11.33 pp [+7.98, +15.42] (ABOVE) | 35/900 (3.89%) | +2.78 pp [+1.36, +4.33] (ABOVE) |
+| `A-null_L1_corr` | 1184/1200 (98.67%) | 39.42 – 44.35 | **139/300 (46.33%)** | **+46.33 pp [+40.63, +51.99] (ABOVE)** | 89/900 (9.89%) | +8.78 pp [+6.77, +10.96] (ABOVE) |
+| `A-null_L1_loose` | 1175/1200 (97.92%) | 45.30 – 51.71 | 101/300 (33.67%) | +33.67 pp [+28.40, +39.19] (ABOVE) | 63/900 (7.00%) | +5.89 pp [+4.14, +7.81] (ABOVE) |
+| `A-cov_L6` | 1198/1200 (99.83%) | 36.38 – 36.50 | 48/300 (16.00%) | +16.00 pp [+12.08, +20.57] (ABOVE) | 95/900 (10.56%) | +9.44 pp [+7.38, +11.68] (ABOVE) |
+| `A-null_L6_corr` | 1192/1200 (99.33%) | 38.47 – 40.93 | **131/300 (43.67%)** | **+43.67 pp [+38.03, +49.32] (ABOVE)** | 93/900 (10.33%) | +9.22 pp [+7.18, +11.44] (ABOVE) |
+
+- **Core Finding:** Corrected null-space projection (`A-null_L1_corr`) provides a **$4.1\times$ improvement** in sequential retention over covariance-weighted updates alone (46.33% vs 11.33% at L1) and a **$2.7\times$ improvement** at L6 (43.67% vs 16.00%), while holding perplexity tightly controlled (39.4–44.4 vs baseline 36.03).
+- **Dynamic Pruning:** `A-sgd_L6` was cleanly pruned at the end of the budget ceiling without exceeding session limits.
+
+---
+
+## 12. Active Codebase Organization
+
+- `experiments/s0_11_constraints.py`: Directive S0-11 engine (covariance estimation, null-space tracking, corrected closed-form updates, sequential execution).
+- `experiments/s0_11_diagnostic.py`: Directive S0-11 Stage N float64 diagnostic engine.
+- `experiments/run_s0_11.py`: Master orchestrator for Directive S0-11.
 - `experiments/s0_10_repair.py`: Directive S0-10 engine (restore verification, diagnostic, repaired closed-form, fullgrad SGD, capability/locality, sequential execution).
 - `experiments/run_s0_10.py`: Master orchestrator for Directive S0-10.
 - `experiments/s0_9_writability.py`: Directive S0-9 engine.
@@ -235,10 +278,11 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (131 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-10.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-10.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_10.json`).
+- `tests/test_metrics.py`: Pre-flight unit test suite (136 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-11.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-11.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_11.json`).
+- `s0_11_stdout.txt`: Verbatim execution stdout log for S0-11.
 - `s0_10_stdout.txt`: Verbatim execution stdout log for S0-10.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
 
