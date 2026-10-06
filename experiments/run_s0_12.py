@@ -108,19 +108,14 @@ def run_s0_12_master():
 
     # 1. Pre-flight Test Suite Execution
     print("\n--- [Pre-Flight Unit Test Suite Execution] ---")
-    import unittest
-    suite = unittest.defaultTestLoader.discover(str(REPO_ROOT / "tests"), pattern="test_*.py")
-    runner = unittest.TextTestRunner(verbosity=1)
-    test_result = runner.run(suite)
-    if not test_result.wasSuccessful():
-        print("  Pre-flight test suite FAILED. Aborting.")
-        sys.exit(1)
-    print(f"  Pre-flight test suite passed: {test_result.testsRun} tests run, 0 failures.")
+    from tests.test_metrics import run_all_tests
+    test_exit = run_all_tests()
+    assert test_exit == 0, f"Pre-flight unit tests failed with code {test_exit}"
 
     # 2. Pinned Asset Verification
-    facts_path = REPO_ROOT / "data" / "b1_facts.json"
-    with open(facts_path, "rb") as f:
-        facts_bytes = f.read()
+    facts_file = REPO_ROOT / "b1_facts.json"
+    assert facts_file.exists(), f"Missing facts file: {facts_file}"
+    facts_bytes = facts_file.read_bytes()
     facts_sha = hashlib.sha256(facts_bytes).hexdigest()
     assert facts_sha == "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536"
     print(f"\n  Pinned Facts SHA-256        : {facts_sha} (Verified)")
