@@ -215,22 +215,33 @@ def run_stage_l_patching(
         key_drifts.append(drift)
 
         # Patching condition (a): subject last-token only
-        def hook_patch_subj(m, inp, out):
-            inp_mod = inp[0].clone()
-            inp_mod[0, subj_idx, :] = k_base[0, subj_idx, :]
-            return (inp_mod,)
+        def hook_patch_subj(m, inp):
+            inp_t = inp[0]
+            if inp_t.shape[1] > subj_idx:
+                inp_mod = inp_t.clone()
+                inp_mod[0, subj_idx, :] = k_base[0, subj_idx, :]
+                return (inp_mod,)
+            return inp
 
         # Patching condition (b): non-subject prompt positions only
-        def hook_patch_non_subj(m, inp, out):
-            inp_mod = inp[0].clone()
-            for pos in range(seq_len):
-                if pos != subj_idx:
-                    inp_mod[0, pos, :] = k_base[0, pos, :]
-            return (inp_mod,)
+        def hook_patch_non_subj(m, inp):
+            inp_t = inp[0]
+            if inp_t.shape[1] >= seq_len:
+                inp_mod = inp_t.clone()
+                for pos in range(seq_len):
+                    if pos != subj_idx:
+                        inp_mod[0, pos, :] = k_base[0, pos, :]
+                return (inp_mod,)
+            return inp
 
         # Patching condition (c): all positions
-        def hook_patch_all(m, inp, out):
-            return (k_base.clone(),)
+        def hook_patch_all(m, inp):
+            inp_t = inp[0]
+            if inp_t.shape[1] >= seq_len:
+                inp_mod = inp_t.clone()
+                inp_mod[0, :seq_len, :] = k_base[0, :seq_len, :]
+                return (inp_mod,)
+            return inp
 
         # Test recovery under (a)
         h_pa = c_proj.register_forward_pre_hook(hook_patch_subj)
@@ -276,13 +287,21 @@ class FullPromptSequentialNullTracker(CorrectedSequentialNullTracker):
         self.capacity_exhausted = False
         self.exhaustion_edit_idx = None
 
+    @property
+    def dim_null(self) -> int:
+        return self.v_null.shape[1]
+
+    @property
+    def dim_k(self) -> int:
+        return self.q_k.shape[1] if self.q_k is not None else len(self.stored_keys)
+
     def record_prompt_keys(self, prompt_keys: List[torch.Tensor]) -> None:
         """
         Records all token keys from the current prompt into the protected keys store.
         """
         for k in prompt_keys:
             self.stored_keys.append(k.to(self.device, dtype=torch.float64).detach())
-        if self.dim_k >= self.dim_null and not self.capacity_exhausted:
+        if len(self.stored_keys) >= self.dim_null and not self.capacity_exhausted:
             self.capacity_exhausted = True
 
 
