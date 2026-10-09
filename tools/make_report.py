@@ -3162,8 +3162,7 @@ Target Seeds: 1, 3, 5 | Diagnostic Suite per Amendment 1 Section B:
         v1_rows.append(
             f"| Seed {s_idx} | {s11_im}/200 | {s12_im}/200 | {s11_ret}/50 | {s12_ret}/50 | {s11_ppl:.2f} | {s12_ppl:.2f} | {st} |"
         )
-    v1_table = "
-".join(v1_rows)
+    v1_table = "\n".join(v1_rows)
 
     sec6 = f"""## 6. Gate V1 reproduction audit
 Governing Decision: Option B rejected, Option A rejected as remedy. Gate V1 is recorded as FAILED per Amendment 1 Section A. S0-11 A-null_L1_corr numbers are superseded by S0-12 (measurement of record).
@@ -3209,8 +3208,7 @@ Pre-registered Primary Floor Rule: max(never_edited, pre_edit_baseline, sham_seq
         comp_rows.append(
             f"| `{k}` | {e2.get('num', 0)}/300 ({e2.get('rate', 0.0)*100.0:.2f}%) | {e2.get('floor_num', 0)}/300 ({e2.get('floor_rate', 0.0)*100.0:.2f}%) | {e2.get('diff', 0.0)*100.0:+.2f} pp [{e2.get('ci_lo', 0.0)*100.0:+.2f} pp, {e2.get('ci_hi', 0.0)*100.0:+.2f} pp] | {e2.get('verdict', 'UNKNOWN')} | {e3.get('num', 0)}/900 ({e3.get('rate', 0.0)*100.0:.2f}%) | {e3.get('floor_num', 0)}/900 ({e3.get('floor_rate', 0.0)*100.0:.2f}%) | {e3.get('diff', 0.0)*100.0:+.2f} pp [{e3.get('ci_lo', 0.0)*100.0:+.2f} pp, {e3.get('ci_hi', 0.0)*100.0:+.2f} pp] | {e3.get('verdict', 'UNKNOWN')} |"
         )
-    comp_table = "
-".join(comp_rows)
+    comp_table = "\n".join(comp_rows)
 
     rec_rows = []
     for k, v in st_v.items():
@@ -3222,8 +3220,7 @@ Pre-registered Primary Floor Rule: max(never_edited, pre_edit_baseline, sham_seq
         rec_rows.append(
             f"| `{k}` | {r_num}/{r_den} ({r_pct:.2f}%) | {nr_num}/{nr_den} ({nr_pct:.2f}%) |"
         )
-    rec_table = "
-".join(rec_rows)
+    rec_table = "\n".join(rec_rows)
 
     sec8 = f"""## 8. Stage V retention vs primary sequential floor
 
