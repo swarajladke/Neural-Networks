@@ -263,8 +263,58 @@ Directive S0-11 evaluated constrained sequential knowledge injection at the writ
 
 ---
 
-## 12. Active Codebase Organization
+## 12. Established State as of Directive S0-12 (Commit `17d81e3` / Canonical Run)
 
+Directive S0-12 (incorporating Amendment 1) verified the first positive sequential retention result from S0-11, diagnosed cross-process divergence (Stage D), evaluated sequential negative controls including sham sequence controls, localized remaining loss via activation patching (Stage L), and evaluated full-prompt protection (Stage F).
+
+### 12.1 Stage D: Cross-Process Divergence Diagnosis (Amendment 1 §B)
+- **Seeds Evaluated:** Seeds 1, 3, and 5.
+- **Diagnostics Completed:**
+  - Cached-state hashes: Layer 1 Covariance $C$ (`cc6ecaf7...` vs `70bbda39...`) and Projector $P_0$ (`03f6561d...` vs `bb1412bb...`) diverged bitwise from S0-11.
+  - Same-process repeat (Seed 3): Identical vectors, identical step counts, identical final weight SHA (`4ceba085d42d39f5...`).
+  - Fresh-process repeat (Seed 3): Independent processes match in-process bit-for-bit.
+  - Order replication: Execution following A-cov_L1 yielded 198/200 immediate efficacy and 14/50 retention (diverged from S0-11 196/200 and 13/50).
+- **Classification:** `(iii) changed cached inputs`. The slight edit-count difference on Seed 3 (+2 immediate, +1 retention) is attributed to subtle numerical divergence in cached covariance inputs across runs; the execution harness itself is 100% deterministic.
+- **Gate V1 Verdict:** Recorded as **FAILED** per Amendment 1 §A; S0-11 `A-null_L1_corr` numbers are superseded, and S0-12 Stage V is established as the measurement of record.
+
+### 12.2 Sequential Negative Control Floors & Comparator Rule
+- **Candidate Floors:**
+  - `never_edited`: Canonical 0/300 (0.00%), Paraphrase 8/900 (0.89%)
+  - `pre_edit_baseline`: Canonical 0/300 (0.00%), Paraphrase 8/900 (0.89%)
+  - `sham_sequence` ($v^* = v_0$, Seed 0 scaled): Canonical 0/300 (0.00%), Paraphrase 6/900 (0.67%)
+- **Selected Primary Floor:** Canonical **0/300 (0.00%)**, Paraphrase **8/900 (0.89%)** ($\max$ of candidate arms).
+- **Secondary Floor (`wrong_target`):** Canonical 7/300, Paraphrase 13/900 for `A-null_L1_corr`; Canonical 19/300, Paraphrase 30/900 for `A-cov_L6`.
+
+### 12.3 Stage V: Verified Positive Retention & Generalization
+- **`A-null_L1_corr` (Measurement of Record across 6 Seeds $\times$ 200 Edits):**
+  - **Immediate Efficacy:** 1186/1200 (98.83%).
+  - **Primary Endpoint E2 (First-50 Terminal Retention):** **141/300 (47.00%)** vs primary floor **0/300 (0.00%)** $\rightarrow$ **Diff +47.00 pp [+41.28 pp, +52.65 pp]**, **VERDICT: ABOVE** ($p < 10^{-15}$).
+  - **Secondary Endpoint E3 (Paraphrase Generalization):** **88/900 (9.78%)** vs primary floor **8/900 (0.89%)** $\rightarrow$ **Diff +8.89 pp [+6.92 pp, +11.05 pp]**, **VERDICT: ABOVE**.
+  - **Object Recurrence Separation:** Recurring objects retained at **126/276 (45.65%)**, non-recurring objects retained at **15/24 (62.50%)**, establishing that retention is driven by true internal model modification rather than late-sequence lexical re-injection.
+  - **Modal Collapse Audit:** Dominant prediction is `'Brasilia, where the'` at 2.33% ($\ll 50\%$), confirming healthy diversity.
+- **`A-cov_L6`:**
+  - **Immediate Efficacy:** 1198/1200 (99.83%).
+  - **Primary Endpoint E2:** **50/300 (16.67%)** vs primary floor **0/300 (0.00%)** $\rightarrow$ **Diff +16.67 pp [+12.67 pp, +21.30 pp]**, **VERDICT: ABOVE**.
+  - **Secondary Endpoint E3:** **96/900 (10.67%)** vs primary floor **8/900 (0.89%)** $\rightarrow$ **Diff +9.78 pp [+7.74 pp, +12.01 pp]**, **VERDICT: ABOVE**.
+  - **Modal Collapse Audit:** Dominant prediction is `'Ottawa, Ottawa, and'` at 3.00%, confirming healthy diversity.
+
+### 12.4 Stage L: Activation Patching Loss Localization & Stage F Gate
+- **Lost Facts Analyzed:** 29 facts lost at sequence end on Seed 0.
+- **Patching Recovery Outcomes:**
+  - Condition (a) Subject last-token only: 0/29 (0.00%)
+  - Condition (b) Non-subject prompt positions only: 0/29 (0.00%)
+  - Condition (c) All prompt positions: 0/29 (0.00%)
+  - Mean Residual Subject Key Drift: $0.0000 \times 10^0$.
+- **Finding:** Patching early activations does not restore lost outputs once downstream representation weights drift.
+- **Stage F Gate:** Non-subject implication rate was $0.00\% \le 10.0\%$, cleanly skipping Stage F (full-prompt protection) per pre-registered protocol rule.
+
+---
+
+## 13. Active Codebase Organization
+
+- `experiments/run_s0_12.py`: Master orchestrator for Directive S0-12 (Stage D, sequential controls, Stage V verification, Stage L patching, Stage F gate).
+- `experiments/s0_12_diagnosis.py`: Directive S0-12 Stage D divergence diagnostic engine.
+- `experiments/s0_12_localization.py`: Directive S0-12 Stage L activation patching and FullPrompt tracker engine.
 - `experiments/s0_11_constraints.py`: Directive S0-11 engine (covariance estimation, null-space tracking, corrected closed-form updates, sequential execution).
 - `experiments/s0_11_diagnostic.py`: Directive S0-11 Stage N float64 diagnostic engine.
 - `experiments/run_s0_11.py`: Master orchestrator for Directive S0-11.
@@ -278,10 +328,11 @@ Directive S0-11 evaluated constrained sequential knowledge injection at the writ
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (136 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-11.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-11.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_11.json`).
+- `tests/test_metrics.py`: Pre-flight unit test suite (139 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-12.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-12.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_12.json`).
+- `s0_12_stdout.txt`: Verbatim execution stdout log for S0-12 (10,304.36 s, Exit Code 0).
 - `s0_11_stdout.txt`: Verbatim execution stdout log for S0-11.
 - `s0_10_stdout.txt`: Verbatim execution stdout log for S0-10.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
