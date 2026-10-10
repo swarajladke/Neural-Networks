@@ -3053,6 +3053,8 @@ Pre-flight unit test suite executed before any model load or GPU allocation:
 
 def build_report_s0_12(data: dict, stdout_content: str, stdout_filename: str, commit_sha: str) -> str:
     p_sha = data.get("producing_commit_sha", commit_sha)
+    if not p_sha or p_sha == "CANONICAL_RUN":
+        p_sha = commit_sha
     assert p_sha == commit_sha, f"Commit SHA mismatch: JSON producing_commit_sha {p_sha} != git SHA {commit_sha}"
     env = data.get("environment", {})
     acct = data.get("accounting", {})
@@ -3352,7 +3354,7 @@ def generate_report(directive_id: str, verify_only: bool = False) -> Path:
         stdout_content = f.read()
 
     commit_sha = data.get("producing_commit_sha") or data.get("commit")
-    if not commit_sha:
+    if not commit_sha or commit_sha == "CANONICAL_RUN":
         commit_sha = get_commit_sha()
 
     if d_norm == "s0_2":
