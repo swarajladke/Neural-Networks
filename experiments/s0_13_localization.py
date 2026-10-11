@@ -11,7 +11,14 @@ Implements Directive S0-13 Stage L2 and Stage R:
 """
 
 import math
+import sys
+from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -207,7 +214,7 @@ def run_stage_l2b_patching(
     retained_outcomes = {c: [] for c in conditions}
 
     # Evaluate lost facts
-    for idx in lost_facts_to_eval := lost_indices:
+    for idx in lost_indices:
         fact = eval_facts[idx]
         prompt = fact["edit_prompt"]
         target_obj = fact["object"]
@@ -228,7 +235,7 @@ def run_stage_l2b_patching(
                 h.remove()
 
     # Evaluate retained facts
-    for idx in retained_facts_to_eval := retained_indices:
+    for idx in retained_indices:
         fact = eval_facts[idx]
         prompt = fact["edit_prompt"]
         target_obj = fact["object"]

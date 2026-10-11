@@ -12,7 +12,14 @@ Implements Directive S0-13 Stage F:
 """
 
 import math
+import sys
+from pathlib import Path
 from typing import Dict, List, Tuple, Any, Optional
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
