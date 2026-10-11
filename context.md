@@ -2,7 +2,7 @@
 
 **Author:** Swaraj Ladke  
 **Repository:** `swarajladke/Neural-Networks`  
-**Last Updated:** October 1, 2026 (Reflecting Directive S0-10 completion, commit `99d3335`)
+**Last Updated:** October 11, 2026 (Reflecting Directive S0-12 completion, commit `bfe2b2b`)
 
 ---
 
@@ -59,7 +59,7 @@ Established empirical findings across 5 seeds:
 
 ### Track B — Sequential Knowledge Injection into GPT-2 Small (Active Focus)
 - **Model:** GPT-2 Small (124,439,808 parameters; tied `lm_head.weight` and `transformer.wte.weight`, 50,257 × 768).
-- **Target Parameter Block:** `lm_head.weight` (row-wise projection across 50,257 rows, $d=768$).
+- **Target Parameter Block:** Historically `lm_head.weight` (Directives S0-2 through S0-7); relocated from Directive S0-8 onwards to mid-layer MLP value projections `transformer.h.L.mlp.c_proj.weight` ($d_{\text{in}}=3072, d_{\text{out}}=768$, layers 1 and 6) with readout layers (`lm_head`, `wte`, `ln_f`) frozen bitwise zero.
 - **Datasets:**
   - Pinned 1,000 synthetic facts (`b1_facts.json`, SHA-256 `285638ad…`), 4 relations × 250 facts (`born_city`, `profession`, `plays_instrument`, `capital_of_country`). Multi-token object target fraction: 97.0%.
   - Pinned WikiText-2 capability slice (1,000 sequences, SHA-256 `3fd93350…`, pre-edit baseline perplexity **36.03**).
