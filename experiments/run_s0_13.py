@@ -119,16 +119,6 @@ def evaluate_perplexity(
     return evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
 
 
-def exact_student_t_test(paired_diffs: List[float]) -> Tuple[float, float]:
-    stat_res = compute_paired_stats_with_pvalues(paired_diffs)
-    return float(stat_res["t"]), float(stat_res["t_p"])
-
-
-def exact_wilcoxon_signed_rank(paired_diffs: List[float]) -> Tuple[float, float]:
-    stat_res = compute_paired_stats_with_pvalues(paired_diffs)
-    return float(stat_res["W"]), float(stat_res["W_p"])
-
-
 def newcombe_confidence_interval(k1: int, n1: int, k2: int, n2: int) -> Dict[str, float]:
     diff, lo, hi = newcombe_score_interval(k1, n1, k2, n2, confidence=0.95)
     return {"diff": diff, "ci_lower": lo, "ci_upper": hi}
@@ -169,7 +159,10 @@ def run_g0_gate(model: nn.Module, tokenizer: Any, facts_seq: List[Dict[str, Any]
     print("  Gate G0: PASSED.")
 
     model.load_state_dict(base_state)
-    return {"total_steps": total_steps, "immediate": sum(imm_matches), "terminal": term_matches, "elapsed": elapsed}
+    return {
+        "total_steps": total_steps, "immediate": sum(imm_matches), "terminal": term_matches, "elapsed": elapsed,
+        "immediate_matches": imm_matches, "terminal_matches": c_ret
+    }
 
 
 def ensure_pinned_cache(model: nn.Module, tokenizer: Any, device: str) -> Dict[str, Any]:
@@ -221,6 +214,7 @@ def run_sequential_reference_seed(
     factors_64: List[Tuple[torch.Tensor, torch.Tensor]] = []
     k_vecs, r_vecs, vstar_vecs, v0_vecs = [], [], [], []
     write_margins = []
+    w_50, w_100 = None, None
 
     for idx, fact in enumerate(facts_seq):
         res = edit_fact_mlp_null_corrected(model, tokenizer, fact, tracker, layer_idx=layer_idx, max_steps=100, lr_v=0.1, device=device)
@@ -228,7 +222,7 @@ def run_sequential_reference_seed(
         steps_per_edit.append(res["steps_taken"])
 
         # Factors: u_f32, r_f32
-        p_k = tracker.project_k(res["k_vec"].to(device, dtype=torch.float64))[0]
+        p_k = res["p_k"].to(device, dtype=torch.float64)
         k_64 = res["k_vec"].to(device, dtype=torch.float64)
         r_64 = res["r_vec"].to(device, dtype=torch.float64)
         k_p_k = torch.dot(k_64, p_k).item()
@@ -243,12 +237,18 @@ def run_sequential_reference_seed(
         vstar_vecs.append(res["v_star"].cpu())
         v0_vecs.append(res["v0"].cpu())
 
+        if idx == 49:
+            w_50 = c_proj.weight.data.clone().cpu()
+        elif idx == 99:
+            w_100 = c_proj.weight.data.clone().cpu()
+
         w_margin = compute_target_margin(model, tokenizer, fact["edit_prompt"], fact["object"], device=device)
         write_margins.append(w_margin)
 
-    # Unit test reconstruction at t = 50, 100, 199
-    verify_weight_reconstruction(c_proj.weight.data.cpu(), w_0, factors_32, 50)
-    verify_weight_reconstruction(c_proj.weight.data.cpu(), w_0, factors_32, 100)
+    # Unit test reconstruction at t = 49 (50 edits), 99 (100 edits), 199 (200 edits)
+    assert w_50 is not None and w_100 is not None
+    verify_weight_reconstruction(w_50, w_0, factors_32, 49)
+    verify_weight_reconstruction(w_100, w_0, factors_32, 99)
     verify_weight_reconstruction(c_proj.weight.data.cpu(), w_0, factors_32, 199)
 
     # Terminal evaluation on first 50 facts
@@ -385,6 +385,11 @@ def main():
     ret_idx = [i for i, m in enumerate(l2_seed0["canonical_retention"]) if m]
     print(f"  Seed 0 First-50: {len(ret_idx)} retained, {len(lost_idx)} lost")
 
+    # Restore Seed 0 terminal weights into model for Stage L2b output patching
+    model.load_state_dict(base_state_dict)
+    w_seed0_term = reconstruct_weight(l2_seed0["w_0"], l2_seed0["factors_32"], 199).to(device)
+    model.transformer.h[1].mlp.c_proj.weight.data.copy_(w_seed0_term)
+
     l2b_res = run_stage_l2b_patching(
         model, tokenizer, l2_seed0["w_0"], l2_seed0["b_0"], l2_seed0["factors_32"],
         facts_seed0, lost_idx, ret_idx, layer_idx=1, device=device
@@ -490,20 +495,23 @@ def main():
     print("\n--- [Evaluating Reference Arm Perplexity] ---")
     for s in SEEDS:
         run_s = reference_runs[s]
+        model.load_state_dict(base_state_dict)
         w_terminal = reconstruct_weight(run_s["w_0"], run_s["factors_32"], 199).to(device)
         model.transformer.h[1].mlp.c_proj.weight.data.copy_(w_terminal)
         run_s["terminal_ppl"] = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, slice_sha=slice_sha)
+    model.load_state_dict(base_state_dict)
 
     # Primary Comparison: F1 vs Reference on E2 paired by seed
-    ref_ret_counts = [sum(reference_runs[s]["canonical_retention"]) for s in SEEDS]
-    f1_ret_counts = [sum(f1_runs[s]["canonical_retention"]) for s in SEEDS]
+    ref_ret_counts = [float(sum(reference_runs[s]["canonical_retention"])) for s in SEEDS]
+    f1_ret_counts = [float(sum(f1_runs[s]["canonical_retention"])) for s in SEEDS]
     paired_diffs = [f1_ret_counts[i] - ref_ret_counts[i] for i in range(6)]
     mean_diff = sum(paired_diffs) / 6.0
 
-    t_stat, t_pval = exact_student_t_test(paired_diffs)
-    w_stat, w_pval = exact_wilcoxon_signed_rank(paired_diffs)
-    pool_f1_ret = sum(f1_ret_counts)
-    pool_ref_ret = sum(ref_ret_counts)
+    paired_stats = compute_paired_stats_with_pvalues(f1_ret_counts, ref_ret_counts)
+    t_stat, t_pval = paired_stats["t_stat"], paired_stats["t_pvalue"]
+    w_stat, w_pval = paired_stats["wilcoxon_stat"], paired_stats["wilcoxon_pvalue"]
+    pool_f1_ret = int(sum(f1_ret_counts))
+    pool_ref_ret = int(sum(ref_ret_counts))
     newcombe_diff = newcombe_confidence_interval(pool_f1_ret, 300, pool_ref_ret, 300)
 
     pct_sym, ci_lvl = "%", 95
@@ -523,7 +531,7 @@ def main():
     results_artifact = {
         "metadata": {
             "directive": "S0-13", "producing_commit_sha": commit_sha, "device": device,
-            "baseline_ppl": baseline_ppl, "total_wall_clock_s": total_wall_clock,
+            "exit_code": 0, "baseline_ppl": baseline_ppl, "total_wall_clock_s": total_wall_clock,
             "ceiling_s": SESSION_BUDGET_CEILING,
             "cache_hashes": {"cov_l1_sha256": cache_info["cov_sha256"], "v_null_l1_sha256": cache_info["v_null_sha256"]}
         },

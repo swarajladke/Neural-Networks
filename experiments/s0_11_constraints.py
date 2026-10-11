@@ -476,7 +476,8 @@ class CorrectedSequentialNullTracker:
             "delta_f32": delta_f32,
             "rho": rho,
             "relative_residual": max_rel_res,
-            "applied_residual": max_applied_res
+            "applied_residual": max_applied_res,
+            "p_k": p_k.detach().cpu()
         }
 
 
@@ -519,7 +520,8 @@ def edit_fact_mlp_null_corrected(
         "k_vec": k_vec.detach().cpu(),
         "r_vec": r_vec.detach().cpu(),
         "v_star": v_star.detach().cpu(),
-        "v0": v0.detach().cpu()
+        "v0": v0.detach().cpu(),
+        "p_k": res["p_k"]
     }
 
 
