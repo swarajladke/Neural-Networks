@@ -148,19 +148,17 @@ class FullPromptSVDNullTracker:
             u_64 = p_cand / denom
             delta_64 = torch.outer(p_cand, r_64) / denom
 
-        # Check relative residual against protected keys: ||k_prot Delta|| / (||k_prot|| ||Delta||)
+        # Check relative residual against protected basis directions V_null @ Q:
         delta_norm_2 = torch.linalg.norm(delta_64, ord=2).item() + 1e-12
         r_norm = torch.linalg.norm(r_64).item()
         max_res = 0.0
 
-        if len(self.stored_keys) > 0 and k_p_k > 1e-12:
-            for prev_k in self.stored_keys:
-                k_norm = torch.linalg.norm(prev_k).item() + 1e-12
-                proj_val = abs(torch.dot(prev_k, p_k).item())
-                err_norm = (proj_val * r_norm) / (k_p_k + 1e-12)
-                rel_res = err_norm / (k_norm * delta_norm_2)
-                if rel_res > max_res:
-                    max_res = rel_res
+        if self.q_basis is not None and self.q_basis.shape[1] > 0 and k_p_k > 1e-12:
+            v_q = torch.matmul(self.v_null, self.q_basis)
+            proj_vals = torch.abs(torch.matmul(v_q.t(), p_k))
+            err_norms = (proj_vals * r_norm) / (k_p_k + 1e-12)
+            rel_residuals = err_norms / delta_norm_2
+            max_res = float(torch.max(rel_residuals).item()) if rel_residuals.numel() > 0 else 0.0
 
         if max_res > self.max_observed_residual:
             self.max_observed_residual = max_res

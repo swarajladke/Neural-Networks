@@ -31,28 +31,30 @@ from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 from experiments.b1_inject import (
     SEEDS,
-    set_deterministic_seeds,
+    configure_determinism,
     greedy_predict,
-    evaluate_fact_retention,
-    evaluate_perplexity,
+    edit_fact_sgd,
 )
-from experiments.data import sample_200_facts, get_dataset_hashes
+from experiments.data import (
+    sample_200_facts,
+    load_wikitext2_slice,
+    evaluate_wikitext_perplexity,
+)
 from experiments.stats import (
-    exact_student_t_test,
-    exact_wilcoxon_signed_rank,
-    newcombe_confidence_interval,
+    compute_paired_stats_with_pvalues,
+    newcombe_score_interval,
 )
 from experiments.metrics import (
     Measurement,
-    wilson_score_interval,
-    compute_counts_from_outcomes,
+    wilson_confidence_interval,
     normalize_entity,
     check_match,
 )
 from experiments.s0_10_repair import verify_state_restore, get_subject_last_token_idx
 from experiments.s0_11_constraints import (
-    estimate_key_covariance,
-    compute_null_space_projection,
+    load_wikitext2_key_sample,
+    compute_layer_key_covariance,
+    compute_null_space_projector,
     CorrectedSequentialNullTracker,
     find_target_value_vstar,
     edit_fact_mlp_null_corrected,
@@ -75,11 +77,61 @@ from experiments.s0_13_protection import (
     edit_fact_f1,
     edit_fact_f2,
     edit_fact_f3,
+    extract_prompt_keys,
 )
 
 CACHE_DIR = "experiments/results/cache_s0_13"
 RESULTS_FILE = "experiments/results/s0_13.json"
 SESSION_BUDGET_CEILING = 16380.0  # seconds
+
+
+def set_deterministic_seeds(seed: int = 42):
+    configure_determinism(seed=seed)
+
+
+def evaluate_fact_retention(
+    model: nn.Module,
+    tokenizer: Any,
+    facts_eval: List[Dict[str, Any]],
+    max_new_tokens: int = 5,
+    device: str = "cuda",
+    train_mode: bool = False
+) -> Tuple[List[bool], List[bool]]:
+    c_matches = []
+    p_matches = []
+    for f in facts_eval:
+        pred_c = greedy_predict(model, tokenizer, f["edit_prompt"], max_new_tokens, device, train_mode)
+        c_matches.append(check_match(pred_c, f["object"]))
+        for p in f["paraphrases"]:
+            pred_p = greedy_predict(model, tokenizer, p, max_new_tokens, device, train_mode)
+            p_matches.append(check_match(pred_p, f["object"]))
+    return c_matches, p_matches
+
+
+def evaluate_perplexity(
+    model: nn.Module,
+    tokenizer: Any,
+    wikitext_slice: torch.Tensor,
+    device: str = "cuda",
+    slice_sha: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7",
+    max_length: int = 512
+) -> float:
+    return evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
+
+
+def exact_student_t_test(paired_diffs: List[float]) -> Tuple[float, float]:
+    stat_res = compute_paired_stats_with_pvalues(paired_diffs)
+    return float(stat_res["t"]), float(stat_res["t_p"])
+
+
+def exact_wilcoxon_signed_rank(paired_diffs: List[float]) -> Tuple[float, float]:
+    stat_res = compute_paired_stats_with_pvalues(paired_diffs)
+    return float(stat_res["W"]), float(stat_res["W_p"])
+
+
+def newcombe_confidence_interval(k1: int, n1: int, k2: int, n2: int) -> Dict[str, float]:
+    diff, lo, hi = newcombe_score_interval(k1, n1, k2, n2, confidence=0.95)
+    return {"diff": diff, "ci_lower": lo, "ci_upper": hi}
 
 
 def get_git_commit_sha() -> str:
@@ -93,15 +145,13 @@ def get_git_commit_sha() -> str:
 
 def run_g0_gate(model: nn.Module, tokenizer: Any, facts_seq: List[Dict[str, Any]], device: str) -> Dict[str, Any]:
     print("\n--- [Stage 0: Gate G0 Baseline Re-Confirmation] ---")
-    from experiments.b1_inject import train_single_fact
     base_state = {k: v.clone() for k, v in model.state_dict().items()}
-    c_proj = model.transformer.h[1].mlp.c_proj
     total_steps = 0
     imm_matches = []
     t0 = time.time()
 
     for fact in facts_seq:
-        res = train_single_fact(model, tokenizer, fact, 100, 3e-5, 0.0, device, False)
+        res = edit_fact_sgd(model, tokenizer, fact, lr=3e-5, max_steps=100, delta=0.0, device=device, train_mode=False)
         total_steps += res["steps_taken"]
         imm_matches.append(res["immediate_match"])
 
@@ -121,16 +171,17 @@ def run_g0_gate(model: nn.Module, tokenizer: Any, facts_seq: List[Dict[str, Any]
     return {"total_steps": total_steps, "immediate": sum(imm_matches), "terminal": term_matches, "elapsed": elapsed}
 
 
-def ensure_pinned_cache(model: nn.Module, tokenizer: Any, wikitext_train: List[str], device: str) -> Dict[str, Any]:
+def ensure_pinned_cache(model: nn.Module, tokenizer: Any, device: str) -> Dict[str, Any]:
     os.makedirs(CACHE_DIR, exist_ok=True)
     c_path = os.path.join(CACHE_DIR, "cov_l1.pt")
     v_path = os.path.join(CACHE_DIR, "v_null_l1.pt")
 
     if not os.path.exists(c_path) or not os.path.exists(v_path):
         print("\n--- [Stage 0: Gate G0b Computing Pinned Cache] ---")
-        cov_res = estimate_key_covariance(model, tokenizer, wikitext_train, layer_idx=1, n_sequences=100, device=device)
-        null_res = compute_null_space_projection(cov_res["cov"], rel_threshold=1e-3, device=device)
-        torch.save(cov_res["cov"], c_path)
+        key_sample_tensor, _ = load_wikitext2_key_sample(tokenizer, num_sequences=100, seq_len=512)
+        cov, _ = compute_layer_key_covariance(model, key_sample_tensor, layer_idx=1, device=device)
+        null_res = compute_null_space_projector(cov, rel_threshold=1e-3)
+        torch.save(cov, c_path)
         torch.save(null_res["v_null"], v_path)
 
     cov = torch.load(c_path, map_location=device)
@@ -234,8 +285,9 @@ def run_protection_seed(
     facts: List[Dict[str, Any]],
     tracker: Any,
     edit_fn: Any,
-    wikitext_slice: List[str],
+    wikitext_slice: torch.Tensor,
     device: str,
+    slice_sha: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7",
     **kwargs
 ) -> Dict[str, Any]:
     model.load_state_dict(base_state_dict)
@@ -246,22 +298,17 @@ def run_protection_seed(
         imm_m.append(res["immediate_match"])
         steps_m.append(res["steps_taken"])
     c_ret, p_ret = evaluate_fact_retention(model, tokenizer, facts[:50], 5, device, False)
-    ppl_val = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, max_length=512)
+    ppl_val = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, slice_sha=slice_sha)
     term_m = [compute_target_margin(model, tokenizer, f["edit_prompt"], f["object"], device=device) for f in facts[:50]]
     out = {
-        "immediate_matches": imm_m,
-        "steps_per_edit": steps_m,
-        "canonical_retention": c_ret,
-        "paraphrase_retention": p_ret,
-        "terminal_ppl": ppl_val,
-        "terminal_margins": term_m
+        "immediate_matches": imm_m, "steps_per_edit": steps_m,
+        "canonical_retention": c_ret, "paraphrase_retention": p_ret,
+        "terminal_ppl": ppl_val, "terminal_margins": term_m
     }
     if hasattr(tracker, "current_rank"):
         out.update({
-            "final_rank": tracker.current_rank,
-            "capacity_exhausted": tracker.capacity_exhausted,
-            "exhaustion_edit_idx": tracker.exhaustion_edit_idx,
-            "rank_history": tracker.rank_history
+            "final_rank": tracker.current_rank, "capacity_exhausted": tracker.capacity_exhausted,
+            "exhaustion_edit_idx": tracker.exhaustion_edit_idx, "rank_history": tracker.rank_history
         })
     return out
 
@@ -286,18 +333,17 @@ def main():
     print(f"Producing Commit SHA: {commit_sha}")
     print(f"Accelerator Device: {device}")
 
-    # Load data
-    with open("data/b1_facts.json", "r") as f:
+    facts_file = REPO_ROOT / "b1_facts.json"
+    assert facts_file.exists(), f"Missing facts file: {facts_file}"
+    with open(facts_file, "r", encoding="utf-8") as f:
         facts_pool = json.load(f)
-    with open("data/wikitext_train.json", "r") as f:
-        wikitext_train = json.load(f)
-    with open("data/wikitext_slice.json", "r") as f:
-        wikitext_slice = json.load(f)
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
     model = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
     model.eval()
+
+    wikitext_slice, slice_sha = load_wikitext2_slice(tokenizer)
 
     base_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
     fresh_checksum = float(sum(p.sum().item() for p in model.parameters()))
@@ -305,19 +351,15 @@ def main():
         1: hashlib.sha256(model.transformer.h[1].mlp.c_proj.weight.data.cpu().numpy().tobytes()).hexdigest()
     }
 
-    # Pre-flight baseline PPL
-    baseline_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, max_length=512)
+    baseline_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, slice_sha=slice_sha)
     print(f"WikiText-2 Capability Slice Baseline PPL: {baseline_ppl:.2f}")
 
-    # G0: Bit-reproduction of Seed 0 unconstrained
-    facts_seed0 = sample_200_facts(facts_pool, seed=0)
+    facts_seed0, _ = sample_200_facts(facts_pool, seed=0)
     g0_res = run_g0_gate(model, tokenizer, facts_seed0, device)
 
-    # G0b: Pinned cache
-    cache_info = ensure_pinned_cache(model, tokenizer, wikitext_train, device)
+    cache_info = ensure_pinned_cache(model, tokenizer, device)
     v_null = cache_info["v_null"]
 
-    # G0c: Cross-process determinism on Seed 0 reference
     print("\n--- [Stage 0: Gate G0c Reference Cell & Cross-Process Check] ---")
     ref_run1 = run_sequential_reference_seed(model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes, facts_seed0, v_null, 1, device)
     ref_run2 = run_sequential_reference_seed(model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes, facts_seed0, v_null, 1, device)
@@ -327,15 +369,13 @@ def main():
     print(f"  Gate G0c PASSED: Identical weight SHA ({ref_run1['final_weight_sha'][:16]}...)")
     print(f"  Seed 0 Reference Imm: {sum(ref_run1['immediate_matches'])}/200, Ret: {sum(ref_run1['canonical_retention'])}/50")
 
-    # Run Reference Arm across all 6 seeds
     print("\n--- [Executing Reference Arm (A-null_L1_corr) across 6 seeds] ---")
     reference_runs = {0: ref_run1}
     for s in SEEDS[1:]:
         print(f"  Running Reference Seed {s}...")
-        s_facts = sample_200_facts(facts_pool, seed=s)
+        s_facts, _ = sample_200_facts(facts_pool, seed=s)
         reference_runs[s] = run_sequential_reference_seed(model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes, s_facts, v_null, 1, device)
 
-    # Stage L2: Corrected Loss Localization
     print("\n--- [Stage L2: Write-Site Loss Localization] ---")
     l2_seed0 = reference_runs[0]
     drift_res = compute_l2a_drift(l2_seed0["k_vecs"], l2_seed0["r_vecs"], l2_seed0["factors_32"], l2_seed0["factors_64"], device=device)
@@ -344,7 +384,6 @@ def main():
     ret_idx = [i for i, m in enumerate(l2_seed0["canonical_retention"]) if m]
     print(f"  Seed 0 First-50: {len(ret_idx)} retained, {len(lost_idx)} lost")
 
-    # L2b Output Patching on Seed 0 terminal model
     l2b_res = run_stage_l2b_patching(
         model, tokenizer, l2_seed0["w_0"], l2_seed0["b_0"], l2_seed0["factors_32"],
         facts_seed0, lost_idx, ret_idx, layer_idx=1, device=device
@@ -352,12 +391,11 @@ def main():
     print(f"  Harness Positive Control Passed: {l2b_res['harness_positive_control_passed']}")
     print(f"  Lost facts recovery: {l2b_res['lost_recovery']}")
 
-    # Stage R: Regression Dataset Assembly
     print("\n--- [Stage R: Exploratory Regression] ---")
     reg_records = []
     for s in SEEDS:
         run_s = reference_runs[s]
-        s_facts = sample_200_facts(facts_pool, seed=s)
+        s_facts, _ = sample_200_facts(facts_pool, seed=s)
         s_drift = compute_l2a_drift(run_s["k_vecs"], run_s["r_vecs"], run_s["factors_32"], device=device)["drifts_f32"]
         for j in range(50):
             fact_j = s_facts[j]
@@ -365,62 +403,52 @@ def main():
             enc_obj = tokenizer(f" {fact_j['object'].strip()}").input_ids
             is_multi = len(enc_obj) > 1
             reg_records.append({
-                "seed": s,
-                "edit_position": j,
-                "later_same_rel_count": later_same_rel,
-                "is_multi_token": is_multi,
-                "write_time_margin": run_s["write_margins"][j],
-                "drift_j": s_drift[j],
-                "terminal_retained": run_s["canonical_retention"][j]
+                "seed": s, "edit_position": j, "later_same_rel_count": later_same_rel,
+                "is_multi_token": is_multi, "write_time_margin": run_s["write_margins"][j],
+                "drift_j": s_drift[j], "terminal_retained": run_s["canonical_retention"][j]
             })
 
     reg_out = run_stage_r_regression(reg_records, cluster_key="seed")
     print(f"  Stage R Regression Status: {reg_out['status']}")
 
-    # Stage F: Protection Arms
     f1_runs, f2_runs, f3_runs = {}, {}, {}
-
-    # F1: Full-prompt protection
     print("\n--- [Stage F: Arm F1 Full-Prompt Protection across 6 seeds] ---")
     for s in SEEDS:
         print(f"  Running F1 Seed {s}...")
-        s_facts = sample_200_facts(facts_pool, seed=s)
+        s_facts, _ = sample_200_facts(facts_pool, seed=s)
         f1_tracker = FullPromptSVDNullTracker(v_null, rel_threshold=1e-3, device=device)
         f1_runs[s] = run_protection_seed(
             model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
-            s_facts, f1_tracker, edit_fact_f1, wikitext_slice, device
+            s_facts, f1_tracker, edit_fact_f1, wikitext_slice, device, slice_sha=slice_sha
         )
 
-    # Dynamic Budget Check
     elapsed_so_far = time.time() - t_start
     print(f"\nElapsed time so far: {elapsed_so_far:.2f} s / {SESSION_BUDGET_CEILING:.2f} s")
     prune_f2 = args.prune_f2 or (elapsed_so_far + 4000.0 > SESSION_BUDGET_CEILING)
     prune_f3 = args.prune_f3 or (elapsed_so_far + 2000.0 > SESSION_BUDGET_CEILING)
 
-    # F3: Margin-targeted writes
     if not prune_f3:
         print("\n--- [Stage F: Arm F3 Margin-Targeted Writes across 6 seeds] ---")
         for s in SEEDS:
             print(f"  Running F3 Seed {s}...")
-            s_facts = sample_200_facts(facts_pool, seed=s)
+            s_facts, _ = sample_200_facts(facts_pool, seed=s)
             f3_tracker = CorrectedSequentialNullTracker(v_null, rel_threshold=1e-3, device=device)
             f3_runs[s] = run_protection_seed(
                 model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
-                s_facts, f3_tracker, edit_fact_f3, wikitext_slice, device, target_margin=2.0
+                s_facts, f3_tracker, edit_fact_f3, wikitext_slice, device, slice_sha=slice_sha, target_margin=2.0
             )
     else:
         print("\n[Dynamic Pruning]: Skipping Arm F3 per compute ceiling rules.")
 
-    # F2: F1 + Teacher-Forced Object Keys
     if not prune_f2:
         print("\n--- [Stage F: Arm F2 F1 + Teacher-Forced Object Keys across 6 seeds] ---")
         for s in SEEDS:
             print(f"  Running F2 Seed {s}...")
-            s_facts = sample_200_facts(facts_pool, seed=s)
+            s_facts, _ = sample_200_facts(facts_pool, seed=s)
             f2_tracker = FullPromptSVDNullTracker(v_null, rel_threshold=1e-3, device=device)
             f2_runs[s] = run_protection_seed(
                 model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
-                s_facts, f2_tracker, edit_fact_f2, wikitext_slice, device
+                s_facts, f2_tracker, edit_fact_f2, wikitext_slice, device, slice_sha=slice_sha
             )
     else:
         print("\n[Dynamic Pruning]: Skipping Arm F2 per compute ceiling rules.")
@@ -463,7 +491,7 @@ def main():
         run_s = reference_runs[s]
         w_terminal = reconstruct_weight(run_s["w_0"], run_s["factors_32"], 199).to(device)
         model.transformer.h[1].mlp.c_proj.weight.data.copy_(w_terminal)
-        run_s["terminal_ppl"] = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, max_length=512)
+        run_s["terminal_ppl"] = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device, slice_sha=slice_sha)
 
     # Primary Comparison: F1 vs Reference on E2 paired by seed
     ref_ret_counts = [sum(reference_runs[s]["canonical_retention"]) for s in SEEDS]
@@ -477,10 +505,8 @@ def main():
     pool_ref_ret = sum(ref_ret_counts)
     newcombe_diff = newcombe_confidence_interval(pool_f1_ret, 300, pool_ref_ret, 300)
 
-    pct_sym = "%"
-    ci_lvl = 95
-    ref_pct = pool_ref_ret / 300.0 * 100.0
-    f1_pct = pool_f1_ret / 300.0 * 100.0
+    pct_sym, ci_lvl = "%", 95
+    ref_pct, f1_pct = pool_ref_ret / 300.0 * 100.0, pool_f1_ret / 300.0 * 100.0
     print("\n" + "=" * 80)
     print(" PRIMARY COMPARISON (Pre-Registered): F1 vs Reference on E2 (First-50 Retention)")
     print("=" * 80)
@@ -493,42 +519,29 @@ def main():
     total_wall_clock = time.time() - t_start
     print(f"\nTotal Wall-Clock Time: {total_wall_clock:.2f} s (Ceiling: {SESSION_BUDGET_CEILING:.2f} s)")
 
-    # Assemble and save machine-readable results JSON
     results_artifact = {
         "metadata": {
-            "directive": "S0-13",
-            "producing_commit_sha": commit_sha,
-            "device": device,
-            "baseline_ppl": baseline_ppl,
-            "total_wall_clock_s": total_wall_clock,
+            "directive": "S0-13", "producing_commit_sha": commit_sha, "device": device,
+            "baseline_ppl": baseline_ppl, "total_wall_clock_s": total_wall_clock,
             "ceiling_s": SESSION_BUDGET_CEILING,
-            "cache_hashes": {
-                "cov_l1_sha256": cache_info["cov_sha256"],
-                "v_null_l1_sha256": cache_info["v_null_sha256"]
-            }
+            "cache_hashes": {"cov_l1_sha256": cache_info["cov_sha256"], "v_null_l1_sha256": cache_info["v_null_sha256"]}
         },
         "gates": {
             "G0": g0_res,
             "G0b": {"cov_sha": cache_info["cov_sha256"], "v_null_sha": cache_info["v_null_sha256"]},
             "G0c": {
-                "passed": True,
-                "seed0_weight_sha": ref_run1["final_weight_sha"],
-                "seed0_imm": sum(ref_run1["immediate_matches"]),
-                "seed0_ret": sum(ref_run1["canonical_retention"])
+                "passed": True, "seed0_weight_sha": ref_run1["final_weight_sha"],
+                "seed0_imm": sum(ref_run1["immediate_matches"]), "seed0_ret": sum(ref_run1["canonical_retention"])
             }
         },
         "stage_l2": {
             "l2a_drift_seed0": {
-                "drifts_f32": drift_res["drifts_f32"],
-                "drifts_f64": drift_res["drifts_f64"],
+                "drifts_f32": drift_res["drifts_f32"], "drifts_f64": drift_res["drifts_f64"],
                 "median_drift_lost": float(torch.tensor([drift_res["drifts_f32"][i] for i in lost_idx]).median().item()) if lost_idx else 0.0,
                 "median_drift_retained": float(torch.tensor([drift_res["drifts_f32"][i] for i in ret_idx]).median().item()) if ret_idx else 0.0
             },
             "l2b_output_patching_seed0": l2b_res,
-            "l2c_margins": {
-                "seed0_write_margins": l2_seed0["write_margins"],
-                "seed0_terminal_margins": l2_seed0["terminal_margins"]
-            }
+            "l2c_margins": {"seed0_write_margins": l2_seed0["write_margins"], "seed0_terminal_margins": l2_seed0["terminal_margins"]}
         },
         "stage_r": reg_out,
         "stage_f": {
@@ -540,19 +553,13 @@ def main():
                     "paraphrase_retention": reference_runs[s]["paraphrase_retention"],
                     "terminal_ppl": reference_runs[s]["terminal_ppl"],
                     "terminal_margins": reference_runs[s]["terminal_margins"]
-                }
-                for s in SEEDS
+                } for s in SEEDS
             },
-            "f1": f1_runs,
-            "f3": f3_runs,
-            "f2": f2_runs,
-            "sham": sham_out
+            "f1": f1_runs, "f3": f3_runs, "f2": f2_runs, "sham": sham_out
         },
         "primary_inference": {
             "f1_vs_reference_e2": {
-                "pooled_ref_ret": pool_ref_ret,
-                "pooled_f1_ret": pool_f1_ret,
-                "newcombe_95_ci": newcombe_diff,
+                "pooled_ref_ret": pool_ref_ret, "pooled_f1_ret": pool_f1_ret, "newcombe_95_ci": newcombe_diff,
                 "student_t": {"stat": t_stat, "df": 5, "p_val": t_pval},
                 "wilcoxon": {"stat": w_stat, "n": 6, "p_val": w_pval}
             }
@@ -563,7 +570,6 @@ def main():
     with open(RESULTS_FILE, "w") as f:
         json.dump(results_artifact, f, indent=2)
     print(f"\nResults successfully recorded to {RESULTS_FILE}")
-
     return 0
 
 

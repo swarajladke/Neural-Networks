@@ -515,7 +515,11 @@ def edit_fact_mlp_null_corrected(
         "pred": curr_pred,
         "rho": res["rho"],
         "relative_residual": res["relative_residual"],
-        "applied_residual": res["applied_residual"]
+        "applied_residual": res["applied_residual"],
+        "k_vec": k_vec.detach().cpu(),
+        "r_vec": r_vec.detach().cpu(),
+        "v_star": v_star.detach().cpu(),
+        "v0": v0.detach().cpu()
     }
 
 
