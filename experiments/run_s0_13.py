@@ -145,6 +145,7 @@ def get_git_commit_sha() -> str:
 
 def run_g0_gate(model: nn.Module, tokenizer: Any, facts_seq: List[Dict[str, Any]], device: str) -> Dict[str, Any]:
     print("\n--- [Stage 0: Gate G0 Baseline Re-Confirmation] ---")
+    configure_determinism(seed=0)
     base_state = {k: v.clone() for k, v in model.state_dict().items()}
     total_steps = 0
     imm_matches = []
@@ -155,7 +156,7 @@ def run_g0_gate(model: nn.Module, tokenizer: Any, facts_seq: List[Dict[str, Any]
         total_steps += res["steps_taken"]
         imm_matches.append(res["immediate_match"])
 
-    c_ret, _ = evaluate_fact_retention(model, tokenizer, facts_seq[:50], 5, device, False)
+    c_ret, _ = evaluate_fact_retention(model, tokenizer, facts_seq, 5, device, False)
     term_matches = sum(1 for x in c_ret if x)
     elapsed = time.time() - t0
 
