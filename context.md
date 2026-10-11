@@ -62,7 +62,7 @@ Established empirical findings across 5 seeds:
 - **Target Parameter Block:** Historically `lm_head.weight` (Directives S0-2 through S0-7); relocated from Directive S0-8 onwards to mid-layer MLP value projections `transformer.h.L.mlp.c_proj.weight` ($d_{\text{in}}=3072, d_{\text{out}}=768$, layers 1 and 6) with readout layers (`lm_head`, `wte`, `ln_f`) frozen bitwise zero.
 - **Datasets:**
   - Pinned 1,000 synthetic facts (`b1_facts.json`, SHA-256 `285638ad…`), 4 relations × 250 facts (`born_city`, `profession`, `plays_instrument`, `capital_of_country`). Multi-token object target fraction: 97.0%.
-  - Pinned WikiText-2 capability slice (1,000 sequences, SHA-256 `3fd93350…`, pre-edit baseline perplexity **36.03**).
+  - Pinned WikiText-2 capability slice (1,000 sequences, SHA-256 `3fd93350…`, pre-edit baseline perplexity **36.03**). *Reconciliation:* Full-slice perplexity is **36.03** (pinned in S0-6 commit `733fa24`, canonical comparator of record for E0 ceiling $2 \times 36.03 = 72.06$). A 100-sequence diagnostic split evaluated in S0-9/S0-10 yielded 33.87; 36.03 is the comparator of record.
   - Pinned control probe set (200 template prompts, SHA-256 `8f4ffa6b…`).
 
 #### Core Discoveries on Track B (Directives S0-2 to S0-6):
@@ -198,7 +198,7 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
 5. **Negative Control Evaluation (wrong_target & wrong_target_paraphrase):**
    - `wrong_target` (100 canonical prompts): 0/100 (0.00%) [0.00%, 3.70%].
    - `wrong_target_paraphrase` (300 paraphrase prompts): 1/300 (0.33%) [0.06%, 1.86%].
-6. **Pre-Flight Test Suite:** 127 tests run, 127 passed, 0 failures. AST literal scanner: 0 unlisted violations.
+6. **Pre-Flight Test Suite:** 127 tests run, 127 passed, 0 failures (suite expanded to 136 tests in S0-11 commit `07cb7ee`, and 139 tests in S0-12 commit `bfe2b2b`). AST literal scanner: 0 unlisted violations.
 
 ---
 
@@ -218,7 +218,7 @@ Directive S0-8 relocated the sequential rank-1 write target off the readout and 
    - Conducted across 6 independent seeds x 200 sequential edits with bitwise-zero frozen readout verified on all seeds.
    - **Primary Endpoint (First-50 Terminal Retention, Pooled N=300):** 6/300 (2.00%) vs `wrong_target` floor 58/1200 (4.83%). Difference: -2.83%, Newcombe 95% Hybrid Score CI: [-4.57%, -0.30%]. Verdict: **BELOW** floor.
    - **Secondary Endpoint (First-50 Paraphrase Generalization, Pooled N=900):** 10/900 (1.11%) vs `wrong_target_paraphrase` floor 1/300 (0.33%). Difference: +0.78%, Newcombe 95% Hybrid Score CI: [-0.83%, +1.74%]. Verdict: **AT** floor (spanning zero).
-   - **Perplexity Degradation:** Sequential rank-1 MLP value updates caused severe global representation drift, with full-slice perplexity exploding to 623 – 12,331 (vs unedited baseline 33.87).
+   - **Perplexity Degradation:** Sequential rank-1 MLP value updates caused severe global representation drift, with full-slice perplexity exploding to 623 – 12,331 (vs unedited baseline 36.03 on the full capability slice; an earlier 100-sequence diagnostic split registered 33.87).
    - **Conclusion:** While mid-layer MLP value projections are writable with high immediate efficacy and low single-edit perturbation, **unconstrained sequential rank-1 updates do not sustain retention above matched negative controls and suffer severe cumulative drift**.
 
 ---
@@ -290,7 +290,7 @@ Directive S0-12 (incorporating Amendment 1) verified the first positive sequenti
   - **Immediate Efficacy:** 1186/1200 (98.83%).
   - **Primary Endpoint E2 (First-50 Terminal Retention):** **141/300 (47.00%)** vs primary floor **0/300 (0.00%)** $\rightarrow$ **Diff +47.00 pp [+41.28 pp, +52.65 pp]**, **VERDICT: ABOVE** ($p < 10^{-15}$).
   - **Secondary Endpoint E3 (Paraphrase Generalization):** **88/900 (9.78%)** vs primary floor **8/900 (0.89%)** $\rightarrow$ **Diff +8.89 pp [+6.92 pp, +11.05 pp]**, **VERDICT: ABOVE**.
-  - **Object Recurrence Separation:** Recurring objects retained at **126/276 (45.65%)**, non-recurring objects retained at **15/24 (62.50%)**, establishing that retention is driven by true internal model modification rather than late-sequence lexical re-injection.
+  - **Object Recurrence Separation:** Recurring objects retained at **126/276 (45.65%)**, non-recurring objects retained at **15/24 (62.50%)**, consistent with the hypothesis that retention is driven by true internal model modification rather than late-sequence lexical re-injection, though the non-recurring cell is small ($N=24$ across 6 seeds).
   - **Modal Collapse Audit:** Dominant prediction is `'Brasilia, where the'` at 2.33% ($\ll 50\%$), confirming healthy diversity.
 - **`A-cov_L6`:**
   - **Immediate Efficacy:** 1198/1200 (99.83%).
@@ -299,14 +299,11 @@ Directive S0-12 (incorporating Amendment 1) verified the first positive sequenti
   - **Modal Collapse Audit:** Dominant prediction is `'Ottawa, Ottawa, and'` at 3.00%, confirming healthy diversity.
 
 ### 12.4 Stage L: Activation Patching Loss Localization & Stage F Gate
-- **Lost Facts Analyzed:** 29 facts lost at sequence end on Seed 0.
-- **Patching Recovery Outcomes:**
-  - Condition (a) Subject last-token only: 0/29 (0.00%)
-  - Condition (b) Non-subject prompt positions only: 0/29 (0.00%)
-  - Condition (c) All prompt positions: 0/29 (0.00%)
-  - Mean Residual Subject Key Drift: $0.0000 \times 10^0$.
-- **Finding:** Patching early activations does not restore lost outputs once downstream representation weights drift.
-- **Stage F Gate:** Non-subject implication rate was $0.00\% \le 10.0\%$, cleanly skipping Stage F (full-prompt protection) per pre-registered protocol rule.
+- **Status: INVALID — UNINFORMATIVE BY CONSTRUCTION (Directive S0-13 Corrections of Record §0.1–0.3):**
+  - **Stage L Invalidation (§0.1):** S0-12 `run_stage_l_patching` hooked and patched the *input* of `h[1].mlp.c_proj` with base-model activations. Under `A-null_L1_corr`, only `h[1].mlp.c_proj.weight` is modified; all upstream parameters are bitwise unchanged, so the `c_proj` input is identical between base and edited models. The patch was a mathematical no-op, which fully explains zero key drift and zero recovery under all three conditions.
+  - **Statement Withdrawn (§0.2):** The S0-12 statement "patching early activations does not restore lost outputs once downstream representation weights drift" is formally WITHDRAWN. Layers 2–11 and the readout are frozen; the only changed computation is the L1 `c_proj` output.
+  - **Stage F Gate Vacated (§0.3):** The S0-12 Stage F gate decision is VACATED (it consumed the invalid Stage L measurement). Stage F is executed in Directive S0-13.
+- **Lost Facts Evaluated (Historical Record):** 29 facts lost at sequence end on Seed 0; conditions (a)–(c) reported 0/29 recovery (now understood as no-op artifact).
 
 ---
 

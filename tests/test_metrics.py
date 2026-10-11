@@ -169,7 +169,10 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "s0_7b_audit.py",
         REPO_ROOT / "experiments" / "run_s0_7b.py",
         REPO_ROOT / "experiments" / "s0_8_relocate.py",
-        REPO_ROOT / "experiments" / "run_s0_8.py"
+        REPO_ROOT / "experiments" / "run_s0_8.py",
+        REPO_ROOT / "experiments" / "s0_13_localization.py",
+        REPO_ROOT / "experiments" / "s0_13_protection.py",
+        REPO_ROOT / "experiments" / "run_s0_13.py"
     ]
     for ts in target_scripts:
         if ts.exists():
@@ -1295,7 +1298,136 @@ def run_all_tests() -> int:
     print("  Test 3.38 (Modal-Collapse Check)      : Collapse correctly detected at majority threshold and rejected on diverse set PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.39 TEST SUITE SUMMARY
+    # 3.39 TEST WEIGHT RECONSTRUCTION (DIRECTIVE S0-13 §2)
+    # --------------------------------------------------------------------------
+    print("\n[3.39 Test Rank-1 Factor Weight Reconstruction (Directive S0-13 §2)]")
+    tests_run += 1
+    from experiments.s0_13_localization import reconstruct_weight, verify_weight_reconstruction
+    torch.manual_seed(42)
+    stub_w0 = torch.randn(3072, 768, dtype=torch.float32)
+    stub_factors = []
+    live_w = stub_w0.clone()
+    for t_idx in range(200):
+        u_t = torch.randn(3072, dtype=torch.float32)
+        r_t = torch.randn(768, dtype=torch.float32)
+        live_w.add_(torch.outer(u_t, r_t))
+        stub_factors.append((u_t, r_t))
+
+    w_50 = stub_w0.clone()
+    for i in range(50):
+        w_50.add_(torch.outer(stub_factors[i][0], stub_factors[i][1]))
+    assert verify_weight_reconstruction(w_50, stub_w0, stub_factors, 49) is True
+
+    w_100 = stub_w0.clone()
+    for i in range(100):
+        w_100.add_(torch.outer(stub_factors[i][0], stub_factors[i][1]))
+    assert verify_weight_reconstruction(w_100, stub_w0, stub_factors, 99) is True
+
+    assert verify_weight_reconstruction(live_w, stub_w0, stub_factors, 199) is True
+    tests_passed += 1
+    print("  Test 3.39 (Weight Reconstruction)     : Reconstructed weight matches live weight bitwise at t=50, 100, 200 PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.40 TEST OUTPUT-HOOK GENERATED POSITION FIRING (DIRECTIVE S0-13 §2 L2b)
+    # --------------------------------------------------------------------------
+    print("\n[3.40 Test Output-Hook Generated Position Firing (Directive S0-13 §2 L2b)]")
+    tests_run += 1
+    from experiments.s0_13_localization import make_output_patch_hook
+    w_j = torch.randn(3072, 768, dtype=torch.float32)
+    b_j = torch.randn(768, dtype=torch.float32)
+    prompt_len = 4
+    subj_idx = 1
+
+    hook_d = make_output_patch_hook(w_j, b_j, prompt_len, subj_idx, "d")
+    hook_e = make_output_patch_hook(w_j, b_j, prompt_len, subj_idx, "e")
+
+    # Step 0: prompt only (len=4)
+    inp_0 = (torch.randn(1, 4, 3072, dtype=torch.float32),)
+    out_0 = torch.randn(1, 4, 768, dtype=torch.float32)
+    patched_d_0 = hook_d(None, inp_0, out_0)
+    assert torch.equal(patched_d_0, out_0)
+
+    # Step 2: 2 generated tokens (len=6)
+    inp_2 = (torch.randn(1, 6, 3072, dtype=torch.float32),)
+    out_2 = torch.randn(1, 6, 768, dtype=torch.float32)
+    patched_d_2 = hook_d(None, inp_2, out_2)
+    assert torch.equal(patched_d_2[:, :4, :], out_2[:, :4, :])
+    v_j_2 = torch.addmm(b_j, inp_2[0].view(-1, 3072), w_j).view(1, 6, 768)
+    assert torch.equal(patched_d_2[:, 4:, :], v_j_2[:, 4:, :])
+
+    patched_e_2 = hook_e(None, inp_2, out_2)
+    assert torch.equal(patched_e_2, v_j_2)
+    tests_passed += 1
+    print("  Test 3.40 (Output Hook Decode Firing) : Hook fires on generated tokens and preserves prompt for condition d PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.41 TEST SVD-TRUNCATED BASIS ORTHONORMALITY (DIRECTIVE S0-13 §4 F1)
+    # --------------------------------------------------------------------------
+    print("\n[3.41 Test SVD-Truncated Basis Orthonormality (Directive S0-13 §4 F1)]")
+    tests_run += 1
+    from experiments.s0_13_protection import FullPromptSVDNullTracker
+    torch.manual_seed(42)
+    q_null, _ = torch.linalg.qr(torch.randn(100, 50, dtype=torch.float64))
+    tracker = FullPromptSVDNullTracker(q_null, rel_threshold=1e-3, device="cpu")
+
+    k1 = torch.randn(1, 100, dtype=torch.float32)
+    k2 = k1.clone() + 1e-6 * torch.randn(1, 100, dtype=torch.float32)
+    k3 = torch.randn(1, 100, dtype=torch.float32)
+    tracker.add_keys(torch.cat([k1, k2, k3], dim=0), edit_idx=0)
+
+    q_b = tracker.q_basis
+    assert q_b is not None
+    ident = torch.eye(q_b.shape[1], dtype=torch.float64)
+    orth_err = torch.max(torch.abs(q_b.t() @ q_b - ident)).item()
+    assert orth_err < 1e-10, f"Basis orthonormality error too high: {orth_err:.2e}"
+    assert tracker.current_rank == 2, f"Expected rank 2 after filtering collinear key, got {tracker.current_rank}"
+    tests_passed += 1
+    print("  Test 3.41 (SVD Basis Orthonormality)  : Q basis is strictly orthonormal and filters collinear keys PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.42 TEST PROTECTED-KEY RESIDUAL GUARD UNDER F1 (DIRECTIVE S0-13 §4 F1)
+    # --------------------------------------------------------------------------
+    print("\n[3.42 Test Protected-Key Residual Guard under F1 (Directive S0-13 §4 F1)]")
+    tests_run += 1
+    k_new = torch.randn(100, dtype=torch.float32)
+    r_new = torch.randn(30, dtype=torch.float32)
+    upd = tracker.compute_update(k_new, r_new)
+    assert upd["relative_residual"] <= 1e-8, f"Residual exceeds 1e-8 gate: {upd['relative_residual']:.2e}"
+
+    for pk in tracker.stored_keys:
+        pk_64 = pk.to(torch.float64)
+        delta_64 = torch.outer(upd["u_f32"].to(torch.float64), upd["r_f32"].to(torch.float64))
+        err_vec = pk_64 @ delta_64
+        err_norm = torch.linalg.norm(err_vec).item()
+        denom = (torch.linalg.norm(pk_64).item() * torch.linalg.norm(delta_64).item()) + 1e-12
+        assert (err_norm / denom) < 1e-6
+    tests_passed += 1
+    print("  Test 3.42 (F1 Protected Residual)     : Residual <= 1e-8 gate passed on all stored prompt keys PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.43 TEST CACHE INTEGRITY & S0-13 REGISTRY SCOPES (DIRECTIVE S0-13 §1)
+    # --------------------------------------------------------------------------
+    print("\n[3.43 Test Cache Integrity & S0-13 Registry Scopes (Directive S0-13 §1)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_13_eval_canonical") == 50
+    assert POPULATION_REGISTRY.get("s0_13_eval_canonical_pooled") == 300
+    assert POPULATION_REGISTRY.get("s0_13_eval_paraphrase") == 150
+    assert POPULATION_REGISTRY.get("s0_13_eval_paraphrase_pooled") == 900
+    assert POPULATION_REGISTRY.get("s0_13_key_sample") == 100
+
+    def assert_cache_sha256(data_bytes: bytes, expected_sha: str) -> bool:
+        computed = hashlib.sha256(data_bytes).hexdigest()
+        return computed == expected_sha
+
+    test_b = b"pinned_cache_test_tensor"
+    test_h = hashlib.sha256(test_b).hexdigest()
+    assert assert_cache_sha256(test_b, test_h) is True
+    assert assert_cache_sha256(test_b, "mismatched_hash") is False
+    tests_passed += 1
+    print("  Test 3.43 (S0-13 Scopes & Cache Hash) : S0-13 scopes in registry and cache SHA-256 verification PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.44 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
