@@ -32,8 +32,31 @@ from experiments.s0_10_repair import get_subject_last_token_idx, verify_state_re
 from experiments.s0_11_constraints import edit_fact_unconstrained_sgd, find_target_value_vstar
 from experiments.s0_13_protection import find_target_value_vstar_margin
 from experiments.s0_13_localization import compute_target_margin
-from experiments.b1_inject import evaluate_fact_retention, greedy_predict
+from experiments.b1_inject import greedy_predict
 from experiments.metrics import check_match
+
+
+def evaluate_fact_retention(
+    model: nn.Module,
+    tokenizer: Any,
+    facts_eval: List[Dict[str, Any]],
+    max_new_tokens: int = 5,
+    device: str = "cuda",
+    train_mode: bool = False
+) -> Tuple[List[bool], List[bool]]:
+    """
+    Evaluates canonical and paraphrase retention across facts_eval.
+    Returns (canonical_matches, paraphrase_matches).
+    """
+    c_matches = []
+    p_matches = []
+    for f in facts_eval:
+        pred_c = greedy_predict(model, tokenizer, f["edit_prompt"], max_new_tokens, device, train_mode)
+        c_matches.append(check_match(pred_c, f["object"]))
+        for p in f.get("paraphrases", []):
+            pred_p = greedy_predict(model, tokenizer, p, max_new_tokens, device, train_mode)
+            p_matches.append(check_match(pred_p, f["object"]))
+    return c_matches, p_matches
 
 
 class InstrumentedAuditNullTracker:
@@ -71,7 +94,8 @@ class InstrumentedAuditNullTracker:
             self.max_prior_cosines[edit_idx] = 0.0
             return []
 
-        k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
+        k_64 = k_vec.to(self.device, dtype=torch.float64)
+        k_unit = k_64 / (torch.linalg.norm(k_64) + 1e-12)
         other, other_units = [], []
         exclusions = []
         max_cos = -1.0
@@ -80,7 +104,8 @@ class InstrumentedAuditNullTracker:
         # Scan in reverse order exactly matching CorrectedSequentialNullTracker
         for offset, prev_k in enumerate(reversed(self.stored_keys)):
             orig_idx = n_stored - 1 - offset
-            prev_unit = prev_k / (torch.linalg.norm(prev_k) + 1e-12)
+            prev_64 = prev_k.to(self.device, dtype=torch.float64)
+            prev_unit = prev_64 / (torch.linalg.norm(prev_64) + 1e-12)
             cos_val = torch.dot(k_unit, prev_unit).item()
             if cos_val > max_cos:
                 max_cos = cos_val
@@ -92,7 +117,7 @@ class InstrumentedAuditNullTracker:
                         dedup_match = True
                         break
                 if not dedup_match:
-                    other.append(prev_k)
+                    other.append(prev_64)
                     other_units.append(prev_unit)
                 else:
                     exclusions.append({"prior_idx": orig_idx, "cosine": cos_val, "reason": "dedup"})
@@ -108,7 +133,7 @@ class InstrumentedAuditNullTracker:
         if not other_keys or self.v_null.shape[1] == 0:
             self.q_k = None
             return
-        k_mat = torch.stack(other_keys, dim=1)
+        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in other_keys], dim=1)
         c_mat = torch.matmul(self.v_null.t(), k_mat)
         q_basis, r_mat = torch.linalg.qr(c_mat)
         diag_r = torch.abs(torch.diag(r_mat))

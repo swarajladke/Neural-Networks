@@ -51,7 +51,7 @@ class StrictSequentialNullTracker:
         if not self.stored_keys or self.v_null.shape[1] == 0:
             self.q_k = None
             return
-        k_mat = torch.stack(self.stored_keys, dim=1)
+        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in self.stored_keys], dim=1)
         c_mat = torch.matmul(self.v_null.t(), k_mat)
         q_basis, r_mat = torch.linalg.qr(c_mat)
         diag_r = torch.abs(torch.diag(r_mat))
@@ -97,8 +97,9 @@ class StrictSequentialNullTracker:
 
         if len(self.stored_keys) > 0:
             for prev_k in self.stored_keys:
-                k_norm = torch.linalg.norm(prev_k).item() + 1e-12
-                proj_val = abs(torch.dot(prev_k, p_k).item())
+                prev_64 = prev_k.to(self.device, dtype=torch.float64)
+                k_norm = torch.linalg.norm(prev_64).item() + 1e-12
+                proj_val = abs(torch.dot(prev_64, p_k).item())
                 err_norm = (proj_val * torch.linalg.norm(r_64).item()) / (k_p_k + 1e-12)
                 rel_res = err_norm / (k_norm * delta_norm_2)
                 if rel_res > max_rel_res:
@@ -148,10 +149,12 @@ class SlotConsolidatedNullTracker:
     def detect_collisions(self, k_vec: torch.Tensor) -> List[int]:
         if not self.stored_keys:
             return []
-        k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
+        k_64 = k_vec.to(self.device, dtype=torch.float64)
+        k_unit = k_64 / (torch.linalg.norm(k_64) + 1e-12)
         coll_indices = []
         for idx, prev_k in enumerate(self.stored_keys):
-            prev_unit = prev_k / (torch.linalg.norm(prev_k) + 1e-12)
+            prev_64 = prev_k.to(self.device, dtype=torch.float64)
+            prev_unit = prev_64 / (torch.linalg.norm(prev_64) + 1e-12)
             cos_sim = torch.dot(k_unit, prev_unit).item()
             if cos_sim >= self.cos_threshold:
                 coll_indices.append(idx)
@@ -160,7 +163,7 @@ class SlotConsolidatedNullTracker:
     def update_basis_for_noncolliding(self, noncoll_keys: List[torch.Tensor]) -> Optional[torch.Tensor]:
         if not noncoll_keys or self.v_null.shape[1] == 0:
             return None
-        k_mat = torch.stack(noncoll_keys, dim=1)
+        k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in noncoll_keys], dim=1)
         c_mat = torch.matmul(self.v_null.t(), k_mat)
         q_basis, r_mat = torch.linalg.qr(c_mat)
         diag_r = torch.abs(torch.diag(r_mat))
@@ -202,8 +205,9 @@ class SlotConsolidatedNullTracker:
         # 1. Gate on all non-colliding keys (<= 1e-8)
         max_noncoll_res = 0.0
         for prev_k in noncoll_keys:
-            k_norm = torch.linalg.norm(prev_k).item() + 1e-12
-            proj_val = abs(torch.dot(prev_k, p_k).item())
+            prev_64 = prev_k.to(self.device, dtype=torch.float64)
+            k_norm = torch.linalg.norm(prev_64).item() + 1e-12
+            proj_val = abs(torch.dot(prev_64, p_k).item())
             err_norm = (proj_val * torch.linalg.norm(r_64).item()) / (k_p_k + 1e-12)
             rel_res = err_norm / (k_norm * delta_norm_2)
             if rel_res > max_noncoll_res:
@@ -275,10 +279,12 @@ class SlotConsolidatedTemplateNullTracker:
     def detect_collisions(self, k_vec: torch.Tensor) -> List[int]:
         if not self.stored_keys:
             return []
-        k_unit = k_vec / (torch.linalg.norm(k_vec) + 1e-12)
+        k_64 = k_vec.to(self.device, dtype=torch.float64)
+        k_unit = k_64 / (torch.linalg.norm(k_64) + 1e-12)
         coll = []
         for idx, prev_k in enumerate(self.stored_keys):
-            prev_unit = prev_k / (torch.linalg.norm(prev_k) + 1e-12)
+            prev_64 = prev_k.to(self.device, dtype=torch.float64)
+            prev_unit = prev_64 / (torch.linalg.norm(prev_64) + 1e-12)
             if torch.dot(k_unit, prev_unit).item() >= self.cos_threshold:
                 coll.append(idx)
         return coll
@@ -321,7 +327,7 @@ class SlotConsolidatedTemplateNullTracker:
         c_k = torch.matmul(self.v_null.t(), k_64)
         all_q_parts = []
         if noncoll_keys:
-            k_mat = torch.stack(noncoll_keys, dim=1)
+            k_mat = torch.stack([k.to(self.device, dtype=torch.float64) for k in noncoll_keys], dim=1)
             c_mat = torch.matmul(self.v_null.t(), k_mat)
             all_q_parts.append(c_mat)
         if self.q_prompt is not None and self.q_prompt.shape[1] > 0:
@@ -353,6 +359,8 @@ class SlotConsolidatedTemplateNullTracker:
         spec_norm = torch.linalg.norm(delta_64, ord=2).item()
         self.spectral_norms.append(spec_norm)
 
+        for c_idx in coll_indices:
+            self.stored_vstars[c_idx] = joint_vstar.detach().cpu()
         self.stored_keys.append(k_64.detach())
         self.stored_vstars.append(joint_vstar.detach().cpu())
         u_64 = p_k / k_p_k

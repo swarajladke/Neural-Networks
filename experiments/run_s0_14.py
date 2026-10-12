@@ -27,13 +27,10 @@ if str(REPO_ROOT) not in sys.path:
 import torch
 import torch.nn as nn
 
-from experiments.b1_inject import (
-    load_base_model_and_tokenizer,
-    evaluate_fact_retention,
-    greedy_predict,
-    evaluate_baseline_facts
-)
-from experiments.data import load_synthetic_facts, sample_200_facts, evaluate_perplexity, load_wikitext2_slice
+from transformers import GPT2Tokenizer, GPT2LMHeadModel
+
+from experiments.b1_inject import greedy_predict
+from experiments.data import sample_200_facts, load_wikitext2_slice, evaluate_wikitext_perplexity
 from experiments.metrics import check_match
 from experiments.stats import (
     newcombe_score_interval,
@@ -54,6 +51,7 @@ from experiments.s0_14_tracker import (
     find_joint_target_value_vstar
 )
 from experiments.s0_14_audit import (
+    evaluate_fact_retention,
     run_g0_bit_reproduction,
     load_and_assert_pinned_cache,
     run_audit_seed,
@@ -67,6 +65,16 @@ CACHE_DIR = os.path.join(str(REPO_ROOT), "experiments", "cache")
 SEEDS = [0, 1, 2, 3, 4, 5]
 SESSION_BUDGET_CEILING = 16380.0
 WIKITEXT_PPL_BASELINE = 36.03
+
+
+def evaluate_perplexity(
+    model: nn.Module,
+    tokenizer: Any,
+    wikitext_slice: torch.Tensor,
+    device: str = "cuda",
+    slice_sha: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7"
+) -> float:
+    return evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
 
 
 def run_fix_arm_seed(
@@ -190,14 +198,24 @@ def main():
     print(f"  Deterministic   : True (:4096:8)")
 
     # 2. Model & Data Loading
-    model, tokenizer = load_base_model_and_tokenizer(device=device)
-    base_state_dict = {k: v.clone().cpu() for k, v in model.state_dict().items()}
-    fresh_checksum = float(sum(p.sum().item() for p in model.parameters()))
-    fresh_c_proj_hashes = {i: hashlib.sha256(model.transformer.h[i].mlp.c_proj.weight.data.cpu().numpy().tobytes()).hexdigest() for i in [1, 6]}
+    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    tokenizer.pad_token = tokenizer.eos_token
+    model = GPT2LMHeadModel.from_pretrained("gpt2").to(device)
+    model.eval()
 
-    facts_pool = load_synthetic_facts(num_facts=200)
+    base_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
+    fresh_checksum = float(sum(p.sum().item() for p in model.parameters()))
+    fresh_c_proj_hashes = {
+        1: hashlib.sha256(model.transformer.h[1].mlp.c_proj.weight.data.cpu().numpy().tobytes()).hexdigest()
+    }
+
+    facts_file = REPO_ROOT / "b1_facts.json"
+    assert facts_file.exists(), f"Missing facts file: {facts_file}"
+    with open(facts_file, "r", encoding="utf-8") as f:
+        facts_pool = json.load(f)
+
     facts_seed0, _ = sample_200_facts(facts_pool, seed=0)
-    wikitext_slice = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
+    wikitext_slice, slice_sha = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
 
     # 3. Stage 0 Gates
     g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, facts_seed0, device)
@@ -357,8 +375,9 @@ def main():
     primary_diff = (c2_pooled_e2 - r_pooled_e2) / 300.0
     primary_newcombe = newcombe_score_interval(c2_pooled_e2, 300, r_pooled_e2, 300)
     primary_paired = compute_paired_stats_with_pvalues([x / 50.0 for x in c2_e2_per_seed], [x / 50.0 for x in r_e2_per_seed])
-    print(f"  Reference R Retention (Pooled): {r_pooled_e2}/300 ({r_pooled_e2 / 300.0 * 100.0:.2f}%)")
-    print(f"  C2 Retention (Pooled)         : {c2_pooled_e2}/300 ({c2_pooled_e2 / 300.0 * 100.0:.2f}%)")
+    pct_sym = "%"
+    print(f"  Reference R Retention (Pooled): {r_pooled_e2}/300 ({r_pooled_e2 / 300.0 * 100.0:.2f} {pct_sym})")
+    print(f"  C2 Retention (Pooled)         : {c2_pooled_e2}/300 ({c2_pooled_e2 / 300.0 * 100.0:.2f} {pct_sym})")
     print(f"  Difference                    : {primary_diff * 100.0:+.2f} pp [{primary_newcombe[1] * 100.0:+.2f} pp, {primary_newcombe[2] * 100.0:+.2f} pp]")
     print(f"  Exact Student's t (df=5)      : t = {primary_paired['t_stat']:.4f}, p = {primary_paired['t_pvalue']:.4e}")
     print(f"  Exact Wilcoxon (n=6)          : W = {primary_paired['wilcoxon_stat']}, p = {primary_paired['wilcoxon_pvalue']:.4f}")
