@@ -29,10 +29,10 @@ import torch
 import torch.nn as nn
 from experiments.stats import newcombe_score_interval
 from experiments.s0_10_repair import get_subject_last_token_idx, verify_state_restore
-from experiments.s0_11_constraints import edit_fact_unconstrained_sgd, find_target_value_vstar
+from experiments.s0_11_constraints import find_target_value_vstar
 from experiments.s0_13_protection import find_target_value_vstar_margin
 from experiments.s0_13_localization import compute_target_margin
-from experiments.b1_inject import greedy_predict
+from experiments.b1_inject import configure_determinism, greedy_predict, edit_fact_sgd
 from experiments.metrics import check_match
 
 
@@ -462,11 +462,12 @@ def run_recomputed_stage_r(
 
 def run_g0_bit_reproduction(model: nn.Module, tokenizer: Any, base_state: Dict[str, torch.Tensor], facts: List[Dict[str, Any]], device: str) -> Dict[str, Any]:
     print("\n--- [Stage 0: Gate G0 Bit-Reproduction Control (Seed 0, unconstrained SGD)] ---")
+    configure_determinism(seed=0)
     model.load_state_dict(base_state)
     t0 = time.time()
     imm_matches, total_steps = [], 0
     for fact in facts:
-        res = edit_fact_unconstrained_sgd(model, tokenizer, fact, layer_idx=1, max_steps=100, lr=5e-4, lambda_norm=0.0, device=device)
+        res = edit_fact_sgd(model, tokenizer, fact, lr=3e-5, max_steps=100, delta=0.0, device=device, train_mode=False)
         imm_matches.append(res["immediate_match"])
         total_steps += res["steps_taken"]
     c_ret, _ = evaluate_fact_retention(model, tokenizer, facts, 5, device, False)
