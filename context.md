@@ -307,8 +307,61 @@ Directive S0-12 (incorporating Amendment 1) verified the first positive sequenti
 
 ---
 
-## 13. Active Codebase Organization
+---
 
+## 13. Established State as of Directive S0-13 (Commit `f44dd21` / Canonical Run)
+
+Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resolved Stage L loss localization via direct write-site output patching (Stage L2), conducted exploratory regression (Stage R), and evaluated the protection arms panel (Stage F) including primary paired inference for Full-Prompt Protection (Arm F1).
+
+### 13.1 Run Header & Stage 0 Gates
+- **Environment:** Remote Kaggle Tesla T4 GPU, Wall-clock 14,251.33 s, Exit Code 0.
+- **Gate G0 (Bit-Reproduction):** Seed 0 unconstrained SGD bit-reproduced exactly (669 steps, 200/200 immediate efficacy, 8/200 terminal retention). **PASSED**.
+- **Gate G0b (Cached Inputs Pinning):** Pinned Layer 1 Covariance $C$ (`795b9c54a5b71979...`) and $V_{\text{null}}$ (`82aa46ced8021e4c...`) verified from disjoint split. **PASSED**.
+- **Gate G0c (Cross-Process Rerun):** Fresh-process execution of `A-null_L1_corr` Seed 0 reproduced in-process metrics and weights bit-for-bit (Immediate: 198/200, Retention: 19/50, Weight SHA: `48c7e3f64c3ac390...`). **PASSED**.
+
+### 13.2 Stage L2: Write-Site Loss Localization (Seed 0 First-50 Facts)
+- **Cohort:** 19 facts retained, 31 facts lost at sequence end. Retained (19) + Lost (31) = 50.
+- **L2a Protected Key Drift:** Median drift on lost facts is **0.484101** (vs 0.000000 on retained facts), confirming substantial drift at the protected key.
+- **L2b Output Patching on Terminal Model:**
+  - **Harness Positive Control (Condition e):** **PASSED** (Condition e retained 19/19 (100.00%) stable and recovered 29/31 (93.55%) of lost facts).
+  - **Recovery Distribution across 31 Lost Facts:**
+    - `(a)` Subject last-token position only: **9/31 (29.03%)**
+    - `(b)` Non-subject prompt positions only: **13/31 (41.94%)**
+    - `(c)` **All prompt positions**: **29/31 (93.55%)**
+    - `(d)` **Generated object-token positions only**: **0/31 (0.00%)**
+    - `(e)` All positions (Harness Control): **29/31 (93.55%)**
+- **Physical Localization Finding:** Catastrophic forgetting is unequivocally localized to **prompt-position representation drift entering Layer 1** (`c`: 93.55% recovery), while output-token drift (`d`: 0.00%) contributes nothing to recovery.
+
+### 13.3 Stage R: Exploratory Regression ($N=300$ observations across 6 seeds)
+- Seed-clustered logistic regression converged.
+- Strongest retention predictors:
+  - Key drift `drift_j`: Log-odds coef **-4.7966** [95% CI: -7.9672, -1.6260] (severe negative impact on retention).
+  - Write-time margin: Log-odds coef **+0.3659** [95% CI: +0.0238, +0.7080] (higher initial margin promotes retention).
+
+### 13.4 Stage F: Protection Arms Panel ($N=300$ retention, $N=900$ generalization, $N=1200$ immediate)
+| Arm Condition | Imm Efficacy (E1) | Terminal PPL (E0) | First-50 Retention (E2) | Paraphrase Gen (E3) | Mean Terminal Margin (E4) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Reference (`A-null_L1_corr`) | 1184/1200 (98.67%) | 39.42 – 44.35 | **139/300 (46.33%)** | 89/900 (9.89%) | -0.70 nats |
+| F1 (Full-Prompt Protection) | 1183/1200 (98.58%) | 48.26 – 57.22 | **77/300 (25.67%)** | 65/900 (7.22%) | -1.04 nats |
+| F3 (Margin-Targeted Writes) | 1198/1200 (99.83%) | 43.26 – 46.39 | **172/300 (57.33%)** | 138/900 (15.33%) | -0.55 nats |
+| F2 (F1 + Teacher-Forced Keys) | 1182/1200 (98.50%) | 50.12 – 62.75 | **94/300 (31.33%)** | 61/900 (6.78%) | -0.95 nats |
+| Sham Sequence (F1 rules, Seed 0) | 200/200 (100.00%) | Baseline | 0/50 (0.00%) | 1/150 (0.67%) | N/A |
+
+### 13.5 Primary Paired Inference: F1 vs Reference on E2
+- **Retention Difference:** 77/300 (25.67%) vs 139/300 (46.33%) $\rightarrow$ **-20.67 pp** [Newcombe 95% CI: **-27.96 pp, -13.03 pp**].
+- **Hypothesis Tests:**
+  - Exact Student's t ($df=5$): $t = -4.8652$, exact $p = 4.6122 \times 10^{-3}$.
+  - Exact Wilcoxon Signed-Rank ($n=6$, 64 permutations): $W = 0.0$, exact $p = 0.0312$.
+- **Conclusion:** Arm F1 statistically significantly underperforms the Reference Arm on retention ($p = 0.0312$). Protecting all prompt keys consumes null-space degrees of freedom too aggressively during sequential editing, degrading retention compared to subject-only protection.
+- **Emergent Finding (Arm F3):** Margin-targeted writes achieved **172/300 (57.33%)** retention (+11.00 pp over Reference) and improved paraphrase generalization (15.33% vs 9.89%), establishing higher write-time margins as a promising avenue.
+
+---
+
+## 14. Active Codebase Organization
+
+- `experiments/run_s0_13.py`: Master orchestrator for Directive S0-13 (Stage 0 gates, Stage L2 loss localization, Stage R regression, Stage F protection panel).
+- `experiments/s0_13_localization.py`: Stage L2 write-site loss localization and output patching engine.
+- `experiments/s0_13_protection.py`: Stage F protection arms engine (F1 Full-Prompt, F2 Teacher-Forced, F3 Margin-Targeted).
 - `experiments/run_s0_12.py`: Master orchestrator for Directive S0-12 (Stage D, sequential controls, Stage V verification, Stage L patching, Stage F gate).
 - `experiments/s0_12_diagnosis.py`: Directive S0-12 Stage D divergence diagnostic engine.
 - `experiments/s0_12_localization.py`: Directive S0-12 Stage L activation patching and FullPrompt tracker engine.
@@ -325,14 +378,16 @@ Directive S0-12 (incorporating Amendment 1) verified the first positive sequenti
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (139 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-12.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-12.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_12.json`).
-- `s0_12_stdout.txt`: Verbatim execution stdout log for S0-12 (10,304.36 s, Exit Code 0).
+- `tests/test_metrics.py`: Pre-flight unit test suite (144 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-13.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-13.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_13.json`).
+- `s0_13_stdout.txt`: Verbatim execution stdout log for S0-13 (14,251.33 s, Exit Code 0).
+- `s0_12_stdout.txt`: Verbatim execution stdout log for S0-12.
 - `s0_11_stdout.txt`: Verbatim execution stdout log for S0-11.
 - `s0_10_stdout.txt`: Verbatim execution stdout log for S0-10.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
 
 
 
