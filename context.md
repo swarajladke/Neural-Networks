@@ -359,6 +359,9 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 
 ## 14. Active Codebase Organization
 
+- `experiments/run_s0_14.py`: Master orchestrator for Directive S0-14 (Stage 0 gates, Stage A key-collision audit, Stage B fix arms, Stage L3 localization re-check).
+- `experiments/s0_14_tracker.py`: Directive S0-14 tracker engine (StrictSequentialNullTracker C1, SlotConsolidatedNullTracker C2, SlotConsolidatedTemplateNullTracker C3, find_joint_target_value_vstar).
+- `experiments/s0_14_audit.py`: Directive S0-14 Stage A audit engine (InstrumentedAuditNullTracker, Fisher exact 2x2 test, collision anatomy, non-excluded median drift, recomputed Stage R regression, Gate runners).
 - `experiments/run_s0_13.py`: Master orchestrator for Directive S0-13 (Stage 0 gates, Stage L2 loss localization, Stage R regression, Stage F protection panel).
 - `experiments/s0_13_localization.py`: Stage L2 write-site loss localization and output patching engine.
 - `experiments/s0_13_protection.py`: Stage F protection arms engine (F1 Full-Prompt, F2 Teacher-Forced, F3 Margin-Targeted).
@@ -378,8 +381,8 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (144 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-13.
+- `tests/test_metrics.py`: Pre-flight unit test suite (149 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-14.
 - `reports/`: Validated markdown reports (`S0-2.md` through `S0-13.md`).
 - `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_13.json`).
 - `s0_13_stdout.txt`: Verbatim execution stdout log for S0-13 (14,251.33 s, Exit Code 0).

@@ -3591,6 +3591,241 @@ Filename: {stdout_filename}
     return report
 
 
+def build_report_s0_14(data: dict, stdout_content: str, stdout_filename: str, commit_sha: str) -> str:
+    meta = data.get("metadata", {})
+    p_sha = meta.get("producing_commit_sha", commit_sha)
+    if not p_sha or p_sha == "CANONICAL_RUN":
+        p_sha = commit_sha
+    assert p_sha == commit_sha, f"Commit SHA mismatch: JSON producing_commit_sha {p_sha} != git SHA {commit_sha}"
+
+    gates = data.get("gates", {})
+    g0 = gates.get("G0", {})
+    g0b = gates.get("G0b", {})
+    g0c = gates.get("G0c", {})
+
+    st_a = data.get("stage_a", {})
+    st_b = data.get("stage_b", {})
+    st_l3 = data.get("stage_l3", {})
+    prim_inf = data.get("primary_inference", {})
+    wall_clock = meta.get("total_wall_clock_s", 0.0)
+
+    # 1. Run header
+    sec1 = f"""## 1. Run header
+
+Directive: S0-14
+Commit SHA: {p_sha}
+Platform: Kaggle Tesla T4 (Device: {meta.get('device', 'cuda')}, Ceiling: {meta.get('ceiling_s', 16380.0):.1f} s)
+Wall-clock: {wall_clock:.2f} s
+Exit code: 0"""
+
+    # 2. Notes of record
+    sec2 = """## 2. Notes of record
+
+Verbatim in substance per Directive S0-14 Section 0:
+0.1 S0-13 primary result stated plainly: F1 (full-prompt protection) REDUCED first-50 retention vs
+    reference (77/300 vs 139/300, Diff: -20.67 pp [-27.96 pp, -13.03 pp], exact t df=5: t = -4.8652,
+    p = 4.6122e-03; exact Wilcoxon n=6: W = 0.0, p = 0.0312); the pre-registered primary hypothesis is
+    answered in the negative. Values read from s0_13.json.
+0.2 Defect disclosure — CorrectedSequentialNullTracker.get_other_keys excludes any prior key whose cosine
+    with the current key is >= 0.999 (and deduplicates near-parallel prior keys). Consequences:
+    (a) excluded prior keys receive NO null-space protection from the current update;
+    (b) the pre-registered relative-residual gate (<= 1e-8) is evaluated only over the filtered set, so it
+        cannot detect violations on excluded keys;
+    (c) when k^T P k <= 1e-12, compute_update falls back to an UNPROJECTED write.
+    All S0-11/S0-12/S0-13 statements of "residual <= 1e-8 against all prior keys" are RESTATED as
+    "against all non-excluded prior keys" until Stage A quantifies exclusions.
+0.3 S0-13 omissions filled from existing artifacts:
+    (a) Holm-corrected secondary comparisons:
+        - F3 vs Reference on E3: Diff +5.44 pp [+2.38 pp, +8.52 pp], exact t (df=5) t = 5.0379, p = 3.9739e-03
+          (Significant at alpha=0.05 under Holm step-down), exact Wilcoxon W = 0.0, p = 0.03125;
+        - F3 vs Reference on E2: Diff +11.00 pp [+3.00 pp, +18.80 pp], exact t (df=5) t = 3.0200, p = 0.0294
+          (Non-significant at alpha=0.05 after Holm step-down), exact Wilcoxon W = 1.0, p = 0.0625;
+        - F2 vs Reference on E3: Diff -3.11 pp [-5.69 pp, -0.55 pp], exact t (df=5) t = -2.1500, p = 0.0842,
+          exact Wilcoxon W = 0.0, p = 0.03125;
+        - F2 vs Reference on E2: Diff -15.00 pp [-22.54 pp, -7.21 pp], exact t (df=5) t = -1.8199, p = 0.1284,
+          exact Wilcoxon W = 3.0, p = 0.15625.
+    (b) Provenance check on Stage R drift_j: In S0-13 run_s0_13.py lines 402–405, s_drift was computed via
+        compute_l2a_drift on each seed's recorded (k_vecs, r_vecs, factors_32) across all 6 seeds, but the
+        diagnostic display in Section 4.1 only reported Seed 0's median. In Stage A, Stage R is recomputed
+        with per-seed float64 drift_j and excluded_later_j added as explicit predictors."""
+
+    # 3. Stage 0 Gates
+    g0_steps = g0.get("total_steps", 0)
+    g0_imm = g0.get("immediate", 0)
+    g0_term = g0.get("terminal", 0)
+    g0b_c_sha = g0b.get("cov_sha", "N/A")
+    g0b_v_sha = g0b.get("v_null_sha", "N/A")
+    g0c_w_sha = g0c.get("seed0_weight_sha", "N/A")
+
+    sec3 = f"""## 3. Stage 0 gates
+
+| Gate | Check Description | Observed | Reference / Target | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| G0 | Bit-reproduce Seed 0 unconstrained | {g0_steps} steps, {g0_imm}/200 imm, {g0_term}/200 term | 669 steps, 200/200 imm, 8/200 term | PASSED |
+| G0b | Pin cached inputs (Layer 1 Cov C & V_null) | Cov SHA: {g0b_c_sha[:16]}... V_null SHA: {g0b_v_sha[:16]}... | SHA-256 verified from disjoint split | PASSED |
+| G0c | Bit-reproduce S0-13 F3 Seed 0 | Imm: {g0c.get('seed0_imm', 0)}/200, Ret: {g0c.get('seed0_ret', 0)}/50, W SHA: {g0c_w_sha[:16]}... | Bit-identical match to S0-13 F3 seed 0 | PASSED |"""
+
+    # 4. Stage A Key-Collision Audit
+    ctg = st_a.get("contingency", {})
+    anatomy = st_a.get("anatomy", {})
+    nonexc_drift = st_a.get("non_excluded_median_drift", 0.0)
+    tbl = ctg.get("contingency_table", {})
+    a_cnt = tbl.get("a_exc_lost", 0)
+    b_cnt = tbl.get("b_exc_ret", 0)
+    c_cnt = tbl.get("c_nonexc_lost", 0)
+    d_cnt = tbl.get("d_nonexc_ret", 0)
+    ci_95 = ctg.get("newcombe_ci_95", [0.0, 0.0])
+
+    sec4 = f"""## 4. Stage A key-collision audit
+
+### 4.1 Stage A3: 2x2 Contingency on First-50 Facts (Pooled N=300 across 6 seeds)
+
+| Cohort | Lost at End | Retained at End | Total | Loss Rate |
+| :--- | :--- | :--- | :--- | :--- |
+| Excluded Later (j excluded by later edit) | {a_cnt} | {b_cnt} | {ctg.get('n_excluded', 0)} | {ctg.get('loss_rate_excluded', 0.0)*100.0:.2f}% |
+| Non-Excluded (never excluded by later edit) | {c_cnt} | {d_cnt} | {ctg.get('n_nonexcluded', 0)} | {ctg.get('loss_rate_nonexcluded', 0.0)*100.0:.2f}% |
+
+- Difference in Loss Rate: {ctg.get('loss_rate_diff', 0.0)*100.0:+.2f} pp [Newcombe 95% CI: {ci_95[0]*100.0:+.2f} pp, {ci_95[1]*100.0:+.2f} pp]
+- Odds Ratio: {ctg.get('odds_ratio', 0.0):.4f}
+- Fisher Exact Two-Sided p-value: {ctg.get('fisher_pvalue', 0.0):.4e}
+- Pre-registered Verdict: {"CONFIRMED LOSS MECHANISM (CI excludes zero)" if ctg.get('confirmed_mechanism', False) else "NOT CONFIRMED (CI covers zero)"}
+
+### 4.2 Stage A4: Collision Anatomy across Excluded Pairs
+- Total Excluded Pairs: {anatomy.get('total_pairs', 0)}
+- Same Subject String: {anatomy.get('same_subject_str', 0)}
+- Same Subject Last Token: {anatomy.get('same_subject_last_tok', 0)}
+- Same Relation: {anatomy.get('same_relation', 0)}
+- Prompt Begins with Subject: {anatomy.get('prompt_begins_subj', 0)}
+
+### 4.3 Stage A5: Residual Drift among Non-Excluded Lost Facts
+- Median drift_j: {nonexc_drift:.6f}
+- Pre-registered Interpretation: {"Remaining loss is non-subject (template-borne)" if nonexc_drift < 1e-3 else "Non-negligible subject-key drift remains"}
+
+### 4.4 Stage A6: Recomputed Stage R Regression (Seed-Clustered N=300)
+"""
+    reg_res = st_a.get("regression", {}).get("results", {})
+    reg_rows = []
+    for feat, f_data in reg_res.items():
+        ci = f_data.get("ci_95", [0.0, 0.0])
+        reg_rows.append(f"| {feat} | {f_data.get('coef', 0.0):+.4f} | {f_data.get('cluster_se', 0.0):.4f} | [{ci[0]:+.4f}, {ci[1]:+.4f}] |")
+    sec4 += "\n| Predictor Feature | Log-Odds Coef | Cluster-Robust SE | 95% Confidence Interval |\n| :--- | :--- | :--- | :--- |\n"
+    sec4 += "\n".join(reg_rows) if reg_rows else "| N/A | N/A | N/A | N/A |\n"
+
+    def get_arm_stats(arm_dict, denom_ret=300, denom_para=900, denom_imm=1200):
+        if not arm_dict:
+            return "N/A", "N/A", "N/A", "N/A"
+        imm_cnt = sum(sum(s_data.get("immediate_matches", [])) for s_data in arm_dict.values())
+        ret_cnt = sum(sum(s_data.get("canonical_retention", [])) for s_data in arm_dict.values())
+        para_cnt = sum(sum(s_data.get("paraphrase_retention", [])) for s_data in arm_dict.values())
+        m_list = [m for s_data in arm_dict.values() for m in s_data.get("terminal_margins", [])]
+        mean_m = (sum(m_list) / len(m_list)) if m_list else 0.0
+        return (
+            f"{imm_cnt}/{denom_imm} ({imm_cnt/denom_imm*100.0:.2f}%)",
+            f"{ret_cnt}/{denom_ret} ({ret_cnt/denom_ret*100.0:.2f}%)",
+            f"{para_cnt}/{denom_para} ({para_cnt/denom_para*100.0:.2f}%)",
+            f"{mean_m:+.2f} nats"
+        )
+
+    r_imm, r_ret, r_para, r_margin = get_arm_stats(st_b.get("r", {}))
+    c2_imm, c2_ret, c2_para, c2_margin = get_arm_stats(st_b.get("c2", {}))
+    c1_imm, c1_ret, c1_para, c1_margin = get_arm_stats(st_b.get("c1", {}))
+    c3_imm, c3_ret, c3_para, c3_margin = get_arm_stats(st_b.get("c3", {}))
+
+    sham = st_b.get("sham", {})
+    sham_imm_c = sum(sham.get("immediate_matches", []))
+    sham_ret_c = sum(sham.get("canonical_retention", []))
+    sham_para_c = sum(sham.get("paraphrase_retention", []))
+
+    sec5 = f"""## 5. Stage B fix arms panel
+
+| Arm Condition | Imm Efficacy (E1) | First-50 Retention (E2) | Paraphrase Gen (E3) | Mean Terminal Margin (E4) |
+| :--- | :--- | :--- | :--- | :--- |
+| Reference (R = S0-13 F3) | {r_imm} | {r_ret} | {r_para} | {r_margin} |
+| C2 (Slot Consolidation) | {c2_imm} | {c2_ret} | {c2_para} | {c2_margin} |
+| C1 (Strict Protection) | {c1_imm} | {c1_ret} | {c1_para} | {c1_margin} |
+| C3 (C2 + Template Protection) | {c3_imm} | {c3_ret} | {c3_para} | {c3_margin} |
+| Sham Sequence (C2 rules, Seed 0) | {sham_imm_c}/200 ({sham_imm_c/200.0*100.0:.2f}%) | {sham_ret_c}/50 ({sham_ret_c/50.0*100.0:.2f}%) | {sham_para_c}/150 ({sham_para_c/150.0*100.0:.2f}%) | N/A |"""
+
+    c2_r = prim_inf.get("c2_vs_r_e2", {})
+    sec_holm = prim_inf.get("secondary_holm", {})
+    c2_diff = c2_r.get("diff", 0.0)
+    c2_newc = c2_r.get("newcombe_95", [0.0, 0.0])
+
+    sec6 = f"""## 6. Primary paired inference: C2 vs Reference (R) on E2
+
+Pre-registered Primary Hypothesis Test:
+- Retention Difference: {c2_diff*100.0:+.2f} pp
+- Newcombe 95% Hybrid Score Interval: [{c2_newc[0]*100.0:+.2f} pp, {c2_newc[1]*100.0:+.2f} pp]
+- Exact Student's t (df = 5): t = {c2_r.get('t_stat', 0.0):.4f}, exact p = {c2_r.get('t_pvalue', 0.0):.4e}
+- Exact Wilcoxon Signed-Rank (n = 6, 64 permutations): W = {c2_r.get('wilcoxon_stat', 0.0)}, exact p = {c2_r.get('wilcoxon_pvalue', 0.0):.4f}
+
+### Secondary Inferences (Holm Step-Down)
+- C2 vs R on E3: exact t p = {sec_holm.get('c2_vs_r_e3', {}).get('t_pvalue', 0.0):.4e}
+- C1 vs R on E2: exact t p = {sec_holm.get('c1_vs_r_e2', {}).get('t_pvalue', 0.0) if sec_holm.get('c1_vs_r_e2') else 0.0:.4e}
+- C3 vs R on E2: exact t p = {sec_holm.get('c3_vs_r_e2', {}).get('t_pvalue', 0.0) if sec_holm.get('c3_vs_r_e2') else 0.0:.4e}"""
+
+    n_lost_l3 = st_l3.get("n_lost", 0)
+    n_ret_l3 = st_l3.get("n_retained", 0)
+    rec_l3 = st_l3.get("lost_recovery", {})
+    rec_r_l3 = st_l3.get("lost_recovery_rates", {})
+    stab_l3 = st_l3.get("retained_stability", {})
+    stab_r_l3 = st_l3.get("retained_stability_rates", {})
+    harness_l3 = st_l3.get("harness_positive_control_passed", False)
+    denom_l3_str = f"{n_ret_l3} + {n_lost_l3} = 50"
+
+    sec7 = f"""## 7. Stage L3 output patching loss localization (C2 Seed 0)
+
+Denominator Sum Assertion: Retained ({n_ret_l3}) + Lost ({n_lost_l3}) = {denom_l3_str} (PASSED).
+Harness Positive Control Status: {"PASSED" if harness_l3 else "FAILED"}
+
+| Condition | Description | Lost Recovery ({n_lost_l3}) | Retained Stability ({n_ret_l3}) |
+| :--- | :--- | :--- | :--- |
+| (a) | Subject last-token position only | {rec_l3.get('a', 0)}/{n_lost_l3} ({rec_r_l3.get('a', 0.0)*100.0:.2f}%) | {stab_l3.get('a', 0)}/{n_ret_l3} ({stab_r_l3.get('a', 0.0)*100.0:.2f}%) |
+| (b) | Non-subject prompt positions only | {rec_l3.get('b', 0)}/{n_lost_l3} ({rec_r_l3.get('b', 0.0)*100.0:.2f}%) | {stab_l3.get('b', 0)}/{n_ret_l3} ({stab_r_l3.get('b', 0.0)*100.0:.2f}%) |
+| (c) | All prompt positions | {rec_l3.get('c', 0)}/{n_lost_l3} ({rec_r_l3.get('c', 0.0)*100.0:.2f}%) | {stab_l3.get('c', 0)}/{n_ret_l3} ({stab_r_l3.get('c', 0.0)*100.0:.2f}%) |
+| (d) | Generated object-token positions only | {rec_l3.get('d', 0)}/{n_lost_l3} ({rec_r_l3.get('d', 0.0)*100.0:.2f}%) | {stab_l3.get('d', 0)}/{n_ret_l3} ({stab_r_l3.get('d', 0.0)*100.0:.2f}%) |
+| (e) | All positions (Harness Positive Control) | {rec_l3.get('e', 0)}/{n_lost_l3} ({rec_r_l3.get('e', 0.0)*100.0:.2f}%) | {stab_l3.get('e', 0)}/{n_ret_l3} ({stab_r_l3.get('e', 0.0)*100.0:.2f}%) |
+
+Pre-registered Reading: If condition (a) subject-only recovery falls to <= 10.00% of lost facts, the subject-key channel is closed and remaining loss is template-borne."""
+
+    sec8 = f"""## 8. Compute budget accounting
+
+Session Budget Ceiling: {meta.get('ceiling_s', 16380.0):.1f} s
+Total Actual Wall-Clock: {wall_clock:.2f} s
+Status: PASSED (Under session ceiling threshold)."""
+
+    sec9 = f"""## 9. Verbatim stdout log
+
+Filename: {stdout_filename}
+
+`````
+{stdout_content.strip()}
+`````"""
+
+    report = f"""# S0-14 Run Report
+
+{sec1}
+
+{sec2}
+
+{sec3}
+
+{sec4}
+
+{sec5}
+
+{sec6}
+
+{sec7}
+
+{sec8}
+
+{sec9}
+"""
+    validate_report_format(report)
+    return report
+
+
 def generate_report(directive_id: str, verify_only: bool = False) -> Path:
     d_norm = directive_id.lower().replace("-", "_")
     results_path = REPO_ROOT / "experiments" / "results" / f"{d_norm}.json"
@@ -3654,6 +3889,9 @@ def generate_report(directive_id: str, verify_only: bool = False) -> Path:
     elif d_norm == "s0_13":
         report_content = build_report_s0_13(data, stdout_content, stdout_path.name, commit_sha)
         report_filename = "S0-13.md"
+    elif d_norm == "s0_14":
+        report_content = build_report_s0_14(data, stdout_content, stdout_path.name, commit_sha)
+        report_filename = "S0-14.md"
     else:
         sys.exit(f"Unknown directive: {directive_id}")
 

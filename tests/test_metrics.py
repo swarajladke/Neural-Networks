@@ -172,7 +172,10 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "run_s0_8.py",
         REPO_ROOT / "experiments" / "s0_13_localization.py",
         REPO_ROOT / "experiments" / "s0_13_protection.py",
-        REPO_ROOT / "experiments" / "run_s0_13.py"
+        REPO_ROOT / "experiments" / "run_s0_13.py",
+        REPO_ROOT / "experiments" / "s0_14_tracker.py",
+        REPO_ROOT / "experiments" / "s0_14_audit.py",
+        REPO_ROOT / "experiments" / "run_s0_14.py"
     ]
     for ts in target_scripts:
         if ts.exists():
@@ -1427,7 +1430,155 @@ def run_all_tests() -> int:
     print("  Test 3.43 (S0-13 Scopes & Cache Hash) : S0-13 scopes in registry and cache SHA-256 verification PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.44 TEST SUITE SUMMARY
+    # 3.44 TEST IDENTICAL KEYS WITH DIFFERENT TARGETS (DIRECTIVE S0-14 §6 t1)
+    # --------------------------------------------------------------------------
+    print("\n[3.44 Test Identical Keys with Different Targets (Directive S0-14 §6 t1)]")
+    tests_run += 1
+    from experiments.s0_14_tracker import StrictSequentialNullTracker, SlotConsolidatedNullTracker
+    torch.manual_seed(101)
+    d_f, d_n = 20, 10
+    v_n, _ = torch.linalg.qr(torch.randn(d_f, d_n, dtype=torch.float64))
+    k1 = torch.randn(d_f, dtype=torch.float32)
+    k2 = k1.clone()
+    r1 = torch.randn(15, dtype=torch.float32)
+    r2 = torch.randn(15, dtype=torch.float32)
+
+    # Arm C1: Strict protection marks identical second key as unwritable
+    c1 = StrictSequentialNullTracker(v_n, device="cpu")
+    res_c1_1 = c1.compute_update(k1, r1)
+    assert not res_c1_1["is_unwritable"]
+    res_c1_2 = c1.compute_update(k2, r2)
+    assert res_c1_2["is_unwritable"]
+    assert c1.unwritable_count == 1
+    assert torch.equal(res_c1_2["delta_f32"], torch.zeros_like(res_c1_2["delta_f32"]))
+
+    # Arm C2: Slot consolidation detects collision and satisfies both via joint v*
+    c2 = SlotConsolidatedNullTracker(v_n, cos_threshold=0.999, device="cpu")
+    w_curr = torch.randn(d_f, 15, dtype=torch.float32)
+    b_curr = torch.randn(15, dtype=torch.float32)
+
+    v0_1 = torch.addmm(b_curr, k1.unsqueeze(0), w_curr).squeeze(0)
+    v_star_1 = v0_1 + r1
+    res_c2_1 = c2.compute_update(k1, r1, [], v_star_1, {"id": 1}, w_curr, b_curr)
+    w_curr = w_curr + res_c2_1["delta_f32"]
+
+    coll_idx = c2.detect_collisions(k2)
+    assert coll_idx == [0]
+    v0_2 = torch.addmm(b_curr, k2.unsqueeze(0), w_curr).squeeze(0)
+    v_star_2 = v0_2 + r2
+    v_joint = 0.5 * (v_star_1 + v_star_2)
+    r_joint = v_joint - v0_2
+    res_c2_2 = c2.compute_update(k2, r_joint, coll_idx, v_joint, {"id": 2}, w_curr, b_curr)
+    assert res_c2_2["coll_residual"] <= 1e-6
+    w_final = w_curr + res_c2_2["delta_f32"]
+
+    pred_1 = torch.addmm(b_curr, k1.unsqueeze(0), w_final).squeeze(0)
+    pred_2 = torch.addmm(b_curr, k2.unsqueeze(0), w_final).squeeze(0)
+    err1 = torch.linalg.norm(pred_1 - v_joint).item() / (torch.linalg.norm(v_joint).item() + 1e-12)
+    err2 = torch.linalg.norm(pred_2 - v_joint).item() / (torch.linalg.norm(v_joint).item() + 1e-12)
+    assert err1 <= 1e-6 and err2 <= 1e-6
+    tests_passed += 1
+    print("  Test 3.44 (Identical Keys C1 vs C2)    : C1 marks unwritable, C2 satisfies joint v* within 1e-6 PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.45 TEST RESIDUAL GATE EVALUATES ALL PRIOR KEYS (DIRECTIVE S0-14 §6 t2)
+    # --------------------------------------------------------------------------
+    print("\n[3.45 Test Residual Gate Evaluates All Prior Keys (Directive S0-14 §6 t2)]")
+    tests_run += 1
+    torch.manual_seed(102)
+    v_n, _ = torch.linalg.qr(torch.randn(30, 15, dtype=torch.float64))
+    c1_tracker = StrictSequentialNullTracker(v_n, device="cpu")
+    kp1 = torch.randn(30, dtype=torch.float32)
+    kp_near = kp1 + 1e-5 * torch.randn(30, dtype=torch.float32)
+    cos_near = torch.dot(kp1 / torch.linalg.norm(kp1), kp_near / torch.linalg.norm(kp_near)).item()
+    assert cos_near >= 0.999
+
+    c1_tracker.stored_keys.append(kp1.to(torch.float64))
+    c1_tracker.stored_keys.append(kp_near.to(torch.float64))
+    assert len(c1_tracker.stored_keys) == 2
+
+    k_orth = torch.randn(30, dtype=torch.float32)
+    r_orth = torch.randn(10, dtype=torch.float32)
+    upd_res = c1_tracker.compute_update(k_orth, r_orth)
+    assert upd_res["relative_residual"] <= 1e-8
+    assert len(c1_tracker.stored_keys) == 3
+    tests_passed += 1
+    print("  Test 3.45 (Residual Gate All Keys)    : Residual gate audits all prior keys without omission PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.46 TEST FALLBACK BRANCH UNREACHABLE (DIRECTIVE S0-14 §6 t3)
+    # --------------------------------------------------------------------------
+    print("\n[3.46 Test Fallback Branch Unreachable in New Tracker (Directive S0-14 §6 t3)]")
+    tests_run += 1
+    v_empty = torch.zeros(10, 0, dtype=torch.float64)
+    c2_unreach = SlotConsolidatedNullTracker(v_empty, device="cpu")
+    k_dummy = torch.randn(10, dtype=torch.float32)
+    r_dummy = torch.randn(5, dtype=torch.float32)
+    w_dummy = torch.zeros(10, 5, dtype=torch.float32)
+    b_dummy = torch.zeros(5, dtype=torch.float32)
+
+    caught_fallback = False
+    try:
+        c2_unreach.compute_update(k_dummy, r_dummy, [], r_dummy, {"id": 1}, w_dummy, b_dummy)
+    except RuntimeError as re_err:
+        if "Fallback branch unreachable" in str(re_err):
+            caught_fallback = True
+    assert caught_fallback, "FAIL: Fallback branch did not raise RuntimeError!"
+    tests_passed += 1
+    print("  Test 3.46 (Fallback Branch Unreachable): Degenerate update raises RuntimeError as required PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.47 TEST INSTRUMENTED AUDIT TRACKER BITWISE MATCH (DIRECTIVE S0-14 §6 t4)
+    # --------------------------------------------------------------------------
+    print("\n[3.47 Test Instrumented Audit Tracker Bitwise Match (Directive S0-14 §6 t4)]")
+    tests_run += 1
+    from experiments.s0_11_constraints import CorrectedSequentialNullTracker
+    from experiments.s0_14_audit import InstrumentedAuditNullTracker
+    torch.manual_seed(103)
+    v_n50, _ = torch.linalg.qr(torch.randn(50, 25, dtype=torch.float64))
+    orig_tr = CorrectedSequentialNullTracker(v_n50, device="cpu")
+    audit_tr = InstrumentedAuditNullTracker(v_n50, device="cpu")
+
+    w_orig = torch.randn(50, 10, dtype=torch.float32)
+    w_audit = w_orig.clone()
+
+    for step_i in range(5):
+        k_step = torch.randn(50, dtype=torch.float32)
+        r_step = torch.randn(10, dtype=torch.float32)
+        res_orig = orig_tr.compute_update(k_step, r_step)
+        res_audit = audit_tr.compute_update(k_step, r_step, step_i)
+
+        assert torch.equal(res_orig["delta_f32"], res_audit["delta_f32"]), f"Step {step_i} delta mismatch!"
+        assert torch.equal(res_orig["u_f32"], res_audit["u_f32"]), f"Step {step_i} u mismatch!"
+        assert torch.equal(res_orig["r_f32"], res_audit["r_f32"]), f"Step {step_i} r mismatch!"
+        w_orig.add_(res_orig["delta_f32"])
+        w_audit.add_(res_audit["delta_f32"])
+
+    assert torch.equal(w_orig, w_audit), "FAIL: Final weight matrices differ between orig and audit tracker!"
+    assert len(audit_tr.exclusions_per_edit) == 5
+    tests_passed += 1
+    print("  Test 3.47 (Audit Tracker Bitwise Match): Instrumented tracker produces bitwise-identical weights PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.48 TEST S0-14 REGISTRY SCOPES & FISHER EXACT STUB (DIRECTIVE S0-14 §2)
+    # --------------------------------------------------------------------------
+    print("\n[3.48 Test S0-14 Registry Scopes & Fisher Exact Stub (Directive S0-14 §2)]")
+    tests_run += 1
+    from experiments.s0_14_audit import compute_fisher_exact_2x2
+    assert POPULATION_REGISTRY.get("s0_14_eval_canonical") == 50
+    assert POPULATION_REGISTRY.get("s0_14_eval_canonical_pooled") == 300
+    assert POPULATION_REGISTRY.get("s0_14_eval_paraphrase") == 150
+    assert POPULATION_REGISTRY.get("s0_14_eval_paraphrase_pooled") == 900
+    assert POPULATION_REGISTRY.get("s0_14_key_sample") == 100
+
+    or_val, p_val = compute_fisher_exact_2x2([[12, 5], [3, 14]])
+    assert or_val > 5.0
+    assert 0.0 < p_val < 0.01
+    tests_passed += 1
+    print("  Test 3.48 (S0-14 Scopes & Fisher Exact): Registry scopes asserted and exact Fisher test validated PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.49 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")
