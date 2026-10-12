@@ -3611,7 +3611,7 @@ def generate_report(directive_id: str, verify_only: bool = False) -> Path:
     with open(stdout_path, "r", encoding="utf-8") as f:
         stdout_content = f.read()
 
-    commit_sha = data.get("producing_commit_sha") or data.get("commit")
+    commit_sha = data.get("producing_commit_sha") or data.get("commit") or data.get("metadata", {}).get("producing_commit_sha")
     if not commit_sha or commit_sha == "CANONICAL_RUN":
         commit_sha = get_commit_sha()
 

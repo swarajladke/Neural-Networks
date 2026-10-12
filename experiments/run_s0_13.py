@@ -120,7 +120,7 @@ def evaluate_perplexity(
 
 
 def newcombe_confidence_interval(k1: int, n1: int, k2: int, n2: int) -> Dict[str, float]:
-    diff, lo, hi = newcombe_score_interval(k1, n1, k2, n2, confidence=0.95)
+    diff, lo, hi = newcombe_score_interval(k1, n1, k2, n2, conf=0.95)
     return {"diff": diff, "ci_lower": lo, "ci_upper": hi}
 
 
@@ -529,6 +529,7 @@ def main():
     print(f"\nTotal Wall-Clock Time: {total_wall_clock:.2f} s (Ceiling: {SESSION_BUDGET_CEILING:.2f} s)")
 
     results_artifact = {
+        "producing_commit_sha": commit_sha,
         "metadata": {
             "directive": "S0-13", "producing_commit_sha": commit_sha, "device": device,
             "exit_code": 0, "baseline_ppl": baseline_ppl, "total_wall_clock_s": total_wall_clock,

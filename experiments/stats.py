@@ -179,8 +179,10 @@ def compute_paired_stats_with_pvalues(
     }
 
 
-def wilson_interval(k: int, n: int, conf: float = 0.95) -> Tuple[float, float]:
+def wilson_interval(k: int, n: int, conf: float = 0.95, confidence: Optional[float] = None) -> Tuple[float, float]:
     """Wilson score confidence interval for a single proportion."""
+    if confidence is not None:
+        conf = confidence
     if n <= 0:
         return 0.0, 0.0
     p = k / n
@@ -200,7 +202,8 @@ def newcombe_score_interval(
     n1: int,
     k2: int,
     n2: int,
-    conf: float = 0.95
+    conf: float = 0.95,
+    confidence: Optional[float] = None
 ) -> Tuple[float, float, float]:
     """
     Newcombe hybrid score confidence interval for the difference of two independent
@@ -208,6 +211,8 @@ def newcombe_score_interval(
     Returns (diff, lo, hi).
     Reference: Newcombe, R. G. (1998), Method 10.
     """
+    if confidence is not None:
+        conf = confidence
     if n1 <= 0 or n2 <= 0:
         raise ValueError("Sample sizes must be positive")
     p1 = k1 / n1
