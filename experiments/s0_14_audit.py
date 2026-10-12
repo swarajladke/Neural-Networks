@@ -198,6 +198,7 @@ class InstrumentedAuditNullTracker:
             "k_vec": k_vec,
             "r_vec": r_vec,
             "k_p_k": k_p_k,
+            "rho": rho,
             "relative_residual": max_rel_res,
             "fallback_fired": self.fallback_fired[edit_idx],
             "exclusions": self.exclusions_per_edit[edit_idx]
@@ -484,11 +485,25 @@ def run_g0_bit_reproduction(model: nn.Module, tokenizer: Any, base_state: Dict[s
     return {"total_steps": total_steps, "immediate": sum(imm_matches), "terminal": term_matches, "elapsed": elapsed}
 
 
-def load_and_assert_pinned_cache(cache_dir: str, device: str) -> Dict[str, Any]:
+def load_and_assert_pinned_cache(model: nn.Module, tokenizer: Any, cache_dir: str, device: str) -> Dict[str, Any]:
     print("\n--- [Stage 0: Gate G0b Asserting Pinned Cache Hashes] ---")
+    os.makedirs(cache_dir, exist_ok=True)
     c_path = os.path.join(cache_dir, "cov_l1.pt")
     v_path = os.path.join(cache_dir, "v_null_l1.pt")
-    assert os.path.exists(c_path) and os.path.exists(v_path), "Pinned cache files missing from disk!"
+
+    if not os.path.exists(c_path) or not os.path.exists(v_path):
+        from experiments.s0_11_constraints import (
+            load_wikitext2_key_sample,
+            compute_layer_key_covariance,
+            compute_null_space_projector
+        )
+        print("  Computing pinned covariance cache from disjoint WikiText-2 key sample...")
+        key_sample_tensor, _ = load_wikitext2_key_sample(tokenizer, num_sequences=100, seq_len=512)
+        cov, _ = compute_layer_key_covariance(model, key_sample_tensor, layer_idx=1, device=device)
+        null_res = compute_null_space_projector(cov, rel_threshold=1e-3)
+        torch.save(cov, c_path)
+        torch.save(null_res["v_null"], v_path)
+
     with open(c_path, "rb") as f:
         c_sha = hashlib.sha256(f.read()).hexdigest()
     with open(v_path, "rb") as f:

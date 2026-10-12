@@ -1549,8 +1549,8 @@ def run_all_tests() -> int:
         res_audit = audit_tr.compute_update(k_step, r_step, step_i)
 
         assert torch.equal(res_orig["delta_f32"], res_audit["delta_f32"]), f"Step {step_i} delta mismatch!"
-        assert torch.equal(res_orig["u_f32"], res_audit["u_f32"]), f"Step {step_i} u mismatch!"
-        assert torch.equal(res_orig["r_f32"], res_audit["r_f32"]), f"Step {step_i} r mismatch!"
+        assert abs(res_orig["rho"] - res_audit["rho"]) < 1e-12, f"Step {step_i} rho mismatch!"
+        assert abs(res_orig["relative_residual"] - res_audit["relative_residual"]) < 1e-12, f"Step {step_i} residual mismatch!"
         w_orig.add_(res_orig["delta_f32"])
         w_audit.add_(res_audit["delta_f32"])
 

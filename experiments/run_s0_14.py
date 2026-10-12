@@ -219,7 +219,7 @@ def main():
 
     # 3. Stage 0 Gates
     g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, facts_seed0, device)
-    cache_info = load_and_assert_pinned_cache(CACHE_DIR, device)
+    cache_info = load_and_assert_pinned_cache(model, tokenizer, CACHE_DIR, device)
     v_null = cache_info["v_null"]
 
     print("\n--- [Stage 0: Gate G0c Bit-Reproduce S0-13 F3 Seed 0] ---")
