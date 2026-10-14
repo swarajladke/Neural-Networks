@@ -1,0 +1,218 @@
+{
+  "metadata": {
+    "directive": "S0-15",
+    "audit_type": "Pre-Execution Artifact and Mathematical Audit",
+    "source_artifacts": {
+      "s0_14_json": {
+        "path": "C:\\Users\\Vicky\\Desktop\\Neural Networks\\experiments\\results\\s0_14.json",
+        "sha256": "2da1289445ebbafb11e029015b7954ce0f90ee8d2ab8fd247c44bb2996aa20b0"
+      },
+      "s0_13_json": {
+        "path": "C:\\Users\\Vicky\\Desktop\\Neural Networks\\experiments\\results\\s0_13.json",
+        "sha256": "4f7550d37487587e139830bc646fe6358b4a517d7cc12892db74efe77cca43cf"
+      }
+    }
+  },
+  "section_1_artifact_audit": {
+    "section_1_1_stage_a_population": {
+      "s0_14_contingency_table": {
+        "a_exc_lost": 57,
+        "b_exc_ret": 2,
+        "c_nonexc_lost": 104,
+        "d_nonexc_ret": 137,
+        "total_retained": 139,
+        "total_lost": 161,
+        "denominator": 300
+      },
+      "arm_identities": {
+        "s0_13_reference_retained": 139,
+        "s0_13_f3_retained": 172,
+        "s0_14_stage_b_r_retained": 172,
+        "stage_a_table_matches_arm": "A-null_L1_corr"
+      },
+      "discrepancy_diagnosis": "The S0-14 Stage A contingency table describes A-null_L1_corr (139/300 retained), which was run with use_margin=False in run_s0_14.py line 261. In contrast, Stage B Reference R is S0-13 F3 (172/300 retained), run with use_margin=True. The contingency table for F3 was not computed or serialized in s0_14.json.",
+      "collision_anatomy_disaggregation": {
+        "total_tracker_events": 12378,
+        "same_subject_str_events": 269,
+        "same_subject_last_tok_events": 1258,
+        "same_relation_events": 3266,
+        "prompt_begins_subj_events": 9112,
+        "semantic_basis": "Counts represent repeated tracker exclusion events across all 200 sequential edits and 6 seeds (out of 119,400 possible ordered pairs), NOT distinct fact pairs."
+      }
+    },
+    "section_1_2_primary_statistics": {
+      "seed_level_retention": {
+        "r_f3": [
+          30,
+          27,
+          36,
+          22,
+          23,
+          34
+        ],
+        "c2_slot_consolidation": [
+          30,
+          27,
+          37,
+          27,
+          36,
+          34
+        ]
+      },
+      "paired_differences": {
+        "raw_count_differences": [
+          0,
+          0,
+          1,
+          5,
+          13,
+          0
+        ],
+        "percentage_point_differences": [
+          0.0,
+          0.0,
+          2.0,
+          10.0,
+          26.0,
+          0.0
+        ],
+        "mean_difference_facts": 3.1666666666666665,
+        "mean_difference_pp": 6.333333333333332,
+        "sample_std_facts": 5.192943930629973,
+        "standard_error_facts": 2.1200104821543793
+      },
+      "wilcoxon_verification": {
+        "total_pairs": 6,
+        "zero_differences_count": 3,
+        "effective_nonzero_sample_size": 3,
+        "nonzero_differences": [
+          1,
+          5,
+          13
+        ],
+        "tie_zero_convention": "Standard Wilcoxon: zero-difference pairs discarded, absolute values ranked",
+        "stat_W": 0.0,
+        "permutation_count": 8,
+        "exact_pvalue": 0.25,
+        "interpretation": "Because 3 of the 6 seeds had identical retention (diff = 0), only 3 pairs were informative (+1, +5, +13). Across 2^3 = 8 possible sign assignments, the minimum two-sided p-value is 2/8 = 0.2500, creating an exact discrete floor."
+      },
+      "student_t_verification": {
+        "df": 5,
+        "t_statistic": 1.4937033063386853,
+        "exact_pvalue": 0.07209093553692165,
+        "distributional_assumption": "Student's t assumes normality of the six seed differences. Because half the observations are zero and the other half are strictly positive, normality is violated; the test is parametric, not distribution-free."
+      }
+    },
+    "section_1_3_omitted_endpoints": {
+      "r": {
+        "immediate_matches_total": "1198/1200 (99.83%)",
+        "canonical_retention_total": "172/300 (57.33%)",
+        "paraphrase_retention_total": "138/900 (15.33%)",
+        "first_50_immediate_efficacy": "300/300 (100.00%)",
+        "conditional_retention_first50": "172/300 (57.33%)",
+        "unwritable_count": 0,
+        "terminal_ppl_status": "NOT MEASURED IN JSON (evaluated in memory but dropped from output_data)",
+        "e5_drift_status": "NOT MEASURED IN JSON",
+        "rank_trajectory_status": "NOT MEASURED IN JSON",
+        "optimization_steps_status": "NOT MEASURED IN JSON"
+      },
+      "c2": {
+        "immediate_matches_total": "1144/1200 (95.33%)",
+        "canonical_retention_total": "191/300 (63.67%)",
+        "paraphrase_retention_total": "187/900 (20.78%)",
+        "first_50_immediate_efficacy": "295/300 (98.33%)",
+        "conditional_retention_first50": "191/295 (64.75%)",
+        "unwritable_count": 0,
+        "terminal_ppl_status": "NOT MEASURED IN JSON (evaluated in memory but dropped from output_data)",
+        "e5_drift_status": "MEASURED (len=200/seed)",
+        "rank_trajectory_status": "NOT MEASURED IN JSON",
+        "optimization_steps_status": "NOT MEASURED IN JSON"
+      },
+      "c1": {
+        "immediate_matches_total": "1032/1200 (86.00%)",
+        "canonical_retention_total": "221/300 (73.67%)",
+        "paraphrase_retention_total": "176/900 (19.56%)",
+        "first_50_immediate_efficacy": "286/300 (95.33%)",
+        "conditional_retention_first50": "221/286 (77.27%)",
+        "unwritable_count": 163,
+        "terminal_ppl_status": "NOT MEASURED IN JSON (evaluated in memory but dropped from output_data)",
+        "e5_drift_status": "NOT MEASURED IN JSON",
+        "rank_trajectory_status": "NOT MEASURED IN JSON",
+        "optimization_steps_status": "NOT MEASURED IN JSON",
+        "matched_subset_vs_r": {
+          "c1_writable_subset_size": 286,
+          "c1_retention_on_subset": "221/286 (77.27%)",
+          "r_retention_on_same_subset": "171/286 (59.79%)",
+          "subset_difference": "+17.48 pp",
+          "gate_status": "FAILED IMMEDIATE EFFICACY GATE (86.00% < 90.00% ceiling per AGENTS.md \u00a711.5)"
+        }
+      },
+      "c3": {
+        "immediate_matches_total": "1119/1200 (93.25%)",
+        "canonical_retention_total": "252/300 (84.00%)",
+        "paraphrase_retention_total": "227/900 (25.22%)",
+        "first_50_immediate_efficacy": "293/300 (97.67%)",
+        "conditional_retention_first50": "252/293 (86.01%)",
+        "unwritable_count": 0,
+        "terminal_ppl_status": "NOT MEASURED IN JSON (evaluated in memory but dropped from output_data)",
+        "e5_drift_status": "NOT MEASURED IN JSON",
+        "rank_trajectory_status": "MEASURED (len=200/seed)",
+        "optimization_steps_status": "NOT MEASURED IN JSON"
+      }
+    },
+    "section_1_4_sham_semantics": {
+      "reported_immediate_efficacy": "200/200 (100.00%)",
+      "reported_terminal_retention": "0/50 (0.00%)",
+      "implementation_finding": "In run_s0_14.py line 366, sham_imm was populated via sham_imm.append(True) for every edit step without evaluating greedy model predictions. Because sham updates used target residual r = 0, no factual knowledge was injected.",
+      "semantic_discrepancy": "For all experimental arms (R, C1, C2, C3), immediate efficacy evaluated behavioral greedy match of the requested target token. For Sham, immediate efficacy recorded update completion without crash.",
+      "behavioral_immediate_efficacy_estimate": "~0.00% (at pre-edit baseline floor <= 3.75%)",
+      "resolution": "Separate execution completion from behavioral immediate efficacy. Formally report Sham behavioral efficacy as 0/200."
+    },
+    "section_1_5_budget_deviation": {
+      "directive_prescribed_ceiling_s": 16380.0,
+      "json_configured_ceiling_s": 25000.0,
+      "actual_total_wall_clock_s": 22722.139711856842,
+      "ceiling_widened": true,
+      "deviation_magnitude_s": 8620.0,
+      "deviation_percentage": 52.62515262515263,
+      "protocol_disclosure": "S0-14 widened the compute ceiling from 16,380.0 s to 25,000.0 s via commit 722f73b to prevent dynamic pruning of Arms C1 and C3 on Kaggle. This threshold edit was not authorized by a formal directive amendment, violating AGENTS.md \u00a72.1 and \u00a72.2. The pre-commit checklist claim that no thresholds were edited is hereby corrected."
+    }
+  },
+  "section_2_consolidation_mathematics": {
+    "rank_1_geometry": {
+      "formula": "Delta = u r^T  ==>  k_g Delta = (k_g u) r^T",
+      "implication": "For any rank-1 update, changes to all keys in collision group G lie along the identical output direction r. If two keys k_1, k_2 have cosine similarity >= 0.999, k_1 u ~= k_2 u, so the induced outputs v_1 and v_2 necessarily shift by approximately the same vector r."
+    },
+    "feasibility_regimes": {
+      "compatible_targets": "Feasible: If different prompts with near-identical subject keys require compatible downstream directions, a shared v* can satisfy both.",
+      "contradictory_targets_same_prompt": "Mathematically Infeasible: Two identical prompts with conflicting target tokens cannot be resolved by any rank-1 update or any single v*.",
+      "orthogonal_residuals_near_parallel_keys": "Infeasible / Approximated: If desired residuals r_1, r_2 are orthogonal (<r_1, r_2> = 0), a single rank-1 direction r cannot satisfy both; error >= 1/sqrt(2) ||r_2||.",
+      "relation_branching": "Conditional: Sharing subject key k across different relation contexts succeeds if layers 2-11 attention routing branches the prompt context tokens."
+    },
+    "c2_c3_mechanism": "Arm C2/C3 uses Adam optimization on a single parameter v* in R^768 to minimize the joint cross-entropy loss sum_{i in G} L_i(v*) across all colliding facts in group G. This seeks an empirical compromise v* rather than guaranteeing exact linear algebraic satisfaction."
+  },
+  "section_3_memory_and_replay": {
+    "retained_state_components": {
+      "v_null_cache": "15,630,336 bytes (15.63 MB, fixed)",
+      "q_prompt_basis_c3": "3,235,968 bytes (3.24 MB, max)",
+      "stored_keys_float64_per_edit": "24,576 bytes",
+      "stored_vstars_float64_per_edit": "6,144 bytes",
+      "update_factors_float32_per_edit": "15,360 bytes",
+      "fact_prompt_metadata_per_edit": "1,500 bytes",
+      "marginal_growth_per_edit": "47,580 bytes (47.58 kB/edit)"
+    },
+    "memory_totals": {
+      "at_200_edits_bytes": 28382304,
+      "at_200_edits_mb": 27.067474365234375,
+      "at_1000_edits_bytes": 66446304,
+      "at_1000_edits_mb": 63.368133544921875,
+      "scaling_law": "Memory(N) = 18.87 MB + 47.58 kB * N"
+    },
+    "replay_classification": {
+      "is_replay_assisted": true,
+      "formal_designation": "REPLAY-ASSISTED CONSOLIDATION",
+      "evidence": "When collision group G forms, find_joint_target_value_vstar retrieves the original prompts and objects of all prior colliding facts from stored_facts, passes them through the model, and optimizes v* against their summed cross-entropy loss.",
+      "held_out_paraphrase_leakage_audit": "CLEAN: Paraphrase prompts are never accessed during find_joint_target_value_vstar or update computation. Only canonical edit_prompt and object strings are replayed."
+    }
+  }
+}

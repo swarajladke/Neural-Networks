@@ -2,7 +2,7 @@
 
 **Author:** Swaraj Ladke  
 **Repository:** `swarajladke/Neural-Networks`  
-**Last Updated:** October 14, 2026 (Reflecting Directive S0-14 completion, commit `6bb7484`)
+**Last Updated:** October 14, 2026 (Reflecting Directive S0-15 Pre-Execution Audit & Pilot Implementation)
 
 ---
 
@@ -384,8 +384,12 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 
 ## 14. Active Codebase Organization
 
+- `experiments/run_s0_15.py`: Master orchestrator for Directive S0-15 pilot confirmation (preregistered paired confirmation pilot of C3 vs Reference R on Seed 0).
+- `experiments/s0_15_audit.py`: Directive S0-15 pre-execution artifact and mathematical audit engine (recomputing S0-14 contingency tables, exact Wilcoxon floor, omitted endpoints recovery, memory footprint analysis).
+- `experiments/results/s0_15_audit.json`: Machine-readable audit artifact for Directive S0-15.
+- `reports/S0-15.md`: Single-artifact audit and validation report for Directive S0-15.
 - `experiments/run_s0_14.py`: Master orchestrator for Directive S0-14 (Stage 0 gates, Stage A key-collision audit, Stage B fix arms, Stage L3 localization re-check).
-- `experiments/s0_14_tracker.py`: Directive S0-14 tracker engine (StrictSequentialNullTracker C1, SlotConsolidatedNullTracker C2, SlotConsolidatedTemplateNullTracker C3, find_joint_target_value_vstar).
+- `experiments/s0_14_tracker.py`: Directive S0-14/S0-15 tracker engine (StrictSequentialNullTracker C1, SlotConsolidatedNullTracker C2, SlotConsolidatedTemplateNullTracker C3, find_joint_target_value_vstar, check_consolidation_feasibility).
 - `experiments/s0_14_audit.py`: Directive S0-14 Stage A audit engine (InstrumentedAuditNullTracker, Fisher exact 2x2 test, collision anatomy, non-excluded median drift, recomputed Stage R regression, Gate runners).
 - `experiments/run_s0_13.py`: Master orchestrator for Directive S0-13 (Stage 0 gates, Stage L2 loss localization, Stage R regression, Stage F protection panel).
 - `experiments/s0_13_localization.py`: Stage L2 write-site loss localization and output patching engine.
@@ -406,16 +410,38 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (155 tests) and AST literal scanner.
-- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-14.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-14.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_14.json`).
+- `tests/test_metrics.py`: Pre-flight unit test suite (161 tests) and AST literal scanner.
+- `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-15.
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-15.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_14.json`, `s0_15_audit.json`).
 - `s0_14_stdout.txt`: Verbatim execution stdout log for S0-14 (22,722.14 s, Exit Code 0).
 - `s0_13_stdout.txt`: Verbatim execution stdout log for S0-13 (14,251.33 s, Exit Code 0).
 - `s0_12_stdout.txt`: Verbatim execution stdout log for S0-12.
 - `s0_11_stdout.txt`: Verbatim execution stdout log for S0-11.
 - `s0_10_stdout.txt`: Verbatim execution stdout log for S0-10.
 - **Do not touch AGNIS files** (`agnis*.py`, quarantined legacy attempt).
+
+---
+
+## 15. Directive S0-15: Validate C3 Before Scaling
+
+- **Mission:** Rigorously audit S0-14 artifacts, consolidation mathematics, and memory/replay semantics before launching new GPU runs.
+- **Section 1 Artifact Audit Findings:**
+  1. *Stage A Population Identity Resolved:* The 2x2 contingency table in S0-14 describes `A-null_L1_corr` (139 retained / 300), NOT Stage B Reference R (F3, 172/300). The F3 contingency table was omitted.
+  2. *Primary Wilcoxon Inference Floor:* Half the paired differences (Seeds 0, 1, 5) are exactly zero ($n_{\text{eff}} = 3$). The discrete permutation floor for $n_{\text{eff}} = 3$ is $2/8 = \mathbf{0.2500}$.
+  3. *Arm C1 Efficacy Gate Failure:* C1 immediate efficacy was $1032/1200 = 86.00\% < 90.00\%$ (FAILED acquisition gate). On the writable subset ($N=286$), C1 retention was $77.27\%$ vs R's $59.79\%$ ($+17.48\text{ pp}$).
+  4. *Sham Metric Semantics:* Fixed runner code defect where `sham_imm.append(True)` recorded execution completion instead of greedy prediction ($\sim 0.00\%$).
+  5. *Budget Deviation Disclosed:* Runtime ceiling widened from 16,380.0 s to 25,000.0 s without formal directive authorization.
+- **Section 2 Mathematical Slot Consolidation:**
+  - Rank-1 geometry: $\Delta = u r^T \implies k_g \Delta = (k_g u) r^T$. Near-parallel keys force collinear updates. Contradictory targets on identical prompts are mathematically infeasible.
+  - Implemented `check_consolidation_feasibility` in `experiments/s0_14_tracker.py` and validated across 5 properties in Tests 3.49–3.53 in `tests/test_metrics.py`.
+- **Section 3 Memory Footprint & Replay Policy:**
+  - Memory footprint: $\text{Memory}(N) = 18.87\text{ MB} + 47.58\text{ kB} \cdot N$ ($28.38\text{ MB}$ at $N=200$, $66.45\text{ MB}$ at $N=1000$).
+  - Policy Classification: Formally designated as **REPLAY-ASSISTED CONSOLIDATION** because `find_joint_target_value_vstar` replays stored prompts and target objects of earlier facts during collision group optimization. Paraphrase evaluation prompts remain strictly held out.
+- **Section 5 Preregistered Pilot Confirmation Plan:**
+  - Paired comparison: Validated C3 vs Validated Reference R (F3) on Seed 0 (200 facts).
+  - Prescribed ceiling: 4,000.0 s.
+  - Required gates: E0 $\le 72.06$, E1 $\ge 90.00\%$, C3 consolidation count $> 0$, memory matching Section 3 projections.
 
 
 

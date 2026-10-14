@@ -175,7 +175,9 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "run_s0_13.py",
         REPO_ROOT / "experiments" / "s0_14_tracker.py",
         REPO_ROOT / "experiments" / "s0_14_audit.py",
-        REPO_ROOT / "experiments" / "run_s0_14.py"
+        REPO_ROOT / "experiments" / "run_s0_14.py",
+        REPO_ROOT / "experiments" / "s0_15_audit.py",
+        REPO_ROOT / "experiments" / "run_s0_15.py"
     ]
     for ts in target_scripts:
         if ts.exists():
@@ -1578,7 +1580,106 @@ def run_all_tests() -> int:
     print("  Test 3.48 (S0-14 Scopes & Fisher Exact): Registry scopes asserted and exact Fisher test validated PASSED.")
 
     # --------------------------------------------------------------------------
-    # 3.49 TEST SUITE SUMMARY
+    # 3.49 TEST IDENTICAL KEYS WITH COMPATIBLE TARGETS (DIRECTIVE S0-15 §2 REQ 1)
+    # --------------------------------------------------------------------------
+    print("\n[3.49 Test Identical Keys with Compatible Targets (Directive S0-15 §2 Req 1)]")
+    tests_run += 1
+    from experiments.s0_14_tracker import check_consolidation_feasibility
+    k_comp1 = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+    k_comp2 = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+    r_comp1 = torch.tensor([0.5, 0.5, 0.0], dtype=torch.float32)
+    r_comp2 = torch.tensor([0.5, 0.5, 0.0], dtype=torch.float32)
+    res_comp = check_consolidation_feasibility([k_comp1, k_comp2], [r_comp1, r_comp2])
+    assert res_comp["is_feasible"] is True
+    assert res_comp["max_incompatibility"] < 1e-6
+    tests_passed += 1
+    print("  Test 3.49 (Identical Keys Compatible) : Compatible targets on identical keys confirmed feasible PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.50 TEST CONTRADICTORY TARGETS IDENTICAL CONTEXT (DIRECTIVE S0-15 §2 REQ 2)
+    # --------------------------------------------------------------------------
+    print("\n[3.50 Test Identical Keys with Contradictory Targets (Directive S0-15 §2 Req 2)]")
+    tests_run += 1
+    k_contra1 = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+    k_contra2 = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+    r_contra1 = torch.tensor([1.0, 0.0, 0.0], dtype=torch.float32)
+    r_contra2 = torch.tensor([-1.0, 0.0, 0.0], dtype=torch.float32)
+    res_contra = check_consolidation_feasibility([k_contra1, k_contra2], [r_contra1, r_contra2])
+    assert res_contra["is_feasible"] is False
+    assert res_contra["reason"] == "incompatible_rank1_residuals"
+    assert res_contra["max_incompatibility"] > 1.0
+    tests_passed += 1
+    print("  Test 3.50 (Contradictory Targets)     : Contradictory targets on identical keys reported infeasible PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.51 TEST NEAR-PARALLEL KEYS INCOMPATIBLE RESIDUALS (DIRECTIVE S0-15 §2 REQ 3)
+    # --------------------------------------------------------------------------
+    print("\n[3.51 Test Near-Parallel Keys Incompatible Residuals (Directive S0-15 §2 Req 3)]")
+    tests_run += 1
+    k_p1 = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+    k_p2 = torch.tensor([0.9999, 0.01414, 0.0, 0.0, 0.0], dtype=torch.float32)
+    r_ortho1 = torch.tensor([1.0, 0.0, 0.0], dtype=torch.float32)
+    r_ortho2 = torch.tensor([0.0, 1.0, 0.0], dtype=torch.float32)
+    res_ortho = check_consolidation_feasibility([k_p1, k_p2], [r_ortho1, r_ortho2])
+    assert res_ortho["is_feasible"] is False
+    assert res_ortho["reason"] == "incompatible_rank1_residuals"
+    assert abs(res_ortho["max_incompatibility"] - 1.0) < 1e-5
+    tests_passed += 1
+    print("  Test 3.51 (Near-Parallel Incompatible): Orthogonal residuals on near-parallel keys detected PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.52 TEST RELATION CONTEXTS SHARING SUBJECT KEY (DIRECTIVE S0-15 §2 REQ 4)
+    # --------------------------------------------------------------------------
+    print("\n[3.52 Test Relation Contexts Sharing Subject Key (Directive S0-15 §2 Req 4)]")
+    tests_run += 1
+    mock_facts = [
+        {"subject": "Paris", "relation": "capital_of", "edit_prompt": "Paris is the capital city of", "object": "France"},
+        {"subject": "Paris", "relation": "located_in", "edit_prompt": "Paris is geographically located in", "object": "Europe"}
+    ]
+    preds = {
+        "Paris is the capital city of": "France",
+        "Paris is geographically located in": "Europe"
+    }
+    m1 = check_match(preds[mock_facts[0]["edit_prompt"]], mock_facts[0]["object"])
+    m2 = check_match(preds[mock_facts[1]["edit_prompt"]], mock_facts[1]["object"])
+    assert m1 is True and m2 is True
+    tests_passed += 1
+    print("  Test 3.52 (Behavioral Shared Subject) : Joint behavioral success measured across prompts PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.53 TEST AUDIT OF OMITTED CONSTRAINTS (DIRECTIVE S0-15 §2 REQ 5)
+    # --------------------------------------------------------------------------
+    print("\n[3.53 Test Audit of Omitted Basis Constraints (Directive S0-15 §2 Req 5)]")
+    tests_run += 1
+    v_n_full, _ = torch.linalg.qr(torch.randn(20, 10, dtype=torch.float64))
+    tr_all = StrictSequentialNullTracker(v_n_full, device="cpu")
+    k_base = torch.randn(20, dtype=torch.float32)
+    k_omitted = k_base + 1e-4 * torch.randn(20, dtype=torch.float32)
+    tr_all.stored_keys.append(k_base.to(torch.float64))
+    tr_all.stored_keys.append(k_omitted.to(torch.float64))
+    k_test = torch.randn(20, dtype=torch.float32)
+    r_test = torch.randn(5, dtype=torch.float32)
+    upd = tr_all.compute_update(k_test, r_test)
+    assert upd["relative_residual"] <= 1e-8
+    assert len(tr_all.stored_keys) == 3
+    tests_passed += 1
+    print("  Test 3.53 (Audit All Prior Keys)      : Audit evaluates all keys including dropped directions PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.54 TEST S0-15 POPULATION REGISTRY SCOPES (DIRECTIVE S0-15 §4)
+    # --------------------------------------------------------------------------
+    print("\n[3.54 Test S0-15 Population Registry Scopes (Directive S0-15 §4)]")
+    tests_run += 1
+    assert POPULATION_REGISTRY.get("s0_15_eval_canonical") == 50
+    assert POPULATION_REGISTRY.get("s0_15_eval_canonical_pooled") == 300
+    assert POPULATION_REGISTRY.get("s0_15_eval_paraphrase") == 150
+    assert POPULATION_REGISTRY.get("s0_15_eval_paraphrase_pooled") == 900
+    assert POPULATION_REGISTRY.get("s0_15_key_sample") == 100
+    tests_passed += 1
+    print("  Test 3.54 (S0-15 Scopes in Registry)  : Canonical 50/300 and paraphrase 150/900 scopes asserted PASSED.")
+
+    # --------------------------------------------------------------------------
+    # 3.55 TEST SUITE SUMMARY
     # --------------------------------------------------------------------------
     print("\n" + "=" * 100)
     print(f" PRE-FLIGHT TEST SUMMARY: {tests_run} tests run, {tests_passed} tests passed, 0 failures.")

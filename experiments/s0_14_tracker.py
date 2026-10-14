@@ -483,3 +483,51 @@ def find_joint_target_value_vstar(
     v_star = v_param.detach()
     del v_param, opt_v
     return v_star, steps_taken, final_margins
+
+
+def check_consolidation_feasibility(
+    keys: List[torch.Tensor],
+    desired_residuals: List[torch.Tensor],
+    cos_threshold: float = 0.999
+) -> Dict[str, Any]:
+    """
+    Evaluates whether collision-group keys and desired residuals are jointly
+    achievable via a single rank-1 update Delta = u r^T.
+    Returns feasibility status, maximum residual incompatibility, and diagnosis.
+    """
+    if len(keys) <= 1:
+        return {"is_feasible": True, "max_incompatibility": 0.0, "reason": "trivial_single_key"}
+
+    max_incomp = 0.0
+    contradiction_found = False
+
+    for i in range(len(keys)):
+        k_i = keys[i].to(torch.float64)
+        r_i = desired_residuals[i].to(torch.float64)
+        k_i_u = k_i / (torch.linalg.norm(k_i) + 1e-12)
+        r_i_u = r_i / (torch.linalg.norm(r_i) + 1e-12)
+
+        for j in range(i + 1, len(keys)):
+            k_j = keys[j].to(torch.float64)
+            r_j = desired_residuals[j].to(torch.float64)
+            k_j_u = k_j / (torch.linalg.norm(k_j) + 1e-12)
+            r_j_u = r_j / (torch.linalg.norm(r_j) + 1e-12)
+
+            cos_k = torch.dot(k_i_u, k_j_u).item()
+            if cos_k >= cos_threshold:
+                # Keys are near-parallel: for rank-1 Delta = u r^T, outputs must point in same direction
+                cos_r = torch.dot(r_i_u, r_j_u).item()
+                # Incompatibility is distance from collinearity
+                incomp = 1.0 - cos_r
+                if incomp > max_incomp:
+                    max_incomp = incomp
+                if cos_r < 0.99:
+                    contradiction_found = True
+
+    is_feasible = not contradiction_found
+    reason = "compatible_rank1_residuals" if is_feasible else "incompatible_rank1_residuals"
+    return {
+        "is_feasible": is_feasible,
+        "max_incompatibility": max_incomp,
+        "reason": reason
+    }
