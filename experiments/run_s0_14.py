@@ -77,6 +77,22 @@ def evaluate_perplexity(
     return evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
 
 
+def sanitize_for_json(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {str(k): sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [sanitize_for_json(x) for x in obj]
+    elif isinstance(obj, torch.Tensor):
+        if obj.numel() == 1:
+            return obj.item()
+        return obj.detach().cpu().tolist()
+    elif hasattr(obj, "item") and callable(getattr(obj, "item")):
+        return obj.item()
+    elif hasattr(obj, "tolist") and callable(getattr(obj, "tolist")):
+        return obj.tolist()
+    return obj
+
+
 def run_fix_arm_seed(
     arm_name: str,
     model: nn.Module,
@@ -174,10 +190,12 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--prune-c3", action="store_true")
     parser.add_argument("--prune-c1", action="store_true")
+    parser.add_argument("--ceiling", type=float, default=25000.0)
     args = parser.parse_args()
 
     t_start = time.time()
     device = args.device
+    session_ceiling = args.ceiling
 
     print("=" * 100)
     print(" DIRECTIVE S0-14: Key-Collision Audit, Strict Protection, and Slot Consolidation")
@@ -304,9 +322,9 @@ def main():
         c2_runs[s] = run_fix_arm_seed("c2", model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes, s_facts, v_null, wikitext_slice, device)
 
     elapsed_so_far = time.time() - t_start
-    print(f"\nElapsed time so far: {elapsed_so_far:.2f} s / {SESSION_BUDGET_CEILING:.2f} s")
-    prune_c1 = args.prune_c1 or (elapsed_so_far + 4000.0 > SESSION_BUDGET_CEILING)
-    prune_c3 = args.prune_c3 or (elapsed_so_far + 2000.0 > SESSION_BUDGET_CEILING)
+    print(f"\nElapsed time so far: {elapsed_so_far:.2f} s / {session_ceiling:.2f} s")
+    prune_c3 = args.prune_c3 or (elapsed_so_far + 11000.0 > session_ceiling)
+    prune_c1 = args.prune_c1 or (elapsed_so_far + 5500.0 > session_ceiling)
 
     if not prune_c1:
         print("\n--- [Stage B: Arm C1 (Strict Protection) across 6 seeds] ---")
@@ -389,12 +407,13 @@ def main():
     sec_c3_r_e2 = compute_paired_stats_with_pvalues([x / 50.0 for x in [sum(c3_runs[s]["canonical_retention"]) for s in SEEDS]], [x / 50.0 for x in r_e2_per_seed]) if c3_runs else None
 
     total_wall_clock = time.time() - t_start
-    print(f"\nTotal Wall-Clock Time: {total_wall_clock:.2f} s (Ceiling: {SESSION_BUDGET_CEILING:.2f} s)")
+    print(f"\nTotal Wall-Clock Time: {total_wall_clock:.2f} s (Ceiling: {session_ceiling:.2f} s)")
 
     output_data = {
         "metadata": {
             "directive": "S0-14", "device": device, "exit_code": 0, "baseline_ppl": WIKITEXT_PPL_BASELINE,
-            "total_wall_clock_s": total_wall_clock, "ceiling_s": SESSION_BUDGET_CEILING, "cache_hashes": cache_info
+            "total_wall_clock_s": total_wall_clock, "ceiling_s": session_ceiling,
+            "cache_hashes": {"cov_sha": cache_info["cov_sha"], "v_null_sha": cache_info["v_null_sha"]}
         },
         "gates": {
             "G0": g0_res,
@@ -422,7 +441,10 @@ def main():
             } for s in SEEDS} if c1_runs else {},
             "c3": {str(s): {
                 "immediate_matches": c3_runs[s]["immediate_matches"], "canonical_retention": c3_runs[s]["canonical_retention"],
-                "paraphrase_retention": c3_runs[s]["paraphrase_retention"], "terminal_margins": c3_runs[s]["terminal_margins"]
+                "paraphrase_retention": c3_runs[s]["paraphrase_retention"], "terminal_margins": c3_runs[s]["terminal_margins"],
+                "rank_history": c3_runs[s].get("rank_history", []),
+                "rho_history": c3_runs[s].get("rho_history", []),
+                "spectral_norms": c3_runs[s].get("spectral_norms", [])
             } for s in SEEDS} if c3_runs else {},
             "sham": {"immediate_matches": sham_imm, "canonical_retention": sham_c_ret, "paraphrase_retention": sham_p_ret}
         },
@@ -439,8 +461,9 @@ def main():
 
     out_path = os.path.join(str(REPO_ROOT), "experiments", "results", "s0_14.json")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w") as f:
-        json.dump(output_data, f, indent=2)
+    clean_out = sanitize_for_json(output_data)
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(clean_out, f, indent=2)
     print(f"\nResults successfully recorded to {out_path}")
     return 0
 
