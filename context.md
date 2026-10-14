@@ -2,7 +2,7 @@
 
 **Author:** Swaraj Ladke  
 **Repository:** `swarajladke/Neural-Networks`  
-**Last Updated:** October 11, 2026 (Reflecting Directive S0-12 completion, commit `bfe2b2b`)
+**Last Updated:** October 14, 2026 (Reflecting Directive S0-14 completion, commit `6bb7484`)
 
 ---
 
@@ -357,6 +357,31 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 
 ---
 
+### 13.6 Directive S0-14: Key-Collision Audit, Strict Protection, and Slot Consolidation
+- **Defect Discovery & Disclosure:** Earlier sequential trackers excluded prior keys with cosine similarity $\ge 0.999$, omitting them from null-space protection and causing unprojected writes when $k^T P k \le 10^{-12}$.
+- **Stage A Key-Collision Audit ($N=300$ across 6 seeds):**
+  - Contingency Table: Excluded-later facts suffered **57/59 (96.61%)** loss, while non-excluded facts suffered **104/241 (43.15%)** loss.
+  - Loss Rate Difference: **+53.46 pp** [Newcombe 95% CI: **+43.15 pp, +60.03 pp**].
+  - Odds Ratio: $\mathbf{37.54}$, Fisher exact two-sided $p = \mathbf{1.3798 \times 10^{-15}}$ (Confirmed causal loss mechanism).
+  - Residual Drift among Non-Excluded Lost Facts: Median $\text{drift}_j = \mathbf{0.000000}$ ($< 10^{-3}$).
+- **Stage B Fix Arms Panel ($N=300$ across 6 seeds):**
+  - **Reference (R = S0-13 F3):** Imm 1198/1200 (99.83%), Ret 172/300 (57.33%), Para 138/900 (15.33%), Margin -0.55 nats.
+  - **Arm C2 (Slot Consolidation):** Imm 1144/1200 (95.33%), Ret 191/300 (63.67%), Para 187/900 (20.78%), Margin +0.21 nats.
+  - **Arm C1 (Strict Protection):** Imm 1032/1200 (86.00%), Ret 221/300 (73.67%), Para 176/900 (19.56%), Margin +0.54 nats.
+  - **Arm C3 (C2 + Template Protection):** Imm 1119/1200 (93.25%), Ret 252/300 (84.00%), Para 227/900 (25.22%), Margin +2.36 nats.
+  - **Sham Sequence Control (Seed 0):** Imm 200/200 (100.00%), Ret 0/50 (0.00%), Para 1/150 (0.67%).
+- **Primary Pre-Registered Inference (C2 vs Reference on E2 Retention):**
+  - Retention Difference: **+6.33 pp** [Newcombe 95% CI: **-1.48 pp, +14.04 pp**].
+  - Exact Student's t ($df=5$): $t = 1.4937$, exact $p = 0.1955$.
+  - Exact Wilcoxon Signed-Rank ($n=6$): $W = 0$, exact $p = 0.2500$.
+  - *Conclusion:* C2 improves retention by +19 facts across seeds (+6.33 pp), but inter-seed variance does not cross the two-sided significance threshold at $\alpha = 0.05$.
+- **Stage L3 Mechanistic Localization Proof:**
+  - Subject last-token recovery (Condition a): $2/20 = \mathbf{10.00\%} \le 10.00\%$.
+  - Non-subject prompt recovery (Condition b): $14/20 = \mathbf{70.00\%}$.
+  - *Verdict:* The subject-key collision channel is closed by Slot Consolidation; remaining forgetting is isolated to non-subject prompt template representations.
+
+---
+
 ## 14. Active Codebase Organization
 
 - `experiments/run_s0_14.py`: Master orchestrator for Directive S0-14 (Stage 0 gates, Stage A key-collision audit, Stage B fix arms, Stage L3 localization re-check).
@@ -381,10 +406,11 @@ Directive S0-13 executed Stage 0 bit-reproduction and cache pinning gates, resol
 - `experiments/stats.py`: Statistical engine (MDE, Newcombe intervals, exact Student t, exact Wilcoxon with combinatorial floor).
 - `experiments/metrics.py`: Mathematical metrics, Wilson intervals, and Provenance Guard 2.0 with closed `POPULATION_REGISTRY`.
 - `experiments/data.py`: Synthetic facts generation, deterministic seed sampling, and perplexity evaluation.
-- `tests/test_metrics.py`: Pre-flight unit test suite (149 tests) and AST literal scanner.
+- `tests/test_metrics.py`: Pre-flight unit test suite (155 tests) and AST literal scanner.
 - `tools/make_report.py`: Single-artifact report generator and byte-verifier supporting S0-2 through S0-14.
-- `reports/`: Validated markdown reports (`S0-2.md` through `S0-13.md`).
-- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_13.json`).
+- `reports/`: Validated markdown reports (`S0-2.md` through `S0-14.md`).
+- `experiments/results/`: Machine-readable results JSON artifacts (`s0_5.json` through `s0_14.json`).
+- `s0_14_stdout.txt`: Verbatim execution stdout log for S0-14 (22,722.14 s, Exit Code 0).
 - `s0_13_stdout.txt`: Verbatim execution stdout log for S0-13 (14,251.33 s, Exit Code 0).
 - `s0_12_stdout.txt`: Verbatim execution stdout log for S0-12.
 - `s0_11_stdout.txt`: Verbatim execution stdout log for S0-11.
