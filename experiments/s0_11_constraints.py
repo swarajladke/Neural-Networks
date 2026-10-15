@@ -30,14 +30,16 @@ def load_wikitext2_key_sample(tokenizer: Any, num_sequences: int = 100, seq_len:
     (which were drawn from validation + test splits).
     """
     from datasets import load_dataset
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
+    try:
+        dataset = load_dataset("Salesforce/wikitext", "wikitext-2-raw-v1")
+    except Exception:
+        dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
     train_text = "\n\n".join(list(dataset["train"]["text"]))
     tokens = tokenizer.encode(train_text)
     total_needed = num_sequences * seq_len
     assert len(tokens) >= total_needed, f"Insufficient tokens in train split: {len(tokens)} < {total_needed}"
     tensor_sample = torch.tensor(tokens[:total_needed], dtype=torch.long).view(num_sequences, seq_len)
-    sample_sha = hashlib.sha256(tensor_sample.numpy().tobytes()).hexdigest()
-    return tensor_sample, sample_sha
+    return tensor_sample, hashlib.sha256(tensor_sample.numpy().tobytes()).hexdigest()
 
 
 def compute_layer_key_covariance(

@@ -60,10 +60,11 @@ IMMEDIATE_EFFICACY_GATE = 90.00
 def evaluate_perplexity(
     model: nn.Module,
     tokenizer: Any,
-    eval_slice: torch.Tensor,
-    device: str = "cuda"
+    wikitext_slice: torch.Tensor,
+    device: str = "cuda",
+    slice_sha: str = "3fd93350878609bf94ba000e9d2cde2f8a6e0b32f2510a6835258e1d20e632d7"
 ) -> float:
-    return evaluate_wikitext_perplexity(model, tokenizer, eval_slice, device=device)
+    return evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
 
 
 def sanitize_for_json(obj: Any) -> Any:

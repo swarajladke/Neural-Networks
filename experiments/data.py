@@ -182,8 +182,45 @@ class CausalSubspaceManager:
 
 def load_wikitext2_slice(tokenizer: Any, num_sequences: int = 1000, seq_len: int = 512) -> Tuple[torch.Tensor, str]:
     from datasets import load_dataset
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1")
-    full_text = "\n\n".join(list(dataset["validation"]["text"]) + list(dataset["test"]["text"]))
+    dataset = None
+    for name in ("Salesforce/wikitext", "wikitext"):
+        try:
+            dataset = load_dataset(name, "wikitext-2-raw-v1")
+            if dataset is not None:
+                break
+        except Exception:
+            continue
+
+    if dataset is not None:
+        full_text = "\n\n".join(list(dataset["validation"]["text"]) + list(dataset["test"]["text"]))
+    else:
+        import urllib.request
+        import zipfile
+        import io
+        urls = [
+            "https://huggingface.co/datasets/Salesforce/wikitext/resolve/main/wikitext-2-raw-v1.zip",
+            "https://dax-cdn.cdn.appdomain.cloud/dax-wikitext-2/1.0.1/wikitext-2-raw-v1.zip",
+            "https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip"
+        ]
+        val_text, test_text = "", ""
+        for url in urls:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    z = zipfile.ZipFile(io.BytesIO(resp.read()))
+                    with z.open("wikitext-2-raw/wiki.valid.raw") as f_val:
+                        val_text = f_val.read().decode("utf-8")
+                    with z.open("wikitext-2-raw/wiki.test.raw") as f_test:
+                        test_text = f_test.read().decode("utf-8")
+                    break
+            except Exception:
+                continue
+        if not val_text or not test_text:
+            raise RuntimeError("Failed to load wikitext-2-raw-v1 dataset via load_dataset and direct download fallbacks")
+        val_lines = val_text.splitlines()
+        test_lines = test_text.splitlines()
+        full_text = "\n\n".join(val_lines + test_lines)
+
     tokens = tokenizer.encode(full_text)
     total_needed = num_sequences * seq_len
     if len(tokens) < total_needed:
