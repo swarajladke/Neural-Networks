@@ -41,10 +41,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from experiments.data import sample_200_facts
 from experiments.metrics import check_match
+from experiments.s0_13_localization import compute_target_margin
 from experiments.s0_13_protection import (
     get_subject_last_token_idx,
-    find_target_value_vstar_margin,
-    compute_target_margin
+    find_target_value_vstar_margin
 )
 from experiments.s0_14_audit import (
     load_and_assert_pinned_cache,
