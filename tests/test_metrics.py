@@ -178,7 +178,8 @@ def run_all_tests() -> int:
         REPO_ROOT / "experiments" / "run_s0_14.py",
         REPO_ROOT / "experiments" / "s0_15_audit.py",
         REPO_ROOT / "experiments" / "run_s0_15.py",
-        REPO_ROOT / "experiments" / "s0_15_g0c_diagnosis.py"
+        REPO_ROOT / "experiments" / "s0_15_g0c_diagnosis.py",
+        REPO_ROOT / "experiments" / "s0_15_historical_restoration.py"
     ]
     for ts in target_scripts:
         if ts.exists():
