@@ -125,7 +125,7 @@ def main():
     prompt_hasher = hashlib.sha256()
     for f in facts_seed0[:50]:
         enc_p = tokenizer(f["edit_prompt"]).input_ids
-        prompt_hasher.update(bytes(enc_p))
+        prompt_hasher.update(json.dumps(enc_p).encode("utf-8"))
     encoded_prompts_sha = prompt_hasher.hexdigest()
 
     print(f"  b1_facts.json SHA256      : {facts_file_sha}")
