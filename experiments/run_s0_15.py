@@ -143,6 +143,7 @@ def run_c3_pilot_seed(
     imm_m, steps_m, write_m = [], [], []
     k_vecs, r_vecs, factors_32 = [], [], []
     consolidation_events = 0
+    replay_facts_evaluated = 0
     slot_assignments = []
 
     for idx, fact in enumerate(facts):
@@ -169,6 +170,7 @@ def run_c3_pilot_seed(
         else:
             consolidation_events += 1
             coll_facts = [facts[i] for i in coll_idx] + [fact]
+            replay_facts_evaluated += len(coll_facts)
             v_star, steps, _ = find_joint_target_value_vstar(
                 model, tokenizer, coll_facts, 1, 2.0, 100, 0.1, device=device
             )
@@ -196,23 +198,32 @@ def run_c3_pilot_seed(
             compute_target_margin(model, tokenizer, fact["edit_prompt"], fact["object"], device=device)
         )
 
-    c_ret, p_ret = evaluate_fact_retention(model, tokenizer, facts[:50], 5, device, False)
+    c_ret_200, p_ret_150 = evaluate_fact_retention(model, tokenizer, facts, 5, device=device, train_mode=False)
+    c_ret_50 = c_ret_200[:50]
     ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device)
-    term_m = [
+    term_m_200 = [
         compute_target_margin(model, tokenizer, f["edit_prompt"], f["object"], device=device)
-        for f in facts[:50]
+        for f in facts
     ]
+    term_m_50 = term_m_200[:50]
     drift_res = compute_l2a_drift(k_vecs, r_vecs, factors_32, device=device)["drifts_f32"]
     mem_audit = audit_memory_footprint(tracker, len(facts))
     distinct_slots = len(set(slot_assignments))
 
+    c3_imm_50 = imm_m[:50]
+    c3_imm_idx = [i for i in range(50) if c3_imm_50[i]]
+    c3_ret_cond = (sum(1 for i in c3_imm_idx if c_ret_50[i]) / max(len(c3_imm_idx), 1)) * 100.0
+    c3_imm_lost = sum(1 for i in c3_imm_idx if not c_ret_50[i])
+
     return {
         "immediate_matches": imm_m,
         "steps_per_edit": steps_m,
-        "canonical_retention": c_ret,
-        "paraphrase_retention": p_ret,
+        "canonical_retention": c_ret_50,
+        "canonical_retention_all200": c_ret_200,
+        "paraphrase_retention": p_ret_150,
         "terminal_ppl": ppl,
-        "terminal_margins": term_m,
+        "terminal_margins": term_m_50,
+        "terminal_margins_all200": term_m_200,
         "write_margins": write_m,
         "drifts": drift_res,
         "rank_history": tracker.rank_history,
@@ -221,6 +232,9 @@ def run_c3_pilot_seed(
         "consolidation_events": consolidation_events,
         "distinct_slots": distinct_slots,
         "memory_audit": mem_audit,
+        "replay_facts_evaluated": replay_facts_evaluated,
+        "retention_conditional_on_imm": c3_ret_cond,
+        "imm_success_subsequently_lost": c3_imm_lost,
         "w_0": w_0,
         "b_0": b_0
     }
@@ -277,6 +291,8 @@ def main():
 
     facts_seed0, _ = sample_200_facts(facts_pool, seed=0)
     wikitext_slice, slice_sha = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
+    pre_edit_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device)
+    print(f"  Pre-Edit Baseline PPL : {pre_edit_ppl:.2f} (expected {WIKITEXT_PPL_BASELINE:.2f})")
 
     # 3. Stage 0 Gates
     g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, facts_seed0, device)
@@ -293,20 +309,36 @@ def main():
     g0c_imm = sum(g0c_f3_run["immediate_matches"])
     g0c_ret = sum(g0c_f3_run["canonical_retention"])
     g0c_sha = g0c_f3_run["final_weight_sha"]
+    exp_g0c_sha = "578ee1cb8557bda2a513572200300e02b7361f28ca8f1a49a6e4720287271aac"
 
     print(f"  G0c Immediate : {g0c_imm}/200 (expected 200)")
     print(f"  G0c Retention : {g0c_ret}/50 (expected 30)")
     print(f"  G0c Final W   : {g0c_sha[:16]}...")
     assert g0c_imm == 200, f"G0c immediate mismatch: {g0c_imm} != 200"
     assert g0c_ret == 30, f"G0c retention mismatch: {g0c_ret} != 30"
+    assert g0c_sha == exp_g0c_sha, f"G0c weight SHA mismatch: {g0c_sha} != {exp_g0c_sha}"
     print("  Gate G0c: PASSED.")
 
-    # Reference R Terminal PPL and Drift
+    # Reference R Terminal Accuracy & Endpoints
+    ref_c_ret_200, ref_p_ret_150 = evaluate_fact_retention(model, tokenizer, facts_seed0, 5, device=device, train_mode=False)
+    ref_term_m_200 = [
+        compute_target_margin(model, tokenizer, f["edit_prompt"], f["object"], device=device)
+        for f in facts_seed0
+    ]
+    ref_c_ret_50 = ref_c_ret_200[:50]
+    ref_term_m_50 = ref_term_m_200[:50]
+    ref_imm_50 = g0c_f3_run["immediate_matches"][:50]
+    ref_imm_idx = [i for i in range(50) if ref_imm_50[i]]
+    ref_ret_cond = (sum(1 for i in ref_imm_idx if ref_c_ret_50[i]) / max(len(ref_imm_idx), 1)) * 100.0
+    ref_imm_lost = sum(1 for i in ref_imm_idx if not ref_c_ret_50[i])
+
     ref_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device)
     ref_drift = compute_l2a_drift(
         g0c_f3_run["k_vecs"], g0c_f3_run["r_vecs"], g0c_f3_run["factors_32"], device=device
     )["drifts_f32"]
     ref_imm_rate = (g0c_imm / 200.0) * 100.0
+    print(f"  Reference R First-50 Ret : {sum(ref_c_ret_50)}/50")
+    print(f"  Reference R All-200 Ret  : {sum(ref_c_ret_200)}/200")
     print(f"  Reference R Terminal PPL : {ref_ppl:.2f} (ceiling {PPL_CEILING_GATE:.2f})")
     print(f"  Reference R Drift Median : {float(torch.median(torch.tensor(ref_drift)).item()):.6f}")
     assert ref_ppl <= PPL_CEILING_GATE, f"Reference R PPL gate failed: {ref_ppl:.2f} > {PPL_CEILING_GATE:.2f}"
@@ -321,18 +353,21 @@ def main():
     )
     t_c3_elapsed = time.time() - t0_c3
     c3_imm = sum(c3_run["immediate_matches"])
-    c3_ret = sum(c3_run["canonical_retention"])
+    c3_ret_50 = sum(c3_run["canonical_retention"])
+    c3_ret_200 = sum(c3_run["canonical_retention_all200"])
     c3_par = sum(c3_run["paraphrase_retention"])
     c3_ppl = c3_run["terminal_ppl"]
     c3_imm_rate = (c3_imm / 200.0) * 100.0
     mem_audit = c3_run["memory_audit"]
 
     print(f"  C3 Immediate Efficacy : {c3_imm}/200 ({c3_imm_rate:.2f}%)")
-    print(f"  C3 First-50 Retention : {c3_ret}/50 ({(c3_ret/50.0)*100.0:.2f}%)")
+    print(f"  C3 First-50 Retention : {c3_ret_50}/50 ({(c3_ret_50/50.0)*100.0:.2f}%)")
+    print(f"  C3 All-200 Retention  : {c3_ret_200}/200 ({(c3_ret_200/200.0)*100.0:.2f}%)")
     print(f"  C3 Paraphrase Gen     : {c3_par}/150 ({(c3_par/150.0)*100.0:.2f}%)")
     print(f"  C3 Terminal PPL       : {c3_ppl:.2f} (ceiling {PPL_CEILING_GATE:.2f})")
     print(f"  C3 Consolidations     : {c3_run['consolidation_events']} events")
     print(f"  C3 Distinct Slots     : {c3_run['distinct_slots']}")
+    print(f"  C3 Replay Fact Evals  : {c3_run['replay_facts_evaluated']}")
     print(f"  C3 Memory Footprint   : {mem_audit['total_mb']:.2f} MB (pred: {mem_audit['predicted_mb']:.2f} MB)")
 
     # Assert C3 Pilot Gates
@@ -349,11 +384,13 @@ def main():
     for idx, fact in enumerate(facts_seed0):
         pred = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device, False)
         sham_imm_behavioral.append(check_match(pred, fact["object"]))
-    sham_c_ret, sham_p_ret = evaluate_fact_retention(model, tokenizer, facts_seed0[:50], 5, device, False)
+    sham_c_ret_200, sham_p_ret = evaluate_fact_retention(model, tokenizer, facts_seed0, 5, device, False)
+    sham_c_ret_50 = sham_c_ret_200[:50]
     sham_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device)
     sham_imm_count = sum(sham_imm_behavioral)
     print(f"  Sham Behavioral Imm Efficacy : {sham_imm_count}/200 ({(sham_imm_count/200.0)*100.0:.2f}%)")
-    print(f"  Sham First-50 Retention      : {sum(sham_c_ret)}/50")
+    print(f"  Sham First-50 Retention      : {sum(sham_c_ret_50)}/50")
+    print(f"  Sham All-200 Retention       : {sum(sham_c_ret_200)}/200")
     print(f"  Sham Paraphrase Retention    : {sum(sham_p_ret)}/150")
     print(f"  Sham Terminal PPL            : {sham_ppl:.2f}")
 
@@ -372,13 +409,22 @@ def main():
             "type": "preregistered_pilot_confirmation",
             "producing_commit_sha": "LOCAL_PILOT",
             "seed": 0,
+            "pre_edit_ppl": pre_edit_ppl,
+            "baseline_ppl": WIKITEXT_PPL_BASELINE,
+            "ppl_ceiling": PPL_CEILING_GATE,
             "session_budget_ceiling_s": session_ceiling,
             "actual_total_wall_clock_s": total_wall_clock
         },
         "gates": {
             "g0_baseline_reproduction": {"passed": True, "steps": g0_res["total_steps"], "term": g0_res["terminal"]},
             "g0b_cache_integrity": {"passed": True, "cov_sha": cache_info["cov_sha"], "v_null_sha": cache_info["v_null_sha"]},
-            "g0c_ref_f3_reproduction": {"passed": True, "immediate": g0c_imm, "retention": g0c_ret},
+            "g0c_ref_f3_reproduction": {
+                "passed": True,
+                "immediate": g0c_imm,
+                "retention": g0c_ret,
+                "weight_sha": g0c_sha,
+                "expected_sha": exp_g0c_sha
+            },
             "pilot_ppl_gate": {"passed": c3_ppl <= PPL_CEILING_GATE, "c3_ppl": c3_ppl, "ceiling": PPL_CEILING_GATE},
             "pilot_acquisition_gate": {"passed": c3_imm_rate >= IMMEDIATE_EFFICACY_GATE, "c3_immediate_pct": c3_imm_rate},
             "pilot_consolidation_gate": {"passed": c3_run["consolidation_events"] > 0, "events": c3_run["consolidation_events"]}
@@ -386,29 +432,43 @@ def main():
         "pilot_comparison": {
             "reference_r": {
                 "immediate_matches": g0c_f3_run["immediate_matches"],
-                "canonical_retention": g0c_f3_run["canonical_retention"],
-                "paraphrase_retention": g0c_f3_run["paraphrase_retention"],
+                "canonical_retention_first50": ref_c_ret_50,
+                "canonical_retention_all200": ref_c_ret_200,
+                "paraphrase_retention": ref_p_ret_150,
+                "terminal_margins_first50": ref_term_m_50,
+                "terminal_margins_all200": ref_term_m_200,
+                "write_margins": g0c_f3_run["write_margins"],
+                "retention_conditional_on_imm": ref_ret_cond,
+                "imm_success_subsequently_lost": ref_imm_lost,
                 "terminal_ppl": ref_ppl,
                 "drifts": ref_drift,
                 "wall_clock_s": t_ref_elapsed
             },
             "c3_slot_template": {
                 "immediate_matches": c3_run["immediate_matches"],
-                "canonical_retention": c3_run["canonical_retention"],
+                "canonical_retention_first50": c3_run["canonical_retention"],
+                "canonical_retention_all200": c3_run["canonical_retention_all200"],
                 "paraphrase_retention": c3_run["paraphrase_retention"],
+                "terminal_margins_first50": c3_run["terminal_margins"],
+                "terminal_margins_all200": c3_run["terminal_margins_all200"],
+                "write_margins": c3_run["write_margins"],
+                "retention_conditional_on_imm": c3_run["retention_conditional_on_imm"],
+                "imm_success_subsequently_lost": c3_run["imm_success_subsequently_lost"],
                 "terminal_ppl": c3_run["terminal_ppl"],
                 "drifts": c3_run["drifts"],
                 "rank_history": c3_run["rank_history"],
                 "rho_history": c3_run["rho_history"],
                 "spectral_norms": c3_run["spectral_norms"],
                 "consolidation_events": c3_run["consolidation_events"],
+                "replay_facts_evaluated": c3_run["replay_facts_evaluated"],
                 "distinct_slots": c3_run["distinct_slots"],
                 "memory_audit": mem_audit,
                 "wall_clock_s": t_c3_elapsed
             },
             "sham_control": {
                 "behavioral_immediate_matches": sham_imm_behavioral,
-                "canonical_retention": sham_c_ret,
+                "canonical_retention_first50": sham_c_ret_50,
+                "canonical_retention_all200": sham_c_ret_200,
                 "paraphrase_retention": sham_p_ret,
                 "terminal_ppl": sham_ppl
             }
