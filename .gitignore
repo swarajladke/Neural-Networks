@@ -125,6 +125,7 @@ data/
 !context.md
 !reports/*.md
 !experiments/results/*.json
+!experiments/s0_16_registry.json
 !*s0*_stdout.txt
 
 # Python Cache
