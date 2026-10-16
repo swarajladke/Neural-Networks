@@ -87,6 +87,20 @@ def main():
     workspace_cfg = os.environ.get("CUBLAS_WORKSPACE_CONFIG", "UNSET")
     det_alg_enabled = torch.are_deterministic_algorithms_enabled() if hasattr(torch, "are_deterministic_algorithms_enabled") else False
 
+    # Installed package versions
+    import importlib.metadata
+    pkg_manifest = {}
+    for p in ["torch", "transformers", "datasets", "accelerate", "numpy"]:
+        try:
+            pkg_manifest[p] = importlib.metadata.version(p)
+        except Exception:
+            pkg_manifest[p] = "NOT_INSTALLED"
+
+    # Source code hashes
+    this_script_sha = hashlib.sha256(open(__file__, "rb").read()).hexdigest()
+    ref_code_path = REPO_ROOT / "experiments" / "s0_14_audit.py"
+    ref_code_sha = hashlib.sha256(open(ref_code_path, "rb").read()).hexdigest()
+
     print("\n[Complete Runtime Environment Fingerprint]")
     print(f"  Python Version          : {py_ver}")
     print(f"  PyTorch Version         : {torch_ver}")
@@ -96,6 +110,12 @@ def main():
     print(f"  Device Name             : {dev_name}")
     print(f"  cuBLAS Workspace Config : {workspace_cfg}")
     print(f"  Deterministic Algorithms: {det_alg_enabled}")
+    print(f"  Transformers Version    : {pkg_manifest.get('transformers')}")
+    print(f"  Datasets Version        : {pkg_manifest.get('datasets')}")
+    print(f"  Accelerate Version      : {pkg_manifest.get('accelerate')}")
+    print(f"  NumPy Version           : {pkg_manifest.get('numpy')}")
+    print(f"  Restoration Script SHA  : {this_script_sha}")
+    print(f"  Reference Code SHA      : {ref_code_sha}")
 
     # 2. Pinned Model & Tokenizer Initial Hash Audit
     print("\n[Model Checkpoint & Pinned Artifact Cryptographic Audit]")
@@ -188,7 +208,10 @@ def main():
             "cudnn_version": cudnn_ver,
             "device_name": dev_name,
             "cublas_workspace_config": workspace_cfg,
-            "deterministic_algorithms_enabled": det_alg_enabled
+            "deterministic_algorithms_enabled": det_alg_enabled,
+            "packages": pkg_manifest,
+            "restoration_script_sha": this_script_sha,
+            "reference_code_sha": ref_code_sha
         },
         "artifact_hashes": {
             "initial_full_model_sha": initial_full_model_sha,
