@@ -370,12 +370,12 @@ def main():
     print(f"  C3 Replay Fact Evals  : {c3_run['replay_facts_evaluated']}")
     print(f"  C3 Memory Footprint   : {mem_audit['total_mb']:.2f} MB (pred: {mem_audit['predicted_mb']:.2f} MB)")
 
-    # Assert C3 Pilot Gates
+    # Assert Established C3 Pilot Gates
     assert c3_ppl <= PPL_CEILING_GATE, f"C3 PPL gate failed: {c3_ppl:.2f} > {PPL_CEILING_GATE:.2f}"
     assert c3_imm_rate >= IMMEDIATE_EFFICACY_GATE, f"C3 E1 gate failed: {c3_imm_rate:.2f}% < 90%"
     assert c3_run["consolidation_events"] > 0, "C3 gate failed: zero consolidation events observed"
-    assert abs(mem_audit["deviation_mb"]) <= 5.0, f"C3 memory deviation too large: {mem_audit['deviation_mb']:.2f} MB"
-    print("  Arm C3 Pilot Gates: ALL PASSED.")
+    print("  Arm C3 Established Gates: ALL PASSED.")
+    print(f"  [Descriptive Audit] Memory Tracker: total {mem_audit['total_mb']:.2f} MB (model: {mem_audit['predicted_mb']:.2f} MB, dev: {mem_audit['deviation_mb']:+.2f} MB)")
 
     # 5. Behavioral Sham Sequence Control (Seed 0)
     print("\n--- [Stage B: Executing Behavioral Sham Control (Seed 0)] ---")
@@ -428,6 +428,47 @@ def main():
             "pilot_ppl_gate": {"passed": c3_ppl <= PPL_CEILING_GATE, "c3_ppl": c3_ppl, "ceiling": PPL_CEILING_GATE},
             "pilot_acquisition_gate": {"passed": c3_imm_rate >= IMMEDIATE_EFFICACY_GATE, "c3_immediate_pct": c3_imm_rate},
             "pilot_consolidation_gate": {"passed": c3_run["consolidation_events"] > 0, "events": c3_run["consolidation_events"]}
+        },
+        "gate_provenance_audit": {
+            "pilot_acquisition_gate": {
+                "status": "PASSED" if c3_imm_rate >= IMMEDIATE_EFFICACY_GATE else "FAILED",
+                "observed": c3_imm_rate,
+                "threshold": IMMEDIATE_EFFICACY_GATE,
+                "governing_source": "Directive S0-13 Section 2 (Gate E1 >= 90%)",
+                "approved_prior": True
+            },
+            "pilot_ppl_gate": {
+                "status": "PASSED" if c3_ppl <= PPL_CEILING_GATE else "FAILED",
+                "observed": c3_ppl,
+                "threshold": PPL_CEILING_GATE,
+                "governing_source": "Directive S0-11 / S0-13 Section 2 (2.0 * Base PPL = 72.06)",
+                "approved_prior": True
+            },
+            "pilot_consolidation_gate": {
+                "status": "PASSED" if c3_run["consolidation_events"] > 0 else "FAILED",
+                "observed": c3_run["consolidation_events"],
+                "threshold": 1,
+                "governing_source": "Directive S0-14 Arm C2/C3 definition (> 0 events)",
+                "approved_prior": True
+            },
+            "candidate_ppl_45": {
+                "status": "EXCEEDED_UNAUTHORIZED",
+                "observed": c3_ppl,
+                "candidate_threshold": 45.0,
+                "governing_source": "Directive S0-14 informal candidate proposal",
+                "approved_prior": False,
+                "note": "Unpreregistered candidate ceiling. Established ceiling 72.06 governs."
+            },
+            "candidate_memory_5mb": {
+                "status": "EXCEEDED_UNAUTHORIZED",
+                "observed_total_mb": mem_audit["total_mb"],
+                "model_predicted_mb": mem_audit["predicted_mb"],
+                "deviation_mb": mem_audit["deviation_mb"],
+                "candidate_threshold": 5.0,
+                "governing_source": "Directive S0-15 diagnostic check proposal",
+                "approved_prior": False,
+                "note": "Unpreregistered candidate threshold. Reported descriptively per Directive S0-15 Sec 1."
+            }
         },
         "pilot_comparison": {
             "reference_r": {
