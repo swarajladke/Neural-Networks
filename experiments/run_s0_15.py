@@ -337,8 +337,12 @@ def main():
         g0c_f3_run["k_vecs"], g0c_f3_run["r_vecs"], g0c_f3_run["factors_32"], device=device
     )["drifts_f32"]
     ref_imm_rate = (g0c_imm / 200.0) * 100.0
-    print(f"  Reference R First-50 Ret : {sum(ref_c_ret_50)}/50")
-    print(f"  Reference R All-200 Ret  : {sum(ref_c_ret_200)}/200")
+    ref_p_ret = ref_p_ret_150
+    ref_p_denom = len(ref_p_ret)
+    ref_p_count = sum(ref_p_ret)
+    print(f"  Reference R First-50 Ret : {sum(ref_c_ret_50)}/50 ({(sum(ref_c_ret_50)/50.0)*100.0:.2f}%)")
+    print(f"  Reference R All-200 Ret  : {sum(ref_c_ret_200)}/200 ({(sum(ref_c_ret_200)/200.0)*100.0:.2f}%)")
+    print(f"  Reference R Paraphrase   : {ref_p_count}/{ref_p_denom} ({(ref_p_count/float(ref_p_denom))*100.0:.2f}%)")
     print(f"  Reference R Terminal PPL : {ref_ppl:.2f} (ceiling {PPL_CEILING_GATE:.2f})")
     print(f"  Reference R Drift Median : {float(torch.median(torch.tensor(ref_drift)).item()):.6f}")
     assert ref_ppl <= PPL_CEILING_GATE, f"Reference R PPL gate failed: {ref_ppl:.2f} > {PPL_CEILING_GATE:.2f}"
@@ -356,6 +360,7 @@ def main():
     c3_ret_50 = sum(c3_run["canonical_retention"])
     c3_ret_200 = sum(c3_run["canonical_retention_all200"])
     c3_par = sum(c3_run["paraphrase_retention"])
+    c3_par_denom = len(c3_run["paraphrase_retention"])
     c3_ppl = c3_run["terminal_ppl"]
     c3_imm_rate = (c3_imm / 200.0) * 100.0
     mem_audit = c3_run["memory_audit"]
@@ -363,7 +368,7 @@ def main():
     print(f"  C3 Immediate Efficacy : {c3_imm}/200 ({c3_imm_rate:.2f}%)")
     print(f"  C3 First-50 Retention : {c3_ret_50}/50 ({(c3_ret_50/50.0)*100.0:.2f}%)")
     print(f"  C3 All-200 Retention  : {c3_ret_200}/200 ({(c3_ret_200/200.0)*100.0:.2f}%)")
-    print(f"  C3 Paraphrase Gen     : {c3_par}/150 ({(c3_par/150.0)*100.0:.2f}%)")
+    print(f"  C3 Paraphrase Gen     : {c3_par}/{c3_par_denom} ({(c3_par/float(c3_par_denom))*100.0:.2f}%)")
     print(f"  C3 Terminal PPL       : {c3_ppl:.2f} (ceiling {PPL_CEILING_GATE:.2f})")
     print(f"  C3 Consolidations     : {c3_run['consolidation_events']} events")
     print(f"  C3 Distinct Slots     : {c3_run['distinct_slots']}")
@@ -388,10 +393,12 @@ def main():
     sham_c_ret_50 = sham_c_ret_200[:50]
     sham_ppl = evaluate_perplexity(model, tokenizer, wikitext_slice, device=device)
     sham_imm_count = sum(sham_imm_behavioral)
+    sham_p_denom = len(sham_p_ret)
+    sham_p_count = sum(sham_p_ret)
     print(f"  Sham Behavioral Imm Efficacy : {sham_imm_count}/200 ({(sham_imm_count/200.0)*100.0:.2f}%)")
-    print(f"  Sham First-50 Retention      : {sum(sham_c_ret_50)}/50")
-    print(f"  Sham All-200 Retention       : {sum(sham_c_ret_200)}/200")
-    print(f"  Sham Paraphrase Retention    : {sum(sham_p_ret)}/150")
+    print(f"  Sham First-50 Retention      : {sum(sham_c_ret_50)}/50 ({(sum(sham_c_ret_50)/50.0)*100.0:.2f}%)")
+    print(f"  Sham All-200 Retention       : {sum(sham_c_ret_200)}/200 ({(sum(sham_c_ret_200)/200.0)*100.0:.2f}%)")
+    print(f"  Sham Paraphrase Retention    : {sham_p_count}/{sham_p_denom} ({(sham_p_count/float(sham_p_denom))*100.0:.2f}%)")
     print(f"  Sham Terminal PPL            : {sham_ppl:.2f}")
 
     total_wall_clock = time.time() - t_start
