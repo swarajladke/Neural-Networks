@@ -86,7 +86,7 @@ def evaluate_arm_terminal_records(
 
     for idx, f in enumerate(facts):
         # 1. Canonical terminal evaluation
-        pred_c = greedy_predict(model, tokenizer, f["edit_prompt"], 5, device=device, train_mode=False)
+        pred_c = greedy_predict(model, tokenizer, f["edit_prompt"], 5, device=device, expected_mode=False)
         is_c = check_match(pred_c, f["object"])
         term_records.append(EvaluationRecord(
             fact_id=f["fact_id"], seed=seed, arm=arm_name, checkpoint="terminal_post_200",
@@ -96,7 +96,7 @@ def evaluate_arm_terminal_records(
 
         # 2. Held-out paraphrase evaluation (3 per fact)
         for p_idx, p_text in enumerate(f.get("paraphrases", [])):
-            pred_p = greedy_predict(model, tokenizer, p_text, 5, device=device, train_mode=False)
+            pred_p = greedy_predict(model, tokenizer, p_text, 5, device=device, expected_mode=False)
             is_p = check_match(pred_p, f["object"])
             para_records.append(EvaluationRecord(
                 fact_id=f["fact_id"], seed=seed, arm=arm_name, checkpoint="terminal_post_200",
@@ -130,7 +130,7 @@ def execute_arm_r(
         res = tracker.compute_update(k_vec, v_star - v0, idx)
         c_proj.weight.data.add_(res["delta_f32"])
 
-        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, train_mode=False)
+        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, expected_mode=False)
         is_imm = check_match(pred_imm, fact["object"])
         imm_records.append(EvaluationRecord(
             fact_id=fact["fact_id"], seed=seed, arm="R", checkpoint=f"immediate_edit_{idx}",
@@ -199,7 +199,7 @@ def execute_arm_c2(
         )
         c_proj.weight.data.add_(res["delta_f32"])
 
-        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, train_mode=False)
+        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, expected_mode=False)
         is_imm = check_match(pred_imm, fact["object"])
         imm_records.append(EvaluationRecord(
             fact_id=fact["fact_id"], seed=seed, arm="C2", checkpoint=f"immediate_edit_{idx}",
@@ -272,7 +272,7 @@ def execute_arm_c3(
         tracker.add_prompt_keys(prompt_keys)
         c_proj.weight.data.add_(res["delta_f32"])
 
-        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, train_mode=False)
+        pred_imm = greedy_predict(model, tokenizer, fact["edit_prompt"], 5, device=device, expected_mode=False)
         is_imm = check_match(pred_imm, fact["object"])
         imm_records.append(EvaluationRecord(
             fact_id=fact["fact_id"], seed=seed, arm="C3", checkpoint=f"immediate_edit_{idx}",
