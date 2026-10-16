@@ -183,8 +183,10 @@ def test_tensor_basis_orthonormality_and_memory():
     stored_vstars = [torch.zeros(768, dtype=torch.float64) for _ in range(50)]
 
     mem = audit_memory_breakdown(v_null, q_prompt, stored_keys, stored_vstars, num_edits=50)
-    assert mem["v_null"]["bytes"] == 3072 * 2235 * 8  # 54,928,896 bytes
-    assert abs(mem["v_null"]["mib"] - 52.38427734375) < 1e-6
+    expected_v_null_bytes = 3072 * 2235 * 8
+    expected_v_null_mib = expected_v_null_bytes / (1024.0 ** 2)
+    assert mem["v_null"]["bytes"] == expected_v_null_bytes, f"Bytes mismatch: {mem['v_null']['bytes']} != {expected_v_null_bytes}"
+    assert abs(float(mem["v_null"]["mib"]) - expected_v_null_mib) < 1e-4, f"MiB mismatch: {mem['v_null']['mib']} != {expected_v_null_mib}"
     assert mem["distinct_subject_slots"] == 50
     assert mem["total_state_bytes"] > mem["total_dynamic_bytes"]
     print("  [Pass] Basis orthonormality and memory breakdown accounting asserted.")

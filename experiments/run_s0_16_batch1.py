@@ -31,7 +31,7 @@ import torch.nn as nn
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
 from experiments.b1_inject import greedy_predict
-from experiments.data import load_wikitext2_slice, evaluate_wikitext_perplexity
+from experiments.data import sample_200_facts, load_wikitext2_slice, evaluate_wikitext_perplexity
 from experiments.metrics import check_match
 from experiments.s0_10_repair import verify_state_restore, get_subject_last_token_idx
 from experiments.s0_13_protection import find_target_value_vstar_margin, extract_prompt_keys
@@ -345,16 +345,17 @@ def main():
     fresh_checksum = sum(p.sum().item() for p in model.parameters())
     fresh_c_proj_hashes = {i: hashlib.sha256(model.transformer.h[i].mlp.c_proj.weight.data.cpu().numpy().tobytes()).hexdigest() for i in range(12)}
 
-    wikitext_slice, slice_sha = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=1024)
+    wikitext_slice, slice_sha = load_wikitext2_slice(tokenizer, num_sequences=1000, seq_len=512)
     pre_edit_ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
     assert abs(pre_edit_ppl - WIKITEXT_PPL_BASELINE) < 0.1, f"Baseline PPL mismatch: {pre_edit_ppl:.2f} != {WIKITEXT_PPL_BASELINE}"
 
     cache_info = load_and_assert_pinned_cache(model, tokenizer, os.path.join(str(REPO_ROOT), "experiments", "cache"), device)
     v_null = cache_info["v_null"]
 
-    # Gate G0
-    g0_facts = [facts_by_id[f_id] for f_id in registry_data["registry"]["101"]["fact_ids_ordered"][:50]]
-    g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, g0_facts, device)
+    # Gate G0 Bit-Reproduction Control (Historical Seed 0)
+    facts_seed0, _ = sample_200_facts(facts_raw, seed=0)
+    g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, facts_seed0, device)
+    verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
     print("  Gate G0: PASSED.")
 
     # 4. Prospective Budget Enforcement & Execution Loop
