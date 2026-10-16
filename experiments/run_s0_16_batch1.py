@@ -158,7 +158,7 @@ def execute_arm_c2(
     model.load_state_dict(base_state)
     verify_state_restore(model, fresh_cs, fresh_hashes)
     c_proj = model.transformer.h[1].mlp.c_proj
-    tracker = SlotConsolidatedNullTracker(v_null, rel_threshold=1e-3, cos_threshold=0.999, device=device)
+    tracker = SlotConsolidatedNullTracker(v_null, cos_threshold=0.999, device=device)
 
     imm_records = []
     total_opt_steps = 0
