@@ -30,7 +30,7 @@ import torch
 import torch.nn as nn
 from transformers import GPT2Tokenizer, GPT2LMHeadModel
 
-from experiments.b1_inject import greedy_predict
+from experiments.b1_inject import greedy_predict, configure_determinism
 from experiments.data import sample_200_facts, load_wikitext2_slice, evaluate_wikitext_perplexity
 from experiments.metrics import check_match
 from experiments.s0_10_repair import verify_state_restore, get_subject_last_token_idx
@@ -309,13 +309,7 @@ def main():
     print("=" * 100)
 
     # 1. Environment & Determinism Setup
-    torch.manual_seed(0)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(0)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-    torch.use_deterministic_algorithms(True)
+    configure_determinism(seed=0)
 
     print("\n[Environment Fingerprint]")
     print(f"  PyTorch Version : {torch.__version__}")
@@ -349,14 +343,15 @@ def main():
     pre_edit_ppl = evaluate_wikitext_perplexity(model, wikitext_slice, slice_sha, device=device)
     assert abs(pre_edit_ppl - WIKITEXT_PPL_BASELINE) < 0.1, f"Baseline PPL mismatch: {pre_edit_ppl:.2f} != {WIKITEXT_PPL_BASELINE}"
 
-    cache_info = load_and_assert_pinned_cache(model, tokenizer, os.path.join(str(REPO_ROOT), "experiments", "cache"), device)
-    v_null = cache_info["v_null"]
-
     # Gate G0 Bit-Reproduction Control (Historical Seed 0)
     facts_seed0, _ = sample_200_facts(facts_raw, seed=0)
     g0_res = run_g0_bit_reproduction(model, tokenizer, base_state_dict, facts_seed0, device)
     verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
     print("  Gate G0: PASSED.")
+
+    # Gate G0b Asserting Pinned Cache Hashes
+    cache_info = load_and_assert_pinned_cache(model, tokenizer, os.path.join(str(REPO_ROOT), "experiments", "cache"), device)
+    v_null = cache_info["v_null"]
 
     # 4. Prospective Budget Enforcement & Execution Loop
     batch_results = {"metadata": {"directive": "S0-16", "batch": 1, "ceiling_s": session_ceiling}, "seeds": {}}
