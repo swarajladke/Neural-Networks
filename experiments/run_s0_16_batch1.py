@@ -44,7 +44,8 @@ from experiments.s0_14_tracker import (
 from experiments.s0_14_audit import (
     run_g0_bit_reproduction,
     load_and_assert_pinned_cache,
-    InstrumentedAuditNullTracker
+    InstrumentedAuditNullTracker,
+    run_audit_seed
 )
 from experiments.s0_16_evaluator import (
     EvaluationRecord,
@@ -54,10 +55,21 @@ from experiments.s0_16_evaluator import (
 )
 
 BATCH_1_SEEDS = [101, 102, 103, 104]
-BATCH_1_BUDGET_CEILING = 15000.0
+BATCH_2_SEEDS = [105, 106, 107, 108]
+BATCH_BUDGET_CEILING = 15000.0
 WIKITEXT_PPL_BASELINE = 36.03
 PPL_CEILING_GATE = 2.0 * WIKITEXT_PPL_BASELINE  # 72.06
 IMMEDIATE_EFFICACY_GATE = 90.00  # 180 / 200
+
+FACTS_SHA256 = "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536"
+REGISTRY_SHA256 = "cf6e4c9d2e449010e931e181656626fe83abe5dcd7db2c885b28c321a87d229f"
+EXP_G0C_WEIGHT_SHA = "578ee1cb8557bda2a513572200300e02b7361f28ca8f1a49a6e4720287271aac"
+
+ARM_PROJECTED_BUDGET = {
+    "R": 850.0,
+    "C2": 1050.0,
+    "C3": 1850.0
+}
 
 
 def sanitize_for_json(obj: Any) -> Any:
@@ -294,18 +306,23 @@ def execute_arm_c3(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Directive S0-16 Batch 1 Confirmation")
+    parser = argparse.ArgumentParser(description="Run Directive S0-16 Confirmation (Batch 1 or Batch 2)")
+    parser.add_argument("--batch", type=int, choices=[1, 2], default=2, help="Confirmation batch (1: seeds 101-104, 2: seeds 105-108)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    parser.add_argument("--ceiling", type=float, default=BATCH_1_BUDGET_CEILING)
+    parser.add_argument("--ceiling", type=float, default=BATCH_BUDGET_CEILING)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--skip-g0c", action="store_true", help="Skip Gate G0c (strictly for reproducing historical Batch 1 unverified mode)")
     args = parser.parse_args()
 
     t_session_start = time.time()
     device = args.device
     session_ceiling = args.ceiling
+    active_seeds = BATCH_1_SEEDS if args.batch == 1 else BATCH_2_SEEDS
+    default_out_name = f"s0_16_batch{args.batch}.json"
+    out_file = args.output or os.path.join(str(REPO_ROOT), "experiments", "results", default_out_name)
 
     print("=" * 100)
-    print(" DIRECTIVE S0-16: Batch 1 Confirmation (Seeds 101-104: R -> C2 -> C3)")
+    print(f" DIRECTIVE S0-16: Batch {args.batch} Confirmation (Seeds {active_seeds[0]}-{active_seeds[-1]}: R -> C2 -> C3)")
     print("=" * 100)
 
     # 1. Environment & Determinism Setup
@@ -315,6 +332,8 @@ def main():
     print(f"  PyTorch Version : {torch.__version__}")
     print(f"  Device Name     : {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
     print(f"  Deterministic   : True (:4096:8)")
+    print(f"  Batch Number    : {args.batch}")
+    print(f"  Active Seeds    : {active_seeds}")
     print(f"  Budget Ceiling  : {session_ceiling:.1f} s")
 
     # 2. Assert Pinned Facts & Registry Integrity
@@ -322,6 +341,16 @@ def main():
     registry_file = REPO_ROOT / "experiments" / "s0_16_registry.json"
     assert facts_file.exists(), f"Missing facts file: {facts_file}"
     assert registry_file.exists(), f"Missing registry file: {registry_file}"
+
+    with open(facts_file, "rb") as f:
+        facts_bytes_sha = hashlib.sha256(f.read()).hexdigest()
+    assert facts_bytes_sha == FACTS_SHA256, f"Facts file SHA mismatch: {facts_bytes_sha} != {FACTS_SHA256}"
+    print(f"  [Pass] Pinned facts file verified (SHA: {facts_bytes_sha[:16]}...)")
+
+    with open(registry_file, "rb") as f:
+        registry_bytes_sha = hashlib.sha256(f.read()).hexdigest()
+    assert registry_bytes_sha == REGISTRY_SHA256, f"Registry file SHA mismatch: {registry_bytes_sha} != {REGISTRY_SHA256}"
+    print(f"  [Pass] Pinned confirmation registry verified (SHA: {registry_bytes_sha[:16]}...)")
 
     with open(facts_file, "r", encoding="utf-8") as f:
         facts_raw = json.load(f)
@@ -352,23 +381,81 @@ def main():
     # Gate G0b Asserting Pinned Cache Hashes
     cache_info = load_and_assert_pinned_cache(model, tokenizer, os.path.join(str(REPO_ROOT), "experiments", "cache"), device)
     v_null = cache_info["v_null"]
+    print("  Gate G0b: PASSED.")
+
+    batch_results = {
+        "metadata": {
+            "directive": "S0-16",
+            "batch": args.batch,
+            "ceiling_s": session_ceiling,
+            "active_seeds": active_seeds,
+            "registry_sha256": registry_bytes_sha,
+            "facts_sha256": facts_bytes_sha,
+            "g0c_executed": not args.skip_g0c
+        },
+        "seeds": {}
+    }
+
+    # Gate G0c Bit-Reproduce S0-13 F3 Seed 0 (Required for Batch 2)
+    if not args.skip_g0c:
+        print("\n--- [Stage 0: Gate G0c Bit-Reproduce S0-13 F3 Seed 0] ---")
+        t0_g0c = time.time()
+        g0c_f3_run = run_audit_seed(
+            model, tokenizer, base_state_dict, fresh_checksum, fresh_c_proj_hashes,
+            facts_seed0, v_null, use_margin=True, device=device
+        )
+        t_g0c_elapsed = time.time() - t0_g0c
+        g0c_imm = sum(g0c_f3_run["immediate_matches"])
+        g0c_ret = sum(g0c_f3_run["canonical_retention"])
+        g0c_sha = g0c_f3_run["final_weight_sha"]
+
+        print(f"  G0c Immediate : {g0c_imm}/200 (expected 200)")
+        print(f"  G0c Retention : {g0c_ret}/50 (expected 30)")
+        print(f"  G0c Final W   : {g0c_sha[:16]}... (elapsed {t_g0c_elapsed:.1f} s)")
+        assert g0c_imm == 200, f"G0c immediate mismatch: {g0c_imm} != 200"
+        assert g0c_ret == 30, f"G0c retention mismatch: {g0c_ret} != 30"
+        assert g0c_sha == EXP_G0C_WEIGHT_SHA, f"G0c weight SHA mismatch: {g0c_sha} != {EXP_G0C_WEIGHT_SHA}"
+
+        model.load_state_dict(base_state_dict)
+        verify_state_restore(model, fresh_checksum, fresh_c_proj_hashes)
+        print("  Gate G0c: PASSED.")
+        batch_results["metadata"]["g0c"] = {
+            "status": "PASSED",
+            "immediate_matches": f"{g0c_imm}/200",
+            "canonical_retention_50": f"{g0c_ret}/50",
+            "weight_sha256": g0c_sha,
+            "elapsed_s": t_g0c_elapsed
+        }
+    else:
+        print("\n  [Note] Gate G0c was skipped via flag (historical Batch 1 unverified G0c mode).")
+        batch_results["metadata"]["g0c"] = {
+            "status": "UNVERIFIED",
+            "note": "Omitted in historical Batch 1 run"
+        }
 
     # 4. Prospective Budget Enforcement & Execution Loop
-    batch_results = {"metadata": {"directive": "S0-16", "batch": 1, "ceiling_s": session_ceiling}, "seeds": {}}
     triplets_completed = []
 
-    for seed_idx, seed in enumerate(BATCH_1_SEEDS):
-        print(f"\n{'='*80}\n>>> EXECUTING SEED {seed} ({seed_idx + 1}/{len(BATCH_1_SEEDS)})\n{'='*80}")
+    for seed_idx, seed in enumerate(active_seeds):
+        print(f"\n{'='*80}\n>>> EXECUTING SEED {seed} ({seed_idx + 1}/{len(active_seeds)})\n{'='*80}")
         seed_record = registry_data["registry"][str(seed)]
         seed_facts = [facts_by_id[f_id] for f_id in seed_record["fact_ids_ordered"]]
         assert len(seed_facts) == 200
+
+        # Assert exact sequence hash from registry
+        expected_seq_sha = seed_record["sequence_sha256"]
+        computed_seq_sha = hashlib.sha256(",".join(str(f["fact_id"]) for f in seed_facts).encode("utf-8")).hexdigest()
+        assert computed_seq_sha == expected_seq_sha, (
+            f"Sequence hash mismatch for seed {seed}: {computed_seq_sha} != {expected_seq_sha}"
+        )
+        print(f"  [Pass] Sequence hash verified for Seed {seed} (SHA: {computed_seq_sha[:16]}...)")
 
         seed_output = {}
 
         for arm_name, exec_fn in [("R", execute_arm_r), ("C2", execute_arm_c2), ("C3", execute_arm_c3)]:
             elapsed = time.time() - t_session_start
             remaining = session_ceiling - elapsed
-            projected_need = 1600.0  # conservative need for 1 arm
+            projected_need = ARM_PROJECTED_BUDGET[arm_name]
             print(f"\n[Budget Check] Elapsed: {elapsed:.1f} s | Remaining: {remaining:.1f} s | Need: {projected_need:.1f} s")
             if remaining < projected_need:
                 print(f"  [HALT] Insufficient remaining budget to guarantee safe completion of Arm {arm_name} on Seed {seed}.")
@@ -402,12 +489,11 @@ def main():
     batch_results["metadata"]["total_wall_clock_s"] = total_time
     batch_results["metadata"]["triplets_completed"] = triplets_completed
 
-    out_file = args.output or os.path.join(str(REPO_ROOT), "experiments", "results", "s0_16_batch1.json")
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(sanitize_for_json(batch_results), f, indent=2)
 
-    print(f"\n{'='*100}\nBATCH 1 COMPLETE: {len(triplets_completed)}/4 Triplets Finished in {total_time:.2f} s.\nResults -> {out_file}\n{'='*100}")
+    print(f"\n{'='*100}\nBATCH {args.batch} COMPLETE: {len(triplets_completed)}/{len(active_seeds)} Triplets Finished in {total_time:.2f} s.\nResults -> {out_file}\n{'='*100}")
     return 0
 
 
