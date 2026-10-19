@@ -62,7 +62,8 @@ PPL_CEILING_GATE = 2.0 * WIKITEXT_PPL_BASELINE  # 72.06
 IMMEDIATE_EFFICACY_GATE = 90.00  # 180 / 200
 
 FACTS_SHA256 = "285638ad25c07b22299153cd6e67e413d2ed4a226d0a4103076d2066763cb536"
-REGISTRY_SHA256 = "cf6e4c9d2e449010e931e181656626fe83abe5dcd7db2c885b28c321a87d229f"
+REGISTRY_SHA256 = "21cda29aa0d1e788c47188481c17e0c576607b83520e6b61e4314e01df835175"
+REGISTRY_SHA256_CRLF = "cf6e4c9d2e449010e931e181656626fe83abe5dcd7db2c885b28c321a87d229f"
 EXP_G0C_WEIGHT_SHA = "578ee1cb8557bda2a513572200300e02b7361f28ca8f1a49a6e4720287271aac"
 
 ARM_PROJECTED_BUDGET = {
@@ -348,8 +349,12 @@ def main():
     print(f"  [Pass] Pinned facts file verified (SHA: {facts_bytes_sha[:16]}...)")
 
     with open(registry_file, "rb") as f:
-        registry_bytes_sha = hashlib.sha256(f.read()).hexdigest()
-    assert registry_bytes_sha == REGISTRY_SHA256, f"Registry file SHA mismatch: {registry_bytes_sha} != {REGISTRY_SHA256}"
+        registry_raw_bytes = f.read()
+    registry_bytes_sha = hashlib.sha256(registry_raw_bytes).hexdigest()
+    registry_normalized_sha = hashlib.sha256(registry_raw_bytes.replace(b"\r\n", b"\n")).hexdigest()
+    assert (registry_bytes_sha in (REGISTRY_SHA256, REGISTRY_SHA256_CRLF) or registry_normalized_sha == REGISTRY_SHA256), (
+        f"Registry file SHA mismatch: raw={registry_bytes_sha}, normalized={registry_normalized_sha} != expected {REGISTRY_SHA256}"
+    )
     print(f"  [Pass] Pinned confirmation registry verified (SHA: {registry_bytes_sha[:16]}...)")
 
     with open(facts_file, "r", encoding="utf-8") as f:
